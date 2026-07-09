@@ -25,4 +25,12 @@ public class Person {
     public LocalDate getBirthDate() {
         return birthDate;
     }
+
+    public String getFullName() {
+        return firstName + " " + lastName;
+    }
+
+    public int getAge() {
+        return LocalDate.now().getYear() - birthDate.getYear();
+    }
 }
