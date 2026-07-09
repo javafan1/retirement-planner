@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.model;
 
 import java.time.LocalDate;
+import java.time.Period;
 
 public class Person {
 
@@ -31,6 +32,6 @@ public class Person {
     }
 
     public int getAge() {
-        return LocalDate.now().getYear() - birthDate.getYear();
+        return Period.between(birthDate, LocalDate.now()).getYears();
     }
 }
