@@ -1,6 +1,6 @@
 package com.daviddunn.retirementplanner.account;
 
-import com.daviddunn.retirementplanner.model.Person;
+import com.daviddunn.retirementplanner.model.*;
 import java.math.BigDecimal;
 
 
@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 public class Account {
 
     private Person owner;
+    private Institution institution;
+
     private String name;
     private BigDecimal balance;
 

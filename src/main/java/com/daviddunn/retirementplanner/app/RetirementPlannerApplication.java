@@ -1,7 +1,8 @@
 package com.daviddunn.retirementplanner.app;
 
-import com.daviddunn.retirementplanner.model.Household;
-import com.daviddunn.retirementplanner.model.Person;
+import com.daviddunn.retirementplanner.model.*;
+import com.daviddunn.retirementplanner.account.*;
+import com.daviddunn.retirementplanner.util.Money;
 
 import java.time.LocalDate;
 
@@ -24,7 +25,29 @@ public class RetirementPlannerApplication {
         Household household =
                 new Household(david,lisa);
 
+
         printHousehold(household);
+
+        TraditionalIRA ira =
+                new TraditionalIRA(
+                        david,
+                        "Fidelity Traditional IRA",
+                        Money.of("2587000"));
+
+        RothIRA roth =
+                new RothIRA(
+                        david,
+                        "Fidelity Roth IRA",
+                        Money.of("400000"));
+
+        david.addAccount(ira);
+        david.addAccount(roth);
+
+        System.out.println();
+        System.out.println("Net Worth");
+        System.out.println("----------");
+        System.out.println(david.getNetWorth());
+
     }
 
     private void printHousehold(Household household) {
@@ -51,5 +74,9 @@ public class RetirementPlannerApplication {
 
         System.out.println("Age  : " +
                 household.getSpouse().getAge());
+
+
+
+
     }
 }

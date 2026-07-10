@@ -6,9 +6,9 @@ import java.math.BigDecimal;
 public class RothIRA extends Account {
 
     public RothIRA(Person owner,
-                   String accountName,
+                   String name,
                    BigDecimal balance) {
 
-        super(owner, accountName, balance);
+        super(owner, name, balance);
     }
 }

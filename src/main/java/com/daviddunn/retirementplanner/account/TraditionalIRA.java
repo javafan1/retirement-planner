@@ -6,9 +6,9 @@ import java.math.BigDecimal;
 public class TraditionalIRA extends Account {
 
     public TraditionalIRA(Person owner,
-                          String accountName,
+                          String name,
                           BigDecimal balance) {
 
-        super(owner, accountName, balance);
+        super(owner, name, balance);
     }
 }
