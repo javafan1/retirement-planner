@@ -3,7 +3,7 @@ package com.daviddunn.retirementplanner.model;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Period;
-import com.daviddunn.retirementplanner.account.Account;
+import com.daviddunn.retirementplanner.financial.Account;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,6 +50,10 @@ public class Person {
         return Collections.unmodifiableList(accounts);
     }
 
+    public int getAccountCount() {
+        return accounts.size();
+    }
+
     public BigDecimal getNetWorth() {
 
         BigDecimal total = BigDecimal.ZERO;
@@ -60,4 +64,5 @@ public class Person {
 
         return total;
     }
+
 }

@@ -1,6 +1,7 @@
-package com.daviddunn.retirementplanner.account;
+package com.daviddunn.retirementplanner.financial;
 
 import com.daviddunn.retirementplanner.model.Person;
+import com.daviddunn.retirementplanner.model.financial.AccountType;
 import java.math.BigDecimal;
 
 public class TraditionalIRA extends Account {
@@ -9,6 +10,9 @@ public class TraditionalIRA extends Account {
                           String name,
                           BigDecimal balance) {
 
-        super(owner, name, balance);
+        super(owner,
+                name,
+                AccountType.TRADITIONAL_IRA,
+                balance);
     }
 }

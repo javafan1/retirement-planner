@@ -1,7 +1,10 @@
 package com.daviddunn.retirementplanner.app;
 
+import com.daviddunn.retirementplanner.financial.Account;
+import com.daviddunn.retirementplanner.financial.RothIRA;
+import com.daviddunn.retirementplanner.financial.TraditionalIRA;
 import com.daviddunn.retirementplanner.model.*;
-import com.daviddunn.retirementplanner.account.*;
+import com.daviddunn.retirementplanner.util.CurrencyFormatter;
 import com.daviddunn.retirementplanner.util.Money;
 
 import java.time.LocalDate;
@@ -10,44 +13,170 @@ public class RetirementPlannerApplication {
 
     public void run() {
 
-        Person david =
-                new Person(
-                        "David",
-                        "Dunn",
-                        LocalDate.of(1963,6,4));
+        Household household = createHousehold();
 
-        Person lisa =
-                new Person(
-                        "Lisa",
-                        "Dunn",
-                        LocalDate.of(1965,2,28));
+        printHeader();
 
-        Household household =
-                new Household(david,lisa);
+        printPerson(household.getPrimaryPerson());
 
+        printPerson(household.getSpouse());
 
-        printHousehold(household);
+        printHouseholdSummary(household);
 
-        TraditionalIRA ira =
+    }
+
+    private Household createHousehold() {
+
+        Person david = new Person(
+                "David",
+                "Dunn",
+                LocalDate.of(1963, 6, 4));
+
+        Person lisa = new Person(
+                "Lisa",
+                "Dunn",
+                LocalDate.of(1965, 2, 28));
+
+        TraditionalIRA davidTraditionalIRA =
                 new TraditionalIRA(
                         david,
                         "Fidelity Traditional IRA",
-                        Money.of("2587000"));
+                        Money.of("2587000.00"));
 
-        RothIRA roth =
+        RothIRA davidRothIRA =
                 new RothIRA(
                         david,
                         "Fidelity Roth IRA",
-                        Money.of("400000"));
+                        Money.of("400000.00"));
 
-        david.addAccount(ira);
-        david.addAccount(roth);
+        TraditionalIRA lisaTraditionalIRA =
+                new TraditionalIRA(
+                        lisa,
+                        "Fidelity Traditional IRA",
+                        Money.of("2165700.00"));
+
+        david.addAccount(davidTraditionalIRA);
+        david.addAccount(davidRothIRA);
+
+        lisa.addAccount(lisaTraditionalIRA);
+
+        return new Household(david, lisa);
+    }
+
+//    public void run() {
+//
+//        Person david =
+//                new Person(
+//                        "David",
+//                        "Dunn",
+//                        LocalDate.of(1963,6,4));
+//
+//        Person lisa =
+//                new Person(
+//                        "Lisa",
+//                        "Dunn",
+//                        LocalDate.of(1965,2,28));
+//
+//        Household household =
+//                new Household(david,lisa);
+//
+//
+//        printHousehold(household);
+//
+//        TraditionalIRA ira =
+//                new TraditionalIRA(
+//                        david,
+//                        "Fidelity Traditional IRA",
+//                        Money.of("2587000"));
+//
+//        RothIRA roth =
+//                new RothIRA(
+//                        david,
+//                        "Fidelity Roth IRA",
+//                        Money.of("400000"));
+//
+//        david.addAccount(ira);
+//        david.addAccount(roth);
+//
+//        System.out.println();
+//        System.out.println("Net Worth");
+//        System.out.println("----------");
+//        System.out.println(david.getNetWorth());
+//
+//        System.out.println();
+//        System.out.println("Accounts");
+//        System.out.println("--------");
+//
+//        for (Account account : david.getAccounts()) {
+//
+//            System.out.printf(
+//                    "%-30s %15s%n",
+//                    account.getAccountName(),
+//                    CurrencyFormatter.format(account.getBalance()));
+//        }
+//
+//        System.out.println();
+//        System.out.println("Net Worth");
+//        System.out.println("---------");
+//
+//        System.out.println(
+//                CurrencyFormatter.format(
+//                        david.getNetWorth()));
+//    }
+
+    private void printHeader() {
 
         System.out.println();
-        System.out.println("Net Worth");
-        System.out.println("----------");
-        System.out.println(david.getNetWorth());
+        System.out.println("Retirement Planner");
+        System.out.println("==================");
+        System.out.println();
+    }
 
+    private void printPerson(Person person) {
+
+        System.out.println(person.getFullName());
+
+        System.out.println("-------------------------");
+
+        System.out.println("Age: " + person.getAge());
+
+        System.out.println();
+
+        System.out.println("Accounts");
+
+        for (Account account : person.getAccounts()) {
+
+            System.out.printf(
+                    "%-30s %15s%n",
+                    account.getAccountName(),
+                    CurrencyFormatter.format(account.getBalance()));
+        }
+
+        System.out.println();
+
+        System.out.println("Net Worth");
+
+        System.out.println(
+                CurrencyFormatter.format(
+                        person.getNetWorth()));
+
+        System.out.println();
+    }
+
+    private void printHouseholdSummary(Household household) {
+
+        System.out.println("==============================");
+
+        System.out.println("Household Net Worth");
+
+        System.out.println(
+                CurrencyFormatter.format(
+                        household.getNetWorth()));
+
+        System.out.println();
+
+        System.out.println("Accounts: "
+                + household.getAccountCount());
     }
 
     private void printHousehold(Household household) {
