@@ -1,9 +1,9 @@
 package com.daviddunn.retirementplanner.financial;
 
-import com.daviddunn.retirementplanner.model.Person;
+import com.daviddunn.retirementplanner.model.*;
 import java.math.BigDecimal;
 
-import  com.daviddunn.retirementplanner.model.financial.AccountType;
+import  com.daviddunn.retirementplanner.model.AccountType;
 
 public class RothIRA extends Account {
 

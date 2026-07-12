@@ -57,13 +57,8 @@ public class Person {
 
     public BigDecimal getNetWorth() {
 
-        BigDecimal total = BigDecimal.ZERO;
-
-        for (Account account : accounts) {
-            total = total.add(account.getBalance());
-        }
-
-        return total;
+        return getTotalAssets()
+                .subtract(getTotalLiabilities());
     }
 
     private final List<IncomeSource> incomeSources =
@@ -86,6 +81,21 @@ public class Person {
         }
 
         return total;
+    }
+
+    public BigDecimal getTotalAssets() {
+
+        BigDecimal total = BigDecimal.ZERO;
+
+        for (Account account : accounts) {
+            total = total.add(account.getCurrentBalance());
+        }
+
+        return total;
+    }
+
+    public BigDecimal getTotalLiabilities() {
+        return BigDecimal.ZERO;
     }
 
 }

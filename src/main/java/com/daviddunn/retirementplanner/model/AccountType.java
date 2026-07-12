@@ -1,4 +1,4 @@
-package com.daviddunn.retirementplanner.model.financial;
+package com.daviddunn.retirementplanner.model;
 
 public enum AccountType {
 

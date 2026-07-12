@@ -43,4 +43,17 @@ public class Household {
         return primaryPerson.getGuaranteedIncome()
                 .add(spouse.getGuaranteedIncome());
     }
+
+    public BigDecimal getTotalAssets() {
+
+        return primaryPerson.getTotalAssets()
+                .add(spouse.getTotalAssets());
+    }
+
+    public BigDecimal getTotalLiabilities() {
+
+        return primaryPerson.getTotalLiabilities()
+                .add(spouse.getTotalLiabilities());
+    }
+
 }

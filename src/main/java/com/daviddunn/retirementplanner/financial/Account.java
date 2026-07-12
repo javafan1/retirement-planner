@@ -2,7 +2,7 @@ package com.daviddunn.retirementplanner.financial;
 
 import com.daviddunn.retirementplanner.model.*;
 import java.math.BigDecimal;
-import com.daviddunn.retirementplanner.model.financial.AccountType;
+import com.daviddunn.retirementplanner.model.AccountType;
 
 
 public abstract class Account {
@@ -11,13 +11,13 @@ public abstract class Account {
     private Institution institution;
 
     private String name;
-    private BigDecimal balance;
+    private BigDecimal curremtBalance;
     private final AccountType type;
 
-//    public Account(Person owner, String name, BigDecimal balance) {
+//    public Account(Person owner, String name, BigDecimal curremtBalance) {
 //        this.owner = owner;
 //        this.name = name;
-//        this.balance = balance;
+//        this.curremtBalance = curremtBalance;
 //    }
 
     protected Account(Person owner,
@@ -28,7 +28,7 @@ public abstract class Account {
         this.owner = owner;
         this.name = name;
         this.type = type;
-        this.balance = balance;
+        this.curremtBalance = balance;
     }
 
     public AccountType getType() {
@@ -43,17 +43,23 @@ public abstract class Account {
         return name;
     }
 
-    public BigDecimal getBalance() {
-        return balance;
+    public BigDecimal getCurrentBalance() {
+        return curremtBalance;
     }
 
     public void deposit(BigDecimal amount) {
-        balance = balance.add(amount);
+        curremtBalance = curremtBalance.add(amount);
     }
 
     public void withdraw(BigDecimal amount) {
-        balance = balance.subtract(amount);
+
+        curremtBalance = curremtBalance.subtract(amount);
     }
 
 
+    //public BigDecimal getCurrentBalance() { return curremtBalance;}
+
+
 }
+
+

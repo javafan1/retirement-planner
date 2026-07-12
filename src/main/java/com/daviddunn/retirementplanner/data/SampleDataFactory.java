@@ -19,11 +19,11 @@ public final class SampleDataFactory {
         Person david = createDavid();
         Person lisa = createLisa();
 
-        createDavidAccounts(david);
-        createLisaAccounts(lisa);
+        addDavidAccounts(david);
+        addLisaAccounts(lisa);
 
-        createDavidIncome(david);
-        createLisaIncome(lisa);
+        addDavidIncome(david);
+        addLisaIncome(lisa);
 
         return new Household(david, lisa);
     }
@@ -44,7 +44,7 @@ public final class SampleDataFactory {
                 LocalDate.of(1965, 2, 28));
     }
 
-    private static void createDavidAccounts(Person david) {
+    private static void addDavidAccounts(Person david) {
 
         david.addAccount(
                 new TraditionalIRA(
@@ -59,7 +59,7 @@ public final class SampleDataFactory {
                         Money.of("400000")));
     }
 
-    private static void createLisaAccounts(Person lisa) {
+    private static void addLisaAccounts(Person lisa) {
 
         lisa.addAccount(
                 new TraditionalIRA(
@@ -68,16 +68,18 @@ public final class SampleDataFactory {
                         Money.of("2165700")));
     }
 
-    private static void createDavidIncome(Person david) {
+    private static void addDavidIncome(Person david) {
 
         david.addIncomeSource(
                 new Pension(
                         david,
                         "Primary Pension",
-                        Money.of("3800")));
+                        LocalDate.of(2026, 7, 1),
+                        Money.of("3800.00"),
+                        false));
     }
 
-    private static void createLisaIncome(Person lisa) {
+    private static void addLisaIncome(Person lisa) {
 
         // Lisa doesn't have a pension yet.
         // We'll add Social Security later.
