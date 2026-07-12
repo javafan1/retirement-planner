@@ -20,7 +20,6 @@ public class Household {
     }
 
 
-
     public Person getPrimaryPerson() {
         return primaryPerson;
     }
@@ -44,3 +43,4 @@ public class Household {
         return primaryPerson.getGuaranteedIncome()
                 .add(spouse.getGuaranteedIncome());
     }
+}
