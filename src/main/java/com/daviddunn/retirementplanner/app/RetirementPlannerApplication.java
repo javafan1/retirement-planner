@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.app;
 
+import com.daviddunn.retirementplanner.data.SampleDataFactory;
 import com.daviddunn.retirementplanner.financial.Account;
 import com.daviddunn.retirementplanner.financial.RothIRA;
 import com.daviddunn.retirementplanner.financial.TraditionalIRA;
@@ -13,7 +14,8 @@ public class RetirementPlannerApplication {
 
     public void run() {
 
-        Household household = createHousehold();
+        Household household =
+                SampleDataFactory.createHousehold();
 
         printHeader();
 
@@ -22,46 +24,45 @@ public class RetirementPlannerApplication {
         printPerson(household.getSpouse());
 
         printHouseholdSummary(household);
-
     }
 
-    private Household createHousehold() {
-
-        Person david = new Person(
-                "David",
-                "Dunn",
-                LocalDate.of(1963, 6, 4));
-
-        Person lisa = new Person(
-                "Lisa",
-                "Dunn",
-                LocalDate.of(1965, 2, 28));
-
-        TraditionalIRA davidTraditionalIRA =
-                new TraditionalIRA(
-                        david,
-                        "Fidelity Traditional IRA",
-                        Money.of("2587000.00"));
-
-        RothIRA davidRothIRA =
-                new RothIRA(
-                        david,
-                        "Fidelity Roth IRA",
-                        Money.of("400000.00"));
-
-        TraditionalIRA lisaTraditionalIRA =
-                new TraditionalIRA(
-                        lisa,
-                        "Fidelity Traditional IRA",
-                        Money.of("2165700.00"));
-
-        david.addAccount(davidTraditionalIRA);
-        david.addAccount(davidRothIRA);
-
-        lisa.addAccount(lisaTraditionalIRA);
-
-        return new Household(david, lisa);
-    }
+//    private Household createHousehold() {
+//
+//        Person david = new Person(
+//                "David",
+//                "Dunn",
+//                LocalDate.of(1963, 6, 4));
+//
+//        Person lisa = new Person(
+//                "Lisa",
+//                "Dunn",
+//                LocalDate.of(1965, 2, 28));
+//
+//        TraditionalIRA davidTraditionalIRA =
+//                new TraditionalIRA(
+//                        david,
+//                        "Fidelity Traditional IRA",
+//                        Money.of("2587000.00"));
+//
+//        RothIRA davidRothIRA =
+//                new RothIRA(
+//                        david,
+//                        "Fidelity Roth IRA",
+//                        Money.of("400000.00"));
+//
+//        TraditionalIRA lisaTraditionalIRA =
+//                new TraditionalIRA(
+//                        lisa,
+//                        "Fidelity Traditional IRA",
+//                        Money.of("2165700.00"));
+//
+//        david.addAccount(davidTraditionalIRA);
+//        david.addAccount(davidRothIRA);
+//
+//        lisa.addAccount(lisaTraditionalIRA);
+//
+//        return new Household(david, lisa);
+//    }
 
 //    public void run() {
 //

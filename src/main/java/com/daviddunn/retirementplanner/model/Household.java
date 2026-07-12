@@ -38,4 +38,9 @@ public class Household {
         return primaryPerson.getAccountCount()
                 + spouse.getAccountCount();
     }
-}
+
+    public BigDecimal getGuaranteedIncome() {
+
+        return primaryPerson.getGuaranteedIncome()
+                .add(spouse.getGuaranteedIncome());
+    }

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Period;
 import com.daviddunn.retirementplanner.financial.Account;
+import com.daviddunn.retirementplanner.income.IncomeSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -60,6 +61,28 @@ public class Person {
 
         for (Account account : accounts) {
             total = total.add(account.getBalance());
+        }
+
+        return total;
+    }
+
+    private final List<IncomeSource> incomeSources =
+            new ArrayList<>();
+
+    public void addIncomeSource(IncomeSource incomeSource) {
+        incomeSources.add(incomeSource);
+    }
+
+    public List<IncomeSource> getIncomeSources() {
+        return Collections.unmodifiableList(incomeSources);
+    }
+
+    public BigDecimal getGuaranteedIncome() {
+
+        BigDecimal total = BigDecimal.ZERO;
+
+        for (IncomeSource income : incomeSources) {
+            total = total.add(income.getAnnualIncome());
         }
 
         return total;

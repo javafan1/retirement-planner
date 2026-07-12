@@ -1,4 +1,32 @@
 
+7.12
+
+                        RetirementPlan
+                               │
+         ┌─────────────────────┼─────────────────────┐
+         │                     │                     │
+    Household         PlanningAssumptions      PlanningGoals
+         │
+         ▼
+      Person
+         │
+┌───────┴────────┐
+│                │
+Accounts      IncomeSources
+
+                         RetirementPlan
+                               │
+     ┌─────────────────────────┼─────────────────────────┐
+     │                         │                         │
+Household              PlanningAssumptions          PlanningGoals
+│
+├─────────────────────────────────────────────────────────────┐
+│                                                             │
+Person                                                      Person
+│                                                             │
+┌───┴──────────────┐                                    ┌─────────┴───────┐
+│                  │                                    │                 │
+Accounts      IncomeSources                        Accounts        IncomeSources
 
 7.11
 
