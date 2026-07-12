@@ -1,4 +1,4 @@
-package com.daviddunn.retirementplanner.projection;
+package com.daviddunn.retirementplanner.domain.projection;
 
 import java.math.BigDecimal;
 

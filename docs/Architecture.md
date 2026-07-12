@@ -1,6 +1,49 @@
 
 7.12
 
+src/main/java
+└── com
+└── daviddunn
+└── retirementplanner
+│
+├── app
+│      RetirementPlannerApplication.java
+│
+├── data
+│      DemoDataFactory.java
+│
+├── domain
+│      ├── model
+│      ├── financial
+│      ├── income
+│      └── projection
+│
+├── persistence
+│      (empty for now)
+│
+├── ui
+│      (empty for now)
+│
+└── util
+
+
+MVC like layers
+View
+
+↓
+
+Application Layer
+
+↓
+
+Domain Layer
+
+↓
+
+Persistence
+
+
+
                         RetirementPlan
                                │
          ┌─────────────────────┼─────────────────────┐

@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.model;
 
+import com.daviddunn.retirementplanner.domain.model.Person;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;

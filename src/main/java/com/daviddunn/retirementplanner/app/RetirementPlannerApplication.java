@@ -1,21 +1,18 @@
 package com.daviddunn.retirementplanner.app;
 
-import com.daviddunn.retirementplanner.data.SampleDataFactory;
-import com.daviddunn.retirementplanner.financial.Account;
-import com.daviddunn.retirementplanner.financial.RothIRA;
-import com.daviddunn.retirementplanner.financial.TraditionalIRA;
-import com.daviddunn.retirementplanner.model.*;
-import com.daviddunn.retirementplanner.util.CurrencyFormatter;
-import com.daviddunn.retirementplanner.util.Money;
+import com.daviddunn.retirementplanner.data.DemoDataFactory;
+import com.daviddunn.retirementplanner.domain.financial.Account;
+import com.daviddunn.retirementplanner.domain.model.Household;
+import com.daviddunn.retirementplanner.domain.model.Person;
 
-import java.time.LocalDate;
+import com.daviddunn.retirementplanner.util.CurrencyFormatter;
 
 public class RetirementPlannerApplication {
 
     public void run() {
 
         Household household =
-                SampleDataFactory.createHousehold();
+                DemoDataFactory.createHousehold();
 
         printHeader();
 
@@ -150,7 +147,7 @@ public class RetirementPlannerApplication {
             System.out.printf(
                     "%-30s %15s%n",
                     account.getAccountName(),
-                    CurrencyFormatter.format(account.getBalance()));
+                    CurrencyFormatter.format(account.getCurrentBalance()));
         }
 
         System.out.println();

@@ -1,17 +1,17 @@
 package com.daviddunn.retirementplanner.data;
 
-import com.daviddunn.retirementplanner.financial.RothIRA;
-import com.daviddunn.retirementplanner.financial.TraditionalIRA;
-import com.daviddunn.retirementplanner.income.Pension;
-import com.daviddunn.retirementplanner.model.Household;
-import com.daviddunn.retirementplanner.model.Person;
+import com.daviddunn.retirementplanner.domain.financial.RothIRA;
+import com.daviddunn.retirementplanner.domain.financial.TraditionalIRA;
+import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.model.Household;
+import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.util.Money;
 
 import java.time.LocalDate;
 
-public final class SampleDataFactory {
+public final class DemoDataFactory {
 
-    private SampleDataFactory() {
+    private DemoDataFactory() {
     }
 
     public static Household createHousehold() {

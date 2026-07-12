@@ -1,8 +1,10 @@
-package com.daviddunn.retirementplanner.financial;
+package com.daviddunn.retirementplanner.domain.financial;
 
-import com.daviddunn.retirementplanner.model.*;
+import com.daviddunn.retirementplanner.domain.model.Institution;
+import com.daviddunn.retirementplanner.domain.model.Person;
+
 import java.math.BigDecimal;
-import com.daviddunn.retirementplanner.model.AccountType;
+import com.daviddunn.retirementplanner.domain.model.AccountType;
 
 
 public abstract class Account {

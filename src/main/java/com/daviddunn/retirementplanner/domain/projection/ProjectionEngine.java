@@ -1,4 +1,4 @@
-import com.daviddunn.retirementplanner.projection.Projection;
+package com.daviddunn.retirementplanner.domain.projection;
 
 public class ProjectionEngine {
 

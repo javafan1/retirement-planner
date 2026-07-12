@@ -1,6 +1,6 @@
-package com.daviddunn.retirementplanner.income;
+package com.daviddunn.retirementplanner.domain.income;
 
-import com.daviddunn.retirementplanner.model.Person;
+import com.daviddunn.retirementplanner.domain.model.Person;
 
 import java.math.BigDecimal;
 

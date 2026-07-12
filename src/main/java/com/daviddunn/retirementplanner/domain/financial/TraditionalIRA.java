@@ -1,7 +1,7 @@
-package com.daviddunn.retirementplanner.financial;
+package com.daviddunn.retirementplanner.domain.financial;
 
-import com.daviddunn.retirementplanner.model.Person;
-import com.daviddunn.retirementplanner.model.financial.AccountType;
+import com.daviddunn.retirementplanner.domain.model.Person;
+import com.daviddunn.retirementplanner.domain.model.AccountType;
 import java.math.BigDecimal;
 
 public class TraditionalIRA extends Account {

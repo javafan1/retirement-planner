@@ -1,4 +1,4 @@
-package com.daviddunn.retirementplanner.model;
+package com.daviddunn.retirementplanner.domain.model;
 
 public class Institution {
 

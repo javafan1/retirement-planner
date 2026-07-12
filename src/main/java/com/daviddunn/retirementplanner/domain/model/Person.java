@@ -1,10 +1,10 @@
-package com.daviddunn.retirementplanner.model;
+package com.daviddunn.retirementplanner.domain.model;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Period;
-import com.daviddunn.retirementplanner.financial.Account;
-import com.daviddunn.retirementplanner.income.IncomeSource;
+import com.daviddunn.retirementplanner.domain.financial.Account;
+import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 
 import java.util.ArrayList;
 import java.util.Collections;

@@ -1,5 +1,5 @@
 
-package com.daviddunn.retirementplanner.model;
+package com.daviddunn.retirementplanner.domain.model;
 
 
 public enum AccountCategory {
