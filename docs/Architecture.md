@@ -1,4 +1,101 @@
 
+7.13
+
+Walking Skeleton
+UI
+│
+Application
+│
+Persistence
+│
+Domain
+│
+Projection
+│
+Report
+
+v0.1
+Project skeleton
+
+v0.2
+Financial model
+
+v0.3
+Projection engine
+
+v0.4
+JSON persistence
+
+v0.5
+Console reports
+
+-------------------
+
+MVP Released
+
+-------------------
+
+v0.6
+Federal taxes
+
+v0.7
+Michigan taxes
+
+v0.8
+IRMAA
+
+v0.9
+Social Security optimization
+
+v1.0
+Pension optimization
+
+MVP Plan
+
+                UI
+                 │
+                 ▼
+        RetirementPlannerApplication
+                 │
+                 ▼
+        RetirementPlanRepository
+                 │
+                 ▼
+           RetirementPlan
+                 │
+                 ▼
+         ProjectionEngine
+                 │
+                 ▼
+           Projection
+                 │
+                 ▼
+          ConsoleReport
+
+Hierarchy change to support Assets instead of just accounts
+
+Asset
+│
+├── FinancialAsset
+│      ├── TraditionalIRA
+│      ├── RothIRA
+│      ├── BrokerageAccount
+│      ├── CheckingAccount
+│      └── SavingsAccount
+│
+├── RealEstate
+│      ├── PrimaryResidence
+│      ├── VacationHome
+│      └── RentalProperty
+│
+├── Vehicle
+│
+└── Collectible
+├── CoinCollection
+├── ComicCollection
+├── CardCollection
+└── Artwork
+
 7.12
 
 src/main/java

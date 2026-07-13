@@ -1,5 +1,34 @@
 7.12
 
+
+Before you stop for the day...
+
+I have one "homework assignment"—not coding, just thinking.
+
+I'd like you to think about what questions you want this software to answer.
+
+Not features.
+
+Questions.
+
+For example, you've already given me some excellent ones:
+
+Should I take the lump sum or the annuity?
+When should David claim Social Security?
+When should Lisa claim Social Security?
+How much can I convert to Roth without crossing the next IRMAA bracket?
+How much can we safely spend each year?
+What happens if one of us dies at age 78?
+Should we spend more while we're younger?
+How much do we need to leave our children?
+How much income tax will we pay over our lifetime?
+How much will IRMAA cost us?
+How much of our portfolio should be Roth by age 80?
+
+I think that list will become our product backlog.
+
+Instead of inventing features, we'll build capabilities that answer real retirement planning questions.
+
 ## Functional Requirements
 
 Decision audit trails.. reproducible calculations

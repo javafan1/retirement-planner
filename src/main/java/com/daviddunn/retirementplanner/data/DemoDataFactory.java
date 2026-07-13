@@ -5,6 +5,8 @@ import com.daviddunn.retirementplanner.domain.financial.TraditionalIRA;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
+import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
+import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.util.Money;
 
 import java.time.LocalDate;
@@ -14,7 +16,7 @@ public final class DemoDataFactory {
     private DemoDataFactory() {
     }
 
-    public static Household createHousehold() {
+    public static RetirementPlan createRetirementPlan() {
 
         Person david = createDavid();
         Person lisa = createLisa();
@@ -25,7 +27,21 @@ public final class DemoDataFactory {
         addDavidIncome(david);
         addLisaIncome(lisa);
 
-        return new Household(david, lisa);
+        Household household = new Household(david, lisa);
+
+        PlanningAssumptions assumptions =
+                createPlanningAssumptions();
+
+        return new RetirementPlan(
+                household,
+                assumptions);
+    }
+
+    private static PlanningAssumptions createPlanningAssumptions() {
+
+        return new PlanningAssumptions(
+                Money.of("0.025"),   // 2.5% inflation
+                Money.of("0.070"));  // 7.0% investment return
     }
 
     private static Person createDavid() {
@@ -49,13 +65,13 @@ public final class DemoDataFactory {
         david.addAccount(
                 new TraditionalIRA(
                         david,
-                        "Fidelity Traditional IRA",
+                        "Traditional IRA",
                         Money.of("2587000")));
 
         david.addAccount(
                 new RothIRA(
                         david,
-                        "Fidelity Roth IRA",
+                        "Roth IRA",
                         Money.of("400000")));
     }
 
@@ -64,7 +80,7 @@ public final class DemoDataFactory {
         lisa.addAccount(
                 new TraditionalIRA(
                         lisa,
-                        "Fidelity Traditional IRA",
+                        "Traditional IRA",
                         Money.of("2165700")));
     }
 
@@ -75,13 +91,12 @@ public final class DemoDataFactory {
                         david,
                         "Primary Pension",
                         LocalDate.of(2026, 7, 1),
-                        Money.of("3800.00"),
+                        Money.of("3800"),
                         false));
     }
 
     private static void addLisaIncome(Person lisa) {
 
-        // Lisa doesn't have a pension yet.
-        // We'll add Social Security later.
+        // Placeholder for future Social Security and pension.
     }
 }
