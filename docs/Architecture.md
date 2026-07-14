@@ -1,4 +1,32 @@
 
+
+7.14 MVP class diagram
+
+RetirementPlan
+│
+├── Household
+│     ├── Person (David)
+│     ├── Person (Lisa)
+│     ├── Expense*
+│     └── getAllAccounts()
+│
+├── PlanningAssumptions
+│
+Person
+│
+├── Account*
+├── IncomeSource*
+│
+Account
+│
+├── TraditionalIRA
+└── RothIRA
+
+IncomeSource
+│
+├── Pension
+└── SocialSecurity
+
 7.13
 
 Walking Skeleton

@@ -5,6 +5,9 @@ import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.projection.Projection;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.util.CurrencyFormatter;
 import com.daviddunn.retirementplanner.util.Money;
 import com.daviddunn.retirementplanner.domain.financial.Account;
@@ -28,6 +31,20 @@ public class RetirementPlannerApplication {
         printHouseholdSummary(household);
 
         printPlanningAssumptions(plan);
+
+//        ProjectionEngine engine =
+//                new ProjectionEngine();
+//
+//        ProjectionYear year =
+//                engine.projectYear(plan, 2027);
+//
+//        printProjection(year);
+
+       // ProjectionEngine engine = new ProjectionEngine();
+
+        //Projection projection = engine.project(plan);
+
+        //printer.print(projection);
     }
 
     private void printHeader() {
@@ -137,4 +154,40 @@ private void printHouseholdSummary(Household household) {
             CurrencyFormatter.format(
                     household.getGuaranteedIncome()));
 }
+
+    private void printProjection(
+            ProjectionYear projection) {
+
+        System.out.println();
+        System.out.println("========================================");
+        System.out.println("Projection " + projection.getCalendarYear());
+        System.out.println("========================================");
+
+        System.out.printf("%-30s %15s%n",
+                "Beginning Assets",
+                CurrencyFormatter.format(
+                        projection.getBeginningAssets()));
+
+        System.out.printf("%-30s %15s%n",
+                "Investment Growth",
+                CurrencyFormatter.format(
+                        projection.getInvestmentGrowth()));
+
+        System.out.printf("%-30s %15s%n",
+                "Guaranteed Income",
+                CurrencyFormatter.format(
+                        projection.getGuaranteedIncome()));
+
+        System.out.printf("%-30s %15s%n",
+                "Expenses",
+                CurrencyFormatter.format(
+                        projection.getExpenses()));
+
+        System.out.println("----------------------------------------");
+
+        System.out.printf("%-30s %15s%n",
+                "Ending Assets",
+                CurrencyFormatter.format(
+                        projection.getEndingAssets()));
+    }
 }

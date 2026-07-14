@@ -1,3 +1,31 @@
+
+7.14 MVP classes
+
+RetirementPlan
+│
+├── Household
+│     ├── Person (David)
+│     ├── Person (Lisa)
+│     ├── Expense*
+│     └── getAllAccounts()
+│
+├── PlanningAssumptions
+│
+Person
+│
+├── Account*
+├── IncomeSource*
+│
+Account
+│
+├── TraditionalIRA
+└── RothIRA
+
+IncomeSource
+│
+├── Pension
+└── SocialSecurity
+
 7.12
 
 Retirement Timeline Events object
