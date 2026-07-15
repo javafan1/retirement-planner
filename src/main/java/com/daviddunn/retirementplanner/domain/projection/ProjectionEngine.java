@@ -29,7 +29,7 @@ public class ProjectionEngine {
 
             projection.addYear(year);
 
-            beginningAssets = year.getEndingAssets();
+            beginningAssets = year.getEndingInvestableAssets();
         }
 
         return projection;

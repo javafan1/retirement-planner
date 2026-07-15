@@ -1,4 +1,18 @@
 
+7.15 mvc v1 packages
+com.daviddunn.retirementplanner
+
+app
+data
+domain
+    financial
+    income
+    model
+    projection
+persistence
+ui
+    console
+util
 
 7.14 MVP class diagram
 

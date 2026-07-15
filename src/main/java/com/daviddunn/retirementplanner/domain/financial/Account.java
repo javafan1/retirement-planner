@@ -58,7 +58,9 @@ public abstract class Account {
         curremtBalance = curremtBalance.subtract(amount);
     }
 
-
+    protected void setCurrentBalance(BigDecimal currentBalance) {
+        currentBalance = currentBalance;
+    }
     //public BigDecimal getCurrentBalance() { return curremtBalance;}
 
 

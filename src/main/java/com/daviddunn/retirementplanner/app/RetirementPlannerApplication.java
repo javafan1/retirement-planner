@@ -8,6 +8,7 @@ import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
+import com.daviddunn.retirementplanner.ui.console.ConsoleReportPrinter;
 import com.daviddunn.retirementplanner.util.CurrencyFormatter;
 import com.daviddunn.retirementplanner.util.Money;
 import com.daviddunn.retirementplanner.domain.financial.Account;
@@ -19,33 +20,53 @@ public class RetirementPlannerApplication {
         RetirementPlan plan =
                 DemoDataFactory.createRetirementPlan();
 
-        Household household =
-                plan.getHousehold();
+        ProjectionEngine projectionEngine =
+               new ProjectionEngine();
 
-        printHeader();
+        Projection projection =
+                projectionEngine.project(plan);
 
-        printPerson(household.getPrimaryPerson());
+        ConsoleReportPrinter printer = new ConsoleReportPrinter();
+        printer.printProjection(projection);
+        printer.printRetirementPlan(plan);
 
-        printPerson(household.getSpouse());
-
-        printHouseholdSummary(household);
-
-        printPlanningAssumptions(plan);
-
-//        ProjectionEngine engine =
-//                new ProjectionEngine();
-//
-//        ProjectionYear year =
-//                engine.projectYear(plan, 2027);
-//
-//        printProjection(year);
-
-       // ProjectionEngine engine = new ProjectionEngine();
-
-        //Projection projection = engine.project(plan);
-
-        //printer.print(projection);
     }
+    public void printRetirementPlan(RetirementPlan plan) {
+    
+//            printHeader();public void run() {
+//
+//            printHousehold(plan.getHousehold());    RetirementPlan plan =
+//                DemoDataFactory.createRetirementPlan();
+//            printPlanningAssumptions(
+//                    plan.getPlanningAssumptions());    Household household =
+//                plan.getHousehold();
+//            printFooter();
+//        }    printHeader();
+//
+//        printPerson(household.getPrimaryPerson());
+//
+//        printPerson(household.getSpouse());
+//
+//        printHouseholdSummary(household);
+//
+//        printPlanningAssumptions(plan);
+//
+////        ProjectionEngine engine =
+////                new ProjectionEngine();
+////
+////        ProjectionYear year =
+////                engine.projectYear(plan, 2027);
+////
+////        printProjection(year);
+//
+//       // ProjectionEngine engine = new ProjectionEngine();
+//
+//        //Projection projection = engine.project(plan);
+//
+//        //printer.print(projection);
+    }
+
+
 
     private void printHeader() {
 
@@ -55,6 +76,9 @@ public class RetirementPlannerApplication {
         System.out.println("==============================================");
         System.out.println();
     }
+
+
+    
 
     private void printPlanningAssumptions(
             RetirementPlan plan) {
@@ -76,6 +100,10 @@ public class RetirementPlannerApplication {
     }
 
     // Existing methods
+
+
+
+
 
     private void printPerson(Person person) {
 
@@ -166,7 +194,7 @@ private void printHouseholdSummary(Household household) {
         System.out.printf("%-30s %15s%n",
                 "Beginning Assets",
                 CurrencyFormatter.format(
-                        projection.getBeginningAssets()));
+                        projection.getBeginningInvestableAssets()));
 
         System.out.printf("%-30s %15s%n",
                 "Investment Growth",
@@ -185,9 +213,12 @@ private void printHouseholdSummary(Household household) {
 
         System.out.println("----------------------------------------");
 
-        System.out.printf("%-30s %15s%n",
-                "Ending Assets",
-                CurrencyFormatter.format(
-                        projection.getEndingAssets()));
+//        System.out.printf("%-30s %15s%n",
+//                "Ending Assets",
+//                CurrencyFormatter.format(
+//                        projection.getEndingAssets()));
     }
+
+
+    
 }

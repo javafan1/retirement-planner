@@ -7,7 +7,7 @@ public class ProjectionYear {
 
     private final int calendarYear;
 
-    private final BigDecimal beginningAssets;
+    private final BigDecimal beginningInvestableAssets;
 
     private final BigDecimal investmentGrowth;
 
@@ -15,20 +15,20 @@ public class ProjectionYear {
 
     private final BigDecimal expenses;
 
-    private final BigDecimal endingAssets;
+    private final BigDecimal endingInvestbleAssets;
 
     public ProjectionYear(
             int calendarYear,
-            BigDecimal beginningAssets,
+            BigDecimal beginningInvestableAssets,
             BigDecimal investmentGrowth,
             BigDecimal guaranteedIncome,
             BigDecimal expenses,
-            BigDecimal endingAssets) {
+            BigDecimal endingInvestableAssets) {
 
         this.calendarYear = calendarYear;
 
-        this.beginningAssets =
-                Objects.requireNonNull(beginningAssets);
+        this.beginningInvestableAssets =
+                Objects.requireNonNull(beginningInvestableAssets);
 
         this.investmentGrowth =
                 Objects.requireNonNull(investmentGrowth);
@@ -39,16 +39,16 @@ public class ProjectionYear {
         this.expenses =
                 Objects.requireNonNull(expenses);
 
-        this.endingAssets =
-                Objects.requireNonNull(endingAssets);
+        this.endingInvestbleAssets =
+                Objects.requireNonNull(endingInvestableAssets);
     }
 
     public int getCalendarYear() {
         return calendarYear;
     }
 
-    public BigDecimal getBeginningAssets() {
-        return beginningAssets;
+    public BigDecimal getBeginningInvestableAssets() {
+        return beginningInvestableAssets;
     }
 
     public BigDecimal getInvestmentGrowth() {
@@ -63,8 +63,8 @@ public class ProjectionYear {
         return expenses;
     }
 
-    public BigDecimal getEndingAssets() {
-        return endingAssets;
+    public BigDecimal getEndingInvestableAssets() {
+        return endingInvestbleAssets;
     }
 }
 
