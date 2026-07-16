@@ -8,10 +8,15 @@ import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
+import com.daviddunn.retirementplanner.persistence.JsonRetirementPlanRepository;
+import com.daviddunn.retirementplanner.persistence.RetirementPlanRepository;
 import com.daviddunn.retirementplanner.ui.console.ConsoleReportPrinter;
 import com.daviddunn.retirementplanner.util.CurrencyFormatter;
 import com.daviddunn.retirementplanner.util.Money;
 import com.daviddunn.retirementplanner.domain.financial.Account;
+
+import java.io.IOException;
+import java.nio.file.Path;
 
 public class RetirementPlannerApplication {
 
@@ -29,6 +34,25 @@ public class RetirementPlannerApplication {
         ConsoleReportPrinter printer = new ConsoleReportPrinter();
         printer.printProjection(projection);
         printer.printRetirementPlan(plan);
+
+        RetirementPlanRepository repository =
+                new JsonRetirementPlanRepository();
+
+        Path file = Path.of("plan.json");
+
+        try {
+            repository.save(plan, file);
+
+            RetirementPlan loadedPlan =
+                    repository.load(file);
+
+            System.out.println(loadedPlan.getHousehold()
+                    .getHouseholdName());
+        } catch (
+            IOException e) {
+
+            e.printStackTrace();
+    }
 
     }
     public void printRetirementPlan(RetirementPlan plan) {
@@ -123,7 +147,7 @@ public class RetirementPlannerApplication {
 
             System.out.printf(
                     "%-30s %15s%n",
-                    account.getAccountName(),
+                    account.getName(),
                     CurrencyFormatter.format(
                             account.getCurrentBalance()));
         }

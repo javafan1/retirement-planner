@@ -119,7 +119,7 @@ public class ConsoleReportPrinter {
 
             System.out.printf(
                     "%-30s %15s%n",
-                    account.getAccountName(),
+                    account.getName(),
                     CurrencyFormatter.format(account.getCurrentBalance()));
         }
 

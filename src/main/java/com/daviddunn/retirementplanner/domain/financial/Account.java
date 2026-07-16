@@ -38,11 +38,12 @@ public abstract class Account {
     }
 
     protected Account(String name,
+                      AccountType type,
                       BigDecimal balance) {
 
         //this.owner = owner;
         this.name = name;
-        //this.type = type;
+        this.type = type;
         this.currentBalance = balance;
     }
 
@@ -59,7 +60,7 @@ public abstract class Account {
 //    }
 
 
-    public String getAccountName() {
+    public String getName() {
         return name;
     }
 
@@ -75,7 +76,7 @@ public abstract class Account {
 //        this.institution = institution;
 //    }
 
-    public void setAccountName(String name) {
+    public void setName(String name) {
         this.name = name;
     }
 

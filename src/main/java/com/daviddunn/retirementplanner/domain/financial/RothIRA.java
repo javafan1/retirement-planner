@@ -7,7 +7,11 @@ import java.math.BigDecimal;
 
 public class RothIRA extends Account {
 
-    public RothIRA(Person david, String rothIra, BigDecimal bigDecimal) {
+//    public RothIRA( String rothIra, BigDecimal bigDecimal) {
+//        super();
+//    }
+
+    protected RothIRA() {
         super();
     }
 

@@ -84,12 +84,13 @@ public final class DemoDataFactory {
 
         david.addIncomeSource(
                 new Pension(
-                        david,
                         "Primary Pension",
                         LocalDate.of(2026, 7, 1),
                         Money.of("3800"),
                         false));
     }
+
+    //"Primary Pension",
 
     private static void addLisaIncome(Person lisa) {
 

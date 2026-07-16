@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.domain.model;
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
@@ -27,6 +28,7 @@ public class Household {
         this.spouse = Objects.requireNonNull(spouse);
     }
 
+    @JsonIgnore
     public String getHouseholdName() {
 
         return primaryPerson.getLastName() + " Household";
@@ -54,6 +56,7 @@ public class Household {
 //                .add(spouse.getTotalAssets());
 //    }
 
+    @JsonIgnore
     public BigDecimal getTotalAssets() {
 
         BigDecimal total = BigDecimal.ZERO;
@@ -64,24 +67,26 @@ public class Household {
 
         return total;
     }
+    @JsonIgnore
     public BigDecimal getTotalLiabilities() {
 
         return primaryPerson.getTotalLiabilities()
                 .add(spouse.getTotalLiabilities());
     }
 
+    @JsonIgnore
     public BigDecimal getNetWorth() {
 
         return getTotalAssets()
                 .subtract(getTotalLiabilities());
     }
-
+    @JsonIgnore
     public BigDecimal getGuaranteedIncome() {
 
         return primaryPerson.getGuaranteedIncome()
                 .add(spouse.getGuaranteedIncome());
     }
-
+    @JsonIgnore
     public BigDecimal getTotalAnnualExpenses() {
 
         BigDecimal total = BigDecimal.ZERO;
@@ -93,6 +98,7 @@ public class Household {
         return total;
     }
 
+    @JsonIgnore
     public List<Account> getAllAccounts() {
 
         List<Account> accounts = new ArrayList<>();
@@ -102,7 +108,7 @@ public class Household {
 
         return Collections.unmodifiableList(accounts);
     }
-
+    @JsonIgnore
     public int getAccountCount() {
         return getAllAccounts().size();
     }

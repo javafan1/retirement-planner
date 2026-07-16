@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.Period;
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,10 +39,12 @@ public class Person {
         return birthDate;
     }
 
+    @JsonIgnore
     public String getFullName() {
         return firstName + " " + lastName;
     }
 
+    @JsonIgnore
     public int getAge() {
         return Period.between(birthDate, LocalDate.now()).getYears();
     }
@@ -54,10 +57,12 @@ public class Person {
         return Collections.unmodifiableList(accounts);
     }
 
+    @JsonIgnore
     public int getAccountCount() {
         return accounts.size();
     }
 
+    @JsonIgnore
     public BigDecimal getNetWorth() {
 
         return getTotalAssets()
@@ -75,6 +80,7 @@ public class Person {
         return Collections.unmodifiableList(incomeSources);
     }
 
+    @JsonIgnore
     public BigDecimal getGuaranteedIncome() {
 
         BigDecimal total = BigDecimal.ZERO;
@@ -86,6 +92,7 @@ public class Person {
         return total;
     }
 
+    @JsonIgnore
     public BigDecimal getTotalAssets() {
 
         BigDecimal total = BigDecimal.ZERO;
@@ -97,6 +104,7 @@ public class Person {
         return total;
     }
 
+    @JsonIgnore
     public BigDecimal getTotalLiabilities() {
         return BigDecimal.ZERO;
     }
