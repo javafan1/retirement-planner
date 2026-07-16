@@ -1,5 +1,8 @@
 package com.daviddunn.retirementplanner.domain.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.math.BigDecimal;
 
 public class PlanningAssumptions {
@@ -8,11 +11,16 @@ public class PlanningAssumptions {
 
     private BigDecimal expectedAnnualInvestmentReturn;
 
-    public PlanningAssumptions(BigDecimal annualInflationRate,
-                               BigDecimal annualInvestmentReturn) {
+    @JsonCreator
+    public PlanningAssumptions(
+            @JsonProperty("expectedAnnualInflationRate")
+            BigDecimal expectedAnnualInflationRate,
 
-        this.expectedAnnualInflationRate = annualInflationRate;
-        this.expectedAnnualInvestmentReturn = annualInvestmentReturn;
+            @JsonProperty("expectedAnnualInvestmentReturn")
+            BigDecimal expectedAnnualInvestmentReturn) {
+
+        this.expectedAnnualInflationRate = expectedAnnualInflationRate;
+        this.expectedAnnualInvestmentReturn = expectedAnnualInvestmentReturn;
     }
 
     public BigDecimal getExpectedAnnualInflationRate() {

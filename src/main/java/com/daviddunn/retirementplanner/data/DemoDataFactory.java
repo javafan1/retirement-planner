@@ -63,14 +63,11 @@ public final class DemoDataFactory {
     private static void addDavidAccounts(Person david) {
 
         david.addAccount(
-                new TraditionalIRA(
-                        david,
-                        "Traditional IRA",
+                new TraditionalIRA("Traditional IRA",
                         Money.of("2587000")));
 
         david.addAccount(
                 new RothIRA(
-                        david,
                         "Roth IRA",
                         Money.of("400000")));
     }
@@ -79,7 +76,6 @@ public final class DemoDataFactory {
 
         lisa.addAccount(
                 new TraditionalIRA(
-                        lisa,
                         "Traditional IRA",
                         Money.of("2165700")));
     }

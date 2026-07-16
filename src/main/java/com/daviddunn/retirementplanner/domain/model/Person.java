@@ -15,7 +15,10 @@ public class Person {
     private String firstName;
     private String lastName;
     private LocalDate birthDate;
-    private final List<Account> accounts = new ArrayList<>();
+    private List<Account> accounts = new ArrayList<>();
+
+    public Person() {
+    }
 
     public Person(String firstName, String lastName, LocalDate birthDate) {
         this.firstName = firstName;
@@ -61,7 +64,7 @@ public class Person {
                 .subtract(getTotalLiabilities());
     }
 
-    private final List<IncomeSource> incomeSources =
+    private List<IncomeSource> incomeSources =
             new ArrayList<>();
 
     public void addIncomeSource(IncomeSource incomeSource) {
@@ -98,4 +101,23 @@ public class Person {
         return BigDecimal.ZERO;
     }
 
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public void setBirthDate(LocalDate birthDate) {
+        this.birthDate = birthDate;
+    }
+
+    public void setAccounts(List<Account> accounts) {
+        this.accounts = accounts;
+    }
+
+    public void setIncomeSources(List<IncomeSource> incomeSources) {
+        this.incomeSources = incomeSources;
+    }
 }

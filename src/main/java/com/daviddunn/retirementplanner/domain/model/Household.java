@@ -2,6 +2,8 @@ package com.daviddunn.retirementplanner.domain.model;
 
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -16,16 +18,13 @@ public class Household {
 
     private final List<Expense> expenses = new ArrayList<>();
 
-    public Household(Person primaryPerson,
-                     Person spouse) {
+    @JsonCreator
+    public Household(
+            @JsonProperty("primaryPerson") Person primaryPerson,
+            @JsonProperty("spouse") Person spouse) {
 
-        this.primaryPerson = Objects.requireNonNull(
-                primaryPerson,
-                "primaryPerson cannot be null");
-
-        this.spouse = Objects.requireNonNull(
-                spouse,
-                "spouse cannot be null");
+        this.primaryPerson = Objects.requireNonNull(primaryPerson);
+        this.spouse = Objects.requireNonNull(spouse);
     }
 
     public String getHouseholdName() {
