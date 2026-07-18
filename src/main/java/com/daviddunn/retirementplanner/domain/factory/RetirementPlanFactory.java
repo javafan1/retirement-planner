@@ -9,6 +9,12 @@ import java.math.BigDecimal;
 
 public final class RetirementPlanFactory {
 
+    private static final BigDecimal DEFAULT_INFLATION_RATE =
+            new BigDecimal("0.03");
+
+    private static final BigDecimal DEFAULT_INVESTMENT_RETURN =
+            new BigDecimal("0.08");
+
     private RetirementPlanFactory() {
     }
 
@@ -22,8 +28,13 @@ public final class RetirementPlanFactory {
 
         PlanningAssumptions assumptions =
                 new PlanningAssumptions(
-                        new BigDecimal("0.03"),
-                        new BigDecimal("0.08"));
+                        DEFAULT_INFLATION_RATE,
+                        DEFAULT_INVESTMENT_RETURN);
+
+//        PlanningAssumptions assumptions =
+//                new PlanningAssumptions(
+//                        new BigDecimal("0.03"),
+//                        new BigDecimal("0.08"));
 
         return new RetirementPlan(
                 household,

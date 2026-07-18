@@ -27,7 +27,9 @@ public class PersonCard extends GridPane {
 
         ColumnConstraints fieldColumn = new ColumnConstraints();
         fieldColumn.setHgrow(Priority.ALWAYS);
-
+        firstNameField.setMaxWidth(Double.MAX_VALUE);
+        lastNameField.setMaxWidth(Double.MAX_VALUE);
+        birthDatePicker.setMaxWidth(Double.MAX_VALUE);
         getColumnConstraints().addAll(labelColumn, fieldColumn);
 
         firstNameField.setPrefColumnCount(20);

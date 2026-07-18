@@ -1,149 +1,191 @@
 package com.daviddunn.retirementplanner.ui;
 
-import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
-import com.daviddunn.retirementplanner.domain.model.Household;
-import com.daviddunn.retirementplanner.domain.model.Person;
-import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
+
 import com.daviddunn.retirementplanner.ui.views.HouseholdView;
+//import com.daviddunn.retirementplanner.ui.views.AccountsView;
+//import com.daviddunn.retirementplanner.ui.views.AssumptionsView;
+//import com.daviddunn.retirementplanner.ui.views.ExpensesView;
+//
+//import com.daviddunn.retirementplanner.ui.views.IncomeView;
+//import com.daviddunn.retirementplanner.ui.views.ResultsView;
+import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
-import javafx.scene.layout.BorderPane;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
-import javafx.geometry.Insets;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-
+import java.io.IOException;
 
 public class MainWindow {
 
-    private final BorderPane root;
-    private RetirementPlan currentPlan;
+    private final ApplicationController controller;
 
+    private final BorderPane root;
+
+    private final HouseholdView householdView;
+//    private final AccountsView accountsView;
+//    private final IncomeView incomeView;
+//    private final ExpensesView expensesView;
+//    private final AssumptionsView assumptionsView;
+//    private final ResultsView resultsView;
+
+    private final Label statusLabel;
 
     public MainWindow() {
 
-        currentPlan = RetirementPlanFactory.createEmptyPlan();
-        //currentPlan = createEmptyPlan();
+        controller = new ApplicationController();
+
+        householdView = new HouseholdView();
+//        accountsView = new AccountsView();
+//        incomeView = new IncomeView();
+//        expensesView = new ExpensesView();
+//        assumptionsView = new AssumptionsView();
+//        resultsView = new ResultsView();
+
+        statusLabel = new Label("Ready");
 
         root = new BorderPane();
 
         root.setTop(createMenuBar());
-
         root.setCenter(createTabPane());
-
         root.setBottom(createStatusBar());
+
+        loadCurrentPlan();
     }
-//    public MainWindow() {
-//
-//        root = new BorderPane();
-//
-//        MenuBar menuBar = createMenuBar();
-//
-//        root.setTop(menuBar);
-//
-//        //root.setCenter(new Label("Retirement Planner"));
-//        root.setCenter(createTabPane());
-//    }
 
     public Scene createScene() {
-        return new Scene(root, 1000, 700);
+        return new Scene(root, 1200, 800);
     }
 
     private MenuBar createMenuBar() {
 
         Menu fileMenu = new Menu("File");
 
+        MenuItem newItem = new MenuItem("New");
+        MenuItem openItem = new MenuItem("Open...");
+        MenuItem saveItem = new MenuItem("Save");
+        MenuItem saveAsItem = new MenuItem("Save As...");
+        MenuItem exitItem = new MenuItem("Exit");
+
         fileMenu.getItems().addAll(
-                new MenuItem("New"),
-                new MenuItem("Open..."),
-                new MenuItem("Save"),
-                new MenuItem("Save As..."),
-                new MenuItem("Exit")
-        );
+                newItem,
+                openItem,
+                saveItem,
+                saveAsItem,
+                new SeparatorMenuItem(),
+                exitItem);
 
         Menu helpMenu = new Menu("Help");
 
-        helpMenu.getItems().add(
-                new MenuItem("About")
-        );
+        MenuItem aboutItem = new MenuItem("About");
 
-        MenuBar menuBar = new MenuBar();
+        helpMenu.getItems().add(aboutItem);
 
-        menuBar.getMenus().addAll(fileMenu, helpMenu);
-
-        return menuBar;
+        return new MenuBar(fileMenu, helpMenu);
     }
 
     private TabPane createTabPane() {
 
         TabPane tabPane = new TabPane();
 
-        tabPane.getTabs().addAll(
-                createTab("Household"),
-                createTab("Accounts"),
-                createTab("Income"),
-                createTab("Expenses"),
-                createTab("Assumptions"),
-                createTab("Results")
-        );
+        tabPane.getTabs().add(createTab("Household", householdView));
+
+        tabPane.getTabs().add(createTab("Accounts", new Label("Coming Soon")));
+        tabPane.getTabs().add(createTab("Income", new Label("Coming Soon")));
+        tabPane.getTabs().add(createTab("Expenses", new Label("Coming Soon")));
+        tabPane.getTabs().add(createTab("Assumptions", new Label("Coming Soon")));
+        tabPane.getTabs().add(createTab("Results", new Label("Coming Soon")));
+
+//        tabPane.getTabs().add(createTab("Accounts", accountsView));
+//        tabPane.getTabs().add(createTab("Income", incomeView));
+//        tabPane.getTabs().add(createTab("Expenses", expensesView));
+//        tabPane.getTabs().add(createTab("Assumptions", assumptionsView));
+//        tabPane.getTabs().add(createTab("Results", resultsView));
 
         return tabPane;
     }
 
-    private Tab createTab(String title) {
+    private Tab createTab(String title, javafx.scene.Node content) {
 
-        Tab tab = new Tab(title);
-
+        Tab tab = new Tab(title, content);
         tab.setClosable(false);
-
-        //tab.setContent(new Label(title));
-        if (title.equals("Household")) {
-            tab.setContent(new HouseholdView());
-        } else {
-            tab.setContent(new Label(title));
-        }
 
         return tab;
     }
 
-    private Label createStatusBar() {
+    private HBox createStatusBar() {
 
-        Label status = new Label("Ready");
+        HBox statusBar = new HBox(statusLabel);
+        statusBar.setPadding(new Insets(5));
 
-        status.setPadding(new Insets(5));
-
-        return status;
+        return statusBar;
     }
 
-//    private RetirementPlan createEmptyPlan() {
+    private void loadCurrentPlan() {
+
+        RetirementPlan plan = controller.getCurrentPlan();
+
+        householdView.load(plan);
+
+        statusLabel.setText("Ready");
+    }
+//    private void refreshViews() {
 //
-//        Person primaryPerson = new Person(
-//                "",
-//                "",
-//                null);
+//        System.out.println(controller);
+//        System.out.println(controller.getCurrentPlan());
 //
-//        Person spouse = new Person(
-//                "",
-//                "",
-//                null);
+//        householdView.load(controller.getCurrentPlan());
 //
-//        Household household = new Household(
-//                primaryPerson,
-//                spouse);
-//
-//        PlanningAssumptions assumptions =
-//                new PlanningAssumptions(
-//                        new BigDecimal("0.03"),
-//                        new BigDecimal("0.08"));
-//
-//        return new RetirementPlan(
-//                household,
-//                assumptions);
+//        statusLabel.setText("Ready");
 //    }
+//    private void refreshViews() {
+//
+//        householdView.load(controller.getCurrentPlan());
+//
+//        statusLabel.setText("Ready");
+//    }
+    //private void refreshViews() {
+
+        // We'll implement this once each view has a load() method.
+
+        // householdView.load(controller.getCurrentPlan());
+        // accountsView.load(controller.getCurrentPlan());
+        // incomeView.load(controller.getCurrentPlan());
+        // expensesView.load(controller.getCurrentPlan());
+        // assumptionsView.load(controller.getCurrentPlan());
+        // resultsView.clear();
+    //}
+
+    private void saveCurrentPlan() {
+
+        RetirementPlan plan = controller.getCurrentPlan();
+
+        householdView.save(plan);
+
+        // Future
+        // accountsView.save(plan);
+        // incomeView.save(plan);
+        // assumptionsView.save(plan);
+    }
+
+    private void onSave() {
+
+        saveCurrentPlan();
+
+        try {
+            controller.save();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        statusLabel.setText("Plan saved.");
+    }
 }
