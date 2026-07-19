@@ -57,4 +57,23 @@ public class ApplicationController {
     public Path getCurrentFile() {
         return currentFile;
     }
+
+    public RetirementPlan open(Path file) throws IOException {
+
+        currentPlan = repository.load(file);
+        currentFile = file;
+
+        return currentPlan;
+    }
+
+    public boolean hasCurrentFile() {
+        return currentFile != null;
+    }
+
+    public void saveAs(Path file) throws IOException {
+
+        repository.save(currentPlan, file);
+        currentFile = file;
+    }
+
 }

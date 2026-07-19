@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.factory;
 
+import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
@@ -31,6 +32,8 @@ public final class RetirementPlanFactory {
                         DEFAULT_INFLATION_RATE,
                         DEFAULT_INVESTMENT_RETURN);
 
+        AccountPortfolio accountPortfolio = new AccountPortfolio();
+
 //        PlanningAssumptions assumptions =
 //                new PlanningAssumptions(
 //                        new BigDecimal("0.03"),
@@ -38,6 +41,7 @@ public final class RetirementPlanFactory {
 
         return new RetirementPlan(
                 household,
+                accountPortfolio,
                 assumptions);
     }
 }

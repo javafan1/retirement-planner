@@ -93,7 +93,7 @@ public abstract class Account {
         currentBalance = currentBalance.subtract(amount);
     }
 
-    protected void setCurrentBalance(BigDecimal currentBalance) {
+    public void setCurrentBalance(BigDecimal currentBalance) {
         this.currentBalance = currentBalance;
     }
 

@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.data;
 
+import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.financial.RothIRA;
 import com.daviddunn.retirementplanner.domain.financial.TraditionalIRA;
 import com.daviddunn.retirementplanner.domain.income.Pension;
@@ -32,8 +33,11 @@ public final class DemoDataFactory {
         PlanningAssumptions assumptions =
                 createPlanningAssumptions();
 
+        AccountPortfolio accountPortfolio = new AccountPortfolio();
+
         return new RetirementPlan(
                 household,
+                accountPortfolio,
                 assumptions);
     }
 

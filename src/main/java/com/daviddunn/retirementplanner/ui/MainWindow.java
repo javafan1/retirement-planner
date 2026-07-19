@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.ui;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 
+import com.daviddunn.retirementplanner.ui.views.AccountsView;
 import com.daviddunn.retirementplanner.ui.views.HouseholdView;
 //import com.daviddunn.retirementplanner.ui.views.AccountsView;
 //import com.daviddunn.retirementplanner.ui.views.AssumptionsView;
@@ -21,7 +22,9 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.stage.FileChooser;
 
+import java.io.File;
 import java.io.IOException;
 
 public class MainWindow {
@@ -31,6 +34,8 @@ public class MainWindow {
     private final BorderPane root;
 
     private final HouseholdView householdView;
+    private final AccountsView accountsView;
+
 //    private final AccountsView accountsView;
 //    private final IncomeView incomeView;
 //    private final ExpensesView expensesView;
@@ -44,6 +49,8 @@ public class MainWindow {
         controller = new ApplicationController();
 
         householdView = new HouseholdView();
+        accountsView = new AccountsView();
+
 //        accountsView = new AccountsView();
 //        incomeView = new IncomeView();
 //        expensesView = new ExpensesView();
@@ -75,6 +82,10 @@ public class MainWindow {
         MenuItem saveAsItem = new MenuItem("Save As...");
         MenuItem exitItem = new MenuItem("Exit");
 
+        saveItem.setOnAction(e -> onSave());
+        saveAsItem.setOnAction(e -> onSaveAs());
+        openItem.setOnAction(e -> onOpen());
+
         fileMenu.getItems().addAll(
                 newItem,
                 openItem,
@@ -98,7 +109,7 @@ public class MainWindow {
 
         tabPane.getTabs().add(createTab("Household", householdView));
 
-        tabPane.getTabs().add(createTab("Accounts", new Label("Coming Soon")));
+        tabPane.getTabs().add(createTab("Accounts", accountsView));
         tabPane.getTabs().add(createTab("Income", new Label("Coming Soon")));
         tabPane.getTabs().add(createTab("Expenses", new Label("Coming Soon")));
         tabPane.getTabs().add(createTab("Assumptions", new Label("Coming Soon")));
@@ -134,6 +145,7 @@ public class MainWindow {
         RetirementPlan plan = controller.getCurrentPlan();
 
         householdView.load(plan);
+        accountsView.load(plan);
 
         statusLabel.setText("Ready");
     }
@@ -169,6 +181,7 @@ public class MainWindow {
         RetirementPlan plan = controller.getCurrentPlan();
 
         householdView.save(plan);
+        accountsView.save(plan);
 
         // Future
         // accountsView.save(plan);
@@ -178,14 +191,89 @@ public class MainWindow {
 
     private void onSave() {
 
+
+        if (!controller.hasCurrentFile()) {
+            onSaveAs();
+            return;
+        }
+
         saveCurrentPlan();
 
         try {
             controller.save();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            statusLabel.setText("Plan saved.");
+        }
+        catch (Exception ex) {
+            statusLabel.setText("Save failed.");
+            ex.printStackTrace();
+        }
+    }
+
+    private void onSaveAs() {
+
+        FileChooser fileChooser = new FileChooser();
+
+        fileChooser.setTitle("Save Retirement Plan");
+
+        fileChooser.setInitialFileName("RetirementPlan.json");
+
+        fileChooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter(
+                        "JSON Files",
+                        "*.json"));
+
+        File file = fileChooser.showSaveDialog(root.getScene().getWindow());
+
+        if (file == null) {
+            return;
         }
 
-        statusLabel.setText("Plan saved.");
+        saveCurrentPlan();
+
+        try {
+            controller.saveAs(file.toPath());
+
+            statusLabel.setText("Plan saved.");
+        }
+        catch (Exception ex) {
+
+            statusLabel.setText("Save failed.");
+
+            ex.printStackTrace();
+        }
     }
+
+    private void onOpen() {
+
+        FileChooser fileChooser = new FileChooser();
+
+        fileChooser.setTitle("Open Retirement Plan");
+
+        fileChooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter(
+                        "JSON Files",
+                        "*.json"));
+
+        File file = fileChooser.showOpenDialog(root.getScene().getWindow());
+
+        if (file == null) {
+            return;
+        }
+
+        try {
+
+            controller.open(file.toPath());
+
+            loadCurrentPlan();
+
+            statusLabel.setText("Plan opened.");
+        }
+        catch (Exception ex) {
+
+            statusLabel.setText("Open failed.");
+
+            ex.printStackTrace();
+        }
+    }
+
 }
