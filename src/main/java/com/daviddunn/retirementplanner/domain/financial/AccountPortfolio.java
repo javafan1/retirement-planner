@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.financial;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.ArrayList;
@@ -36,10 +37,25 @@ public class AccountPortfolio {
         accounts.remove(account);
     }
 
+    public void replace(Account oldAccount,
+                        Account newAccount) {
+
+        Objects.requireNonNull(oldAccount);
+        Objects.requireNonNull(newAccount);
+
+        int index = accounts.indexOf(oldAccount);
+
+        if (index >= 0) {
+            accounts.set(index, newAccount);
+        }
+    }
+
+    @JsonIgnore
     public boolean isEmpty() {
         return accounts.isEmpty();
     }
 
+    @JsonIgnore
     public int size() {
         return accounts.size();
     }

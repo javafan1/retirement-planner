@@ -17,8 +17,14 @@ public class AccountDialog extends Dialog<Account> {
 
     public AccountDialog(Account account) {
 
-        setTitle("Add Account");
-        setHeaderText("Enter account information.");
+        if (account == null) {
+            setTitle("Add Account");
+            setHeaderText("Enter account information.");
+        }
+        else {
+            setTitle("Edit Account");
+            setHeaderText("Update account information.");
+        }
 
         nameField = new TextField();
 

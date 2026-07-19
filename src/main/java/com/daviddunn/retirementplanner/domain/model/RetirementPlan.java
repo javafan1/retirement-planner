@@ -19,9 +19,15 @@ public class RetirementPlan {
             @JsonProperty("accountPortfolio") AccountPortfolio accountPortfolio,
             @JsonProperty("planningAssumptions") PlanningAssumptions planningAssumptions) {
 
-        this.household = household;
-        this.accountPortfolio = accountPortfolio;
-        this.planningAssumptions = planningAssumptions;
+        this.household = Objects.requireNonNull(household);
+
+        this.accountPortfolio =
+                accountPortfolio != null
+                        ? accountPortfolio
+                        : new AccountPortfolio();
+
+        this.planningAssumptions =
+                Objects.requireNonNull(planningAssumptions);
     }
 
     public Household getHousehold() {

@@ -85,6 +85,7 @@ public class MainWindow {
         saveItem.setOnAction(e -> onSave());
         saveAsItem.setOnAction(e -> onSaveAs());
         openItem.setOnAction(e -> onOpen());
+        exitItem.setOnAction(e -> onExit());
 
         fileMenu.getItems().addAll(
                 newItem,
@@ -276,4 +277,10 @@ public class MainWindow {
         }
     }
 
+private void onExit() {
+
+    // Later we'll ask to save unsaved changes.
+
+    root.getScene().getWindow().hide();
+}
 }
