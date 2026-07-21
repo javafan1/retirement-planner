@@ -8,12 +8,14 @@ import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 
 import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.util.Optional;
 
 public class AccountsView extends BorderPane {
@@ -81,8 +83,27 @@ public class AccountsView extends BorderPane {
                 new TableColumn<>("Balance");
 
         balanceColumn.setCellValueFactory(cellData ->
-                new ReadOnlyObjectWrapper<>(
-                        cellData.getValue().getCurrentBalance()));
+                 new ReadOnlyObjectWrapper<>(
+                         cellData.getValue().getCurrentBalance()));
+
+        balanceColumn.setCellFactory(column ->
+                new TableCell<>() {
+
+                    @Override
+                    protected void updateItem(BigDecimal value,
+                                              boolean empty) {
+
+                        super.updateItem(value, empty);
+
+                        if (empty || value == null) {
+                            setText(null);
+                        } else {
+                            setText(NumberFormat
+                                    .getCurrencyInstance()
+                                    .format(value));
+                        }
+                    }
+                });
 
         table.getColumns().addAll(
                 nameColumn,

@@ -1,46 +1,68 @@
+
 package com.daviddunn.retirementplanner.domain.projection;
 
 import java.math.BigDecimal;
 import java.util.Objects;
 
-public class ProjectionYear {
+public final class ProjectionYear {
 
+    // Timeline
+    private final int projectionYear;
     private final int calendarYear;
 
+    // Assets
     private final BigDecimal beginningInvestableAssets;
-
     private final BigDecimal investmentGrowth;
 
+    // Income
     private final BigDecimal guaranteedIncome;
 
-    private final BigDecimal expenses;
+    // Expenses
+    private final BigDecimal projectedExpenses;
 
-    private final BigDecimal endingInvestbleAssets;
+    // Ending Balance
+    private final BigDecimal endingInvestableAssets;
 
     public ProjectionYear(
+            int projectionYear,
             int calendarYear,
             BigDecimal beginningInvestableAssets,
             BigDecimal investmentGrowth,
             BigDecimal guaranteedIncome,
-            BigDecimal expenses,
+            BigDecimal projectedExpenses,
             BigDecimal endingInvestableAssets) {
 
+        this.projectionYear = projectionYear;
         this.calendarYear = calendarYear;
 
         this.beginningInvestableAssets =
-                Objects.requireNonNull(beginningInvestableAssets);
+                Objects.requireNonNull(
+                        beginningInvestableAssets,
+                        "Beginning assets are required.");
 
         this.investmentGrowth =
-                Objects.requireNonNull(investmentGrowth);
+                Objects.requireNonNull(
+                        investmentGrowth,
+                        "Investment growth is required.");
 
         this.guaranteedIncome =
-                Objects.requireNonNull(guaranteedIncome);
+                Objects.requireNonNull(
+                        guaranteedIncome,
+                        "Total income is required.");
 
-        this.expenses =
-                Objects.requireNonNull(expenses);
+        this.projectedExpenses =
+                Objects.requireNonNull(
+                        projectedExpenses,
+                        "Projected expenses are required.");
 
-        this.endingInvestbleAssets =
-                Objects.requireNonNull(endingInvestableAssets);
+        this.endingInvestableAssets =
+                Objects.requireNonNull(
+                        endingInvestableAssets,
+                        "Ending assets are required.");
+    }
+
+    public int getProjectionYear() {
+        return projectionYear;
     }
 
     public int getCalendarYear() {
@@ -59,22 +81,38 @@ public class ProjectionYear {
         return guaranteedIncome;
     }
 
-    public BigDecimal getExpenses() {
-        return expenses;
+    public BigDecimal getProjectedExpenses() {
+        return projectedExpenses;
     }
 
     public BigDecimal getEndingInvestableAssets() {
-        return endingInvestbleAssets;
+        return endingInvestableAssets;
+    }
+
+    @Override
+    public String toString() {
+        return "ProjectionYear{" +
+                "projectionYear=" + projectionYear +
+                ", calendarYear=" + calendarYear +
+                ", beginningInvestableAssets=" + beginningInvestableAssets +
+                ", investmentGrowth=" + investmentGrowth +
+                ", totalIncome=" + guaranteedIncome +
+                ", projectedExpenses=" + projectedExpenses +
+                ", endingInvestableAssets=" + endingInvestableAssets +
+                '}';
     }
 }
 
-//import java.math.BigDecimal;
+//package com.daviddunn.retirementplanner.domain.projection;
 //
+//import java.math.BigDecimal;
+//import java.util.Objects;
+
 //public class ProjectionYear {
 //
-//    private final int year;
+//    private final int calendarYear;
 //
-//    private final BigDecimal beginningAssets;
+//    private final BigDecimal beginningInvestableAssets;
 //
 //    private final BigDecimal investmentGrowth;
 //
@@ -82,14 +120,40 @@ public class ProjectionYear {
 //
 //    private final BigDecimal expenses;
 //
-//    private final BigDecimal endingAssets;
+//    private final BigDecimal endingInvestableAssets;
 //
-//    public int getYear() {
-//        return year;
+//    public ProjectionYear(
+//            int calendarYear,
+//            BigDecimal beginningInvestableAssets,
+//            BigDecimal investmentGrowth,
+//            BigDecimal guaranteedIncome,
+//            BigDecimal expenses,
+//            BigDecimal endingInvestableAssets) {
+
+//        this.calendarYear = calendarYear;
+//
+//        this.beginningInvestableAssets =
+//                Objects.requireNonNull(beginningInvestableAssets);
+//
+//        this.investmentGrowth =
+//                Objects.requireNonNull(investmentGrowth);
+//
+//        this.guaranteedIncome =
+//                Objects.requireNonNull(guaranteedIncome);
+//
+//        this.expenses =
+//                Objects.requireNonNull(expenses);
+//
+//        this.endingInvestableAssets =
+//                Objects.requireNonNull(endingInvestableAssets);
 //    }
 //
-//    public BigDecimal getBeginningAssets() {
-//        return beginningAssets;
+//    public int getCalendarYear() {
+//        return calendarYear;
+//    }
+//
+//    public BigDecimal getBeginningInvestableAssets() {
+//        return beginningInvestableAssets;
 //    }
 //
 //    public BigDecimal getInvestmentGrowth() {
@@ -104,57 +168,7 @@ public class ProjectionYear {
 //        return expenses;
 //    }
 //
-//    public BigDecimal getEndingAssets() {
-//        return endingAssets;
-//    }
-//
-//    public ProjectionYear(
-//            int year,
-//            BigDecimal beginningAssets,
-//            BigDecimal investmentGrowth,
-//            BigDecimal guaranteedIncome,
-//            BigDecimal expenses,
-//            BigDecimal endingAssets) {
-//
-//        this.year = year;
-//        this.beginningAssets = beginningAssets;
-//        this.investmentGrowth = investmentGrowth;
-//        this.guaranteedIncome = guaranteedIncome;
-//        this.expenses = expenses;
-//        this.endingAssets = endingAssets;
-//    }
-//
-//    // getters...
-//}
-
-//public class ProjectionYear {
-//
-//    private final int year;
-//
-//    private BigDecimal beginningNetWorth;
-//    private BigDecimal endingNetWorth;
-//
-//    public ProjectionYear(int year) {
-//        this.year = year;
-//    }
-//
-//    public int getYear() {
-//        return year;
-//    }
-//
-//    public BigDecimal getBeginningNetWorth() {
-//        return beginningNetWorth;
-//    }
-//
-//    public void setBeginningNetWorth(BigDecimal beginningNetWorth) {
-//        this.beginningNetWorth = beginningNetWorth;
-//    }
-//
-//    public BigDecimal getEndingNetWorth() {
-//        return endingNetWorth;
-//    }
-//
-//    public void setEndingNetWorth(BigDecimal endingNetWorth) {
-//        this.endingNetWorth = endingNetWorth;
+//    public BigDecimal getEndingInvestableAssets() {
+//        return endingInvestableAssets;
 //    }
 //}

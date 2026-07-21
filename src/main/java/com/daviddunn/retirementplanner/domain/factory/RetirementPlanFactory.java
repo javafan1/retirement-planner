@@ -16,6 +16,8 @@ public final class RetirementPlanFactory {
     private static final BigDecimal DEFAULT_INVESTMENT_RETURN =
             new BigDecimal("0.08");
 
+    private static final int INITIAL_DEFAULT_PROJECTION_LENGTH_YEARS = 40;
+
     private RetirementPlanFactory() {
     }
 
@@ -30,7 +32,8 @@ public final class RetirementPlanFactory {
         PlanningAssumptions assumptions =
                 new PlanningAssumptions(
                         DEFAULT_INFLATION_RATE,
-                        DEFAULT_INVESTMENT_RETURN);
+                        DEFAULT_INVESTMENT_RETURN,
+                        INITIAL_DEFAULT_PROJECTION_LENGTH_YEARS);
 
         AccountPortfolio accountPortfolio = new AccountPortfolio();
 

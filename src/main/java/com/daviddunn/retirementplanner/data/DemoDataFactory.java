@@ -45,7 +45,7 @@ public final class DemoDataFactory {
 
         return new PlanningAssumptions(
                 Money.of("0.025"),   // 2.5% inflation
-                Money.of("0.070"));  // 7.0% investment return
+                Money.of("0.070"),40);  // 7.0% investment return
     }
 
     private static Person createDavid() {

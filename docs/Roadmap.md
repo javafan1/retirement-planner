@@ -1,4 +1,91 @@
 
+7.21 roadmap
+
+Planning Assumptions
+
+[ Investment ]
+
+Expected Return
+Inflation
+Cash Return
+
+[ Taxes ]
+
+Federal Tax Model
+State
+Roth Conversion Target
+Capital Gains
+
+[ Social Security ]
+
+COLA
+Taxability
+Claiming Strategy
+
+[ Healthcare ]
+
+IRMAA
+Medicare Inflation
+
+[ Longevity ]
+
+Life Expectancy
+Override Ages
+
+[ Simulation ]
+
+Projection Years
+Monte Carlo Trials
+
+Retirement Planner
+├── Household
+├── Accounts
+├── Income Sources
+│     ├── Social Security
+│     ├── Pensions
+│     └── Other Income
+├── Planning Assumptions
+├── Projection
+│     ├── Summary
+│     ├── Yearly Table
+│     ├── Charts
+│     └── Scenario Comparison
+└── Reports
+├── PDF
+├── Excel
+└── Print
+
+Projection Summary
+================================================================
+
+Household
+Planning Assumptions
+Projection Results
+
+---------------------------------------------------------------
+Year | Begin | Growth | Income | Expenses | Taxes | End Assets
+---------------------------------------------------------------
+2027
+2028
+2029
+...
+
+---------------------------------------------------------------
+
+Summary Statistics
+
+Ending Portfolio Value
+Total Investment Growth
+Total Withdrawals
+Total Taxes Paid
+Total Social Security
+Total Pension Income
+Highest Tax Bracket
+First RMD Year
+Age Assets Reach Peak
+Age Assets Reach Minimum
+
+
 7.14 MVP classes
 
 RetirementPlan

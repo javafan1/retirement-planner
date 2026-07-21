@@ -11,6 +11,7 @@ import com.daviddunn.retirementplanner.ui.views.HouseholdView;
 //
 //import com.daviddunn.retirementplanner.ui.views.IncomeView;
 //import com.daviddunn.retirementplanner.ui.views.ResultsView;
+import com.daviddunn.retirementplanner.ui.views.ProjectionView;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
@@ -35,6 +36,7 @@ public class MainWindow {
 
     private final HouseholdView householdView;
     private final AccountsView accountsView;
+    private final ProjectionView projectionView;
 
 //    private final AccountsView accountsView;
 //    private final IncomeView incomeView;
@@ -50,6 +52,7 @@ public class MainWindow {
 
         householdView = new HouseholdView();
         accountsView = new AccountsView();
+        projectionView = new ProjectionView();
 
 //        accountsView = new AccountsView();
 //        incomeView = new IncomeView();
@@ -111,6 +114,8 @@ public class MainWindow {
         tabPane.getTabs().add(createTab("Household", householdView));
 
         tabPane.getTabs().add(createTab("Accounts", accountsView));
+        tabPane.getTabs().add(createTab("Projection", projectionView));
+
         tabPane.getTabs().add(createTab("Income", new Label("Coming Soon")));
         tabPane.getTabs().add(createTab("Expenses", new Label("Coming Soon")));
         tabPane.getTabs().add(createTab("Assumptions", new Label("Coming Soon")));
@@ -147,35 +152,10 @@ public class MainWindow {
 
         householdView.load(plan);
         accountsView.load(plan);
+        projectionView.load(plan);
 
         statusLabel.setText("Ready");
     }
-//    private void refreshViews() {
-//
-//        System.out.println(controller);
-//        System.out.println(controller.getCurrentPlan());
-//
-//        householdView.load(controller.getCurrentPlan());
-//
-//        statusLabel.setText("Ready");
-//    }
-//    private void refreshViews() {
-//
-//        householdView.load(controller.getCurrentPlan());
-//
-//        statusLabel.setText("Ready");
-//    }
-    //private void refreshViews() {
-
-        // We'll implement this once each view has a load() method.
-
-        // householdView.load(controller.getCurrentPlan());
-        // accountsView.load(controller.getCurrentPlan());
-        // incomeView.load(controller.getCurrentPlan());
-        // expensesView.load(controller.getCurrentPlan());
-        // assumptionsView.load(controller.getCurrentPlan());
-        // resultsView.clear();
-    //}
 
     private void saveCurrentPlan() {
 

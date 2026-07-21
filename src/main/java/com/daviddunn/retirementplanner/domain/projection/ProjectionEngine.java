@@ -1,4 +1,3 @@
-
 package com.daviddunn.retirementplanner.domain.projection;
 
 import com.daviddunn.retirementplanner.domain.model.Household;
@@ -6,178 +5,117 @@ import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 
 import java.math.BigDecimal;
+import java.time.Year;
 
 public class ProjectionEngine {
-
 
     public Projection project(RetirementPlan plan) {
 
         Projection projection = new Projection();
 
-        BigDecimal beginningAssets =
-                plan.getHousehold().getTotalAssets();
-
-        int startYear = 2027;          // Temporary
-        int years = 1;                 // MVP
-
-        for (int i = 0; i < years; i++) {
-
-            ProjectionYear year = calculateYear(
-                    plan,
-                    startYear + i,
-                    beginningAssets);
-
-            projection.addYear(year);
-
-            beginningAssets = year.getEndingInvestableAssets();
-        }
-
-        return projection;
-    }
-//    public Projection project(RetirementPlan plan) {
-//
-//        Projection projection = new Projection();
-//
-//        projection.addYear(
-//                projectYear(plan, 2027));
-//
-//        return projection;
- //   }
-
-private ProjectionYear calculateYear(
-        RetirementPlan plan,
-        int calendarYear,
-        BigDecimal beginningAssets) {
-
-    Household household = plan.getHousehold();
-
-    PlanningAssumptions assumptions =
-            plan.getPlanningAssumptions();
-
-    //BigDecimal beginningAssets =
-     //       household.getTotalAssets();
-
-    BigDecimal investmentGrowth =
-            beginningAssets.multiply(
-                    assumptions.getExpectedAnnualInvestmentReturn());
-
-    BigDecimal guaranteedIncome =
-            household.getGuaranteedIncome();
-
-    BigDecimal expenses =
-            household.getTotalAnnualExpenses();
-
-    BigDecimal endingAssets =
-            beginningAssets
-                    .add(investmentGrowth)
-                    .add(guaranteedIncome)
-                    .subtract(expenses);
-
-    return new ProjectionYear(
-            calendarYear,
-            beginningAssets,
-            investmentGrowth,
-            guaranteedIncome,
-            expenses,
-            endingAssets);
-
-}
-
-    private ProjectionYear projectYear(
-            RetirementPlan plan,
-            int calendarYear) {
-
         Household household = plan.getHousehold();
-
         PlanningAssumptions assumptions =
                 plan.getPlanningAssumptions();
 
         BigDecimal beginningAssets =
                 household.getTotalAssets();
 
+        int startYear = Year.now().getValue();
+
+        int projectionLength =
+                assumptions.getProjectionLengthYears();
+
+        for (int projectionYear = 0;
+             projectionYear < projectionLength;
+             projectionYear++) {
+
+            ProjectionYear year = projectYear(
+                    projectionYear,
+                    startYear + projectionYear,
+                    beginningAssets,
+                    household,
+                    assumptions);
+
+            projection.addYear(year);
+
+            beginningAssets =
+                    year.getEndingInvestableAssets();
+        }
+
+        return projection;
+    }
+
+    private ProjectionYear projectYear(
+            int projectionYear,
+            int calendarYear,
+            BigDecimal beginningAssets,
+            Household household,
+            PlanningAssumptions assumptions) {
+
         BigDecimal investmentGrowth =
-                beginningAssets.multiply(
-                        assumptions.getExpectedAnnualInvestmentReturn());
+                calculateInvestmentGrowth(
+                        beginningAssets,
+                        assumptions);
 
-        BigDecimal guaranteedIncome =
-                household.getGuaranteedIncome();
+        BigDecimal totalIncome =
+                calculateTotalIncome(
+                        household);
 
-        BigDecimal expenses =
-                household.getTotalAnnualExpenses();
+        BigDecimal projectedExpenses =
+                calculateProjectedExpenses(
+                        household,
+                        assumptions,
+                        projectionYear);
 
         BigDecimal endingAssets =
-                beginningAssets
-                        .add(investmentGrowth)
-                        .add(guaranteedIncome)
-                        .subtract(expenses);
+                calculateEndingAssets(
+                        beginningAssets,
+                        investmentGrowth,
+                        totalIncome,
+                        projectedExpenses);
 
         return new ProjectionYear(
+                projectionYear,
                 calendarYear,
                 beginningAssets,
                 investmentGrowth,
-                guaranteedIncome,
-                expenses,
+                totalIncome,
+                projectedExpenses,
                 endingAssets);
     }
+
+    private BigDecimal calculateInvestmentGrowth(
+            BigDecimal beginningAssets,
+            PlanningAssumptions assumptions) {
+
+        return beginningAssets.multiply(
+                assumptions.getExpectedAnnualInvestmentReturn());
+    }
+
+    private BigDecimal calculateTotalIncome(
+            Household household) {
+
+        return household.getGuaranteedIncome();
+    }
+
+    private BigDecimal calculateProjectedExpenses(
+            Household household,
+            PlanningAssumptions assumptions,
+            int projectionYear) {
+
+        // Inflation will be implemented in the next step.
+        return household.getTotalAnnualExpenses();
+    }
+
+    private BigDecimal calculateEndingAssets(
+            BigDecimal beginningAssets,
+            BigDecimal investmentGrowth,
+            BigDecimal totalIncome,
+            BigDecimal projectedExpenses) {
+
+        return beginningAssets
+                .add(investmentGrowth)
+                .add(totalIncome)
+                .subtract(projectedExpenses);
+    }
 }
-
-
-//package com.daviddunn.retirementplanner.domain.projection;
-
-//import com.daviddunn.retirementplanner.domain.model.Household;
-//import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
-//
-//import java.math.BigDecimal;
-
-//public class ProjectionEngine {
-//
-//    public ProjectionYear projectYear(
-//            RetirementPlan plan,
-//            int year) {
-//
-//        Household household = plan.getHousehold();
-//
-//        BigDecimal beginningAssets =
-//                household.getTotalAssets();
-//
-//        BigDecimal growthRate =
-//                plan.getPlanningAssumptions()
-//                        .getExpectedAnnualInvestmentReturn();
-//
-//        BigDecimal investmentGrowth =
-//                beginningAssets.multiply(growthRate);
-//
-//        BigDecimal guaranteedIncome =
-//                household.getGuaranteedIncome();
-//
-//        BigDecimal expenses =
-//                household.getTotalAnnualExpenses();
-//
-//        BigDecimal endingAssets =
-//                beginningAssets
-//                        .add(investmentGrowth)
-//                        .add(guaranteedIncome)
-//                        .subtract(expenses);
-//
-//        return new ProjectionYear(
-//                year,
-//                beginningAssets,
-//                investmentGrowth,
-//                guaranteedIncome,
-//                expenses,
-//                endingAssets);
-//    }
-//}
-
-
-//public class ProjectionEngine {
-
-//    public Projection run(RetirementPlan plan) {
-//
-//        Projection projection = new Projection();
-//
-//        ...
-//
-//        return projection;
-//    }
-//}

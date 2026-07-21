@@ -13,8 +13,8 @@ public class Projection {
         years.add(year);
     }
 
-    public List<ProjectionYear> getYears() {
-        return Collections.unmodifiableList(years);
+    public ProjectionYear getYear(int index) {
+        return years.get(index);
     }
 
     public ProjectionYear getFirstYear() {
@@ -25,7 +25,50 @@ public class Projection {
         return years.getLast();
     }
 
-    public int getNumberOfYears() {
+    public int size() {
         return years.size();
     }
+
+    public boolean isEmpty() {
+        return years.isEmpty();
+    }
 }
+
+
+//public class Projection {
+//
+//    private final List<ProjectionYear> years =
+//            new ArrayList<>();
+
+//    public void addYear(ProjectionYear year) {
+//        years.add(year);
+//    }
+//
+//    public List<ProjectionYear> getYears() {
+//        return Collections.unmodifiableList(years);
+//    }
+//
+//    public ProjectionYear getFirstYear() {
+//        return years.getFirst();
+//    }
+//
+//    public ProjectionYear getLastYear() {
+//        return years.getLast();
+//    }
+//
+//    public int getNumberOfYears() {
+//         return years.size();
+//    }
+//
+//    public ProjectionYear getYear(int index) {
+//        return years.get(index);
+//    }
+//
+//    public int size() {
+//        return years.size();
+//    }
+//
+//    public boolean isEmpty() {
+//        return years.isEmpty();
+//    }
+//}

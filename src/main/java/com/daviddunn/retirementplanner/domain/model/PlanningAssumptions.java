@@ -1,33 +1,58 @@
 package com.daviddunn.retirementplanner.domain.model;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.math.BigDecimal;
+import java.util.Objects;
 
-public class PlanningAssumptions {
+public final class PlanningAssumptions {
 
-    private BigDecimal expectedAnnualInflationRate;
+    private final BigDecimal expectedAnnualInvestmentReturn;
 
-    private BigDecimal expectedAnnualInvestmentReturn;
+    private final BigDecimal expectedAnnualInflationRate;
 
-    @JsonCreator
+    private final int projectionLengthYears;
+
     public PlanningAssumptions(
-            @JsonProperty("expectedAnnualInflationRate")
+            BigDecimal expectedAnnualInvestmentReturn,
             BigDecimal expectedAnnualInflationRate,
+            int projectionLengthYears) {
 
-            @JsonProperty("expectedAnnualInvestmentReturn")
-            BigDecimal expectedAnnualInvestmentReturn) {
+        this.expectedAnnualInvestmentReturn =
+                Objects.requireNonNull(
+                        expectedAnnualInvestmentReturn,
+                        "Expected annual investment return is required.");
 
-        this.expectedAnnualInflationRate = expectedAnnualInflationRate;
-        this.expectedAnnualInvestmentReturn = expectedAnnualInvestmentReturn;
+        this.expectedAnnualInflationRate =
+                Objects.requireNonNull(
+                        expectedAnnualInflationRate,
+                        "Expected annual inflation rate is required.");
+
+        if (projectionLengthYears <= 0) {
+            throw new IllegalArgumentException(
+                    "Projection length must be greater than zero.");
+        }
+
+        this.projectionLengthYears = projectionLengthYears;
+    }
+
+    public BigDecimal getExpectedAnnualInvestmentReturn() {
+        return expectedAnnualInvestmentReturn;
     }
 
     public BigDecimal getExpectedAnnualInflationRate() {
         return expectedAnnualInflationRate;
     }
 
-    public BigDecimal getExpectedAnnualInvestmentReturn() {
-        return expectedAnnualInvestmentReturn;
+    public int getProjectionLengthYears() {
+        return projectionLengthYears;
+    }
+
+    @Override
+    public String toString() {
+        return "PlanningAssumptions{" +
+                "expectedAnnualInvestmentReturn=" + expectedAnnualInvestmentReturn +
+                ", expectedAnnualInflationRate=" + expectedAnnualInflationRate +
+                ", projectionLengthYears=" + projectionLengthYears +
+                '}';
     }
 }
+
