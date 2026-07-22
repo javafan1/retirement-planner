@@ -27,7 +27,7 @@
 package com.daviddunn.retirementplanner.domain.financial;
 
 import com.daviddunn.retirementplanner.domain.model.AccountType;
-import com.daviddunn.retirementplanner.domain.model.PersonRole;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -38,10 +38,10 @@ public class RothIRA extends Account {
     @JsonCreator
     public RothIRA(
             @JsonProperty("name") String name,
-            @JsonProperty("owner") PersonRole owner,
+            @JsonProperty("ownership")  AccountOwnership ownership,
             @JsonProperty("currentBalance") BigDecimal currentBalance) {
 
-        super(name, owner, currentBalance);
+        super(name, ownership, currentBalance);
     }
 
     @Override

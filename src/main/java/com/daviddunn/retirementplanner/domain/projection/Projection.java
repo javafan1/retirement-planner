@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.domain.projection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 public class Projection {
 
@@ -10,10 +11,14 @@ public class Projection {
             new ArrayList<>();
 
     public void addYear(ProjectionYear year) {
-        years.add(year);
+        years.add(Objects.requireNonNull(year, "year"));
     }
 
-    public ProjectionYear getYear(int index) {
+    public List<ProjectionYear> getYears() {
+        return List.copyOf(years);
+    }
+
+    public ProjectionYear getYearAt(int index) {
         return years.get(index);
     }
 

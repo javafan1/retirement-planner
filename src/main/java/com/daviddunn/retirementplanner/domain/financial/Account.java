@@ -1,7 +1,8 @@
 package com.daviddunn.retirementplanner.domain.financial;
 
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.AccountType;
-import com.daviddunn.retirementplanner.domain.model.PersonRole;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -23,17 +24,17 @@ import java.util.Objects;
 public abstract class Account {
 
     private final String name;
-    private final PersonRole owner;
+    private final AccountOwnership ownership;
     private BigDecimal currentBalance;
 
     @JsonCreator
     protected Account(
             @JsonProperty("name") String name,
-            @JsonProperty("owner") PersonRole owner,
+            @JsonProperty("ownership") AccountOwnership ownership,
             @JsonProperty("currentBalance") BigDecimal currentBalance) {
 
         this.name = Objects.requireNonNull(name, "name");
-        this.owner = Objects.requireNonNullElse(owner, PersonRole.PRIMARY);
+        this.ownership = Objects.requireNonNullElse(ownership, AccountOwnership.PRIMARY);
         this.currentBalance = Objects.requireNonNull(currentBalance, "currentBalance");
     }
 
@@ -41,8 +42,8 @@ public abstract class Account {
         return name;
     }
 
-    public PersonRole getOwner() {
-        return owner;
+    public AccountOwnership getOwnership() {
+        return ownership;
     }
 
     public BigDecimal getCurrentBalance() {

@@ -66,7 +66,7 @@ public final class DemoDataFactory {
         david.addIncomeSource(
                 new Pension(
                         "Primary Pension",
-                        PersonRole.PRIMARY,
+                        AccountOwnership.PRIMARY,
                         LocalDate.of(2026, 7, 1),
                         null,
                         Money.of("3800"),
@@ -78,7 +78,7 @@ public final class DemoDataFactory {
         lisa.addIncomeSource(
                 new Pension(
                         "Lisa Pension",
-                        PersonRole.SPOUSE,
+                        AccountOwnership.SPOUSE,
                         LocalDate.of(2027, 2, 28),
                         null,
                         Money.of("956"),
@@ -92,19 +92,19 @@ public final class DemoDataFactory {
         portfolio.addAccount(
                 new TraditionalIRA(
                         "Traditional IRA",
-                        PersonRole.PRIMARY,
+                        AccountOwnership.PRIMARY,
                         Money.of("2587000")));
 
         portfolio.addAccount(
                 new RothIRA(
                         "Roth IRA",
-                        PersonRole.PRIMARY,
+                        AccountOwnership.PRIMARY,
                         Money.of("400000")));
 
         portfolio.addAccount(
                 new TraditionalIRA(
                         "Traditional IRA",
-                        PersonRole.SPOUSE,
+                        AccountOwnership.SPOUSE,
                         Money.of("2165700")));
 
         return portfolio;

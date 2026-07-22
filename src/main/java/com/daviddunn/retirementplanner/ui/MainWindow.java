@@ -11,7 +11,7 @@ import com.daviddunn.retirementplanner.ui.views.HouseholdView;
 //
 //import com.daviddunn.retirementplanner.ui.views.IncomeView;
 //import com.daviddunn.retirementplanner.ui.views.ResultsView;
-import com.daviddunn.retirementplanner.ui.views.ProjectionView;
+import com.daviddunn.retirementplanner.ui.views.ProjectionYearView;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
@@ -26,7 +26,6 @@ import javafx.scene.layout.HBox;
 import javafx.stage.FileChooser;
 
 import java.io.File;
-import java.io.IOException;
 
 public class MainWindow {
 
@@ -36,7 +35,7 @@ public class MainWindow {
 
     private final HouseholdView householdView;
     private final AccountsView accountsView;
-    private final ProjectionView projectionView;
+    private final ProjectionYearView projectionYearView;
 
 //    private final AccountsView accountsView;
 //    private final IncomeView incomeView;
@@ -52,7 +51,7 @@ public class MainWindow {
 
         householdView = new HouseholdView();
         accountsView = new AccountsView();
-        projectionView = new ProjectionView();
+        projectionYearView = new ProjectionYearView();
 
 //        accountsView = new AccountsView();
 //        incomeView = new IncomeView();
@@ -114,7 +113,7 @@ public class MainWindow {
         tabPane.getTabs().add(createTab("Household", householdView));
 
         tabPane.getTabs().add(createTab("Accounts", accountsView));
-        tabPane.getTabs().add(createTab("Projection", projectionView));
+        tabPane.getTabs().add(createTab("Projection", projectionYearView));
 
         tabPane.getTabs().add(createTab("Income", new Label("Coming Soon")));
         tabPane.getTabs().add(createTab("Expenses", new Label("Coming Soon")));
@@ -152,7 +151,7 @@ public class MainWindow {
 
         householdView.load(plan);
         accountsView.load(plan);
-        projectionView.load(plan);
+        projectionYearView.load(plan);
 
         statusLabel.setText("Ready");
     }

@@ -1,6 +1,6 @@
 package com.daviddunn.retirementplanner.domain.income;
 
-import com.daviddunn.retirementplanner.domain.model.PersonRole;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -19,8 +19,8 @@ public class Pension extends IncomeSource {
             @JsonProperty("name")
             String name,
 
-            @JsonProperty("owner")
-            PersonRole owner,
+            @JsonProperty("ownership")
+            AccountOwnership ownership,
 
             @JsonProperty("startDate")
             LocalDate commencementDate,
@@ -36,7 +36,7 @@ public class Pension extends IncomeSource {
 
         super(
                 name,
-                owner,
+                ownership,
                 commencementDate,
                 terminationDate);
 

@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.income;
 
-import com.daviddunn.retirementplanner.domain.model.PersonRole;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -22,7 +23,7 @@ public abstract class IncomeSource {
 
     private final String name;
 
-    private final PersonRole owner;
+    private final AccountOwnership ownership;
 
     private final LocalDate startDate;
 
@@ -30,12 +31,12 @@ public abstract class IncomeSource {
 
     protected IncomeSource(
             @JsonProperty("name") String name,
-            @JsonProperty("owner") PersonRole owner,
+            @JsonProperty("owner")  AccountOwnership ownership,
             @JsonProperty("startDate") LocalDate startDate,
             @JsonProperty("endDate") LocalDate endDate) {
 
         this.name = Objects.requireNonNull(name);
-        this.owner = Objects.requireNonNull(owner);
+        this.ownership = Objects.requireNonNull(ownership);
         this.startDate = Objects.requireNonNull(startDate);
         this.endDate = endDate;
     }
@@ -44,8 +45,8 @@ public abstract class IncomeSource {
         return name;
     }
 
-    public PersonRole getOwner() {
-        return owner;
+    public AccountOwnership getOwnership() {
+        return ownership;
     }
 
     public LocalDate getStartDate() {

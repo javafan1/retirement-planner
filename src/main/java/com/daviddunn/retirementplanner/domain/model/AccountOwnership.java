@@ -1,7 +1,7 @@
 package com.daviddunn.retirementplanner.domain.model;
 
-public enum PersonRole {
-
+public enum AccountOwnership {
     PRIMARY,
-    SPOUSE
+    SPOUSE,
+    JOINT
 }

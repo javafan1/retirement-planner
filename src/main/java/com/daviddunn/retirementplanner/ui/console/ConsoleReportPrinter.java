@@ -28,7 +28,7 @@ public class ConsoleReportPrinter {
         printProjectionHeader();
 
         for (int i = 0; i < projection.size(); i++) {
-            printProjectionYear(projection.getYear(i));
+            printProjectionYear(projection.getYearAt(i));
         }
 
         printFooter();
@@ -69,7 +69,7 @@ public class ConsoleReportPrinter {
         System.out.printf("%-30s %15s%n",
                 "Expenses",
                 CurrencyFormatter.format(
-                        year.getProjectedExpenses()));
+                        year.getAnnualExpenses()));
 
         System.out.println("----------------------------------------");
 

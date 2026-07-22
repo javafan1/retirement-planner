@@ -2,8 +2,9 @@
 
 package com.daviddunn.retirementplanner.domain.financial;
 
-import com.daviddunn.retirementplanner.domain.model.PersonRole;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
@@ -38,13 +39,14 @@ public class AccountPortfolio {
         return List.copyOf(accounts);
     }
 
-    public List<Account> getAccounts(PersonRole owner) {
+    public List<Account> getAccounts(AccountOwnership ownership) {
 
         return accounts.stream()
-                .filter(account -> account.getOwner() == owner)
+                .filter(account -> account.getOwnership() == ownership)
                 .toList();
     }
 
+    @JsonIgnore
     public BigDecimal getTotalBalance() {
 
         return accounts.stream()
@@ -52,7 +54,8 @@ public class AccountPortfolio {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    public BigDecimal getTotalBalance(PersonRole owner) {
+    @JsonIgnore
+    public BigDecimal getTotalBalance(AccountOwnership owner) {
 
         return getAccounts(owner).stream()
                 .map(Account::getCurrentBalance)

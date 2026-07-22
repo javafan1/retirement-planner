@@ -1,7 +1,7 @@
 package com.daviddunn.retirementplanner.domain.financial;
 
 import com.daviddunn.retirementplanner.domain.model.AccountType;
-import com.daviddunn.retirementplanner.domain.model.PersonRole;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 
 import java.math.BigDecimal;
 import java.util.Objects;
@@ -14,12 +14,12 @@ public final class AccountFactory {
     public static Account create(
             AccountType type,
             String name,
-            PersonRole owner,
+            AccountOwnership ownership,
             BigDecimal balance) {
 
         Objects.requireNonNull(type);
         Objects.requireNonNull(name);
-        Objects.requireNonNull(owner);
+        Objects.requireNonNull(ownership);
         Objects.requireNonNull(balance);
 
         return switch (type) {
@@ -27,13 +27,13 @@ public final class AccountFactory {
             case TRADITIONAL_IRA ->
                     new TraditionalIRA(
                             name,
-                            owner,
+                            ownership,
                             balance);
 
             case ROTH_IRA ->
                     new RothIRA(
                             name,
-                            owner,
+                            ownership,
                             balance);
 
             default ->

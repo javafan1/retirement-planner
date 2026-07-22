@@ -3,8 +3,9 @@ package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.financial.AccountFactory;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.AccountType;
-import com.daviddunn.retirementplanner.domain.model.PersonRole;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
@@ -15,7 +16,7 @@ public class AccountDialog extends Dialog<Account> {
 
     private final TextField nameField;
     private final ComboBox<AccountType> typeCombo;
-    private final ComboBox<PersonRole> ownerCombo;
+    private final ComboBox<AccountOwnership> ownershipCombo;
     private final TextField balanceField;
 
     public AccountDialog(Account account) {
@@ -34,16 +35,16 @@ public class AccountDialog extends Dialog<Account> {
         typeCombo.getItems().addAll(AccountType.values());
         typeCombo.getSelectionModel().selectFirst();
 
-        ownerCombo = new ComboBox<>();
-        ownerCombo.getItems().addAll(PersonRole.values());
-        ownerCombo.getSelectionModel().selectFirst();
+        ownershipCombo = new ComboBox<>();
+        ownershipCombo.getItems().addAll(AccountOwnership.values());
+        ownershipCombo.getSelectionModel().selectFirst();
 
         balanceField = new TextField();
 
         if (account != null) {
             nameField.setText(account.getName());
             typeCombo.setValue(account.getType());
-            ownerCombo.setValue(account.getOwner());
+            ownershipCombo.setValue(account.getOwnership());
             balanceField.setText(
                     account.getCurrentBalance().toPlainString());
         }
@@ -60,7 +61,7 @@ public class AccountDialog extends Dialog<Account> {
         grid.add(typeCombo, 1, 1);
 
         grid.add(new Label("Owner:"), 0, 2);
-        grid.add(ownerCombo, 1, 2);
+        grid.add(ownershipCombo, 1, 2);
 
         grid.add(new Label("Current Balance:"), 0, 3);
         grid.add(balanceField, 1, 3);
@@ -79,7 +80,7 @@ public class AccountDialog extends Dialog<Account> {
 
             String name = nameField.getText().trim();
             AccountType type = typeCombo.getValue();
-            PersonRole owner = ownerCombo.getValue();
+            AccountOwnership ownership = ownershipCombo.getValue();
 
             BigDecimal balance =
                     new BigDecimal(balanceField.getText().trim());
@@ -87,7 +88,7 @@ public class AccountDialog extends Dialog<Account> {
             return AccountFactory.create(
                     type,
                     name,
-                    owner,
+                    ownership,
                     balance);
         });
     }
