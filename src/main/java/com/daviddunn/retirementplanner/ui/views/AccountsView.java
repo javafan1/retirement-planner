@@ -156,7 +156,7 @@ public class AccountsView extends BorderPane {
 
         result.ifPresent(account -> {
 
-            getPortfolio().add(account);
+            getPortfolio().addAccount(account);
 
             refreshTable();
         });
@@ -178,7 +178,7 @@ public class AccountsView extends BorderPane {
 
         result.ifPresent(account -> {
 
-            getPortfolio().replace(
+            getPortfolio().replaceAccount(
                     selected,
                     account);
 
@@ -193,7 +193,7 @@ public class AccountsView extends BorderPane {
             return;
         }
 
-        getPortfolio().remove(selected);
+        getPortfolio().removeAccount(selected);
 
         refreshTable();
     }

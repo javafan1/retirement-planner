@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -56,17 +57,17 @@ public class Household {
 //                .add(spouse.getTotalAssets());
 //    }
 
-    @JsonIgnore
-    public BigDecimal getTotalAssets() {
-
-        BigDecimal total = BigDecimal.ZERO;
-
-        for (Account account : getAllAccounts()) {
-            total = total.add(account.getCurrentBalance());
-        }
-
-        return total;
-    }
+//    @JsonIgnore
+//    public BigDecimal getTotalAssets() {
+//
+//        BigDecimal total = BigDecimal.ZERO;
+//
+//        for (Account account : getAllAccounts()) {
+//            total = total.add(account.getCurrentBalance());
+//        }
+//
+//        return total;
+//    }
     @JsonIgnore
     public BigDecimal getTotalLiabilities() {
 
@@ -74,18 +75,26 @@ public class Household {
                 .add(spouse.getTotalLiabilities());
     }
 
-    @JsonIgnore
-    public BigDecimal getNetWorth() {
+//    @JsonIgnore
+//    public BigDecimal getNetWorth() {
+//
+//        return getTotalAssets()
+//                .subtract(getTotalLiabilities());
+//    }
+//    @JsonIgnore
+//    public BigDecimal getGuaranteedIncome() {
+//
+//        return primaryPerson.getGuaranteedIncome()
+//                .add(spouse.getGuaranteedIncome());
+//    }
 
-        return getTotalAssets()
-                .subtract(getTotalLiabilities());
-    }
     @JsonIgnore
-    public BigDecimal getGuaranteedIncome() {
+    public BigDecimal getGuaranteedIncome(LocalDate projectionDate) {
 
-        return primaryPerson.getGuaranteedIncome()
-                .add(spouse.getGuaranteedIncome());
+        return primaryPerson.getGuaranteedIncome(projectionDate)
+                .add(spouse.getGuaranteedIncome(projectionDate));
     }
+
     @JsonIgnore
     public BigDecimal getTotalAnnualExpenses() {
 
@@ -98,18 +107,18 @@ public class Household {
         return total;
     }
 
-    @JsonIgnore
-    public List<Account> getAllAccounts() {
-
-        List<Account> accounts = new ArrayList<>();
-
-        accounts.addAll(primaryPerson.getAccounts());
-        accounts.addAll(spouse.getAccounts());
-
-        return Collections.unmodifiableList(accounts);
-    }
-    @JsonIgnore
-    public int getAccountCount() {
-        return getAllAccounts().size();
-    }
+//    @JsonIgnore
+//    public List<Account> getAllAccounts() {
+//
+//        List<Account> accounts = new ArrayList<>();
+//
+//        accounts.addAll(primaryPerson.getAccounts());
+//        accounts.addAll(spouse.getAccounts());
+//
+//        return Collections.unmodifiableList(accounts);
+//    }
+//    @JsonIgnore
+//    public int getAccountCount() {
+//        return getAllAccounts().size();
+//    }
 }

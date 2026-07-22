@@ -2,37 +2,74 @@ package com.daviddunn.retirementplanner.domain.model;
 
 import java.math.BigDecimal;
 import java.util.Objects;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public final class PlanningAssumptions {
 
     private final BigDecimal expectedAnnualInvestmentReturn;
-
     private final BigDecimal expectedAnnualInflationRate;
-
     private final int projectionLengthYears;
 
-    public PlanningAssumptions(
-            BigDecimal expectedAnnualInvestmentReturn,
-            BigDecimal expectedAnnualInflationRate,
-            int projectionLengthYears) {
+@JsonCreator
+public PlanningAssumptions(
 
-        this.expectedAnnualInvestmentReturn =
-                Objects.requireNonNull(
-                        expectedAnnualInvestmentReturn,
-                        "Expected annual investment return is required.");
+        @JsonProperty("expectedAnnualInvestmentReturn")
+        BigDecimal expectedAnnualInvestmentReturn,
 
-        this.expectedAnnualInflationRate =
-                Objects.requireNonNull(
-                        expectedAnnualInflationRate,
-                        "Expected annual inflation rate is required.");
+        @JsonProperty("expectedAnnualInflationRate")
+        BigDecimal expectedAnnualInflationRate,
 
-        if (projectionLengthYears <= 0) {
-            throw new IllegalArgumentException(
-                    "Projection length must be greater than zero.");
-        }
+        @JsonProperty("projectionLengthYears")
+        int projectionLengthYears) {
 
-        this.projectionLengthYears = projectionLengthYears;
+    this.expectedAnnualInvestmentReturn =
+            Objects.requireNonNull(
+                    expectedAnnualInvestmentReturn,
+                    "Expected annual investment return is required.");
+
+    this.expectedAnnualInflationRate =
+            Objects.requireNonNull(
+                    expectedAnnualInflationRate,
+                    "Expected annual inflation rate is required.");
+
+    if (projectionLengthYears <= 0) {
+        throw new IllegalArgumentException(
+                "Projection length must be greater than zero.");
     }
+
+    this.projectionLengthYears = projectionLengthYears;
+}
+//public final class PlanningAssumptions {
+//
+//    private final BigDecimal expectedAnnualInvestmentReturn;
+//
+//    private final BigDecimal expectedAnnualInflationRate;
+//
+//    private final int projectionLengthYears;
+//
+//    public PlanningAssumptions(
+//            BigDecimal expectedAnnualInvestmentReturn,
+//            BigDecimal expectedAnnualInflationRate,
+//            int projectionLengthYears) {
+//
+//        this.expectedAnnualInvestmentReturn =
+//                Objects.requireNonNull(
+//                        expectedAnnualInvestmentReturn,
+//                        "Expected annual investment return is required.");
+//
+//        this.expectedAnnualInflationRate =
+//                Objects.requireNonNull(
+//                        expectedAnnualInflationRate,
+//                        "Expected annual inflation rate is required.");
+//
+//        if (projectionLengthYears <= 0) {
+//            throw new IllegalArgumentException(
+//                    "Projection length must be greater than zero.");
+//        }
+//
+//        this.projectionLengthYears = projectionLengthYears;
+//    }
 
     public BigDecimal getExpectedAnnualInvestmentReturn() {
         return expectedAnnualInvestmentReturn;

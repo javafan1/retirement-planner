@@ -1,12 +1,15 @@
 package com.daviddunn.retirementplanner.domain.financial;
 
-import com.daviddunn.retirementplanner.domain.model.Institution;
-import com.daviddunn.retirementplanner.domain.model.Person;
-
-import java.math.BigDecimal;
 import com.daviddunn.retirementplanner.domain.model.AccountType;
+import com.daviddunn.retirementplanner.domain.model.PersonRole;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+
+import java.math.BigDecimal;
+import java.util.Objects;
 
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
@@ -19,84 +22,59 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 })
 public abstract class Account {
 
-    //private Person owner;
-
-
-    //private Institution institution;
-
-    private String name;
+    private final String name;
+    private final PersonRole owner;
     private BigDecimal currentBalance;
-    private AccountType type;
 
-//    public Account(Person owner, String name, BigDecimal curremtBalance) {
-//        this.owner = owner;
-//        this.name = name;
-//        this.curremtBalance = curremtBalance;
-//    }
+    @JsonCreator
+    protected Account(
+            @JsonProperty("name") String name,
+            @JsonProperty("owner") PersonRole owner,
+            @JsonProperty("currentBalance") BigDecimal currentBalance) {
 
-    protected Account() {
+        this.name = Objects.requireNonNull(name, "name");
+        this.owner = Objects.requireNonNullElse(owner, PersonRole.PRIMARY);
+        this.currentBalance = Objects.requireNonNull(currentBalance, "currentBalance");
     }
-
-    protected Account(String name,
-                      AccountType type,
-                      BigDecimal balance) {
-
-        //this.owner = owner;
-        this.name = name;
-        this.type = type;
-        this.currentBalance = balance;
-    }
-
-    public AccountType getType() {
-        return type;
-    }
-
-//    public Person getOwner() {
-//        return owner;
-//    }
-
-//    public Institution getInstitution() {
-//        return institution;
-//    }
-
 
     public String getName() {
         return name;
+    }
+
+    public PersonRole getOwner() {
+        return owner;
     }
 
     public BigDecimal getCurrentBalance() {
         return currentBalance;
     }
 
-//    public void setOwner(Person owner) {
-//        this.owner = owner;
-//    }
-
-//    public void setInstitution(Institution institution) {
-//        this.institution = institution;
-//    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    protected void setType(AccountType type) {
-        this.type = type;
+    public void setCurrentBalance(BigDecimal currentBalance) {
+        this.currentBalance = Objects.requireNonNull(currentBalance, "currentBalance");
     }
 
     public void deposit(BigDecimal amount) {
+
+        Objects.requireNonNull(amount, "amount");
+
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException("Deposit amount cannot be negative.");
+        }
+
         currentBalance = currentBalance.add(amount);
     }
 
     public void withdraw(BigDecimal amount) {
 
+        Objects.requireNonNull(amount, "amount");
+
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException("Withdrawal amount cannot be negative.");
+        }
+
         currentBalance = currentBalance.subtract(amount);
     }
 
-    public void setCurrentBalance(BigDecimal currentBalance) {
-        this.currentBalance = currentBalance;
-    }
-
+    @JsonIgnore
+    public abstract AccountType getType();
 }
-
-

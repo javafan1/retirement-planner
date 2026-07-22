@@ -1,6 +1,6 @@
 package com.daviddunn.retirementplanner.domain.income;
 
-import com.daviddunn.retirementplanner.domain.model.Person;
+import com.daviddunn.retirementplanner.domain.model.PersonRole;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -9,26 +9,39 @@ import java.time.LocalDate;
 
 public class Pension extends IncomeSource {
 
-    private final LocalDate commencementDate;
     private final BigDecimal monthlyBenefit;
+
     private final boolean cola;
 
     @JsonCreator
     public Pension(
-            @JsonProperty("name") String name,
-            @JsonProperty("commencementDate") LocalDate commencementDate,
-            @JsonProperty("monthlyBenefit") BigDecimal monthlyBenefit,
-            @JsonProperty("cola") boolean cola) {
 
-        super(name);
+            @JsonProperty("name")
+            String name,
 
-        this.commencementDate = commencementDate;
+            @JsonProperty("owner")
+            PersonRole owner,
+
+            @JsonProperty("startDate")
+            LocalDate commencementDate,
+
+            @JsonProperty("endDate")
+            LocalDate terminationDate,
+
+            @JsonProperty("monthlyBenefit")
+            BigDecimal monthlyBenefit,
+
+            @JsonProperty("cola")
+            boolean cola) {
+
+        super(
+                name,
+                owner,
+                commencementDate,
+                terminationDate);
+
         this.monthlyBenefit = monthlyBenefit;
         this.cola = cola;
-    }
-
-    public LocalDate getCommencementDate() {
-        return commencementDate;
     }
 
     public BigDecimal getMonthlyBenefit() {
@@ -40,7 +53,13 @@ public class Pension extends IncomeSource {
     }
 
     @Override
-    public BigDecimal getAnnualIncome() {
+    public BigDecimal getAnnualIncome(LocalDate projectionDate) {
+
+        if (!isActive(projectionDate)) {
+            return BigDecimal.ZERO;
+        }
+
+        // COLA support will be added later.
         return monthlyBenefit.multiply(BigDecimal.valueOf(12));
     }
 }

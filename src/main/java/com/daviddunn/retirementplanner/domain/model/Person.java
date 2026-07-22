@@ -81,16 +81,28 @@ public class Person {
     }
 
     @JsonIgnore
-    public BigDecimal getGuaranteedIncome() {
+    public BigDecimal getGuaranteedIncome(LocalDate projectionDate) {
 
         BigDecimal total = BigDecimal.ZERO;
 
         for (IncomeSource income : incomeSources) {
-            total = total.add(income.getAnnualIncome());
+            total = total.add(
+                    income.getAnnualIncome(projectionDate));
         }
 
         return total;
     }
+//    @JsonIgnore
+//    public BigDecimal getGuaranteedIncome() {
+//
+//        BigDecimal total = BigDecimal.ZERO;
+//
+//        for (IncomeSource income : incomeSources) {
+//            total = total.add(income.getAnnualIncome());
+//        }
+//
+//        return total;
+//    }
 
     @JsonIgnore
     public BigDecimal getTotalAssets() {

@@ -1,3 +1,26 @@
+7.22
+I've been thinking about your overall domain model, and I see two possible "owners" for different concepts:
+
+Household owns the people and household-level information.
+AccountPortfolio owns the investable assets.
+Each Account knows which household member owns it.
+Each IncomeSource knows which household member owns it.
+
+That creates a consistent model:
+
+RetirementPlan
+│
+├── Household
+│     ├── Primary Person
+│     └── Spouse
+│
+├── AccountPortfolio
+│     ├── Traditional IRA (PRIMARY)
+│     ├── Roth IRA (PRIMARY)
+│     └── Traditional IRA (SPOUSE)
+│
+└── PlanningAssumptions
+
 7.21 
 
 ProjectionYear

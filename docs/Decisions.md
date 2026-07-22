@@ -1,3 +1,20 @@
+7.23 
+
+I think we should eventually model each person like this
+Person
+--------
+name
+birthDate
+expectedDeathDate
+
+For the MVP, expectedDeathDate can simply be entered manually.
+
+Later we could support:
+
+actuarial life expectancy
+Monte Carlo longevity
+user-defined scenarios
+
 7.11.26
 
 Refactor

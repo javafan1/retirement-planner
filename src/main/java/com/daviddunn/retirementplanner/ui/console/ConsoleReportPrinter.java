@@ -134,20 +134,20 @@ public class ConsoleReportPrinter {
         System.out.println();
     }
 
-    public void printHouseholdSummary(Household household) {
+    public void printHouseholdSummary(RetirementPlan plan) {
 
         System.out.println("==============================");
 
-        System.out.println("Household Net Worth");
+//        System.out.println("Household Net Worth");
 
-        System.out.println(
-                CurrencyFormatter.format(
-                        household.getNetWorth()));
+//        System.out.println(
+//                CurrencyFormatter.format(
+//                        household.getNetWorth()));
 
         System.out.println();
 
         System.out.println("Accounts: "
-                + household.getAccountCount());
+                + plan.getAccountPortfolio().getTotalBalance());
     }
 
     private void printHousehold(Household household) {
