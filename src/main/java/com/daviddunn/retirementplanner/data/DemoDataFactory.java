@@ -43,7 +43,8 @@ public final class DemoDataFactory {
         return new PlanningAssumptions(
                 Money.of("0.025"),
                 Money.of("0.070"),
-                40);
+                40,
+                LocalDate.of(2026, 7, 1));
     }
 
     private static Person createDavid() {

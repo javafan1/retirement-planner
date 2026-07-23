@@ -7,6 +7,7 @@ import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public final class RetirementPlanFactory {
 
@@ -16,31 +17,40 @@ public final class RetirementPlanFactory {
     private static final BigDecimal DEFAULT_INVESTMENT_RETURN =
             new BigDecimal("0.08");
 
-    private static final int INITIAL_DEFAULT_PROJECTION_LENGTH_YEARS = 40;
+    private static final int INITIAL_DEFAULT_PROJECTION_LENGTH_YEARS =
+            40;
 
     private RetirementPlanFactory() {
     }
 
     public static RetirementPlan createEmptyPlan() {
 
-        Person primary = new Person("", "", null);
-        Person spouse = new Person("", "", null);
+        Person primary =
+                new Person(
+                        "",
+                        "",
+                        null);
+
+        Person spouse =
+                new Person(
+                        "",
+                        "",
+                        null);
 
         Household household =
-                new Household(primary, spouse);
+                new Household(
+                        primary,
+                        spouse);
 
         PlanningAssumptions assumptions =
                 new PlanningAssumptions(
-                        DEFAULT_INFLATION_RATE,
                         DEFAULT_INVESTMENT_RETURN,
-                        INITIAL_DEFAULT_PROJECTION_LENGTH_YEARS);
+                        DEFAULT_INFLATION_RATE,
+                        INITIAL_DEFAULT_PROJECTION_LENGTH_YEARS,
+                        LocalDate.now());
 
-        AccountPortfolio accountPortfolio = new AccountPortfolio();
-
-//        PlanningAssumptions assumptions =
-//                new PlanningAssumptions(
-//                        new BigDecimal("0.03"),
-//                        new BigDecimal("0.08"));
+        AccountPortfolio accountPortfolio =
+                new AccountPortfolio();
 
         return new RetirementPlan(
                 household,

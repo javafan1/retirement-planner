@@ -3,25 +3,23 @@ package com.daviddunn.retirementplanner.ui.views;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.ui.dialogs.PensionDialog;
 import com.daviddunn.retirementplanner.ui.dialogs.SocialSecurityDialog;
-import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
-
-import javafx.scene.control.ChoiceDialog;
-
-import java.util.Optional;
 
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
+import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+
 import java.time.format.DateTimeFormatter;
-import javafx.scene.control.Alert;
+import java.util.Optional;
 
 public class IncomeSourcesView extends BorderPane {
 
@@ -32,6 +30,13 @@ public class IncomeSourcesView extends BorderPane {
     private final Button removeButton;
 
     private RetirementPlan currentPlan;
+
+    /*
+     * MainWindow can register a callback here.
+     * IncomeSourcesView does not need to know
+     * what gets refreshed when the plan changes.
+     */
+    private Runnable onPlanChanged;
 
     private final DateTimeFormatter dateFormatter =
             DateTimeFormatter.ofPattern("MM/dd/yyyy");
@@ -56,13 +61,20 @@ public class IncomeSourcesView extends BorderPane {
                         .selectedItemProperty()
                         .isNull());
 
+        addButton.setOnAction(
+                e -> onAdd());
 
-        addButton.setOnAction(e -> onAdd());
-        editButton.setOnAction(e -> onEdit());
-        removeButton.setOnAction(e -> onRemove());
+        editButton.setOnAction(
+                e -> onEdit());
 
-        HBox buttonBar = new HBox(10);
-        buttonBar.setPadding(new Insets(10));
+        removeButton.setOnAction(
+                e -> onRemove());
+
+        HBox buttonBar =
+                new HBox(10);
+
+        buttonBar.setPadding(
+                new Insets(10));
 
         buttonBar.getChildren().addAll(
                 addButton,
@@ -74,8 +86,12 @@ public class IncomeSourcesView extends BorderPane {
     }
 
     private IncomeSource getSelectedIncomeSource() {
-        return table.getSelectionModel().getSelectedItem();
+
+        return table
+                .getSelectionModel()
+                .getSelectedItem();
     }
+
     private void onAdd() {
 
         ChoiceDialog<String> dialog =
@@ -84,9 +100,14 @@ public class IncomeSourcesView extends BorderPane {
                         "Pension",
                         "Social Security");
 
-        dialog.setTitle("Add Income");
-        dialog.setHeaderText("Select the type of income to add.");
-        dialog.setContentText("Income Type:");
+        dialog.setTitle(
+                "Add Income");
+
+        dialog.setHeaderText(
+                "Select the type of income to add.");
+
+        dialog.setContentText(
+                "Income Type:");
 
         Optional<String> result =
                 dialog.showAndWait();
@@ -132,10 +153,13 @@ public class IncomeSourcesView extends BorderPane {
                             selected,
                             updated));
 
-        } else if (selected instanceof SocialSecurityIncome socialSecurity) {
+        } else if (
+                selected instanceof
+                        SocialSecurityIncome socialSecurity) {
 
             SocialSecurityDialog dialog =
-                    new SocialSecurityDialog(socialSecurity);
+                    new SocialSecurityDialog(
+                            socialSecurity);
 
             Optional<SocialSecurityIncome> result =
                     dialog.showAndWait();
@@ -152,11 +176,20 @@ public class IncomeSourcesView extends BorderPane {
             IncomeSource newIncome) {
 
         Person oldOwner =
-                getPerson(oldIncome.getOwnership());
+                getPerson(
+                        oldIncome.getOwnership());
 
         Person newOwner =
-                getPerson(newIncome.getOwnership());
+                getPerson(
+                        newIncome.getOwnership());
 
+        /*
+         * If ownership did not change, replace
+         * the income source in the same person's list.
+         *
+         * If ownership changed, remove it from the
+         * old owner and add it to the new owner.
+         */
         if (oldOwner == newOwner) {
 
             oldOwner.replaceIncomeSource(
@@ -165,11 +198,16 @@ public class IncomeSourcesView extends BorderPane {
 
         } else {
 
-            oldOwner.removeIncomeSource(oldIncome);
-            newOwner.addIncomeSource(newIncome);
+            oldOwner.removeIncomeSource(
+                    oldIncome);
+
+            newOwner.addIncomeSource(
+                    newIncome);
         }
 
         refreshTable();
+
+        notifyPlanChanged();
     }
 
     private void onRemove() {
@@ -185,9 +223,12 @@ public class IncomeSourcesView extends BorderPane {
                 getPerson(
                         selected.getOwnership());
 
-        owner.removeIncomeSource(selected);
+        owner.removeIncomeSource(
+                selected);
 
         refreshTable();
+
+        notifyPlanChanged();
     }
 
     private void addSocialSecurity() {
@@ -201,11 +242,15 @@ public class IncomeSourcesView extends BorderPane {
         result.ifPresent(income -> {
 
             Person person =
-                    getPerson(income.getOwnership());
+                    getPerson(
+                            income.getOwnership());
 
-            person.addIncomeSource(income);
+            person.addIncomeSource(
+                    income);
 
             refreshTable();
+
+            notifyPlanChanged();
         });
     }
 
@@ -244,55 +289,14 @@ public class IncomeSourcesView extends BorderPane {
                     getPerson(
                             pension.getOwnership());
 
-            person.addIncomeSource(pension);
+            person.addIncomeSource(
+                    pension);
 
             refreshTable();
+
+            notifyPlanChanged();
         });
     }
-//    private void createColumns() {
-//
-//        TableColumn<IncomeSource, String> nameColumn =
-//                new TableColumn<>("Name");
-//
-//        nameColumn.setCellValueFactory(cellData ->
-//                new ReadOnlyStringWrapper(
-//                        cellData.getValue().getName()));
-//
-//        TableColumn<IncomeSource, String> ownershipColumn =
-//                new TableColumn<>("Owner");
-//
-//        ownershipColumn.setCellValueFactory(cellData ->
-//                new ReadOnlyStringWrapper(
-//                        cellData.getValue()
-//                                .getOwnership()
-//                                .toString()));
-//
-//        TableColumn<IncomeSource, String> typeColumn =
-//                new TableColumn<>("Type");
-//
-//        typeColumn.setCellValueFactory(cellData ->
-//                new ReadOnlyStringWrapper(
-//                        getIncomeTypeName(
-//                                cellData.getValue())));
-//
-//        TableColumn<IncomeSource, String> startDateColumn =
-//                new TableColumn<>("Start Date");
-//
-//        startDateColumn.setCellValueFactory(cellData ->
-//                new ReadOnlyStringWrapper(
-//                        formatDate(
-//                                cellData.getValue()
-//                                        .getStartDate())));
-//
-//        table.getColumns().addAll(
-//                nameColumn,
-//                ownershipColumn,
-//                typeColumn,
-//                startDateColumn);
-//
-//        table.setColumnResizePolicy(
-//                TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
-//    }
 
     private void createColumns() {
 
@@ -309,7 +313,8 @@ public class IncomeSourcesView extends BorderPane {
 
         nameColumn.setCellValueFactory(cellData ->
                 new ReadOnlyStringWrapper(
-                        cellData.getValue().getName()));
+                        cellData.getValue()
+                                .getName()));
 
         TableColumn<IncomeSource, String> ownershipColumn =
                 new TableColumn<>("Owner");
@@ -338,6 +343,9 @@ public class IncomeSourcesView extends BorderPane {
                                 cellData.getValue()
                                         .getEndDate())));
 
+        /*
+         * Pension monthly benefit.
+         */
         TableColumn<IncomeSource, String> monthlyBenefitColumn =
                 new TableColumn<>("Monthly Benefit");
 
@@ -349,13 +357,18 @@ public class IncomeSourcesView extends BorderPane {
             if (income instanceof Pension pension) {
 
                 return new ReadOnlyStringWrapper(
-                        pension.getMonthlyBenefit()
+                        pension
+                                .getMonthlyBenefit()
                                 .toPlainString());
             }
 
             return new ReadOnlyStringWrapper("");
         });
 
+        /*
+         * Social Security benefit at
+         * Full Retirement Age.
+         */
         TableColumn<IncomeSource, String> fraBenefitColumn =
                 new TableColumn<>("FRA Benefit");
 
@@ -364,7 +377,8 @@ public class IncomeSourcesView extends BorderPane {
             IncomeSource income =
                     cellData.getValue();
 
-            if (income instanceof SocialSecurityIncome socialSecurity) {
+            if (income instanceof
+                    SocialSecurityIncome socialSecurity) {
 
                 return new ReadOnlyStringWrapper(
                         socialSecurity
@@ -375,6 +389,9 @@ public class IncomeSourcesView extends BorderPane {
             return new ReadOnlyStringWrapper("");
         });
 
+        /*
+         * Social Security claiming age.
+         */
         TableColumn<IncomeSource, String> claimingAgeColumn =
                 new TableColumn<>("Claim Age");
 
@@ -383,16 +400,22 @@ public class IncomeSourcesView extends BorderPane {
             IncomeSource income =
                     cellData.getValue();
 
-            if (income instanceof SocialSecurityIncome socialSecurity) {
+            if (income instanceof
+                    SocialSecurityIncome socialSecurity) {
 
                 return new ReadOnlyStringWrapper(
                         Integer.toString(
-                                socialSecurity.getClaimingAge()));
+                                socialSecurity
+                                        .getClaimingAge()));
             }
 
             return new ReadOnlyStringWrapper("");
         });
 
+        /*
+         * Both pensions and Social Security
+         * may have COLA assumptions.
+         */
         TableColumn<IncomeSource, String> colaColumn =
                 new TableColumn<>("COLA");
 
@@ -405,14 +428,17 @@ public class IncomeSourcesView extends BorderPane {
 
                 return new ReadOnlyStringWrapper(
                         formatPercent(
-                                pension.getAnnualColaRate()));
+                                pension
+                                        .getAnnualColaRate()));
             }
 
-            if (income instanceof SocialSecurityIncome socialSecurity) {
+            if (income instanceof
+                    SocialSecurityIncome socialSecurity) {
 
                 return new ReadOnlyStringWrapper(
                         formatPercent(
-                                socialSecurity.getAnnualColaRate()));
+                                socialSecurity
+                                        .getAnnualColaRate()));
             }
 
             return new ReadOnlyStringWrapper("");
@@ -437,7 +463,9 @@ public class IncomeSourcesView extends BorderPane {
             IncomeSource incomeSource) {
 
         String className =
-                incomeSource.getClass().getSimpleName();
+                incomeSource
+                        .getClass()
+                        .getSimpleName();
 
         return switch (className) {
 
@@ -452,7 +480,6 @@ public class IncomeSourcesView extends BorderPane {
         };
     }
 
-
     private String formatDate(
             java.time.LocalDate date) {
 
@@ -460,7 +487,8 @@ public class IncomeSourcesView extends BorderPane {
             return "";
         }
 
-        return dateFormatter.format(date);
+        return dateFormatter.format(
+                date);
     }
 
     private String formatPercent(
@@ -478,18 +506,23 @@ public class IncomeSourcesView extends BorderPane {
                 + "%";
     }
 
-    public void load(RetirementPlan plan) {
+    public void load(
+            RetirementPlan plan) {
 
         currentPlan = plan;
 
         refreshTable();
     }
 
-    public void save(RetirementPlan plan) {
+    public void save(
+            RetirementPlan plan) {
 
-        // Nothing to do.
-        // Changes will be applied directly
-        // to the domain model.
+        /*
+         * Nothing to do.
+         *
+         * Add/Edit/Remove modify the
+         * domain model directly.
+         */
     }
 
     private void refreshTable() {
@@ -515,5 +548,19 @@ public class IncomeSourcesView extends BorderPane {
 
     public TableView<IncomeSource> getTable() {
         return table;
+    }
+
+    public void setOnPlanChanged(
+            Runnable onPlanChanged) {
+
+        this.onPlanChanged =
+                onPlanChanged;
+    }
+
+    private void notifyPlanChanged() {
+
+        if (onPlanChanged != null) {
+            onPlanChanged.run();
+        }
     }
 }

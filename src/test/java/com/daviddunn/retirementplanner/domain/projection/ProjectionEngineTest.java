@@ -87,7 +87,8 @@ class ProjectionEngineTest {
                 new PlanningAssumptions(
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
-                        1);
+                        1,
+                        LocalDate.of(currentYear, 1, 1));
 
         RetirementPlan plan =
                 new RetirementPlan(
@@ -189,7 +190,8 @@ class ProjectionEngineTest {
                 new PlanningAssumptions(
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
-                        1);
+                        1,
+                        LocalDate.of(currentYear, 1, 1));
 
         RetirementPlan plan =
                 new RetirementPlan(
@@ -281,8 +283,8 @@ class ProjectionEngineTest {
                 new PlanningAssumptions(
                         BigDecimal.ZERO,
                         new BigDecimal("0.03"),
-                        2);
-
+                        2,
+                        LocalDate.of(currentYear, 1, 1));
         RetirementPlan plan =
                 new RetirementPlan(
                         household,
@@ -421,7 +423,8 @@ class ProjectionEngineTest {
                 new PlanningAssumptions(
                         new BigDecimal("0.05"),
                         BigDecimal.ZERO,
-                        1);
+                        1,
+                        LocalDate.of(currentYear, 1, 1));
 
         RetirementPlan plan =
                 new RetirementPlan(
@@ -460,6 +463,210 @@ class ProjectionEngineTest {
 
         assertEquals(
                 new BigDecimal("1026000.00"),
+                year.getEndingInvestableAssets());
+    }
+
+    @Test
+    void projectionProratesExpensesForMidYearStart() {
+
+        int currentYear =
+                Year.now().getValue();
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        /*
+         * Pension begins July 1.
+         *
+         * $3,000 × 6 months = $18,000.
+         */
+        primary.addIncomeSource(
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(currentYear, 7, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        BigDecimal.ZERO));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        /*
+         * $60,000 annual expenses.
+         *
+         * July through December = 6 months.
+         *
+         * First-year expenses should therefore
+         * be $30,000.
+         */
+        household.addExpense(
+                new Expense(
+                        "Living Expenses",
+                        new BigDecimal("60000")));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        1,
+                        LocalDate.of(
+                                currentYear,
+                                7,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear year =
+                projection.getYearAt(0);
+
+        /*
+         * July through December:
+         *
+         * Expenses:       $30,000
+         * Pension:        $18,000
+         * Withdrawal:     $12,000
+         *
+         * Ending assets:
+         * $1,000,000 - $12,000
+         * = $988,000
+         */
+
+        assertEquals(
+                new BigDecimal("30000.00"),
+                year.getAnnualExpenses());
+
+        assertEquals(
+                new BigDecimal("18000"),
+                year.getGuaranteedIncome());
+
+        assertEquals(
+                new BigDecimal("12000.00"),
+                year.getPortfolioWithdrawal());
+
+        assertEquals(
+                new BigDecimal("988000.00"),
+                year.getEndingInvestableAssets());
+    }
+
+    @Test
+    void projectionProratesInvestmentGrowthForMidYearStart() {
+
+        int currentYear =
+                Year.now().getValue();
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        /*
+         * 6% annual investment return.
+         * Projection begins July 1.
+         *
+         * July through December = 6 months.
+         *
+         * $1,000,000 × 6% × 6/12
+         * = $30,000
+         */
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new BigDecimal("0.06"),
+                        BigDecimal.ZERO,
+                        1,
+                        LocalDate.of(
+                                currentYear,
+                                7,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear year =
+                projection.getYearAt(0);
+
+        assertEquals(
+                new BigDecimal("1000000"),
+                year.getBeginningInvestableAssets());
+
+        assertEquals(
+                new BigDecimal("30000.00"),
+                year.getInvestmentGrowth());
+
+        assertEquals(
+                new BigDecimal("0.00"),
+                year.getAnnualExpenses());
+
+        assertEquals(
+                BigDecimal.ZERO,
+                year.getGuaranteedIncome());
+
+        assertEquals(
+                new BigDecimal("0.00"),
+                year.getPortfolioWithdrawal());
+
+        assertEquals(
+                new BigDecimal("1030000.00"),
                 year.getEndingInvestableAssets());
     }
 }

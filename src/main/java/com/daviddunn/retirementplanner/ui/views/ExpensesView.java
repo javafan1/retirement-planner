@@ -26,6 +26,8 @@ public class ExpensesView extends BorderPane {
 
     private RetirementPlan currentPlan;
 
+    private Runnable onPlanChanged;
+
     private final NumberFormat currency =
             NumberFormat.getCurrencyInstance();
 
@@ -141,6 +143,8 @@ public class ExpensesView extends BorderPane {
                     .addExpense(expense);
 
             refreshTable();
+
+            notifyPlanChanged();
         });
     }
 
@@ -167,6 +171,8 @@ public class ExpensesView extends BorderPane {
                             updated);
 
             refreshTable();
+
+            notifyPlanChanged();
         });
     }
 
@@ -183,6 +189,8 @@ public class ExpensesView extends BorderPane {
                 .removeExpense(selected);
 
         refreshTable();
+
+        notifyPlanChanged();
     }
 
     private Expense getSelectedExpense() {
@@ -199,5 +207,19 @@ public class ExpensesView extends BorderPane {
 
     public TableView<Expense> getTable() {
         return table;
+    }
+
+    public void setOnPlanChanged(
+            Runnable onPlanChanged) {
+
+        this.onPlanChanged =
+                onPlanChanged;
+    }
+
+    private void notifyPlanChanged() {
+
+        if (onPlanChanged != null) {
+            onPlanChanged.run();
+        }
     }
 }

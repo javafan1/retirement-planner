@@ -11,7 +11,7 @@ public class RetirementPlan {
     private final Household household;
     private final AccountPortfolio accountPortfolio;
 
-    private final PlanningAssumptions planningAssumptions;
+    private PlanningAssumptions planningAssumptions;
 
     @JsonCreator
     public RetirementPlan(
@@ -40,5 +40,13 @@ public class RetirementPlan {
 
     public AccountPortfolio getAccountPortfolio() {
         return accountPortfolio;
+    }
+
+    public void setPlanningAssumptions(
+            PlanningAssumptions planningAssumptions) {
+
+        this.planningAssumptions =
+                Objects.requireNonNull(
+                        planningAssumptions);
     }
 }

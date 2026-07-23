@@ -1,4 +1,3 @@
-
 package com.daviddunn.retirementplanner.domain.projection;
 
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
@@ -6,13 +5,12 @@ import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
-import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalResult;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalCalculator;
+import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalResult;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.Year;
 
 public class ProjectionEngine {
 
@@ -22,26 +20,31 @@ public class ProjectionEngine {
 
     public Projection project(RetirementPlan plan) {
 
-
-
-
-        Projection projection = new Projection();
+        Projection projection =
+                new Projection();
 
         BigDecimal beginningAssets =
                 plan.getAccountPortfolio()
                         .getTotalBalance();
 
-        int startYear = Year.now().getValue();
+        PlanningAssumptions assumptions =
+                plan.getPlanningAssumptions();
+
+        LocalDate projectionStartDate =
+                assumptions.getProjectionStartDate();
+
+        int startYear =
+                projectionStartDate.getYear();
 
         int projectionLength =
-                plan.getPlanningAssumptions()
-                        .getProjectionLengthYears();
+                assumptions.getProjectionLengthYears();
 
         for (int yearOffset = 0;
              yearOffset < projectionLength;
              yearOffset++) {
 
-            int calendarYear = startYear + yearOffset;
+            int calendarYear =
+                    startYear + yearOffset;
 
             ProjectionYear projectionYear =
                     calculateProjectionYear(
@@ -50,10 +53,12 @@ public class ProjectionEngine {
                             calendarYear,
                             beginningAssets);
 
-            projection.addYear(projectionYear);
+            projection.addYear(
+                    projectionYear);
 
             beginningAssets =
-                    projectionYear.getEndingInvestableAssets();
+                    projectionYear
+                            .getEndingInvestableAssets();
         }
 
         return projection;
@@ -65,11 +70,25 @@ public class ProjectionEngine {
             int calendarYear,
             BigDecimal beginningAssets) {
 
-        LocalDate projectionDate =
-                LocalDate.of(calendarYear, 1, 1);
-
         PlanningAssumptions assumptions =
                 plan.getPlanningAssumptions();
+
+        LocalDate projectionStartDate =
+                assumptions.getProjectionStartDate();
+
+        /*
+         * The first projection year begins on the
+         * actual projection start date.
+         *
+         * Subsequent years begin January 1.
+         */
+        LocalDate projectionDate =
+                yearOffset == 0
+                        ? projectionStartDate
+                        : LocalDate.of(
+                        calendarYear,
+                        1,
+                        1);
 
         Household household =
                 plan.getHousehold();
@@ -77,7 +96,9 @@ public class ProjectionEngine {
         BigDecimal investmentGrowth =
                 calculateInvestmentGrowth(
                         beginningAssets,
-                        assumptions);
+                        assumptions,
+                        yearOffset,
+                        projectionStartDate);
 
         BigDecimal guaranteedIncome =
                 calculateTotalIncome(
@@ -88,9 +109,8 @@ public class ProjectionEngine {
                 calculateProjectedExpenses(
                         household,
                         assumptions,
-                        yearOffset);
-
-
+                        yearOffset,
+                        projectionStartDate);
 
         BigDecimal portfolioWithdrawal =
                 calculatePortfolioWithdrawal(
@@ -116,19 +136,46 @@ public class ProjectionEngine {
 
     private BigDecimal calculateInvestmentGrowth(
             BigDecimal beginningAssets,
-            PlanningAssumptions assumptions) {
+            PlanningAssumptions assumptions,
+            int yearOffset,
+            LocalDate projectionStartDate) {
 
-        return beginningAssets
-                .multiply(
-                        assumptions.getExpectedAnnualInvestmentReturn())
-                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal investmentGrowth =
+                beginningAssets.multiply(
+                        assumptions
+                                .getExpectedAnnualInvestmentReturn());
+
+        /*
+         * Prorate investment growth for the
+         * partial first calendar year.
+         */
+        if (yearOffset == 0) {
+
+            int activeMonths =
+                    13 -
+                            projectionStartDate
+                                    .getMonthValue();
+
+            investmentGrowth =
+                    investmentGrowth
+                            .multiply(
+                                    BigDecimal.valueOf(activeMonths))
+                            .divide(
+                                    BigDecimal.valueOf(12),
+                                    2,
+                                    RoundingMode.HALF_UP);
+        }
+
+        return investmentGrowth.setScale(
+                2,
+                RoundingMode.HALF_UP);
     }
-
     private BigDecimal calculateTotalIncome(
             Household household,
             LocalDate projectionDate) {
 
-        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal total =
+                BigDecimal.ZERO;
 
         total = total.add(
                 calculateIncome(
@@ -147,12 +194,15 @@ public class ProjectionEngine {
             Person person,
             LocalDate projectionDate) {
 
-        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal total =
+                BigDecimal.ZERO;
 
-        for (IncomeSource income : person.getIncomeSources()) {
+        for (IncomeSource income :
+                person.getIncomeSources()) {
 
             total = total.add(
-                    income.getAnnualIncome(projectionDate));
+                    income.getAnnualIncome(
+                            projectionDate));
         }
 
         return total;
@@ -161,16 +211,53 @@ public class ProjectionEngine {
     private BigDecimal calculateProjectedExpenses(
             Household household,
             PlanningAssumptions assumptions,
-            int yearOffset) {
+            int yearOffset,
+            LocalDate projectionStartDate) {
 
         BigDecimal inflationMultiplier =
                 BigDecimal.ONE
-                        .add(assumptions.getExpectedAnnualInflationRate())
+                        .add(
+                                assumptions
+                                        .getExpectedAnnualInflationRate())
                         .pow(yearOffset);
 
-        return household.getTotalAnnualExpenses()
-                .multiply(inflationMultiplier)
-                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal annualExpenses =
+                household
+                        .getTotalAnnualExpenses()
+                        .multiply(
+                                inflationMultiplier);
+
+        /*
+         * Only the first projection year can
+         * represent a partial calendar year.
+         *
+         * Example:
+         *
+         * June start:
+         * June through December = 7 months.
+         */
+        if (yearOffset == 0) {
+
+            int activeMonths =
+                    13 -
+                            projectionStartDate
+                                    .getMonthValue();
+
+            annualExpenses =
+                    annualExpenses
+                            .multiply(
+                                    BigDecimal.valueOf(
+                                            activeMonths))
+                            .divide(
+                                    BigDecimal.valueOf(12),
+                                    2,
+                                    RoundingMode.HALF_UP);
+        }
+
+        return annualExpenses
+                .setScale(
+                        2,
+                        RoundingMode.HALF_UP);
     }
 
     private BigDecimal calculatePortfolioWithdrawal(
@@ -178,11 +265,13 @@ public class ProjectionEngine {
             BigDecimal annualExpenses) {
 
         WithdrawalResult withdrawalResult =
-                withdrawalCalculator.calculateWithdrawal(
-                        guaranteedIncome,
-                        annualExpenses);
+                withdrawalCalculator
+                        .calculateWithdrawal(
+                                guaranteedIncome,
+                                annualExpenses);
 
-        return withdrawalResult.getTotalWithdrawal();
+        return withdrawalResult
+                .getTotalWithdrawal();
     }
 
     private BigDecimal calculateEndingAssets(
@@ -195,177 +284,3 @@ public class ProjectionEngine {
                 .subtract(portfolioWithdrawal);
     }
 }
-
-/*
-package com.daviddunn.retirementplanner.domain.projection;
-
-import com.daviddunn.retirementplanner.domain.income.IncomeSource;
-import com.daviddunn.retirementplanner.domain.model.Household;
-import com.daviddunn.retirementplanner.domain.model.Person;
-import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
-import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.time.Year;
-
-public class ProjectionEngine {
-
-    public Projection project(RetirementPlan plan) {
-
-        Projection projection = new Projection();
-
-        BigDecimal beginningAssets =
-                plan.getAccountPortfolio()
-                        .getTotalBalance();
-
-        int startYear = Year.now().getValue();
-
-        int projectionLength =
-                plan.getPlanningAssumptions()
-                        .getProjectionLengthYears();
-
-        for (int yearOffset = 0;
-             yearOffset < projectionLength;
-             yearOffset++) {
-
-            int calendarYear = startYear + yearOffset;
-
-            ProjectionYear projectionYear =
-                    calculateProjectionYear(
-                            plan,
-                            yearOffset,
-                            calendarYear,
-                            beginningAssets);
-
-            projection.addYear(projectionYear);
-
-            beginningAssets =
-                    projectionYear.getEndingInvestableAssets();
-        }
-
-        return projection;
-    }
-
-    private ProjectionYear calculateProjectionYear(
-            RetirementPlan plan,
-            int yearOffset,
-            int calendarYear,
-            BigDecimal beginningAssets) {
-
-        LocalDate projectionDate =
-                LocalDate.of(calendarYear, 1, 1);
-
-        PlanningAssumptions assumptions =
-                plan.getPlanningAssumptions();
-
-        Household household =
-                plan.getHousehold();
-
-        BigDecimal investmentGrowth =
-                calculateInvestmentGrowth(
-                        beginningAssets,
-                        assumptions);
-
-        BigDecimal totalIncome =
-                calculateTotalIncome(
-                        household,
-                        projectionDate);
-
-        BigDecimal projectedExpenses =
-                calculateProjectedExpenses(
-                        household,
-                        assumptions,
-                        yearOffset);
-
-        BigDecimal endingAssets =
-                calculateEndingAssets(
-                        beginningAssets,
-                        investmentGrowth,
-                        totalIncome,
-                        projectedExpenses);
-
-        return new ProjectionYear(
-                yearOffset,
-                calendarYear,
-                beginningAssets,
-                investmentGrowth,
-                totalIncome,
-                projectedExpenses,
-                endingAssets);
-    }
-
-    private BigDecimal calculateInvestmentGrowth(
-            BigDecimal beginningAssets,
-            PlanningAssumptions assumptions) {
-
-        return beginningAssets
-                .multiply(
-                        assumptions.getExpectedAnnualInvestmentReturn())
-                .setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal calculateTotalIncome(
-            Household household,
-            LocalDate projectionDate) {
-
-        BigDecimal total = BigDecimal.ZERO;
-
-        total = total.add(
-                calculateIncome(
-                        household.getPrimaryPerson(),
-                        projectionDate));
-
-        total = total.add(
-                calculateIncome(
-                        household.getSpouse(),
-                        projectionDate));
-
-        return total;
-    }
-
-    private BigDecimal calculateIncome(
-            Person person,
-            LocalDate projectionDate) {
-
-        BigDecimal total = BigDecimal.ZERO;
-
-        for (IncomeSource income : person.getIncomeSources()) {
-
-            total = total.add(
-                    income.getAnnualIncome(projectionDate));
-        }
-
-        return total;
-    }
-
-    private BigDecimal calculateProjectedExpenses(
-            Household household,
-            PlanningAssumptions assumptions,
-            int yearOffset) {
-
-        BigDecimal inflationMultiplier =
-                BigDecimal.ONE
-                        .add(assumptions.getExpectedAnnualInflationRate())
-                        .pow(yearOffset);
-
-        return household.getTotalAnnualExpenses()
-                .multiply(inflationMultiplier)
-                .setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal calculateEndingAssets(
-            BigDecimal beginningAssets,
-            BigDecimal investmentGrowth,
-            BigDecimal totalIncome,
-            BigDecimal projectedExpenses) {
-
-        return beginningAssets
-                .add(investmentGrowth)
-                .add(totalIncome)
-                .subtract(projectedExpenses);
-    }
-}
-
-*/

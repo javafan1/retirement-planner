@@ -3,14 +3,17 @@ package com.daviddunn.retirementplanner.ui;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 
-import com.daviddunn.retirementplanner.ui.views.*;
+import com.daviddunn.retirementplanner.ui.views.AccountsView;
+import com.daviddunn.retirementplanner.ui.views.AssumptionsView;
+import com.daviddunn.retirementplanner.ui.views.ExpensesView;
 
-//import com.daviddunn.retirementplanner.ui.views.AccountsView;
-//import com.daviddunn.retirementplanner.ui.views.AssumptionsView;
-//import com.daviddunn.retirementplanner.ui.views.ExpensesView;
-//
-//import com.daviddunn.retirementplanner.ui.views.IncomeView;
-//import com.daviddunn.retirementplanner.ui.views.ResultsView;
+
+import com.daviddunn.retirementplanner.ui.views.HouseholdView;
+import com.daviddunn.retirementplanner.ui.views.IncomeSourcesView;
+import com.daviddunn.retirementplanner.ui.views.ProjectionYearView;
+import com.daviddunn.retirementplanner.ui.views.ResultsView;
+
+
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
@@ -37,8 +40,8 @@ public class MainWindow {
     private final IncomeSourcesView incomeSourcesView;
     private final ProjectionYearView projectionYearView;
     private final ExpensesView expensesView;
-//    private final AssumptionsView assumptionsView;
-//    private final ResultsView resultsView;
+    private final AssumptionsView assumptionsView;
+    private final ResultsView resultsView;
 
     private final Label statusLabel;
 
@@ -53,8 +56,17 @@ public class MainWindow {
 
 
          expensesView = new ExpensesView();
-//        assumptionsView = new AssumptionsView();
-//        resultsView = new ResultsView();
+         assumptionsView = new AssumptionsView();
+         resultsView = new ResultsView();
+
+        expensesView.setOnPlanChanged(
+                this::refreshResults);
+        incomeSourcesView.setOnPlanChanged(
+                this::refreshResults);
+        accountsView.setOnPlanChanged(
+                this::refreshResults);
+        assumptionsView.setOnPlanChanged(
+                this::refreshResults);
 
         statusLabel = new Label("Ready");
 
@@ -120,13 +132,13 @@ public class MainWindow {
                 createTab("Expenses",expensesView));
 
         tabPane.getTabs().add(
-                createTab("Assumptions", new Label("Coming Soon")));
+                createTab("Assumptions", assumptionsView));
 
         tabPane.getTabs().add(
                 createTab("Projection", projectionYearView));
 
         tabPane.getTabs().add(
-                createTab("Results", new Label("Coming Soon")));
+                createTab("Results", resultsView));
 
 //        tabPane.getTabs().add(createTab("Accounts", accountsView));
 //        tabPane.getTabs().add(createTab("Income", incomeView));
@@ -162,6 +174,8 @@ public class MainWindow {
         incomeSourcesView.load(plan);
         projectionYearView.load(plan);
         expensesView.load(plan);
+        assumptionsView.load(plan);
+        resultsView.load(plan);
 
         statusLabel.setText("Ready");
     }
@@ -174,6 +188,8 @@ public class MainWindow {
         accountsView.save(plan);
         incomeSourcesView.save(plan);
         expensesView.save(plan);
+        assumptionsView.save(plan);
+        //resultsView.save(plan);
 
         // Future
         // accountsView.save(plan);
@@ -274,4 +290,17 @@ private void onExit() {
 
     root.getScene().getWindow().hide();
 }
+
+    private void refreshResults() {
+
+        RetirementPlan plan =
+                controller.getCurrentPlan();
+
+        projectionYearView.load(plan);
+
+        resultsView.load(plan);
+
+        statusLabel.setText(
+                "Projection updated.");
+    }
 }

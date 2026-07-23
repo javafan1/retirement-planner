@@ -4,6 +4,7 @@ import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.ui.dialogs.AccountDialog;
+
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
@@ -28,6 +29,13 @@ public class AccountsView extends BorderPane {
 
     private RetirementPlan currentPlan;
 
+    /*
+     * MainWindow registers a callback here so
+     * projections can be refreshed whenever
+     * an account changes.
+     */
+    private Runnable onPlanChanged;
+
     public AccountsView() {
 
         table = new TableView<>();
@@ -48,12 +56,21 @@ public class AccountsView extends BorderPane {
                         .selectedItemProperty()
                         .isNull());
 
-        addButton.setOnAction(e -> onAdd());
-        editButton.setOnAction(e -> onEdit());
-        removeButton.setOnAction(e -> onRemove());
+        addButton.setOnAction(
+                e -> onAdd());
 
-        HBox buttonBar = new HBox(10);
-        buttonBar.setPadding(new Insets(10));
+        editButton.setOnAction(
+                e -> onEdit());
+
+        removeButton.setOnAction(
+                e -> onRemove());
+
+        HBox buttonBar =
+                new HBox(10);
+
+        buttonBar.setPadding(
+                new Insets(10));
+
         buttonBar.getChildren().addAll(
                 addButton,
                 editButton,
@@ -70,37 +87,48 @@ public class AccountsView extends BorderPane {
 
         nameColumn.setCellValueFactory(cellData ->
                 new ReadOnlyStringWrapper(
-                        cellData.getValue().getName()));
+                        cellData.getValue()
+                                .getName()));
 
         TableColumn<Account, String> typeColumn =
                 new TableColumn<>("Type");
 
         typeColumn.setCellValueFactory(cellData ->
                 new ReadOnlyStringWrapper(
-                        cellData.getValue().getType().toString()));
+                        cellData.getValue()
+                                .getType()
+                                .toString()));
 
         TableColumn<Account, BigDecimal> balanceColumn =
                 new TableColumn<>("Balance");
 
         balanceColumn.setCellValueFactory(cellData ->
-                 new ReadOnlyObjectWrapper<>(
-                         cellData.getValue().getCurrentBalance()));
+                new ReadOnlyObjectWrapper<>(
+                        cellData.getValue()
+                                .getCurrentBalance()));
 
         balanceColumn.setCellFactory(column ->
                 new TableCell<>() {
 
                     @Override
-                    protected void updateItem(BigDecimal value,
-                                              boolean empty) {
+                    protected void updateItem(
+                            BigDecimal value,
+                            boolean empty) {
 
-                        super.updateItem(value, empty);
+                        super.updateItem(
+                                value,
+                                empty);
 
                         if (empty || value == null) {
+
                             setText(null);
+
                         } else {
-                            setText(NumberFormat
-                                    .getCurrencyInstance()
-                                    .format(value));
+
+                            setText(
+                                    NumberFormat
+                                            .getCurrencyInstance()
+                                            .format(value));
                         }
                     }
                 });
@@ -114,36 +142,49 @@ public class AccountsView extends BorderPane {
                 TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
     }
 
-    public void load(RetirementPlan plan) {
+    public void load(
+            RetirementPlan plan) {
 
         currentPlan = plan;
 
         refreshTable();
     }
 
-    public void save(RetirementPlan plan) {
+    public void save(
+            RetirementPlan plan) {
 
-        // Nothing to do.
-        // All changes are applied directly to the domain model.
+        /*
+         * Nothing to do.
+         *
+         * Add/Edit/Remove modify the
+         * domain model directly.
+         */
     }
 
     private void refreshTable() {
 
         if (currentPlan == null) {
+
             table.getItems().clear();
             return;
         }
 
         table.getItems().setAll(
-                getPortfolio().getAccounts());
+                getPortfolio()
+                        .getAccounts());
     }
 
     private AccountPortfolio getPortfolio() {
-        return currentPlan.getAccountPortfolio();
+
+        return currentPlan
+                .getAccountPortfolio();
     }
 
     private Account getSelectedAccount() {
-        return table.getSelectionModel().getSelectedItem();
+
+        return table
+                .getSelectionModel()
+                .getSelectedItem();
     }
 
     private void onAdd() {
@@ -156,15 +197,19 @@ public class AccountsView extends BorderPane {
 
         result.ifPresent(account -> {
 
-            getPortfolio().addAccount(account);
+            getPortfolio()
+                    .addAccount(account);
 
             refreshTable();
+
+            notifyPlanChanged();
         });
     }
 
     private void onEdit() {
 
-        Account selected = getSelectedAccount();
+        Account selected =
+                getSelectedAccount();
 
         if (selected == null) {
             return;
@@ -178,27 +223,57 @@ public class AccountsView extends BorderPane {
 
         result.ifPresent(account -> {
 
-            getPortfolio().replaceAccount(
-                    selected,
-                    account);
+            getPortfolio()
+                    .replaceAccount(
+                            selected,
+                            account);
 
             refreshTable();
+
+            notifyPlanChanged();
         });
     }
+
     private void onRemove() {
 
-        Account selected = getSelectedAccount();
+        Account selected =
+                getSelectedAccount();
 
         if (selected == null) {
             return;
         }
 
-        getPortfolio().removeAccount(selected);
+        getPortfolio()
+                .removeAccount(selected);
 
         refreshTable();
+
+        notifyPlanChanged();
     }
 
     public TableView<Account> getTable() {
         return table;
+    }
+
+    /*
+     * Called by MainWindow to register
+     * what should happen when the plan changes.
+     */
+    public void setOnPlanChanged(
+            Runnable onPlanChanged) {
+
+        this.onPlanChanged =
+                onPlanChanged;
+    }
+
+    /*
+     * Notify MainWindow that an account
+     * change may affect the projection.
+     */
+    private void notifyPlanChanged() {
+
+        if (onPlanChanged != null) {
+            onPlanChanged.run();
+        }
     }
 }
