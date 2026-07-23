@@ -47,6 +47,30 @@ public class Household {
         expenses.add(Objects.requireNonNull(expense));
     }
 
+    public void removeExpense(Expense expense) {
+
+        expenses.remove(
+                Objects.requireNonNull(expense));
+    }
+
+    public void replaceExpense(
+            Expense oldExpense,
+            Expense newExpense) {
+
+        Objects.requireNonNull(oldExpense);
+        Objects.requireNonNull(newExpense);
+
+        int index =
+                expenses.indexOf(oldExpense);
+
+        if (index >= 0) {
+            expenses.set(
+                    index,
+                    newExpense);
+        }
+    }
+
+
     public List<Expense> getExpenses() {
         return Collections.unmodifiableList(expenses);
     }

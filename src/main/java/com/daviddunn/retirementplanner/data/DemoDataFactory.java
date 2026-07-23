@@ -9,6 +9,7 @@ import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.util.Money;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public final class DemoDataFactory {
@@ -70,7 +71,7 @@ public final class DemoDataFactory {
                         LocalDate.of(2026, 7, 1),
                         null,
                         Money.of("3800"),
-                        false));
+                        BigDecimal.ZERO));
     }
 
     private static void addLisaIncome(Person lisa) {
@@ -82,7 +83,7 @@ public final class DemoDataFactory {
                         LocalDate.of(2027, 2, 28),
                         null,
                         Money.of("956"),
-                        false));
+                        BigDecimal.ZERO));
     }
 
     private static AccountPortfolio createPortfolio() {

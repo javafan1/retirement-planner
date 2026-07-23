@@ -3,15 +3,14 @@ package com.daviddunn.retirementplanner.ui;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 
-import com.daviddunn.retirementplanner.ui.views.AccountsView;
-import com.daviddunn.retirementplanner.ui.views.HouseholdView;
+import com.daviddunn.retirementplanner.ui.views.*;
+
 //import com.daviddunn.retirementplanner.ui.views.AccountsView;
 //import com.daviddunn.retirementplanner.ui.views.AssumptionsView;
 //import com.daviddunn.retirementplanner.ui.views.ExpensesView;
 //
 //import com.daviddunn.retirementplanner.ui.views.IncomeView;
 //import com.daviddunn.retirementplanner.ui.views.ResultsView;
-import com.daviddunn.retirementplanner.ui.views.ProjectionYearView;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
@@ -35,11 +34,9 @@ public class MainWindow {
 
     private final HouseholdView householdView;
     private final AccountsView accountsView;
+    private final IncomeSourcesView incomeSourcesView;
     private final ProjectionYearView projectionYearView;
-
-//    private final AccountsView accountsView;
-//    private final IncomeView incomeView;
-//    private final ExpensesView expensesView;
+    private final ExpensesView expensesView;
 //    private final AssumptionsView assumptionsView;
 //    private final ResultsView resultsView;
 
@@ -51,11 +48,11 @@ public class MainWindow {
 
         householdView = new HouseholdView();
         accountsView = new AccountsView();
+        incomeSourcesView = new IncomeSourcesView();
         projectionYearView = new ProjectionYearView();
 
-//        accountsView = new AccountsView();
-//        incomeView = new IncomeView();
-//        expensesView = new ExpensesView();
+
+         expensesView = new ExpensesView();
 //        assumptionsView = new AssumptionsView();
 //        resultsView = new ResultsView();
 
@@ -110,15 +107,26 @@ public class MainWindow {
 
         TabPane tabPane = new TabPane();
 
-        tabPane.getTabs().add(createTab("Household", householdView));
+        tabPane.getTabs().add(
+                createTab("Household", householdView));
 
-        tabPane.getTabs().add(createTab("Accounts", accountsView));
-        tabPane.getTabs().add(createTab("Projection", projectionYearView));
+        tabPane.getTabs().add(
+                createTab("Accounts", accountsView));
 
-        tabPane.getTabs().add(createTab("Income", new Label("Coming Soon")));
-        tabPane.getTabs().add(createTab("Expenses", new Label("Coming Soon")));
-        tabPane.getTabs().add(createTab("Assumptions", new Label("Coming Soon")));
-        tabPane.getTabs().add(createTab("Results", new Label("Coming Soon")));
+        tabPane.getTabs().add(
+                createTab("Income", incomeSourcesView));
+
+        tabPane.getTabs().add(
+                createTab("Expenses",expensesView));
+
+        tabPane.getTabs().add(
+                createTab("Assumptions", new Label("Coming Soon")));
+
+        tabPane.getTabs().add(
+                createTab("Projection", projectionYearView));
+
+        tabPane.getTabs().add(
+                createTab("Results", new Label("Coming Soon")));
 
 //        tabPane.getTabs().add(createTab("Accounts", accountsView));
 //        tabPane.getTabs().add(createTab("Income", incomeView));
@@ -151,7 +159,9 @@ public class MainWindow {
 
         householdView.load(plan);
         accountsView.load(plan);
+        incomeSourcesView.load(plan);
         projectionYearView.load(plan);
+        expensesView.load(plan);
 
         statusLabel.setText("Ready");
     }
@@ -162,6 +172,8 @@ public class MainWindow {
 
         householdView.save(plan);
         accountsView.save(plan);
+        incomeSourcesView.save(plan);
+        expensesView.save(plan);
 
         // Future
         // accountsView.save(plan);

@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 public class Person {
 
@@ -73,7 +74,30 @@ public class Person {
             new ArrayList<>();
 
     public void addIncomeSource(IncomeSource incomeSource) {
-        incomeSources.add(incomeSource);
+        incomeSources.add(
+                Objects.requireNonNull(incomeSource));
+    }
+
+    public void removeIncomeSource(IncomeSource incomeSource) {
+        incomeSources.remove(
+                Objects.requireNonNull(incomeSource));
+    }
+
+    public void replaceIncomeSource(
+            IncomeSource oldIncomeSource,
+            IncomeSource newIncomeSource) {
+
+        Objects.requireNonNull(oldIncomeSource);
+        Objects.requireNonNull(newIncomeSource);
+
+        int index =
+                incomeSources.indexOf(oldIncomeSource);
+
+        if (index >= 0) {
+            incomeSources.set(
+                    index,
+                    newIncomeSource);
+        }
     }
 
     public List<IncomeSource> getIncomeSources() {
@@ -138,6 +162,10 @@ public class Person {
     }
 
     public void setIncomeSources(List<IncomeSource> incomeSources) {
-        this.incomeSources = incomeSources;
+
+        this.incomeSources =
+                incomeSources == null
+                        ? new ArrayList<>()
+                        : new ArrayList<>(incomeSources);
     }
 }

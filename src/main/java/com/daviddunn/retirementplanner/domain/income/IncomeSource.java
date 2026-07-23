@@ -17,7 +17,13 @@ import java.util.Objects;
         property = "incomeType"
 )
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = Pension.class, name = "pension")
+        @JsonSubTypes.Type(
+                value = Pension.class,
+                name = "pension"),
+
+        @JsonSubTypes.Type(
+                value = SocialSecurityIncome.class,
+                name = "socialSecurity")
 })
 public abstract class IncomeSource {
 
@@ -31,7 +37,7 @@ public abstract class IncomeSource {
 
     protected IncomeSource(
             @JsonProperty("name") String name,
-            @JsonProperty("owner")  AccountOwnership ownership,
+            @JsonProperty("ownership") AccountOwnership ownership,
             @JsonProperty("startDate") LocalDate startDate,
             @JsonProperty("endDate") LocalDate endDate) {
 
@@ -40,6 +46,45 @@ public abstract class IncomeSource {
         this.startDate = Objects.requireNonNull(startDate);
         this.endDate = endDate;
     }
+
+    @JsonIgnore
+    protected int getActiveMonths(int calendarYear) {
+
+        LocalDate yearStart =
+                LocalDate.of(calendarYear, 1, 1);
+
+        LocalDate yearEnd =
+                LocalDate.of(calendarYear, 12, 31);
+
+        if (startDate.isAfter(yearEnd)) {
+            return 0;
+        }
+
+        if (endDate != null &&
+                endDate.isBefore(yearStart)) {
+            return 0;
+        }
+
+        LocalDate effectiveStart =
+                startDate.isAfter(yearStart)
+                        ? startDate
+                        : yearStart;
+
+        LocalDate effectiveEnd =
+                endDate != null && endDate.isBefore(yearEnd)
+                        ? endDate
+                        : yearEnd;
+
+        return effectiveEnd.getMonthValue()
+                - effectiveStart.getMonthValue()
+                + 1;
+    }
+
+    //protected abstract BigDecimal calculateAnnualIncome(LocalDate projectionDate);
+
+    protected abstract BigDecimal calculateAnnualIncome(
+            LocalDate projectionDate,
+            int activeMonths);
 
     public String getName() {
         return name;
@@ -70,5 +115,21 @@ public abstract class IncomeSource {
     }
 
     @JsonIgnore
-    public abstract BigDecimal getAnnualIncome(LocalDate projectionDate);
+    public final BigDecimal getAnnualIncome(
+            LocalDate projectionDate) {
+
+        Objects.requireNonNull(projectionDate);
+
+        int activeMonths =
+                getActiveMonths(
+                        projectionDate.getYear());
+
+        if (activeMonths == 0) {
+            return BigDecimal.ZERO;
+        }
+
+        return calculateAnnualIncome(
+                projectionDate,
+                activeMonths);
+    }
 }

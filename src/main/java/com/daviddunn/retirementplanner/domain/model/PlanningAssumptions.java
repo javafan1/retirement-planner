@@ -40,36 +40,6 @@ public PlanningAssumptions(
 
     this.projectionLengthYears = projectionLengthYears;
 }
-//public final class PlanningAssumptions {
-//
-//    private final BigDecimal expectedAnnualInvestmentReturn;
-//
-//    private final BigDecimal expectedAnnualInflationRate;
-//
-//    private final int projectionLengthYears;
-//
-//    public PlanningAssumptions(
-//            BigDecimal expectedAnnualInvestmentReturn,
-//            BigDecimal expectedAnnualInflationRate,
-//            int projectionLengthYears) {
-//
-//        this.expectedAnnualInvestmentReturn =
-//                Objects.requireNonNull(
-//                        expectedAnnualInvestmentReturn,
-//                        "Expected annual investment return is required.");
-//
-//        this.expectedAnnualInflationRate =
-//                Objects.requireNonNull(
-//                        expectedAnnualInflationRate,
-//                        "Expected annual inflation rate is required.");
-//
-//        if (projectionLengthYears <= 0) {
-//            throw new IllegalArgumentException(
-//                    "Projection length must be greater than zero.");
-//        }
-//
-//        this.projectionLengthYears = projectionLengthYears;
-//    }
 
     public BigDecimal getExpectedAnnualInvestmentReturn() {
         return expectedAnnualInvestmentReturn;
