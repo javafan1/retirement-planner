@@ -1,4 +1,16 @@
 
+7.24
+
+v0.1    MVP
+
+v0.2.1  Tax-Aware Domain Foundation
+v0.2.2  Account-Level Projection
+v0.2.3  Tax Engine
+v0.2.4  RMD Engine
+v0.2.5  Medicare / IRMAA
+v0.2.6  Survivor Scenarios
+v0.2.7  Roth Strategy & Reporting
+
 7.21 roadmap
 
 Planning Assumptions

@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 
 import java.math.BigDecimal;
 import java.util.Objects;
+import java.util.List;
 
 public final class AccountFactory {
 
@@ -36,42 +37,66 @@ public final class AccountFactory {
                             ownership,
                             balance);
 
+            case ROLLOVER_IRA ->
+                    new RolloverIRA(
+                            name,
+                            ownership,
+                            balance);
+
+            case TRADITIONAL_401K ->
+                    new Traditional401K(
+                            name,
+                            ownership,
+                            balance);
+
+            case TRADITIONAL_403B ->
+                    new Traditional403B(
+                            name,
+                            ownership,
+                            balance);
+
+            case ROTH_401K ->
+                    new Roth401K(
+                            name,
+                            ownership,
+                            balance);
+
+            case BROKERAGE ->
+                    new BrokerageAccount(
+                            name,
+                            ownership,
+                            balance);
+
+            case CHECKING ->
+                    new CheckingAccount(
+                            name,
+                            ownership,
+                            balance);
+
+            case SAVINGS ->
+                    new SavingsAccount(
+                            name,
+                            ownership,
+                            balance);
+
             default ->
                     throw new UnsupportedOperationException(
                             "Account type not yet implemented: " + type);
         };
     }
-}
-/*
-package com.daviddunn.retirementplanner.domain.financial;
 
+    public static java.util.List<AccountType> getSupportedTypes() {
 
-import com.daviddunn.retirementplanner.domain.model.AccountType;
-
-import java.math.BigDecimal;
-
-public final class AccountFactory {
-
-    private AccountFactory() {
+        return java.util.List.of(
+                AccountType.TRADITIONAL_IRA,
+                AccountType.ROLLOVER_IRA,
+                AccountType.TRADITIONAL_401K,
+                AccountType.TRADITIONAL_403B,
+                AccountType.ROTH_IRA,
+                AccountType.ROTH_401K,
+                AccountType.BROKERAGE,
+                AccountType.CHECKING,
+                AccountType.SAVINGS);
     }
 
-    public static Account create(AccountType type,
-                                 String name,
-                                 BigDecimal balance) {
-
-        switch (type) {
-
-            case TRADITIONAL_IRA:
-                return new TraditionalIRA(name, balance);
-
-            case ROTH_IRA:
-                return new RothIRA(name, balance);
-
-            default:
-                throw new IllegalArgumentException(
-                        "Unsupported account type: " + type);
-        }
-    }
 }
-*/
-

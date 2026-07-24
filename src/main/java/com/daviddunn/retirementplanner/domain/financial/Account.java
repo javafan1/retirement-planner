@@ -2,7 +2,8 @@ package com.daviddunn.retirementplanner.domain.financial;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.AccountType;
-import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+
+import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -19,7 +20,34 @@ import java.util.Objects;
 )
 @JsonSubTypes({
         @JsonSubTypes.Type(value = TraditionalIRA.class, name = "traditional"),
-        @JsonSubTypes.Type(value = RothIRA.class, name = "roth")
+        @JsonSubTypes.Type(value = RothIRA.class, name = "roth"),
+        @JsonSubTypes.Type(value = Traditional401K.class, name = "traditional401k"),
+        @JsonSubTypes.Type(
+                value = Traditional403B.class,
+                name = "traditional403b"),
+        @JsonSubTypes.Type(
+                value = Roth401K.class,
+                name = "roth401k"),
+        @JsonSubTypes.Type(
+                value = BrokerageAccount.class,
+                name = "brokerage"),
+        @JsonSubTypes.Type(value = RothIRA.class, name = "rollover"),
+        @JsonSubTypes.Type(
+                value = CheckingAccount.class,
+                name = "checking"),
+
+        @JsonSubTypes.Type(
+                value = SavingsAccount.class,
+                name = "savings"),
+
+        @JsonSubTypes.Type(
+                value = InheritedTraditionalIRA.class,
+                name = "inheritedTraditional"),
+
+        @JsonSubTypes.Type(
+                value = InheritedRothIRA.class,
+                name = "inheritedRoth")
+
 })
 public abstract class Account {
 
@@ -78,4 +106,9 @@ public abstract class Account {
 
     @JsonIgnore
     public abstract AccountType getType();
+
+    @JsonIgnore
+    public TaxTreatment getTaxTreatment() {
+        return getType().getTaxTreatment();
+    }
 }

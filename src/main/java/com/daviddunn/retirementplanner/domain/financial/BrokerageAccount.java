@@ -2,16 +2,15 @@ package com.daviddunn.retirementplanner.domain.financial;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.AccountType;
-import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
 
-public class TraditionalIRA extends Account {
+public class BrokerageAccount extends Account {
 
     @JsonCreator
-    public TraditionalIRA(
+    public BrokerageAccount(
             @JsonProperty("name") String name,
             @JsonProperty("ownership") AccountOwnership ownership,
             @JsonProperty("currentBalance") BigDecimal currentBalance) {
@@ -21,9 +20,6 @@ public class TraditionalIRA extends Account {
 
     @Override
     public AccountType getType() {
-        return AccountType.TRADITIONAL_IRA;
+        return AccountType.BROKERAGE;
     }
-
-
-
 }
