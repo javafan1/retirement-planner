@@ -9,6 +9,7 @@ import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
@@ -34,6 +35,24 @@ public class ExpensesView extends BorderPane {
     public ExpensesView() {
 
         table = new TableView<>();
+        table.setRowFactory(tv -> {
+
+            TableRow<Expense> row = new TableRow<>();
+
+            row.setOnMouseClicked(event -> {
+
+                if (event.getClickCount() == 2 &&
+                        !row.isEmpty()) {
+
+                    table.getSelectionModel()
+                            .select(row.getItem());
+
+                    onEdit();
+                }
+            });
+
+            return row;
+        });
 
         createColumns();
 

@@ -8,10 +8,7 @@ import com.daviddunn.retirementplanner.ui.dialogs.AccountDialog;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
-import javafx.scene.control.Button;
-import javafx.scene.control.TableCell;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
+import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 
@@ -39,6 +36,32 @@ public class AccountsView extends BorderPane {
     public AccountsView() {
 
         table = new TableView<>();
+//        table.setOnMouseClicked(event -> {
+//
+//            if (event.getClickCount() == 2 &&
+//                    table.getSelectionModel().getSelectedItem() != null) {
+//
+//                onEdit();
+//            }
+//        });
+        table.setRowFactory(tv -> {
+
+            TableRow<Account> row = new TableRow<>();
+
+            row.setOnMouseClicked(event -> {
+
+                if (event.getClickCount() == 2 &&
+                        !row.isEmpty()) {
+
+                    table.getSelectionModel()
+                            .select(row.getItem());
+
+                    onEdit();
+                }
+            });
+
+            return row;
+        });
 
         createColumns();
 

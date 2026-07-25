@@ -85,7 +85,42 @@ public final class AccountFactory {
         };
     }
 
-    public static java.util.List<AccountType> getSupportedTypes() {
+    public static Account createInherited(
+            AccountType type,
+            String name,
+            AccountOwnership ownership,
+            BigDecimal balance,
+            InheritedAccountInformation inheritedAccountInformation) {
+
+        Objects.requireNonNull(type);
+        Objects.requireNonNull(name);
+        Objects.requireNonNull(ownership);
+        Objects.requireNonNull(balance);
+        Objects.requireNonNull(inheritedAccountInformation);
+
+        return switch (type) {
+
+            case INHERITED_TRADITIONAL_IRA ->
+                    new InheritedTraditionalIRA(
+                            name,
+                            ownership,
+                            balance,
+                            inheritedAccountInformation);
+
+            case INHERITED_ROTH_IRA ->
+                    new InheritedRothIRA(
+                            name,
+                            ownership,
+                            balance,
+                            inheritedAccountInformation);
+
+            default ->
+                    throw new IllegalArgumentException(
+                            "Not an inherited account type: " + type);
+        };
+    }
+
+    public static List<AccountType> getSupportedTypes() {
 
         return java.util.List.of(
                 AccountType.TRADITIONAL_IRA,
@@ -96,7 +131,10 @@ public final class AccountFactory {
                 AccountType.ROTH_401K,
                 AccountType.BROKERAGE,
                 AccountType.CHECKING,
-                AccountType.SAVINGS);
+                AccountType.SAVINGS,
+                AccountType.INHERITED_TRADITIONAL_IRA,
+                AccountType.INHERITED_ROTH_IRA
+        );
     }
 
 }

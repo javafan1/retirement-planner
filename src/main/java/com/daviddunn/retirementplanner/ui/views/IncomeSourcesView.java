@@ -11,10 +11,7 @@ import com.daviddunn.retirementplanner.ui.dialogs.SocialSecurityDialog;
 
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
-import javafx.scene.control.Button;
-import javafx.scene.control.ChoiceDialog;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
+import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 
@@ -44,6 +41,24 @@ public class IncomeSourcesView extends BorderPane {
     public IncomeSourcesView() {
 
         table = new TableView<>();
+        table.setRowFactory(tv -> {
+
+            TableRow<IncomeSource> row = new TableRow<>();
+
+            row.setOnMouseClicked(event -> {
+
+                if (event.getClickCount() == 2 &&
+                        !row.isEmpty()) {
+
+                    table.getSelectionModel()
+                            .select(row.getItem());
+
+                    onEdit();
+                }
+            });
+
+            return row;
+        });
 
         createColumns();
 

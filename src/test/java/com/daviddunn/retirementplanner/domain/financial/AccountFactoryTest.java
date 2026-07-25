@@ -2,10 +2,12 @@ package com.daviddunn.retirementplanner.domain.financial;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.AccountType;
+import com.daviddunn.retirementplanner.domain.model.BeneficiaryRelationship;
 import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -169,6 +171,58 @@ public class AccountFactoryTest {
 
         assertEquals(
                 TaxTreatment.CASH,
+                account.getTaxTreatment());
+    }
+
+    @Test
+    void factoryCreatesInheritedTraditionalIra() {
+
+        InheritedAccountInformation inheritedInfo =
+                new InheritedAccountInformation(
+                        LocalDate.of(1960, 1, 1),
+                        LocalDate.of(2025, 1, 1),
+                        BeneficiaryRelationship.SIBLING);
+
+        Account account =
+                AccountFactory.createInherited(
+                        AccountType.INHERITED_TRADITIONAL_IRA,
+                        "Inherited Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("34000"),
+                        inheritedInfo);
+
+        assertEquals(
+                AccountType.INHERITED_TRADITIONAL_IRA,
+                account.getType());
+
+        assertEquals(
+                TaxTreatment.TAX_DEFERRED,
+                account.getTaxTreatment());
+    }
+
+    @Test
+    void factoryCreatesInheritedRothIra() {
+
+        InheritedAccountInformation inheritedInfo =
+                new InheritedAccountInformation(
+                        LocalDate.of(1960, 1, 1),
+                        LocalDate.of(2025, 1, 1),
+                        BeneficiaryRelationship.SIBLING);
+
+        Account account =
+                AccountFactory.createInherited(
+                        AccountType.INHERITED_ROTH_IRA,
+                        "Inherited Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("34000"),
+                        inheritedInfo);
+
+        assertEquals(
+                AccountType.INHERITED_ROTH_IRA,
+                account.getType());
+
+        assertEquals(
+                TaxTreatment.ROTH,
                 account.getTaxTreatment());
     }
 }
