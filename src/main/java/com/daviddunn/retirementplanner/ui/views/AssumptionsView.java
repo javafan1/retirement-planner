@@ -1,12 +1,15 @@
 package com.daviddunn.retirementplanner.ui.views;
 
+import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
@@ -15,11 +18,25 @@ import java.math.BigDecimal;
 
 public class AssumptionsView extends VBox {
 
+    /*
+     * Projection assumptions.
+     */
     private final DatePicker projectionStartDatePicker;
+    private final TextField projectionLengthField;
 
+    /*
+     * Economic assumptions.
+     */
     private final TextField investmentReturnField;
     private final TextField inflationRateField;
-    private final TextField projectionLengthField;
+
+    /*
+     * Tax assumptions.
+     */
+    private final TextField federalBracketGrowthField;
+    private final TextField standardDeductionGrowthField;
+    private final TextField stateIncomeTaxRateField;
+    private final TextField localIncomeTaxRateField;
 
     private final Label statusLabel;
 
@@ -37,16 +54,37 @@ public class AssumptionsView extends VBox {
         setPadding(new Insets(20));
         setSpacing(15);
 
+        /*
+         * Projection fields.
+         */
         projectionStartDatePicker =
                 new DatePicker();
 
+        projectionLengthField =
+                new TextField();
+
+        /*
+         * Economic fields.
+         */
         investmentReturnField =
                 new TextField();
 
         inflationRateField =
                 new TextField();
 
-        projectionLengthField =
+        /*
+         * Tax fields.
+         */
+        federalBracketGrowthField =
+                new TextField();
+
+        standardDeductionGrowthField =
+                new TextField();
+
+        stateIncomeTaxRateField =
+                new TextField();
+
+        localIncomeTaxRateField =
                 new TextField();
 
         statusLabel =
@@ -66,6 +104,32 @@ public class AssumptionsView extends VBox {
 
         int row = 0;
 
+        /*
+         * =================================================
+         * Projection
+         * =================================================
+         */
+
+        Label projectionHeading =
+                new Label("Projection");
+
+        projectionHeading.setStyle(
+                "-fx-font-weight: bold;");
+
+        grid.add(
+                projectionHeading,
+                0,
+                row++,
+                2,
+                1);
+
+        grid.add(
+                new Separator(),
+                0,
+                row++,
+                2,
+                1);
+
         grid.add(
                 new Label("Projection Start Date:"),
                 0,
@@ -75,6 +139,42 @@ public class AssumptionsView extends VBox {
                 projectionStartDatePicker,
                 1,
                 row++);
+
+        grid.add(
+                new Label("Projection Length (Years):"),
+                0,
+                row);
+
+        grid.add(
+                projectionLengthField,
+                1,
+                row++);
+
+        /*
+         * =================================================
+         * Economic Assumptions
+         * =================================================
+         */
+
+        Label economicHeading =
+                new Label("Economic Assumptions");
+
+        economicHeading.setStyle(
+                "-fx-font-weight: bold;");
+
+        grid.add(
+                economicHeading,
+                0,
+                row++,
+                2,
+                1);
+
+        grid.add(
+                new Separator(),
+                0,
+                row++,
+                2,
+                1);
 
         grid.add(
                 new Label("Expected Investment Return (%):"),
@@ -96,13 +196,69 @@ public class AssumptionsView extends VBox {
                 1,
                 row++);
 
+        /*
+         * =================================================
+         * Tax Assumptions
+         * =================================================
+         */
+
+        Label taxHeading =
+                new Label("Tax Assumptions");
+
+        taxHeading.setStyle(
+                "-fx-font-weight: bold;");
+
         grid.add(
-                new Label("Projection Length (Years):"),
+                taxHeading,
+                0,
+                row++,
+                2,
+                1);
+
+        grid.add(
+                new Separator(),
+                0,
+                row++,
+                2,
+                1);
+
+        grid.add(
+                new Label("Federal Tax Bracket Growth (%):"),
                 0,
                 row);
 
         grid.add(
-                projectionLengthField,
+                federalBracketGrowthField,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Standard Deduction Growth (%):"),
+                0,
+                row);
+
+        grid.add(
+                standardDeductionGrowthField,
+                1,
+                row++);
+
+        grid.add(
+                new Label("State Income Tax Rate (%):"),
+                0,
+                row);
+
+        grid.add(
+                stateIncomeTaxRateField,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Local Income Tax Rate (%):"),
+                0,
+                row);
+
+        grid.add(
+                localIncomeTaxRateField,
                 1,
                 row++);
 
@@ -124,24 +280,57 @@ public class AssumptionsView extends VBox {
         PlanningAssumptions assumptions =
                 plan.getPlanningAssumptions();
 
-        projectionStartDatePicker.setValue(
-                assumptions
-                        .getProjectionStartDate());
+        EconomicAssumptions economicAssumptions =
+                assumptions.getEconomicAssumptions();
 
+        TaxAssumptions taxAssumptions =
+                assumptions.getTaxAssumptions();
+
+        /*
+         * Projection.
+         */
+        projectionStartDatePicker.setValue(
+                assumptions.getProjectionStartDate());
+
+        projectionLengthField.setText(
+                Integer.toString(
+                        assumptions.getProjectionLengthYears()));
+
+        /*
+         * Economic assumptions.
+         */
         investmentReturnField.setText(
                 toPercent(
-                        assumptions
+                        economicAssumptions
                                 .getExpectedAnnualInvestmentReturn()));
 
         inflationRateField.setText(
                 toPercent(
-                        assumptions
+                        economicAssumptions
                                 .getExpectedAnnualInflationRate()));
 
-        projectionLengthField.setText(
-                Integer.toString(
-                        assumptions
-                                .getProjectionLengthYears()));
+        /*
+         * Tax assumptions.
+         */
+        federalBracketGrowthField.setText(
+                toPercent(
+                        taxAssumptions
+                                .getFederalTaxBracketGrowthRate()));
+
+        standardDeductionGrowthField.setText(
+                toPercent(
+                        taxAssumptions
+                                .getStandardDeductionGrowthRate()));
+
+        stateIncomeTaxRateField.setText(
+                toPercent(
+                        taxAssumptions
+                                .getStateIncomeTaxRate()));
+
+        localIncomeTaxRateField.setText(
+                toPercent(
+                        taxAssumptions
+                                .getLocalIncomeTaxRate()));
 
         statusLabel.setText("");
     }
@@ -173,6 +362,18 @@ public class AssumptionsView extends VBox {
                         "Projection start date is required.");
             }
 
+            /*
+             * Projection.
+             */
+            int projectionLength =
+                    Integer.parseInt(
+                            projectionLengthField
+                                    .getText()
+                                    .trim());
+
+            /*
+             * Economic assumptions.
+             */
             BigDecimal investmentReturn =
                     parsePercent(
                             investmentReturnField
@@ -183,16 +384,45 @@ public class AssumptionsView extends VBox {
                             inflationRateField
                                     .getText());
 
-            int projectionLength =
-                    Integer.parseInt(
-                            projectionLengthField
-                                    .getText()
-                                    .trim());
+            /*
+             * Tax assumptions.
+             */
+            BigDecimal federalBracketGrowth =
+                    parsePercent(
+                            federalBracketGrowthField
+                                    .getText());
+
+            BigDecimal standardDeductionGrowth =
+                    parsePercent(
+                            standardDeductionGrowthField
+                                    .getText());
+
+            BigDecimal stateIncomeTaxRate =
+                    parsePercent(
+                            stateIncomeTaxRateField
+                                    .getText());
+
+            BigDecimal localIncomeTaxRate =
+                    parsePercent(
+                            localIncomeTaxRateField
+                                    .getText());
+
+            EconomicAssumptions economicAssumptions =
+                    new EconomicAssumptions(
+                            investmentReturn,
+                            inflationRate);
+
+            TaxAssumptions taxAssumptions =
+                    new TaxAssumptions(
+                            federalBracketGrowth,
+                            standardDeductionGrowth,
+                            stateIncomeTaxRate,
+                            localIncomeTaxRate);
 
             PlanningAssumptions updated =
                     new PlanningAssumptions(
-                            investmentReturn,
-                            inflationRate,
+                            economicAssumptions,
+                            taxAssumptions,
                             projectionLength,
                             projectionStartDatePicker
                                     .getValue());
@@ -204,9 +434,8 @@ public class AssumptionsView extends VBox {
                     "Assumptions applied.");
 
             /*
-             * Tell MainWindow that the plan
-             * changed so projections can be
-             * recalculated.
+             * Tell MainWindow that the plan changed
+             * so projections can be recalculated.
              */
             notifyPlanChanged();
         }
