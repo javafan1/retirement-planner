@@ -1,3 +1,25 @@
+
+7.25
+
+GovernmentRules
+│
+├── rulesVersion
+├── taxYear
+├── effectiveDate
+│
+└── Federal tax rules
+│
+├── SINGLE
+│     ├── Standard Deduction
+│     └── Tax Brackets
+│
+├── MARRIED_FILING_JOINTLY
+│     ├── Standard Deduction
+│     └── Tax Brackets
+│
+├── MARRIED_FILING_SEPARATELY
+│
+└── HEAD_OF_HOUSEHOLD
 7.22
 I've been thinking about your overall domain model, and I see two possible "owners" for different concepts:
 
