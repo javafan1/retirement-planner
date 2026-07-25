@@ -669,4 +669,164 @@ class ProjectionEngineTest {
                 new BigDecimal("1030000.00"),
                 year.getEndingInvestableAssets());
     }
+
+    @Test
+    void projectionUsesPriorYearEndBalanceForRmd() {
+
+        /*
+         * Primary is born June 15, 1960.
+         *
+         * Under the government rules currently
+         * loaded by ProjectionEngine, RMDs begin
+         * at age 75 for this person.
+         *
+         * Therefore:
+         *
+         * 2034 -> no RMD yet
+         * 2035 -> first RMD year
+         */
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(
+                                1960,
+                                6,
+                                15));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(
+                                1965,
+                                2,
+                                28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        /*
+         * No investment growth.
+         * No inflation.
+         * No income.
+         * No expenses.
+         *
+         * Therefore the portfolio remains exactly
+         * $1,000,000 through 2034.
+         *
+         * We project two years:
+         *
+         * 2034
+         * 2035
+         */
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear firstYear =
+                projection.getYearAt(0);
+
+        ProjectionYear secondYear =
+                projection.getYearAt(1);
+
+        /*
+         * First projection year:
+         *
+         * We deliberately do not have a modeled
+         * 12/31/2033 snapshot.
+         *
+         * Therefore RMD = $0.
+         */
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(
+                        firstYear
+                                .getRequiredMinimumDistribution()));
+
+        /*
+         * 2034 ends with $1,000,000 because there
+         * is no growth and no withdrawal.
+         *
+         * That ending portfolio becomes the
+         * 12/31/2034 RMD snapshot.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("1000000.00")
+                        .compareTo(
+                                firstYear
+                                        .getEndingInvestableAssets()));
+
+        /*
+         * In 2035 the primary owner is age 75.
+         *
+         * Uniform Lifetime Table divisor = 24.6
+         *
+         * $1,000,000 / 24.6
+         * = $40,650.41
+         *
+         * This proves ProjectionEngine is using
+         * the projected 12/31/2034 balance.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("40650.41")
+                        .compareTo(
+                                secondYear
+                                        .getRequiredMinimumDistribution()));
+
+        /*
+         * RMD is currently REPORTING ONLY.
+         *
+         * It must not yet reduce ending assets.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("1000000.00")
+                        .compareTo(
+                                secondYear
+                                        .getEndingInvestableAssets()));
+
+        /*
+         * Nor should it currently be treated as
+         * the portfolio withdrawal required to
+         * fund expenses.
+         */
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(
+                        secondYear
+                                .getPortfolioWithdrawal()));
+    }
+
 }

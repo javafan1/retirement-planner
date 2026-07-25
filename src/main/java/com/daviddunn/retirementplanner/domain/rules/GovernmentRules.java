@@ -14,6 +14,7 @@ public final class GovernmentRules {
     private final LocalDate effectiveDate;
 
     private final List<FederalTaxRules> federalTaxRules;
+    private final RmdRules rmdRules;
 
     @JsonCreator
     public GovernmentRules(
@@ -28,7 +29,10 @@ public final class GovernmentRules {
             LocalDate effectiveDate,
 
             @JsonProperty("federalTaxRules")
-            List<FederalTaxRules> federalTaxRules) {
+            List<FederalTaxRules> federalTaxRules,
+
+            @JsonProperty("rmdRules")
+            RmdRules rmdRules) {
 
         this.rulesVersion =
                 Objects.requireNonNull(
@@ -58,6 +62,15 @@ public final class GovernmentRules {
             throw new IllegalArgumentException(
                     "At least one federal tax rule is required.");
         }
+
+        this.rmdRules =
+                Objects.requireNonNull(
+                        rmdRules,
+                        "RMD rules are required.");
+    }
+
+    public RmdRules getRmdRules() {
+        return rmdRules;
     }
 
     public String getRulesVersion() {
@@ -107,6 +120,10 @@ public final class GovernmentRules {
                 effectiveDate +
                 ", federalTaxRules=" +
                 federalTaxRules +
+                ", rmdRules=" +
+                rmdRules +
                 '}';
     }
+
+
 }

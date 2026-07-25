@@ -1,6 +1,102 @@
 
 7.25
 
+All tests are passing.
+ProjectedPortfolio now lets the projection evolve without mutating the real accounts.
+RmdBalanceSnapshot captures prior December 31 balances.
+IRA RMDs use projected snapshot balances.
+401(k) and 403(b) RMDs use their individual projected balances.
+OwnerRmdCalculator and HouseholdRmdCalculator are snapshot-aware.
+ProjectionEngine now carries projected account balances forward year-to-year.
+RMDs are now calculated and reported in ProjectionYear.
+Most importantly, we have not yet mixed RMDs into withdrawals, so we're stopping at a clean architectural boundary.
+
+RetirementPlan
+│
+├── actual Primary IRA = $500,000
+└── actual Spouse IRA  = $400,000
+
+             NOT USED
+                X
+
+12/31/2034 RmdBalanceSnapshot
+│
+├── Primary IRA = $1,000,000
+└── Spouse IRA  =   $750,000
+│
+▼
+HouseholdRmdCalculator
+│
+┌───────┴────────┐
+▼                ▼
+Primary RMD         Spouse RMD
+$40,650.41          $30,487.80
+│                │
+└───────┬────────┘
+▼
+Household RMD
+$71,138.21
+--------
+
+HouseholdRmdCalculator
+│
+├── PRIMARY
+│      ↓
+│ OwnerRmdCalculator
+│      ├── IRA
+│      ├── 401(k)
+│      └── 403(b)
+│
+└── SPOUSE
+↓
+OwnerRmdCalculator
+├── IRA
+├── 401(k)
+└── 403(b)
+
+All balances
+↑
+RmdBalanceSnapshot
+↑
+prior December 31
+---------
+
+Normal/current calculation
+
+AccountPortfolio
+↓
+current account balances
+↓
+OwnerRmdCalculator
+↓
+OwnerRmdResult
+
+
+Projection calculation
+
+AccountPortfolio ──────→ account identity/type/owner
+│
+RmdBalanceSnapshot ────→ 12/31 projected balances
+│
+▼
+OwnerRmdCalculator
+│
+▼
+OwnerRmdResult
+
+
+GovernmentRules
+│
+├── FederalTaxRules
+│
+└── RmdRules
+│
+├── StartingAgeRules
+│     └── birth-year range → starting age
+│
+└── UniformLifetimeTable
+└── age → distribution period
+
 GovernmentRules
 │
 ├── rulesVersion

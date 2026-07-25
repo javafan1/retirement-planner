@@ -20,6 +20,7 @@ public class ProjectionYear {
     private final BigDecimal portfolioWithdrawal;
 
     private final BigDecimal endingInvestableAssets;
+    private final BigDecimal requiredMinimumDistribution;
 
     public ProjectionYear(
             int projectionYear,
@@ -29,28 +30,46 @@ public class ProjectionYear {
             BigDecimal guaranteedIncome,
             BigDecimal annualExpenses,
             BigDecimal portfolioWithdrawal,
+            BigDecimal requiredMinimumDistribution,
             BigDecimal endingInvestableAssets) {
 
         this.projectionYear = projectionYear;
         this.calendarYear = calendarYear;
 
         this.beginningInvestableAssets =
-                Objects.requireNonNull(beginningInvestableAssets, "beginningInvestableAssets");
+                Objects.requireNonNull(
+                        beginningInvestableAssets,
+                        "beginningInvestableAssets");
 
         this.investmentGrowth =
-                Objects.requireNonNull(investmentGrowth, "investmentGrowth");
+                Objects.requireNonNull(
+                        investmentGrowth,
+                        "investmentGrowth");
 
         this.guaranteedIncome =
-                Objects.requireNonNull(guaranteedIncome, "guaranteedIncome");
+                Objects.requireNonNull(
+                        guaranteedIncome,
+                        "guaranteedIncome");
 
         this.annualExpenses =
-                Objects.requireNonNull(annualExpenses, "annualExpenses");
+                Objects.requireNonNull(
+                        annualExpenses,
+                        "annualExpenses");
 
         this.portfolioWithdrawal =
-                Objects.requireNonNull(portfolioWithdrawal, "portfolioWithdrawal");
+                Objects.requireNonNull(
+                        portfolioWithdrawal,
+                        "portfolioWithdrawal");
+
+        this.requiredMinimumDistribution =
+                Objects.requireNonNull(
+                        requiredMinimumDistribution,
+                        "requiredMinimumDistribution");
 
         this.endingInvestableAssets =
-                Objects.requireNonNull(endingInvestableAssets, "endingInvestableAssets");
+                Objects.requireNonNull(
+                        endingInvestableAssets,
+                        "endingInvestableAssets");
     }
 
     public int getProjectionYear() {
@@ -93,6 +112,10 @@ public class ProjectionYear {
     @JsonIgnore
     public BigDecimal getAssetChange() {
         return endingInvestableAssets.subtract(beginningInvestableAssets);
+    }
+
+    public BigDecimal getRequiredMinimumDistribution() {
+        return requiredMinimumDistribution;
     }
 }
 

@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.persistence;
 
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
+import com.daviddunn.retirementplanner.domain.rules.RmdLifeExpectancyFactor;
 import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
 
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class GovernmentRulesRepositoryTest {
 
-    @Test
     void loads2026GovernmentRules() throws Exception {
 
         GovernmentRulesRepository repository =
@@ -108,4 +108,89 @@ class GovernmentRulesRepositoryTest {
                         .get(0)
                         .getUpperBound());
     }
+
+    @Test
+    void birthYear1959StartsRmdAt73()
+            throws Exception {
+
+        GovernmentRulesRepository repository =
+                new GovernmentRulesRepository();
+
+        GovernmentRules rules =
+                repository.load(
+                        "/rules/government-rules-2026.json");
+
+        int startingAge =
+                rules.getRmdRules()
+                        .getRmdStartingAge(1959);
+
+        assertEquals(
+                73,
+                startingAge);
+    }
+
+    @Test
+    void birthYear1960StartsRmdAt75()
+            throws Exception {
+
+        GovernmentRulesRepository repository =
+                new GovernmentRulesRepository();
+
+        GovernmentRules rules =
+                repository.load(
+                        "/rules/government-rules-2026.json");
+
+        int startingAge =
+                rules.getRmdRules()
+                        .getRmdStartingAge(1960);
+
+        assertEquals(
+                75,
+                startingAge);
+    }
+
+    @Test
+    void age75HasDistributionPeriod24Point6()
+            throws Exception {
+
+        GovernmentRulesRepository repository =
+                new GovernmentRulesRepository();
+
+        GovernmentRules rules =
+                repository.load(
+                        "/rules/government-rules-2026.json");
+
+        RmdLifeExpectancyFactor factor =
+                rules.getRmdRules()
+                        .getLifeExpectancyFactor(75);
+
+        assertEquals(
+                0,
+                new BigDecimal("24.6")
+                        .compareTo(
+                                factor.getDistributionPeriod()));
+    }
+
+    @Test
+    void rmdStartingAgeChangesAt1960BirthYear()
+            throws Exception {
+
+        GovernmentRulesRepository repository =
+                new GovernmentRulesRepository();
+
+        GovernmentRules rules =
+                repository.load(
+                        "/rules/government-rules-2026.json");
+
+        assertEquals(
+                73,
+                rules.getRmdRules()
+                        .getRmdStartingAge(1959));
+
+        assertEquals(
+                75,
+                rules.getRmdRules()
+                        .getRmdStartingAge(1960));
+    }
+
 }

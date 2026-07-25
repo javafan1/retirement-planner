@@ -31,7 +31,9 @@ import java.util.Objects;
         @JsonSubTypes.Type(
                 value = BrokerageAccount.class,
                 name = "brokerage"),
-        @JsonSubTypes.Type(value = RothIRA.class, name = "rollover"),
+
+        @JsonSubTypes.Type(value = RolloverIRA.class, name = "rollover"),
+
         @JsonSubTypes.Type(
                 value = CheckingAccount.class,
                 name = "checking"),
