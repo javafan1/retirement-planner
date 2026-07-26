@@ -77,6 +77,14 @@ public final class OwnerRmdResult {
                 .add(getTraditional403bRmdTotal());
     }
 
+    public static OwnerRmdResult zero() {
+
+        return new OwnerRmdResult(
+                BigDecimal.ZERO,
+                List.of(),
+                List.of());
+    }
+
     @Override
     public String toString() {
 

@@ -9,6 +9,7 @@ import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.financial.RothIRA;
 
 import org.junit.jupiter.api.Test;
 
@@ -806,9 +807,26 @@ class ProjectionEngineTest {
                                         .getRequiredMinimumDistribution()));
 
         /*
-         * RMD is currently REPORTING ONLY.
+         * The RMD now participates in the withdrawal
+         * calculation.
          *
-         * It must not yet reduce ending assets.
+         * There is no cash-flow need in this test,
+         * so the entire portfolio withdrawal is
+         * caused by the RMD.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("40650.41")
+                        .compareTo(
+                                secondYear
+                                        .getPortfolioWithdrawal()));
+
+        /*
+         * Beginning assets = $1,000,000.00
+         * Growth           =          $0.00
+         * RMD withdrawal   =     $40,650.41
+         *                    ---------------
+         * Ending assets    =    $959,349.59
          */
         assertEquals(
                 0,
@@ -818,15 +836,340 @@ class ProjectionEngineTest {
                                         .getEndingInvestableAssets()));
 
         /*
-         * Nor should it currently be treated as
-         * the portfolio withdrawal required to
-         * fund expenses.
+         * There is no cash-flow shortfall in this test,
+         * so the entire portfolio withdrawal is caused
+         * by the RMD.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("40650.41")
+                        .compareTo(
+                                secondYear
+                                        .getPortfolioWithdrawal()));
+
+
+        /*
+         * With no cash-flow shortfall, the entire
+         * RMD is an excess RMD.
          */
         assertEquals(
                 0,
                 BigDecimal.ZERO.compareTo(
                         secondYear
-                                .getPortfolioWithdrawal()));
+                                .getCashFlowNeed()));
+
+
     }
 
+    @Test
+    void rmdReducesTraditionalIraButDoesNotReduceRothIra() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(
+                                1960,
+                                6,
+                                15));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(
+                                1965,
+                                2,
+                                28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        portfolio.addAccount(
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("500000")));
+
+        /*
+         * No growth, inflation, income, or expenses.
+         *
+         * We need three years:
+         *
+         * 2034 - no RMD
+         * 2035 - first RMD
+         * 2036 - proves the 2035 RMD came specifically
+         *        from the Traditional IRA
+         */
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        3,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear firstYear =
+                projection.getYearAt(0);
+
+        ProjectionYear secondYear =
+                projection.getYearAt(1);
+
+        ProjectionYear thirdYear =
+                projection.getYearAt(2);
+
+        /*
+         * 2034:
+         *
+         * No prior modeled December 31 snapshot,
+         * so there is no RMD.
+         */
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(
+                        firstYear
+                                .getRequiredMinimumDistribution()));
+
+        /*
+         * Total investable assets:
+         *
+         * Traditional IRA = $1,000,000
+         * Roth IRA        =    500,000
+         *                  ------------
+         * Total           = $1,500,000
+         */
+        assertEquals(
+                0,
+                new BigDecimal("1500000")
+                        .compareTo(
+                                firstYear
+                                        .getEndingInvestableAssets()));
+
+        /*
+         * 2035 RMD must be calculated only from the
+         * $1,000,000 Traditional IRA.
+         *
+         * $1,000,000 / 24.6
+         * = $40,650.41
+         */
+        assertEquals(
+                0,
+                new BigDecimal("40650.41")
+                        .compareTo(
+                                secondYear
+                                        .getRequiredMinimumDistribution()));
+
+        /*
+         * There are no expenses, so the entire RMD
+         * is excess RMD and remains an investable
+         * household asset as unallocated cash.
+         *
+         * Therefore total investable assets remain
+         * $1,500,000.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("1500000")
+                        .compareTo(
+                                secondYear
+                                        .getEndingInvestableAssets()));
+
+        /*
+         * Internally, however, the 2035 ending
+         * portfolio should now be:
+         *
+         * Traditional IRA = $959,349.59
+         * Roth IRA        =  500,000.00
+         * Excess RMD cash =   40,650.41
+         *                  -------------
+         * Total           = $1,500,000.00
+         *
+         * Therefore the 2036 RMD must use
+         * $959,349.59 -- NOT $1,000,000 and
+         * certainly not the entire $1,500,000.
+         *
+         * Age 76 divisor = 23.7.
+         *
+         * $959,349.59 / 23.7
+         * = $40,478.89
+         */
+        assertEquals(
+                0,
+                new BigDecimal("40478.89")
+                        .compareTo(
+                                thirdYear
+                                        .getRequiredMinimumDistribution()));
+    }
+
+    @Test
+    void projectionCalculatesExcessRmdWhenRmdExceedsCashFlowNeed() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(
+                                1960,
+                                6,
+                                15));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(
+                                1965,
+                                2,
+                                28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        /*
+         * Annual expenses = $30,000.
+         *
+         * There is no guaranteed income, so the
+         * cash-flow need is also $30,000.
+         */
+        household.addExpense(
+                new Expense(
+                        "Living Expenses",
+                        new BigDecimal("30000")));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        /*
+         * No investment growth.
+         * No inflation.
+         *
+         * 2034 creates the prior 12/31 balance.
+         * 2035 is the first RMD year.
+         */
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear secondYear =
+                projection.getYearAt(1);
+
+        /*
+         * Cash-flow need:
+         *
+         * $30,000 expenses
+         * - $0 guaranteed income
+         * = $30,000
+         */
+        assertEquals(
+                0,
+                new BigDecimal("30000.00")
+                        .compareTo(
+                                secondYear
+                                        .getCashFlowNeed()));
+
+        /*
+         * RMD:
+         *
+         * $970,000 prior-year ending balance
+         * / 24.6
+         * = $39,430.89
+         *
+         * The prior-year balance is $970,000
+         * because 2034 also required $30,000
+         * for expenses.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("39430.89")
+                        .compareTo(
+                                secondYear
+                                        .getRequiredMinimumDistribution()));
+
+        /*
+         * RMD exceeds the cash-flow need,
+         * so the RMD controls the withdrawal.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("39430.89")
+                        .compareTo(
+                                secondYear
+                                        .getPortfolioWithdrawal()));
+
+        /*
+         * Excess RMD:
+         *
+         * $39,430.89 - $30,000
+         * = $9,430.89
+         */
+        assertEquals(
+                0,
+                new BigDecimal("9430.89")
+                        .compareTo(
+                                secondYear
+                                        .getExcessRmd()));
+
+        /*
+         * Until taxes and withholding are modeled,
+         * the entire excess RMD is potentially
+         * available for reinvestment.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("9430.89")
+                        .compareTo(
+                                secondYear
+                                        .getReinvestableExcessRmd()));
+    }
 }

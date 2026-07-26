@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -280,5 +281,228 @@ class ProjectedPortfolioTest {
                 new BigDecimal("3074000.00")
                         .compareTo(
                                 grown.getTotalBalance()));
+    }
+
+    @Test
+    void includesUnallocatedCashInTotalBalance() {
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(),
+                        new BigDecimal("10000.00"));
+
+        assertEquals(
+                0,
+                new BigDecimal("10000.00")
+                        .compareTo(
+                                portfolio.getTotalBalance()));
+    }
+
+    @Test
+    void defaultsUnallocatedCashToZero() {
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of());
+
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(
+                        portfolio.getUnallocatedCash()));
+    }
+
+    @Test
+    void addsCashToUnallocatedCash() {
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(),
+                        new BigDecimal("5000.00"));
+
+        ProjectedPortfolio updated =
+                portfolio.withAdditionalCash(
+                        new BigDecimal("9430.89"));
+
+        assertEquals(
+                0,
+                new BigDecimal("14430.89")
+                        .compareTo(
+                                updated.getUnallocatedCash()));
+
+        assertEquals(
+                0,
+                new BigDecimal("14430.89")
+                        .compareTo(
+                                updated.getTotalBalance()));
+    }
+
+    @Test
+    void addingCashDoesNotModifyOriginalPortfolio() {
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(),
+                        new BigDecimal("5000.00"));
+
+        ProjectedPortfolio updated =
+                portfolio.withAdditionalCash(
+                        new BigDecimal("9430.89"));
+
+        assertEquals(
+                0,
+                new BigDecimal("5000.00")
+                        .compareTo(
+                                portfolio.getUnallocatedCash()));
+
+        assertEquals(
+                0,
+                new BigDecimal("14430.89")
+                        .compareTo(
+                                updated.getUnallocatedCash()));
+    }
+
+    @Test
+    void rejectsNegativeAdditionalCash() {
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of());
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> portfolio.withAdditionalCash(
+                        new BigDecimal("-1.00")));
+    }
+
+    @Test
+    void withdrawsFromProjectedAccount() {
+
+        TraditionalIRA ira =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000.00"));
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        ira,
+                                        new BigDecimal("100000.00"))));
+
+        ProjectedPortfolio updated =
+                portfolio.withWithdrawal(
+                        ira,
+                        new BigDecimal("10000.00"));
+
+        assertEquals(
+                0,
+                new BigDecimal("90000.00")
+                        .compareTo(
+                                updated.getBalance(ira)));
+    }
+
+    @Test
+    void withdrawalDoesNotModifyOriginalPortfolio() {
+
+        TraditionalIRA ira =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000.00"));
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        ira,
+                                        new BigDecimal("100000.00"))));
+
+        ProjectedPortfolio updated =
+                portfolio.withWithdrawal(
+                        ira,
+                        new BigDecimal("10000.00"));
+
+        assertEquals(
+                0,
+                new BigDecimal("100000.00")
+                        .compareTo(
+                                portfolio.getBalance(ira)));
+
+        assertEquals(
+                0,
+                new BigDecimal("90000.00")
+                        .compareTo(
+                                updated.getBalance(ira)));
+    }
+
+    @Test
+    void rejectsWithdrawalGreaterThanAccountBalance() {
+
+        TraditionalIRA ira =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000.00"));
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        ira,
+                                        new BigDecimal("100000.00"))));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> portfolio.withWithdrawal(
+                        ira,
+                        new BigDecimal("100000.01")));
+    }
+    @Test
+    void allocatesGrowthProportionallyAcrossAccounts() {
+
+        TraditionalIRA ira =
+                new TraditionalIRA(
+                        "IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("75000.00"));
+
+        RothIRA roth =
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("25000.00"));
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        ira,
+                                        new BigDecimal("75000.00")),
+                                new ProjectedAccountBalance(
+                                        roth,
+                                        new BigDecimal("25000.00"))));
+
+        ProjectedPortfolio updated =
+                portfolio.withGrowth(
+                        new BigDecimal("10000.00"));
+
+        assertEquals(
+                0,
+                new BigDecimal("82500.00")
+                        .compareTo(
+                                updated.getBalance(ira)));
+
+        assertEquals(
+                0,
+                new BigDecimal("27500.00")
+                        .compareTo(
+                                updated.getBalance(roth)));
+
+        assertEquals(
+                0,
+                new BigDecimal("110000.00")
+                        .compareTo(
+                                updated.getTotalBalance()));
     }
 }

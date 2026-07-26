@@ -1,3 +1,84 @@
+7.26
+
+Beginning ProjectedPortfolio
+↓
+Allocate investment growth
+↓
+Calculate RMD from prior Dec. 31 balances
+↓
+Remove RMD from correct accounts
+↓
+Use RMD toward spending need
+↓
+Additional withdrawal if needed
+↓
+Retain excess RMD as cash
+↓
+Actual Ending ProjectedPortfolio
+↓
+Next year's RMD snapshot
+
+rmds
+ok
+2034 beginning assets       $1,000,000.00
+2034 expenses                  -30,000.00
+-------------
+12/31/2034 RMD balance         970,000.00
+
+2035 RMD:
+$970,000 / 24.6                 39,430.89
+
+2035 cash-flow need             30,000.00
+2035 required withdrawal        39,430.89
+2035 excess RMD                  9,430.89
+
+WithdrawalResult
+│
+├── cashFlowNeed
+├── requiredMinimumDistribution
+├── totalWithdrawal
+└── excessRmd
+│
+▼
+ProjectionYear
+
+Guaranteed income
+Annual expenses
+Prior 12/31 balances
+│
+▼
+Calculate RMD
+│
+▼
+Calculate cash-flow need
+│
+▼
+WithdrawalCalculator
+│
+▼
+max(cash-flow need, RMD)
+│
+▼
+Total portfolio withdrawal
+│
+▼
+Ending assets
+
+Cash-flow need
+│
+├──────────────┐
+│              │
+▼              ▼
+$40,000          RMD
+$55,000
+│              │
+└──────┬───────┘
+▼
+Total withdrawal
+$55,000
+│
+└── Excess RMD = $15,000
+
 
 7.25
 

@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.rmd;
 
+import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
@@ -29,7 +30,7 @@ public final class HouseholdRmdCalculator {
      * Existing calculation path.
      *
      * Uses the current balances stored in the
-     * retirement plan's AccountPortfolio.
+     * AccountPortfolio.
      *
      * Retained for existing callers and tests.
      */
@@ -38,12 +39,19 @@ public final class HouseholdRmdCalculator {
             int projectionYear,
             GovernmentRules governmentRules) {
 
-        validateArguments(
+        Objects.requireNonNull(
                 plan,
-                governmentRules);
+                "Retirement plan is required.");
+
+        Objects.requireNonNull(
+                governmentRules,
+                "Government rules are required.");
 
         Household household =
                 plan.getHousehold();
+
+        AccountPortfolio portfolio =
+                plan.getAccountPortfolio();
 
         Person primary =
                 household.getPrimaryPerson();
@@ -52,18 +60,18 @@ public final class HouseholdRmdCalculator {
                 household.getSpouse();
 
         OwnerRmdResult primaryResult =
-                ownerRmdCalculator.calculate(
-                        plan.getAccountPortfolio(),
+                calculateOwnerRmd(
+                        portfolio,
+                        primary,
                         AccountOwnership.PRIMARY,
-                        primary.getBirthDate(),
                         projectionYear,
                         governmentRules);
 
         OwnerRmdResult spouseResult =
-                ownerRmdCalculator.calculate(
-                        plan.getAccountPortfolio(),
+                calculateOwnerRmd(
+                        portfolio,
+                        spouse,
                         AccountOwnership.SPOUSE,
-                        spouse.getBirthDate(),
                         projectionYear,
                         governmentRules);
 
@@ -75,9 +83,8 @@ public final class HouseholdRmdCalculator {
     /*
      * Projection-safe calculation path.
      *
-     * Account information comes from the
-     * RetirementPlan, while balances come from
-     * the applicable prior December 31 snapshot.
+     * Uses balances captured in the applicable
+     * prior December 31 snapshot.
      */
     public HouseholdRmdResult calculate(
             RetirementPlan plan,
@@ -85,16 +92,23 @@ public final class HouseholdRmdCalculator {
             int projectionYear,
             GovernmentRules governmentRules) {
 
-        validateArguments(
+        Objects.requireNonNull(
                 plan,
-                governmentRules);
+                "Retirement plan is required.");
 
         Objects.requireNonNull(
                 balanceSnapshot,
                 "RMD balance snapshot is required.");
 
+        Objects.requireNonNull(
+                governmentRules,
+                "Government rules are required.");
+
         Household household =
                 plan.getHousehold();
+
+        AccountPortfolio portfolio =
+                plan.getAccountPortfolio();
 
         Person primary =
                 household.getPrimaryPerson();
@@ -103,20 +117,20 @@ public final class HouseholdRmdCalculator {
                 household.getSpouse();
 
         OwnerRmdResult primaryResult =
-                ownerRmdCalculator.calculate(
-                        plan.getAccountPortfolio(),
+                calculateOwnerRmd(
+                        portfolio,
                         balanceSnapshot,
+                        primary,
                         AccountOwnership.PRIMARY,
-                        primary.getBirthDate(),
                         projectionYear,
                         governmentRules);
 
         OwnerRmdResult spouseResult =
-                ownerRmdCalculator.calculate(
-                        plan.getAccountPortfolio(),
+                calculateOwnerRmd(
+                        portfolio,
                         balanceSnapshot,
+                        spouse,
                         AccountOwnership.SPOUSE,
-                        spouse.getBirthDate(),
                         projectionYear,
                         governmentRules);
 
@@ -125,16 +139,57 @@ public final class HouseholdRmdCalculator {
                 spouseResult);
     }
 
-    private void validateArguments(
-            RetirementPlan plan,
+    /*
+     * Current-balance owner calculation.
+     */
+    private OwnerRmdResult calculateOwnerRmd(
+            AccountPortfolio portfolio,
+            Person person,
+            AccountOwnership ownership,
+            int projectionYear,
             GovernmentRules governmentRules) {
 
-        Objects.requireNonNull(
-                plan,
-                "Retirement plan is required.");
+        /*
+         * A newly created plan may not yet have
+         * a birth date entered for this person.
+         */
+        if (person.getBirthDate() == null) {
+            return OwnerRmdResult.zero();
+        }
 
-        Objects.requireNonNull(
-                governmentRules,
-                "Government rules are required.");
+        return ownerRmdCalculator.calculate(
+                portfolio,
+                ownership,
+                person.getBirthDate(),
+                projectionYear,
+                governmentRules);
+    }
+
+    /*
+     * Snapshot-based owner calculation.
+     */
+    private OwnerRmdResult calculateOwnerRmd(
+            AccountPortfolio portfolio,
+            RmdBalanceSnapshot balanceSnapshot,
+            Person person,
+            AccountOwnership ownership,
+            int projectionYear,
+            GovernmentRules governmentRules) {
+
+        /*
+         * A newly created plan may not yet have
+         * a birth date entered for this person.
+         */
+        if (person.getBirthDate() == null) {
+            return OwnerRmdResult.zero();
+        }
+
+        return ownerRmdCalculator.calculate(
+                portfolio,
+                balanceSnapshot,
+                ownership,
+                person.getBirthDate(),
+                projectionYear,
+                governmentRules);
     }
 }

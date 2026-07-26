@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.rmd.RmdAccountCategory;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -13,13 +14,33 @@ import java.util.Objects;
 public final class ProjectedPortfolio {
 
     private final List<ProjectedAccountBalance> accountBalances;
+    private final BigDecimal unallocatedCash;
 
     public ProjectedPortfolio(
             List<ProjectedAccountBalance> accountBalances) {
 
+        this(
+                accountBalances,
+                BigDecimal.ZERO);
+    }
+
+    public ProjectedPortfolio(
+            List<ProjectedAccountBalance> accountBalances,
+            BigDecimal unallocatedCash) {
+
         Objects.requireNonNull(
                 accountBalances,
                 "Projected account balances are required.");
+
+        this.unallocatedCash =
+                Objects.requireNonNull(
+                        unallocatedCash,
+                        "Unallocated cash is required.");
+
+        if (unallocatedCash.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Unallocated cash cannot be negative.");
+        }
 
         this.accountBalances =
                 List.copyOf(accountBalances);
@@ -54,18 +75,26 @@ public final class ProjectedPortfolio {
                 balances);
     }
 
+    public BigDecimal getUnallocatedCash() {
+        return unallocatedCash;
+    }
+
     public List<ProjectedAccountBalance> getAccountBalances() {
         return accountBalances;
     }
 
     public BigDecimal getTotalBalance() {
 
-        return accountBalances
-                .stream()
-                .map(ProjectedAccountBalance::getBalance)
-                .reduce(
-                        BigDecimal.ZERO,
-                        BigDecimal::add);
+        BigDecimal accountTotal =
+                accountBalances
+                        .stream()
+                        .map(ProjectedAccountBalance::getBalance)
+                        .reduce(
+                                BigDecimal.ZERO,
+                                BigDecimal::add);
+
+        return accountTotal.add(
+                unallocatedCash);
     }
 
     public BigDecimal getBalance(
@@ -138,7 +167,8 @@ public final class ProjectedPortfolio {
                         .toList();
 
         return new ProjectedPortfolio(
-                updatedBalances);
+                updatedBalances,
+                unallocatedCash);
     }
 
     public BigDecimal getBalance(
@@ -188,7 +218,109 @@ public final class ProjectedPortfolio {
                         .toList();
 
         return new ProjectedPortfolio(
-                updatedBalances);
+                updatedBalances,
+                unallocatedCash);
     }
 
+    public ProjectedPortfolio withAdditionalCash(
+            BigDecimal amount) {
+
+        Objects.requireNonNull(
+                amount,
+                "Cash amount is required.");
+
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Cash amount cannot be negative.");
+        }
+
+        return new ProjectedPortfolio(
+                accountBalances,
+                unallocatedCash.add(amount));
+    }
+
+    public ProjectedPortfolio withWithdrawal(
+            Account account,
+            BigDecimal amount) {
+
+        Objects.requireNonNull(
+                account,
+                "Account is required.");
+
+        Objects.requireNonNull(
+                amount,
+                "Withdrawal amount is required.");
+
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Withdrawal amount cannot be negative.");
+        }
+
+        BigDecimal currentBalance =
+                getBalance(account);
+
+        if (amount.compareTo(currentBalance) > 0) {
+            throw new IllegalArgumentException(
+                    "Withdrawal cannot exceed projected account balance.");
+        }
+
+        BigDecimal newBalance =
+                currentBalance.subtract(amount);
+
+        return withBalance(
+                account,
+                newBalance);
+    }
+
+    public ProjectedPortfolio withGrowth(
+            BigDecimal growthAmount) {
+
+        Objects.requireNonNull(
+                growthAmount,
+                "Growth amount is required.");
+
+        BigDecimal accountTotal =
+                accountBalances
+                        .stream()
+                        .map(ProjectedAccountBalance::getBalance)
+                        .reduce(
+                                BigDecimal.ZERO,
+                                BigDecimal::add);
+
+        if (accountTotal.signum() == 0) {
+            return this;
+        }
+
+        List<ProjectedAccountBalance> updatedBalances =
+                accountBalances
+                        .stream()
+                        .map(projected -> {
+
+                            BigDecimal share =
+                                    projected
+                                            .getBalance()
+                                            .divide(
+                                                    accountTotal,
+                                                    12,
+                                                    RoundingMode.HALF_UP);
+
+                            BigDecimal accountGrowth =
+                                    growthAmount
+                                            .multiply(share);
+
+                            BigDecimal newBalance =
+                                    projected
+                                            .getBalance()
+                                            .add(accountGrowth);
+
+                            return new ProjectedAccountBalance(
+                                    projected.getAccount(),
+                                    newBalance);
+                        })
+                        .toList();
+
+        return new ProjectedPortfolio(
+                updatedBalances,
+                unallocatedCash);
+    }
 }

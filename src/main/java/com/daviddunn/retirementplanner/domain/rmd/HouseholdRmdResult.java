@@ -56,6 +56,13 @@ public final class HouseholdRmdResult {
                                 .getTotalRmd());
     }
 
+    public static HouseholdRmdResult zero() {
+
+        return new HouseholdRmdResult(
+                OwnerRmdResult.zero(),
+                OwnerRmdResult.zero());
+    }
+
     @Override
     public String toString() {
 
