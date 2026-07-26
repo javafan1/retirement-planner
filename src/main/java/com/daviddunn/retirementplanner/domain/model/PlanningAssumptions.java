@@ -11,6 +11,7 @@ public final class PlanningAssumptions {
 
     private final EconomicAssumptions economicAssumptions;
     private final TaxAssumptions taxAssumptions;
+    private final WithdrawalAssumptions withdrawalAssumptions;
 
     private final int projectionLengthYears;
     private final LocalDate projectionStartDate;
@@ -20,14 +21,17 @@ public final class PlanningAssumptions {
      *
      * Supports:
      *
-     * 1. Current JSON format using EconomicAssumptions
-     *    and TaxAssumptions.
+     * 1. Current JSON format using EconomicAssumptions,
+     *    TaxAssumptions, and WithdrawalAssumptions.
      *
      * 2. Legacy JSON format using the original flat
      *    investment-return and inflation properties.
      *
      * 3. Intermediate files created during the
      *    EconomicAssumptions migration.
+     *
+     * 4. Older files that do not contain
+     *    WithdrawalAssumptions.
      */
     @JsonCreator
     public PlanningAssumptions(
@@ -37,6 +41,9 @@ public final class PlanningAssumptions {
 
             @JsonProperty("taxAssumptions")
             TaxAssumptions taxAssumptions,
+
+            @JsonProperty("withdrawalAssumptions")
+            WithdrawalAssumptions withdrawalAssumptions,
 
             @JsonProperty("expectedAnnualInvestmentReturn")
             BigDecimal legacyInvestmentReturn,
@@ -89,6 +96,18 @@ public final class PlanningAssumptions {
                         ? taxAssumptions
                         : createDefaultTaxAssumptions();
 
+        /*
+         * Withdrawal assumptions.
+         *
+         * Older plans do not contain
+         * WithdrawalAssumptions, so use defaults
+         * when they are absent.
+         */
+        this.withdrawalAssumptions =
+                withdrawalAssumptions != null
+                        ? withdrawalAssumptions
+                        : createDefaultWithdrawalAssumptions();
+
         if (projectionLengthYears <= 0) {
 
             throw new IllegalArgumentException(
@@ -111,8 +130,35 @@ public final class PlanningAssumptions {
     /*
      * Primary constructor for current application code.
      *
-     * UI and domain code should normally use this
-     * constructor rather than the Jackson constructor.
+     * Allows all current assumption groups to be
+     * supplied explicitly.
+     */
+    public PlanningAssumptions(
+            EconomicAssumptions economicAssumptions,
+            TaxAssumptions taxAssumptions,
+            WithdrawalAssumptions withdrawalAssumptions,
+            int projectionLengthYears,
+            LocalDate projectionStartDate) {
+
+        this(
+                economicAssumptions,
+                taxAssumptions,
+                withdrawalAssumptions,
+                null,
+                null,
+                projectionLengthYears,
+                projectionStartDate);
+    }
+
+    /*
+     * Compatibility constructor.
+     *
+     * Existing application code that supplies
+     * EconomicAssumptions and TaxAssumptions but
+     * does not yet supply WithdrawalAssumptions
+     * can continue to work.
+     *
+     * WithdrawalAssumptions will use the default.
      */
     public PlanningAssumptions(
             EconomicAssumptions economicAssumptions,
@@ -123,6 +169,7 @@ public final class PlanningAssumptions {
         this(
                 economicAssumptions,
                 taxAssumptions,
+                null,
                 null,
                 null,
                 projectionLengthYears,
@@ -149,6 +196,7 @@ public final class PlanningAssumptions {
                 null,
                 null,
                 null,
+                null,
                 projectionLengthYears,
                 projectionStartDate);
     }
@@ -161,6 +209,11 @@ public final class PlanningAssumptions {
     @JsonProperty("taxAssumptions")
     public TaxAssumptions getTaxAssumptions() {
         return taxAssumptions;
+    }
+
+    @JsonProperty("withdrawalAssumptions")
+    public WithdrawalAssumptions getWithdrawalAssumptions() {
+        return withdrawalAssumptions;
     }
 
     /*
@@ -212,6 +265,13 @@ public final class PlanningAssumptions {
                 BigDecimal.ZERO);
     }
 
+    private static WithdrawalAssumptions
+    createDefaultWithdrawalAssumptions() {
+
+        return new WithdrawalAssumptions(
+                WithdrawalStrategyType.TAXABLE_FIRST);
+    }
+
     @Override
     public String toString() {
 
@@ -220,6 +280,8 @@ public final class PlanningAssumptions {
                 economicAssumptions +
                 ", taxAssumptions=" +
                 taxAssumptions +
+                ", withdrawalAssumptions=" +
+                withdrawalAssumptions +
                 ", projectionLengthYears=" +
                 projectionLengthYears +
                 ", projectionStartDate=" +

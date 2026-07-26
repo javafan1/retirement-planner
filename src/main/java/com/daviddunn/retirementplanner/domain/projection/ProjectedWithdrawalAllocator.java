@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.rmd.RmdAccountCategory;
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.OwnerRmdResult;
+import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -202,7 +203,8 @@ public final class ProjectedWithdrawalAllocator {
 
     public ProjectedPortfolio applyAdditionalWithdrawal(
             ProjectedPortfolio portfolio,
-            BigDecimal withdrawalAmount) {
+            BigDecimal withdrawalAmount,
+            WithdrawalStrategy withdrawalStrategy) {
 
         Objects.requireNonNull(
                 portfolio,
@@ -211,6 +213,10 @@ public final class ProjectedWithdrawalAllocator {
         Objects.requireNonNull(
                 withdrawalAmount,
                 "Withdrawal amount is required.");
+
+        Objects.requireNonNull(
+                withdrawalStrategy,
+                "Withdrawal strategy is required.");
 
         if (withdrawalAmount.signum() < 0) {
             throw new IllegalArgumentException(
@@ -227,17 +233,30 @@ public final class ProjectedWithdrawalAllocator {
         ProjectedPortfolio updatedPortfolio =
                 portfolio;
 
+        /*
+         * Strategy determines which accounts are
+         * considered first.
+         *
+         * The allocator remains responsible only
+         * for actually changing balances.
+         */
+        List<ProjectedAccountBalance> orderedAccounts =
+                withdrawalStrategy.orderAccounts(
+                        portfolio);
+
         for (ProjectedAccountBalance projected :
-                portfolio.getAccountBalances()) {
+                orderedAccounts) {
 
             Account account =
                     projected.getAccount();
 
             BigDecimal available =
-                    updatedPortfolio.getBalance(account);
+                    updatedPortfolio.getBalance(
+                            account);
 
             BigDecimal withdrawal =
-                    available.min(remaining);
+                    available.min(
+                            remaining);
 
             if (withdrawal.signum() > 0) {
 
@@ -247,7 +266,8 @@ public final class ProjectedWithdrawalAllocator {
                                 withdrawal);
 
                 remaining =
-                        remaining.subtract(withdrawal);
+                        remaining.subtract(
+                                withdrawal);
             }
 
             if (remaining.signum() == 0) {

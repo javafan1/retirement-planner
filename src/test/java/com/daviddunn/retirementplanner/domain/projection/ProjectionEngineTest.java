@@ -10,6 +10,11 @@ import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.financial.RothIRA;
+import com.daviddunn.retirementplanner.domain.financial.BrokerageAccount;
+import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
+import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
+import com.daviddunn.retirementplanner.domain.model.WithdrawalAssumptions;
+import com.daviddunn.retirementplanner.domain.model.WithdrawalStrategyType;
 
 import org.junit.jupiter.api.Test;
 
@@ -73,11 +78,14 @@ class ProjectionEngineTest {
         /*
          * Start with $1,000,000.
          */
-        portfolio.addAccount(
+        TraditionalIRA traditionalIra =
                 new TraditionalIRA(
                         "Traditional IRA",
                         AccountOwnership.PRIMARY,
-                        new BigDecimal("1000000")));
+                        new BigDecimal("1000000"));
+
+        portfolio.addAccount(
+                traditionalIra);
 
         /*
          * No investment growth.
@@ -133,6 +141,13 @@ class ProjectionEngineTest {
         assertEquals(
                 new BigDecimal("976000.00"),
                 year.getEndingInvestableAssets());
+
+        assertEquals(
+                0,
+                new BigDecimal("976000.00")
+                        .compareTo(
+                                year.getEndingBalance(
+                                        traditionalIra)));
     }
 
     @Test
@@ -1171,5 +1186,245 @@ class ProjectionEngineTest {
                         .compareTo(
                                 secondYear
                                         .getReinvestableExcessRmd()));
+
+
     }
+
+    @Test
+    void projectionUsesSelectedWithdrawalStrategy() {
+
+        /*
+         * No guaranteed income.
+         * Annual expenses = $30,000.
+         *
+         * Therefore the portfolio must supply
+         * the entire $30,000.
+         */
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        household.addExpense(
+                new Expense(
+                        "Living Expenses",
+                        new BigDecimal("30000")));
+
+        /*
+         * TAXABLE-FIRST PLAN
+         */
+
+        TraditionalIRA taxableFirstTraditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        BrokerageAccount taxableFirstBrokerage =
+                new BrokerageAccount(
+                        "Brokerage",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        AccountPortfolio taxableFirstPortfolio =
+                new AccountPortfolio();
+
+        /*
+         * Deliberately put Traditional IRA first.
+         *
+         * This ensures portfolio order cannot
+         * accidentally make the test pass.
+         */
+        taxableFirstPortfolio.addAccount(
+                taxableFirstTraditionalIra);
+
+        taxableFirstPortfolio.addAccount(
+                taxableFirstBrokerage);
+
+        PlanningAssumptions taxableFirstAssumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+                        1,
+                        LocalDate.of(2026, 1, 1));
+
+        RetirementPlan taxableFirstPlan =
+                new RetirementPlan(
+                        household,
+                        taxableFirstPortfolio,
+                        taxableFirstAssumptions);
+
+        /*
+         * TAX-DEFERRED-FIRST PLAN
+         */
+
+        TraditionalIRA taxDeferredFirstTraditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        BrokerageAccount taxDeferredFirstBrokerage =
+                new BrokerageAccount(
+                        "Brokerage",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        AccountPortfolio taxDeferredFirstPortfolio =
+                new AccountPortfolio();
+
+        taxDeferredFirstPortfolio.addAccount(
+                taxDeferredFirstTraditionalIra);
+
+        taxDeferredFirstPortfolio.addAccount(
+                taxDeferredFirstBrokerage);
+
+        PlanningAssumptions taxDeferredFirstAssumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAX_DEFERRED_FIRST),
+                        1,
+                        LocalDate.of(2026, 1, 1));
+
+        RetirementPlan taxDeferredFirstPlan =
+                new RetirementPlan(
+                        household,
+                        taxDeferredFirstPortfolio,
+                        taxDeferredFirstAssumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection taxableFirstProjection =
+                engine.project(
+                        taxableFirstPlan);
+
+        Projection taxDeferredFirstProjection =
+                engine.project(
+                        taxDeferredFirstPlan);
+
+        ProjectionYear taxableFirstYear =
+                taxableFirstProjection.getYearAt(0);
+
+        ProjectionYear taxDeferredFirstYear =
+                taxDeferredFirstProjection.getYearAt(0);
+
+        /*
+         * Both plans require the same $30,000
+         * portfolio withdrawal.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("30000.00")
+                        .compareTo(
+                                taxableFirstYear
+                                        .getPortfolioWithdrawal()));
+
+        assertEquals(
+                0,
+                new BigDecimal("30000.00")
+                        .compareTo(
+                                taxDeferredFirstYear
+                                        .getPortfolioWithdrawal()));
+
+        /*
+         * TAXABLE_FIRST
+         *
+         * Brokerage supplies the entire $30,000.
+         *
+         * Traditional IRA = $100,000
+         * Brokerage       =  $70,000
+         */
+        assertEquals(
+                0,
+                new BigDecimal("100000")
+                        .compareTo(
+                                taxableFirstYear
+                                        .getEndingBalance(
+                                                taxableFirstTraditionalIra)));
+
+        assertEquals(
+                0,
+                new BigDecimal("70000")
+                        .compareTo(
+                                taxableFirstYear
+                                        .getEndingBalance(
+                                                taxableFirstBrokerage)));
+
+        /*
+         * TAX_DEFERRED_FIRST
+         *
+         * Traditional IRA supplies the entire $30,000.
+         *
+         * Traditional IRA = $70,000
+         * Brokerage       = $100,000
+         */
+        assertEquals(
+                0,
+                new BigDecimal("70000")
+                        .compareTo(
+                                taxDeferredFirstYear
+                                        .getEndingBalance(
+                                                taxDeferredFirstTraditionalIra)));
+
+        assertEquals(
+                0,
+                new BigDecimal("100000")
+                        .compareTo(
+                                taxDeferredFirstYear
+                                        .getEndingBalance(
+                                                taxDeferredFirstBrokerage)));
+
+        /*
+         * Strategy changes account selection,
+         * but not the aggregate withdrawal or
+         * total ending assets.
+         *
+         * $200,000 - $30,000 = $170,000
+         */
+        assertEquals(
+                0,
+                new BigDecimal("170000.00")
+                        .compareTo(
+                                taxableFirstYear
+                                        .getEndingInvestableAssets()));
+
+        assertEquals(
+                0,
+                new BigDecimal("170000.00")
+                        .compareTo(
+                                taxDeferredFirstYear
+                                        .getEndingInvestableAssets()));
+    }
+
+
 }

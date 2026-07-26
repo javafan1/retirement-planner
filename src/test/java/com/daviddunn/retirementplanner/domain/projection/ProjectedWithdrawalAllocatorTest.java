@@ -9,6 +9,7 @@ import com.daviddunn.retirementplanner.domain.rmd.AccountRmd;
 
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.OwnerRmdResult;
+import com.daviddunn.retirementplanner.domain.withdrawal.TaxableFirstWithdrawalStrategy;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -384,29 +385,35 @@ class ProjectedWithdrawalAllocatorTest {
     }
 
     @Test
-    void appliesAdditionalWithdrawalAcrossAccountsInPortfolioOrder() {
+    void appliesAdditionalWithdrawalUsingWithdrawalStrategy() {
 
-        TraditionalIRA firstAccount =
-                new TraditionalIRA(
-                        "First IRA",
-                        AccountOwnership.PRIMARY,
-                        new BigDecimal("20000"));
-
-        RothIRA secondAccount =
+        RothIRA rothIra =
                 new RothIRA(
                         "Roth IRA",
                         AccountOwnership.PRIMARY,
                         new BigDecimal("80000"));
 
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("20000"));
+
+        /*
+         * Deliberately put Roth FIRST.
+         *
+         * Portfolio order therefore conflicts with
+         * our withdrawal strategy.
+         */
         ProjectedPortfolio portfolio =
                 new ProjectedPortfolio(
                         List.of(
                                 new ProjectedAccountBalance(
-                                        firstAccount,
-                                        new BigDecimal("20000")),
+                                        rothIra,
+                                        new BigDecimal("80000")),
                                 new ProjectedAccountBalance(
-                                        secondAccount,
-                                        new BigDecimal("80000"))));
+                                        traditionalIra,
+                                        new BigDecimal("20000"))));
 
         ProjectedWithdrawalAllocator allocator =
                 new ProjectedWithdrawalAllocator();
@@ -414,29 +421,35 @@ class ProjectedWithdrawalAllocatorTest {
         ProjectedPortfolio updated =
                 allocator.applyAdditionalWithdrawal(
                         portfolio,
-                        new BigDecimal("30000"));
+                        new BigDecimal("30000"),
+                        new TaxableFirstWithdrawalStrategy());
 
         /*
-         * First account is exhausted.
+         * Strategy says TAX_DEFERRED comes before
+         * ROTH, even though Roth appeared first in
+         * the portfolio.
+         *
+         * Traditional IRA supplies its entire
+         * $20,000 balance.
          */
         assertEquals(
                 0,
                 BigDecimal.ZERO.compareTo(
-                        updated.getBalance(firstAccount)));
+                        updated.getBalance(
+                                traditionalIra)));
 
         /*
-         * Remaining $10,000 comes from the
-         * second account.
+         * Remaining $10,000 comes from Roth.
+         *
+         * $80,000 - $10,000 = $70,000
          */
         assertEquals(
                 0,
                 new BigDecimal("70000")
                         .compareTo(
-                                updated.getBalance(secondAccount)));
+                                updated.getBalance(
+                                        rothIra)));
 
-        /*
-         * $100,000 - $30,000 = $70,000
-         */
         assertEquals(
                 0,
                 new BigDecimal("70000")
@@ -444,8 +457,7 @@ class ProjectedWithdrawalAllocatorTest {
                                 updated.getTotalBalance()));
 
         /*
-         * Original projected portfolio remains
-         * unchanged.
+         * Original portfolio remains unchanged.
          */
         assertEquals(
                 0,

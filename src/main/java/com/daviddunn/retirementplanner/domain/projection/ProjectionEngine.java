@@ -15,6 +15,9 @@ import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalDisposition;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalResult;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
 
+import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
+import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategyFactory;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -27,6 +30,7 @@ public class ProjectionEngine {
     private final GovernmentRules governmentRules;
     private final ProjectedWithdrawalAllocator withdrawalAllocator;
 
+
     public ProjectionEngine() {
 
         this.withdrawalCalculator =
@@ -37,6 +41,7 @@ public class ProjectionEngine {
 
         this.withdrawalAllocator =
                 new ProjectedWithdrawalAllocator();
+
 
         try {
 
@@ -78,6 +83,13 @@ public class ProjectionEngine {
         LocalDate projectionStartDate =
                 assumptions.getProjectionStartDate();
 
+        WithdrawalStrategy withdrawalStrategy =
+                WithdrawalStrategyFactory.create(
+                        plan
+                                .getPlanningAssumptions()
+                                .getWithdrawalAssumptions()
+                                .getWithdrawalStrategyType());
+
         int startYear =
                 projectionStartDate.getYear();
 
@@ -108,7 +120,8 @@ public class ProjectionEngine {
                             yearOffset,
                             calendarYear,
                             projectedPortfolio,
-                            priorYearEndSnapshot);
+                            priorYearEndSnapshot,
+                            withdrawalStrategy);
 
             ProjectionYear projectionYear =
                     calculation.getProjectionYear();
@@ -143,148 +156,15 @@ public class ProjectionEngine {
         return projection;
     }
 
-//    private ProjectionYearCalculation calculateProjectionYear(
-//            RetirementPlan plan,
-//            int yearOffset,
-//            int calendarYear,
-//            ProjectedPortfolio projectedPortfolio,
-//            RmdBalanceSnapshot priorYearEndSnapshot) {
-//
-//        PlanningAssumptions assumptions =
-//                plan.getPlanningAssumptions();
-//
-//        LocalDate projectionStartDate =
-//                assumptions.getProjectionStartDate();
-//
-//        /*
-//         * The account-level projected portfolio
-//         * is the source of beginning assets.
-//         */
-//        BigDecimal beginningAssets =
-//                projectedPortfolio
-//                        .getTotalBalance();
-//
-//        /*
-//         * The first projection year begins on the
-//         * actual projection start date.
-//         *
-//         * Subsequent years begin January 1.
-//         */
-//        LocalDate projectionDate =
-//                yearOffset == 0
-//                        ? projectionStartDate
-//                        : LocalDate.of(
-//                        calendarYear,
-//                        1,
-//                        1);
-//
-//        Household household =
-//                plan.getHousehold();
-//
-//        BigDecimal investmentGrowth =
-//                calculateInvestmentGrowth(
-//                        beginningAssets,
-//                        assumptions,
-//                        yearOffset,
-//                        projectionStartDate);
-//
-//        BigDecimal guaranteedIncome =
-//                calculateTotalIncome(
-//                        household,
-//                        projectionDate);
-//
-//        BigDecimal annualExpenses =
-//                calculateProjectedExpenses(
-//                        household,
-//                        assumptions,
-//                        yearOffset,
-//                        projectionStartDate);
-//
-//        HouseholdRmdResult householdRmdResult =
-//                calculateRequiredMinimumDistribution(
-//                        plan,
-//                        calendarYear,
-//                        priorYearEndSnapshot);
-//
-//        BigDecimal requiredMinimumDistribution =
-//                householdRmdResult
-//                        .getTotalRmd()
-//                        .setScale(
-//                                2,
-//                                RoundingMode.HALF_UP);
-//
-//        WithdrawalResult withdrawalResult =
-//                calculatePortfolioWithdrawal(
-//                        guaranteedIncome,
-//                        annualExpenses,
-//                        requiredMinimumDistribution);
-//
-//
-//
-//        BigDecimal portfolioWithdrawal =
-//                withdrawalResult
-//                        .getTotalWithdrawal();
-//
-//        ProjectedPortfolio portfolioAfterRmd =
-//                withdrawalAllocator.applyHouseholdRmds(
-//                        projectedPortfolio,
-//                        householdRmdResult);
-//
-//        ProjectedPortfolio portfolioAfterExcessRmd =
-//                portfolioAfterRmd.withAdditionalCash(
-//                        withdrawalResult.getExcessRmd());
-//
-//        /*
-//         * Separate the portfolio distribution into
-//         * money consumed by household spending and
-//         * money that remains household wealth.
-//         */
-//        WithdrawalDisposition withdrawalDisposition =
-//                withdrawalResult
-//                        .getDisposition();
-//
-//        BigDecimal endingAssets =
-//                calculateEndingAssets(
-//                        beginningAssets,
-//                        investmentGrowth,
-//                        withdrawalDisposition);
-//
-//        ProjectionYear projectionYear =
-//                new ProjectionYear(
-//                        yearOffset,
-//                        calendarYear,
-//                        beginningAssets,
-//                        investmentGrowth,
-//                        guaranteedIncome,
-//                        annualExpenses,
-//                        withdrawalResult.getCashFlowNeed(),
-//                        portfolioWithdrawal,
-//                        requiredMinimumDistribution,
-//                        withdrawalResult.getExcessRmd(),
-//                        endingAssets);
-//
-//        /*
-//         * Temporary bridge remains in place.
-//         *
-//         * We have not yet integrated account-level
-//         * RMD allocation into the year calculation.
-//         */
-//        ProjectedPortfolio endingPortfolio =
-//                createNextPortfolio(
-//                        projectedPortfolio,
-//                        endingAssets);
-//
-//        return new ProjectionYearCalculation(
-//                projectionYear,
-//                endingPortfolio);
-//    }
+
 
     private ProjectionYearCalculation calculateProjectionYear(
             RetirementPlan plan,
             int yearOffset,
             int calendarYear,
             ProjectedPortfolio projectedPortfolio,
-            RmdBalanceSnapshot priorYearEndSnapshot) {
+            RmdBalanceSnapshot priorYearEndSnapshot,
+            WithdrawalStrategy withdrawalStrategy) {
 
         BigDecimal beginningAssets =
                 projectedPortfolio.getTotalBalance();
@@ -358,37 +238,6 @@ public class ProjectionEngine {
                                 2,
                                 RoundingMode.HALF_UP);
 
-        /*
-         * Account-level projection state.
-         *
-         * First allocate the already-calculated
-         * investment growth across the projected
-         * accounts.
-         */
-//        ProjectedPortfolio portfolioAfterGrowth =
-//                projectedPortfolio.withGrowth(
-//                        investmentGrowth);
-
-        /*
-         * Remove RMDs from the actual accounts
-         * responsible for those distributions.
-         */
-//        ProjectedPortfolio portfolioAfterRmd =
-//                withdrawalAllocator.applyHouseholdRmds(
-//                        portfolioAfterGrowth,
-//                        householdRmdResult);
-
-        /*
-         * Any RMD amount not required for modeled
-         * spending remains a household asset.
-         *
-         * Until we have an explicit taxable-account
-         * allocation policy, retain it as
-         * unallocated projected cash.
-         */
-//        ProjectedPortfolio portfolioAfterExcessRmd =
-//                portfolioAfterRmd.withAdditionalCash(
-//                        withdrawalResult.getExcessRmd());
 
         ProjectedPortfolio portfolioAfterGrowth =
                 projectedPortfolio.withGrowth(
@@ -410,7 +259,8 @@ public class ProjectionEngine {
                 withdrawalAllocator.applyAdditionalWithdrawal(
                         portfolioAfterRmd,
                         withdrawalResult
-                                .getAdditionalWithdrawalRequired());
+                                .getAdditionalWithdrawalRequired(),
+                        withdrawalStrategy);
 
         /*
          * If the RMD exceeded the household's
@@ -422,12 +272,21 @@ public class ProjectionEngine {
                         .withAdditionalCash(
                                 withdrawalResult.getExcessRmd());
 
+        List<ProjectedAccountSnapshot> endingAccountSnapshots =
+                endingPortfolio
+                        .getAccountBalances()
+                        .stream()
+                        .map(projected ->
+                                new ProjectedAccountSnapshot(
+                                        projected.getAccount(),
+                                        projected.getBalance()))
+                        .toList();
         /*
-         * Aggregate ending-assets calculation.
+         * Aggregate ending-assets value reported by
+         * ProjectionYear.
          *
-         * We continue using this calculation until
-         * ordinary non-RMD portfolio withdrawals
-         * are allocated at the account level.
+         * The account-level endingPortfolio is carried
+         * forward independently into the next year.
          */
         BigDecimal endingAssets =
                 beginningAssets
@@ -452,23 +311,10 @@ public class ProjectionEngine {
                         portfolioWithdrawal,
                         requiredMinimumDistribution,
                         withdrawalResult.getExcessRmd(),
-                        endingAssets);
+                        endingAssets,
+                        endingAccountSnapshots);
 
-        /*
-         * TEMPORARY BRIDGE
-         *
-         * Do not use portfolioAfterExcessRmd as the
-         * ending portfolio yet.
-         *
-         * We still need account-level allocation of
-         * ordinary cash-flow withdrawals before the
-         * account-level portfolio can completely
-         * replace this proportional bridge.
-         */
-//        ProjectedPortfolio endingPortfolio =
-//                createNextPortfolio(
-//                        projectedPortfolio,
-//                        endingAssets);
+
 
         return new ProjectionYearCalculation(
                 projectionYear,
