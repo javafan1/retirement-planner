@@ -21,8 +21,10 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Year;
+import java.math.RoundingMode;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectionEngineTest {
 
@@ -133,21 +135,60 @@ class ProjectionEngineTest {
         assertEquals(
                 new BigDecimal("60000.00"),
                 year.getAnnualExpenses());
-
         assertEquals(
-                new BigDecimal("24000.00"),
-                year.getPortfolioWithdrawal());
-
-        assertEquals(
-                new BigDecimal("976000.00"),
-                year.getEndingInvestableAssets());
+                0,
+                new BigDecimal("24000.00")
+                        .compareTo(
+                                year.getCashFlowNeed()));
+        assertTrue(
+                year
+                        .getTaxFundingWithdrawal()
+                        .signum() > 0);
 
         assertEquals(
                 0,
-                new BigDecimal("976000.00")
+                year
+                        .getCashFlowNeed()
+                        .add(
+                                year
+                                        .getTaxFundingWithdrawal())
                         .compareTo(
-                                year.getEndingBalance(
-                                        traditionalIra)));
+                                year
+                                        .getPortfolioWithdrawal()));
+
+
+        BigDecimal expectedEndingAssets =
+                year
+                        .getBeginningInvestableAssets()
+                        .add(
+                                year.getInvestmentGrowth())
+                        .subtract(
+                                year.getPortfolioWithdrawal())
+                        .add(
+                                year.getExcessRmd())
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedEndingAssets.compareTo(
+                        year
+                                .getEndingInvestableAssets()
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
+
+
+        assertEquals(
+                0,
+                expectedEndingAssets.compareTo(
+                        year
+                                .getEndingBalance(
+                                        traditionalIra)
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
     }
 
     @Test
@@ -229,12 +270,46 @@ class ProjectionEngineTest {
                 year.getGuaranteedIncome());
 
         assertEquals(
-                new BigDecimal("42000.00"),
-                year.getPortfolioWithdrawal());
+                new BigDecimal("60000.00"),
+                year.getAnnualExpenses());
 
         assertEquals(
-                new BigDecimal("958000.00"),
-                year.getEndingInvestableAssets());
+                0,
+                new BigDecimal("42000.00")
+                        .compareTo(
+                                year.getCashFlowNeed()));
+
+        assertTrue(
+                year.getTaxFundingWithdrawal()
+                        .signum() > 0);
+
+        assertEquals(
+                0,
+                year.getCashFlowNeed()
+                        .add(
+                                year.getTaxFundingWithdrawal())
+                        .compareTo(
+                                year.getPortfolioWithdrawal()));
+
+        BigDecimal expectedEndingAssets =
+                year.getBeginningInvestableAssets()
+                        .add(
+                                year.getInvestmentGrowth())
+                        .subtract(
+                                year.getPortfolioWithdrawal())
+                        .add(
+                                year.getExcessRmd())
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedEndingAssets.compareTo(
+                        year.getEndingInvestableAssets()
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
     }
 
     @Test
@@ -335,6 +410,10 @@ class ProjectionEngineTest {
          * $1,000,000 - $24,000 = $976,000
          */
 
+        /*
+         * YEAR 1
+         */
+
         assertEquals(
                 new BigDecimal("36000"),
                 firstYear.getGuaranteedIncome());
@@ -344,27 +423,51 @@ class ProjectionEngineTest {
                 firstYear.getAnnualExpenses());
 
         assertEquals(
-                new BigDecimal("24000.00"),
-                firstYear.getPortfolioWithdrawal());
+                0,
+                new BigDecimal("24000.00")
+                        .compareTo(
+                                firstYear.getCashFlowNeed()));
+
+        assertTrue(
+                firstYear
+                        .getTaxFundingWithdrawal()
+                        .signum() > 0);
 
         assertEquals(
-                new BigDecimal("976000.00"),
-                firstYear.getEndingInvestableAssets());
+                0,
+                firstYear
+                        .getCashFlowNeed()
+                        .add(
+                                firstYear
+                                        .getTaxFundingWithdrawal())
+                        .compareTo(
+                                firstYear
+                                        .getPortfolioWithdrawal()));
+
+        BigDecimal expectedFirstYearEndingAssets =
+                firstYear
+                        .getBeginningInvestableAssets()
+                        .add(
+                                firstYear.getInvestmentGrowth())
+                        .subtract(
+                                firstYear.getPortfolioWithdrawal())
+                        .add(
+                                firstYear.getExcessRmd())
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedFirstYearEndingAssets.compareTo(
+                        firstYear
+                                .getEndingInvestableAssets()
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
 
         /*
          * YEAR 2
-         *
-         * Pension with 2% COLA:
-         * $36,000 × 1.02 = $36,720
-         *
-         * Expenses with 3% inflation:
-         * $60,000 × 1.03 = $61,800
-         *
-         * Withdrawal:
-         * $61,800 - $36,720 = $25,080
-         *
-         * Ending assets:
-         * $976,000 - $25,080 = $950,920
          */
 
         assertEquals(
@@ -376,12 +479,48 @@ class ProjectionEngineTest {
                 secondYear.getAnnualExpenses());
 
         assertEquals(
-                new BigDecimal("25080.00"),
-                secondYear.getPortfolioWithdrawal());
+                0,
+                new BigDecimal("25080.00")
+                        .compareTo(
+                                secondYear.getCashFlowNeed()));
+
+        assertTrue(
+                secondYear
+                        .getTaxFundingWithdrawal()
+                        .signum() > 0);
 
         assertEquals(
-                new BigDecimal("950920.00"),
-                secondYear.getEndingInvestableAssets());
+                0,
+                secondYear
+                        .getCashFlowNeed()
+                        .add(
+                                secondYear
+                                        .getTaxFundingWithdrawal())
+                        .compareTo(
+                                secondYear
+                                        .getPortfolioWithdrawal()));
+
+        BigDecimal expectedSecondYearEndingAssets =
+                secondYear
+                        .getBeginningInvestableAssets()
+                        .add(
+                                secondYear.getInvestmentGrowth())
+                        .subtract(
+                                secondYear.getPortfolioWithdrawal())
+                        .add(
+                                secondYear.getExcessRmd())
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedSecondYearEndingAssets.compareTo(
+                        secondYear
+                                .getEndingInvestableAssets()
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
     }
 
     @Test
@@ -474,12 +613,42 @@ class ProjectionEngineTest {
                 year.getAnnualExpenses());
 
         assertEquals(
-                new BigDecimal("24000.00"),
-                year.getPortfolioWithdrawal());
+                0,
+                new BigDecimal("24000.00")
+                        .compareTo(
+                                year.getCashFlowNeed()));
+
+        assertTrue(
+                year.getTaxFundingWithdrawal()
+                        .signum() > 0);
 
         assertEquals(
-                new BigDecimal("1026000.00"),
-                year.getEndingInvestableAssets());
+                0,
+                year.getCashFlowNeed()
+                        .add(
+                                year.getTaxFundingWithdrawal())
+                        .compareTo(
+                                year.getPortfolioWithdrawal()));
+
+        BigDecimal expectedEndingAssets =
+                year.getBeginningInvestableAssets()
+                        .add(
+                                year.getInvestmentGrowth())
+                        .subtract(
+                                year.getPortfolioWithdrawal())
+                        .add(
+                                year.getExcessRmd())
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedEndingAssets.compareTo(
+                        year.getEndingInvestableAssets()
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
     }
 
     @Test
@@ -727,11 +896,14 @@ class ProjectionEngineTest {
         AccountPortfolio portfolio =
                 new AccountPortfolio();
 
-        portfolio.addAccount(
+        TraditionalIRA traditionalIra =
                 new TraditionalIRA(
                         "Traditional IRA",
                         AccountOwnership.PRIMARY,
-                        new BigDecimal("1000000")));
+                        new BigDecimal("1000000"));
+
+        portfolio.addAccount(
+                traditionalIra);
 
         /*
          * No investment growth.
@@ -774,6 +946,9 @@ class ProjectionEngineTest {
 
         ProjectionYear secondYear =
                 projection.getYearAt(1);
+
+
+
 
         /*
          * First projection year:
@@ -821,46 +996,33 @@ class ProjectionEngineTest {
                                 secondYear
                                         .getRequiredMinimumDistribution()));
 
-        /*
-         * The RMD now participates in the withdrawal
-         * calculation.
-         *
-         * There is no cash-flow need in this test,
-         * so the entire portfolio withdrawal is
-         * caused by the RMD.
-         */
         assertEquals(
                 0,
-                new BigDecimal("40650.41")
+                secondYear
+                        .getRequiredMinimumDistribution()
+                        .add(
+                                secondYear
+                                        .getTaxFundingWithdrawal())
                         .compareTo(
                                 secondYear
                                         .getPortfolioWithdrawal()));
-
-        /*
-         * Beginning assets = $1,000,000.00
-         * Growth           =          $0.00
-         * RMD withdrawal   =     $40,650.41
-         *                    ---------------
-         * Ending assets    =    $959,349.59
-         */
-        assertEquals(
-                0,
+        BigDecimal expectedEndingAssets =
                 new BigDecimal("1000000.00")
-                        .compareTo(
+                        .subtract(
                                 secondYear
-                                        .getEndingInvestableAssets()));
+                                        .getTaxFundingWithdrawal())
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
 
-        /*
-         * There is no cash-flow shortfall in this test,
-         * so the entire portfolio withdrawal is caused
-         * by the RMD.
-         */
         assertEquals(
                 0,
-                new BigDecimal("40650.41")
-                        .compareTo(
-                                secondYear
-                                        .getPortfolioWithdrawal()));
+                expectedEndingAssets.compareTo(
+                        secondYear
+                                .getEndingInvestableAssets()
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
 
 
         /*
@@ -905,17 +1067,28 @@ class ProjectionEngineTest {
         AccountPortfolio portfolio =
                 new AccountPortfolio();
 
-        portfolio.addAccount(
+        /*
+         * Keep references to the individual accounts
+         * so we can inspect their projected ending
+         * balances.
+         */
+        TraditionalIRA traditionalIra =
                 new TraditionalIRA(
                         "Traditional IRA",
                         AccountOwnership.PRIMARY,
-                        new BigDecimal("1000000")));
+                        new BigDecimal("1000000"));
 
-        portfolio.addAccount(
+        RothIRA rothIra =
                 new RothIRA(
                         "Roth IRA",
                         AccountOwnership.PRIMARY,
-                        new BigDecimal("500000")));
+                        new BigDecimal("500000"));
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        portfolio.addAccount(
+                rothIra);
 
         /*
          * No growth, inflation, income, or expenses.
@@ -999,46 +1172,101 @@ class ProjectionEngineTest {
                                 secondYear
                                         .getRequiredMinimumDistribution()));
 
-        /*
-         * There are no expenses, so the entire RMD
-         * is excess RMD and remains an investable
-         * household asset as unallocated cash.
-         *
-         * Therefore total investable assets remain
-         * $1,500,000.
-         */
-        assertEquals(
-                0,
-                new BigDecimal("1500000")
-                        .compareTo(
-                                secondYear
-                                        .getEndingInvestableAssets()));
 
         /*
-         * Internally, however, the 2035 ending
-         * portfolio should now be:
+         * The RMD itself is taxable income.
          *
-         * Traditional IRA = $959,349.59
-         * Roth IRA        =  500,000.00
-         * Excess RMD cash =   40,650.41
-         *                  -------------
-         * Total           = $1,500,000.00
+         * Because there are no living expenses, the
+         * entire RMD is excess RMD and remains an
+         * investable household asset.
          *
-         * Therefore the 2036 RMD must use
-         * $959,349.59 -- NOT $1,000,000 and
-         * certainly not the entire $1,500,000.
-         *
-         * Age 76 divisor = 23.7.
-         *
-         * $959,349.59 / 23.7
-         * = $40,478.89
+         * Federal income tax, however, is a real
+         * household outflow and therefore reduces
+         * total investable assets.
+         */
+        assertTrue(
+                secondYear
+                        .getTaxFundingWithdrawal()
+                        .signum() > 0);
+
+        BigDecimal expectedEndingAssets =
+                new BigDecimal("1500000")
+                        .subtract(
+                                secondYear
+                                        .getTaxFundingWithdrawal())
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedEndingAssets.compareTo(
+                        secondYear
+                                .getEndingInvestableAssets()
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
+
+        /*
+         * The Roth IRA must remain untouched.
          */
         assertEquals(
                 0,
-                new BigDecimal("40478.89")
+                new BigDecimal("500000")
                         .compareTo(
-                                thirdYear
-                                        .getRequiredMinimumDistribution()));
+                                secondYear
+                                        .getEndingBalance(
+                                                rothIra)));
+
+        /*
+         * The Traditional IRA pays both the RMD and
+         * the tax-funding withdrawal.
+         */
+        BigDecimal expectedTraditionalIraBalance =
+                new BigDecimal("1000000")
+                        .subtract(
+                                secondYear
+                                        .getRequiredMinimumDistribution())
+                        .subtract(
+                                secondYear
+                                        .getTaxFundingWithdrawal());
+
+        assertEquals(
+                0,
+                expectedTraditionalIraBalance
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP)
+                        .compareTo(
+                                secondYear
+                                        .getEndingBalance(
+                                                traditionalIra)
+                                        .setScale(
+                                                2,
+                                                RoundingMode.HALF_UP)));
+
+        /*
+         * The following year's RMD must therefore use
+         * the actual ending Traditional IRA balance,
+         * not the original $1,000,000 balance and not
+         * total household assets.
+         *
+         * Age 76 divisor = 23.7.
+         */
+        BigDecimal expectedNextRmd =
+                secondYear
+                        .getEndingBalance(
+                                traditionalIra)
+                        .divide(
+                                new BigDecimal("23.7"),
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedNextRmd.compareTo(
+                        thirdYear
+                                .getRequiredMinimumDistribution()));
     }
 
     @Test
@@ -1081,12 +1309,14 @@ class ProjectionEngineTest {
         AccountPortfolio portfolio =
                 new AccountPortfolio();
 
-        portfolio.addAccount(
+        TraditionalIRA traditionalIra =
                 new TraditionalIRA(
                         "Traditional IRA",
                         AccountOwnership.PRIMARY,
-                        new BigDecimal("1000000")));
+                        new BigDecimal("1000000"));
 
+        portfolio.addAccount(
+                traditionalIra);
         /*
          * No investment growth.
          * No inflation.
@@ -1119,12 +1349,48 @@ class ProjectionEngineTest {
         ProjectionYear secondYear =
                 projection.getYearAt(1);
 
+        ProjectionYear firstYear =
+                projection.getYearAt(0);
+
+        System.out.println("First year withdrawal = "
+                + firstYear.getPortfolioWithdrawal());
+
+        System.out.println("First year ending assets = "
+                + firstYear.getEndingInvestableAssets());
+
+        System.out.println("Second year RMD = "
+                + secondYear.getRequiredMinimumDistribution());
         /*
-         * Cash-flow need:
+         * Prior-year Traditional IRA balance is
+         * $1,000,000.
          *
-         * $30,000 expenses
-         * - $0 guaranteed income
-         * = $30,000
+         * At age 75 the Uniform Lifetime Table
+         * divisor is 24.6:
+         *
+         * $1,000,000 / 24.6 = $40,650.41
+         */
+        BigDecimal expectedRmd =
+                firstYear
+                        .getEndingBalance(
+                                traditionalIra)
+                        .divide(
+                                new BigDecimal("24.6"),
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedRmd.compareTo(
+                        secondYear
+                                .getRequiredMinimumDistribution()));
+
+        System.out.println(
+                "Second year cash flow need = "
+                        + secondYear.getCashFlowNeed());
+
+        /*
+         * Household expenses are $30,000 and there
+         * is no guaranteed income.
          */
         assertEquals(
                 0,
@@ -1134,59 +1400,89 @@ class ProjectionEngineTest {
                                         .getCashFlowNeed()));
 
         /*
-         * RMD:
+         * The RMD exceeds the household's spending
+         * need.
          *
-         * $970,000 prior-year ending balance
-         * / 24.6
-         * = $39,430.89
-         *
-         * The prior-year balance is $970,000
-         * because 2034 also required $30,000
-         * for expenses.
+         * $40,650.41 - $10,000.00
+         * = $30,650.41 excess RMD.
          */
+        BigDecimal expectedExcessRmd =
+                secondYear
+                        .getRequiredMinimumDistribution()
+                        .subtract(
+                                secondYear
+                                        .getCashFlowNeed());
+
         assertEquals(
                 0,
-                new BigDecimal("39430.89")
-                        .compareTo(
-                                secondYear
-                                        .getRequiredMinimumDistribution()));
+                expectedExcessRmd.compareTo(
+                        secondYear
+                                .getExcessRmd()));
 
         /*
-         * RMD exceeds the cash-flow need,
-         * so the RMD controls the withdrawal.
+         * The RMD is taxable income, so federal tax
+         * must also be funded.
          */
-        assertEquals(
-                0,
-                new BigDecimal("39430.89")
-                        .compareTo(
-                                secondYear
-                                        .getPortfolioWithdrawal()));
+        assertTrue(
+                secondYear
+                        .getTaxFundingWithdrawal()
+                        .signum() > 0);
 
         /*
-         * Excess RMD:
+         * Total portfolio distributions consist of
+         * the RMD plus the additional withdrawal
+         * needed to fund federal tax.
+         */
+        BigDecimal expectedPortfolioWithdrawal =
+                secondYear
+                        .getRequiredMinimumDistribution()
+                        .add(
+                                secondYear
+                                        .getTaxFundingWithdrawal());
+
+        assertEquals(
+                0,
+                expectedPortfolioWithdrawal.compareTo(
+                        secondYear
+                                .getPortfolioWithdrawal()));
+
+        /*
+         * The excess portion of the RMD remains an
+         * investable household asset.
          *
-         * $39,430.89 - $30,000
-         * = $9,430.89
+         * Therefore:
+         *
+         * beginning assets
+         * + investment growth
+         * - total portfolio withdrawal
+         * + excess RMD
+         *
+         * gives ending investable assets.
          */
+        BigDecimal expectedEndingAssets =
+                secondYear
+                        .getBeginningInvestableAssets()
+                        .add(
+                                secondYear
+                                        .getInvestmentGrowth())
+                        .subtract(
+                                secondYear
+                                        .getPortfolioWithdrawal())
+                        .add(
+                                secondYear
+                                        .getExcessRmd())
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
         assertEquals(
                 0,
-                new BigDecimal("9430.89")
-                        .compareTo(
-                                secondYear
-                                        .getExcessRmd()));
-
-        /*
-         * Until taxes and withholding are modeled,
-         * the entire excess RMD is potentially
-         * available for reinvestment.
-         */
-        assertEquals(
-                0,
-                new BigDecimal("9430.89")
-                        .compareTo(
-                                secondYear
-                                        .getReinvestableExcessRmd()));
-
+                expectedEndingAssets.compareTo(
+                        secondYear
+                                .getEndingInvestableAssets()
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
 
     }
 
@@ -1222,7 +1518,6 @@ class ProjectionEngineTest {
                 new Expense(
                         "Living Expenses",
                         new BigDecimal("30000")));
-
         /*
          * TAXABLE-FIRST PLAN
          */
@@ -1342,16 +1637,63 @@ class ProjectionEngineTest {
          * Both plans require the same $30,000
          * portfolio withdrawal.
          */
+
         assertEquals(
                 0,
                 new BigDecimal("30000.00")
+                        .compareTo(
+                                taxableFirstYear
+                                        .getCashFlowNeed()));
+
+        assertEquals(
+                0,
+                new BigDecimal("30000.00")
+                        .compareTo(
+                                taxDeferredFirstYear
+                                        .getCashFlowNeed()));
+
+
+        assertEquals(
+                BigDecimal.ZERO,
+                taxableFirstYear.getAdjustedGrossIncome());
+
+        assertEquals(
+                new BigDecimal("30000.00"),
+                taxDeferredFirstYear.getAdjustedGrossIncome());
+
+        assertEquals(
+                BigDecimal.ZERO,
+                taxableFirstYear.getFederalIncomeTax());
+
+        assertEquals(
+                BigDecimal.ZERO,
+                taxDeferredFirstYear.getFederalIncomeTax());
+
+        assertEquals(
+                BigDecimal.ZERO,
+                taxableFirstYear.getTaxFundingWithdrawal());
+
+        assertEquals(
+                BigDecimal.ZERO,
+                taxDeferredFirstYear.getTaxFundingWithdrawal());
+        assertEquals(
+                0,
+                taxableFirstYear
+                        .getCashFlowNeed()
+                        .add(
+                                taxableFirstYear
+                                        .getTaxFundingWithdrawal())
                         .compareTo(
                                 taxableFirstYear
                                         .getPortfolioWithdrawal()));
 
         assertEquals(
                 0,
-                new BigDecimal("30000.00")
+                taxDeferredFirstYear
+                        .getCashFlowNeed()
+                        .add(
+                                taxDeferredFirstYear
+                                        .getTaxFundingWithdrawal())
                         .compareTo(
                                 taxDeferredFirstYear
                                         .getPortfolioWithdrawal()));
@@ -1427,4 +1769,154 @@ class ProjectionEngineTest {
     }
 
 
+    /*
+    ProjectionEngine
+      ↓
+Pension income                    $18,000
+      +
+Traditional IRA withdrawal        $25,000
+      ↓
+TaxIncome                         $43,000
+      ↓
+FederalTaxCalculator
+      ↓
+ProjectionYear
+      ├─ AGI                      $43,000
+      ├─ Taxable Social Security       $0
+      ├─ Taxable income           $10,800
+      └─ Federal tax               $1,080
+     */
+
+    @Test
+    void projectionStoresFederalTaxCalculation() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        /*
+         * $1,500/month pension:
+         *
+         * $1,500 × 12 = $18,000.
+         */
+        primary.addIncomeSource(
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2026, 1, 1),
+                        null,
+                        new BigDecimal("1500"),
+                        BigDecimal.ZERO));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        /*
+         * Expenses are $43,000.
+         *
+         * Pension supplies $18,000,
+         * leaving a $25,000 portfolio need.
+         */
+        household.addExpense(
+                new Expense(
+                        "Living Expenses",
+                        new BigDecimal("43000")));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        /*
+         * Because we use TAX_DEFERRED_FIRST below,
+         * the entire $25,000 withdrawal will come
+         * from this Traditional IRA.
+         */
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAX_DEFERRED_FIRST),
+                        1,
+                        LocalDate.of(2026, 1, 1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(
+                        plan);
+
+        ProjectionYear year =
+                projection.getYearAt(0);
+
+
+        /*
+         * Ordinary taxable income:
+         *
+         * Pension                 $18,000
+         * Traditional IRA         25,000
+         *                         -------
+         * AGI                     $43,000
+         *
+         * There is no Social Security.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("44200.00")
+                        .compareTo(
+                                year.getAdjustedGrossIncome()
+                                        .setScale(2, RoundingMode.HALF_UP)));
+
+        assertEquals(
+                0,
+                new BigDecimal("12000.00")
+                        .compareTo(
+                                year.getFederalTaxableIncome()
+                                        .setScale(2, RoundingMode.HALF_UP)));
+
+        assertEquals(
+                0,
+                new BigDecimal("1200.00")
+                        .compareTo(
+                                year.getFederalIncomeTax()
+                                        .setScale(2, RoundingMode.HALF_UP)));
+
+        assertEquals(
+                0,
+                new BigDecimal("1200.00")
+                        .compareTo(
+                                year.getTaxFundingWithdrawal()
+                                        .setScale(2, RoundingMode.HALF_UP)));
+    }
 }

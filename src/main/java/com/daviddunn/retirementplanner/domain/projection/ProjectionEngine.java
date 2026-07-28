@@ -10,13 +10,15 @@ import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.OwnerRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.RmdBalanceSnapshot;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalCalculator;
-import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalDisposition;
-import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalResult;
+import com.daviddunn.retirementplanner.domain.withdrawal.*;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
+import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
+import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculator;
 
-import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
-import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategyFactory;
+import com.daviddunn.retirementplanner.domain.tax.TaxIncomeCalculator;
+
+import com.daviddunn.retirementplanner.domain.tax.TaxFundingCalculator;
+import com.daviddunn.retirementplanner.domain.tax.TaxFundingResult;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -30,6 +32,8 @@ public class ProjectionEngine {
     private final GovernmentRules governmentRules;
     private final ProjectedWithdrawalAllocator withdrawalAllocator;
 
+    private final TaxFundingCalculator taxFundingCalculator;
+
 
     public ProjectionEngine() {
 
@@ -41,6 +45,11 @@ public class ProjectionEngine {
 
         this.withdrawalAllocator =
                 new ProjectedWithdrawalAllocator();
+
+
+
+        this.taxFundingCalculator =
+                new TaxFundingCalculator();
 
 
         try {
@@ -156,8 +165,6 @@ public class ProjectionEngine {
         return projection;
     }
 
-
-
     private ProjectionYearCalculation calculateProjectionYear(
             RetirementPlan plan,
             int yearOffset,
@@ -243,10 +250,16 @@ public class ProjectionEngine {
                 projectedPortfolio.withGrowth(
                         investmentGrowth);
 
-        ProjectedPortfolio portfolioAfterRmd =
-                withdrawalAllocator.applyHouseholdRmds(
+        ProjectedWithdrawalAllocation rmdAllocation =
+                withdrawalAllocator.allocateHouseholdRmds(
                         portfolioAfterGrowth,
                         householdRmdResult);
+
+        ProjectedPortfolio portfolioAfterRmd =
+                rmdAllocation.getPortfolio();
+
+        WithdrawalBreakdown rmdWithdrawalBreakdown =
+                rmdAllocation.getWithdrawalBreakdown();
 
         /*
          * The RMD may satisfy some or all of the
@@ -255,11 +268,50 @@ public class ProjectionEngine {
          * Withdraw only the remaining amount that
          * still must come from the portfolio.
          */
-        ProjectedPortfolio portfolioAfterAdditionalWithdrawal =
-                withdrawalAllocator.applyAdditionalWithdrawal(
+        ProjectedWithdrawalAllocation withdrawalAllocation =
+                withdrawalAllocator.allocateAdditionalWithdrawal(
                         portfolioAfterRmd,
                         withdrawalResult
                                 .getAdditionalWithdrawalRequired(),
+                        withdrawalStrategy);
+
+        ProjectedPortfolio portfolioAfterAdditionalWithdrawal =
+                withdrawalAllocation.getPortfolio();
+
+        WithdrawalBreakdown withdrawalBreakdown =
+                withdrawalAllocation.getWithdrawalBreakdown();
+
+        WithdrawalBreakdown totalWithdrawalBreakdown =
+                rmdWithdrawalBreakdown.plus(
+                        withdrawalBreakdown);
+
+
+        TaxFundingResult taxFundingResult =
+                taxFundingCalculator.calculate(
+                        household,
+                        projectionDate,
+                        portfolioAfterAdditionalWithdrawal,
+                        totalWithdrawalBreakdown,
+                        withdrawalStrategy,
+                        assumptions
+                                .getTaxAssumptions()
+                                .getFilingStatus(),
+                        governmentRules);
+
+        BigDecimal taxFundingWithdrawal =
+                taxFundingResult.getAdditionalWithdrawal();
+
+        BigDecimal totalPortfolioWithdrawal =
+                portfolioWithdrawal.add(
+                        taxFundingWithdrawal);
+
+        FederalTaxCalculation federalTaxCalculation =
+                taxFundingResult.getFederalTaxCalculation();
+
+        ProjectedPortfolio portfolioAfterTaxWithdrawal =
+                withdrawalAllocator.applyAdditionalWithdrawal(
+                        portfolioAfterAdditionalWithdrawal,
+                        taxFundingWithdrawal,
                         withdrawalStrategy);
 
         /*
@@ -268,7 +320,7 @@ public class ProjectionEngine {
          * investable household asset.
          */
         ProjectedPortfolio endingPortfolio =
-                portfolioAfterAdditionalWithdrawal
+                portfolioAfterTaxWithdrawal
                         .withAdditionalCash(
                                 withdrawalResult.getExcessRmd());
 
@@ -291,7 +343,7 @@ public class ProjectionEngine {
         BigDecimal endingAssets =
                 beginningAssets
                         .add(investmentGrowth)
-                        .subtract(portfolioWithdrawal)
+                        .subtract(totalPortfolioWithdrawal)
                         .add(
                                 withdrawalResult
                                         .getExcessRmd())
@@ -308,11 +360,13 @@ public class ProjectionEngine {
                         guaranteedIncome,
                         annualExpenses,
                         withdrawalResult.getCashFlowNeed(),
-                        portfolioWithdrawal,
+                        totalPortfolioWithdrawal,
                         requiredMinimumDistribution,
                         withdrawalResult.getExcessRmd(),
                         endingAssets,
-                        endingAccountSnapshots);
+                        endingAccountSnapshots,
+                        federalTaxCalculation,
+                        taxFundingWithdrawal);
 
 
 

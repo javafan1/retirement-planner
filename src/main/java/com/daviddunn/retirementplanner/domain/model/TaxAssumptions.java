@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.model;
 
+import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -14,6 +15,22 @@ public final class TaxAssumptions {
     private final BigDecimal stateIncomeTaxRate;
     private final BigDecimal localIncomeTaxRate;
 
+    private final TaxFilingStatus filingStatus;
+
+    public TaxAssumptions(
+            BigDecimal federalTaxBracketGrowthRate,
+            BigDecimal standardDeductionGrowthRate,
+            BigDecimal stateIncomeTaxRate,
+            BigDecimal localIncomeTaxRate) {
+
+        this(
+                federalTaxBracketGrowthRate,
+                standardDeductionGrowthRate,
+                stateIncomeTaxRate,
+                localIncomeTaxRate,
+                TaxFilingStatus.MARRIED_FILING_JOINTLY);
+    }
+
     @JsonCreator
     public TaxAssumptions(
 
@@ -27,7 +44,10 @@ public final class TaxAssumptions {
             BigDecimal stateIncomeTaxRate,
 
             @JsonProperty("localIncomeTaxRate")
-            BigDecimal localIncomeTaxRate) {
+            BigDecimal localIncomeTaxRate,
+
+            @JsonProperty("filingStatus")
+            TaxFilingStatus filingStatus) {
 
         this.federalTaxBracketGrowthRate =
                 Objects.requireNonNull(
@@ -48,7 +68,13 @@ public final class TaxAssumptions {
                 Objects.requireNonNull(
                         localIncomeTaxRate,
                         "Local income tax rate is required.");
+
+        this.filingStatus =
+                Objects.requireNonNull(
+                        filingStatus,
+                        "Tax filing status is required.");
     }
+
 
     public BigDecimal getFederalTaxBracketGrowthRate() {
         return federalTaxBracketGrowthRate;
@@ -66,6 +92,10 @@ public final class TaxAssumptions {
         return localIncomeTaxRate;
     }
 
+    public TaxFilingStatus getFilingStatus() {
+        return filingStatus;
+    }
+
     @Override
     public String toString() {
 
@@ -78,6 +108,7 @@ public final class TaxAssumptions {
                 stateIncomeTaxRate +
                 ", localIncomeTaxRate=" +
                 localIncomeTaxRate +
+                ", filingStatus=" + filingStatus +
                 '}';
     }
 }

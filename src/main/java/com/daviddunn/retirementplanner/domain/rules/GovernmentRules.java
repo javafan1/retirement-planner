@@ -14,7 +14,10 @@ public final class GovernmentRules {
     private final LocalDate effectiveDate;
 
     private final List<FederalTaxRules> federalTaxRules;
+    private final List<SocialSecurityTaxRules> socialSecurityTaxRules;
+
     private final RmdRules rmdRules;
+
 
     @JsonCreator
     public GovernmentRules(
@@ -30,6 +33,9 @@ public final class GovernmentRules {
 
             @JsonProperty("federalTaxRules")
             List<FederalTaxRules> federalTaxRules,
+
+            @JsonProperty("socialSecurityTaxRules")
+            List<SocialSecurityTaxRules> socialSecurityTaxRules,
 
             @JsonProperty("rmdRules")
             RmdRules rmdRules) {
@@ -61,6 +67,17 @@ public final class GovernmentRules {
         if (this.federalTaxRules.isEmpty()) {
             throw new IllegalArgumentException(
                     "At least one federal tax rule is required.");
+        }
+
+        this.socialSecurityTaxRules =
+                List.copyOf(
+                        Objects.requireNonNull(
+                                socialSecurityTaxRules,
+                                "Social Security tax rules are required."));
+
+        if (this.socialSecurityTaxRules.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "At least one Social Security tax rule is required.");
         }
 
         this.rmdRules =
@@ -125,5 +142,29 @@ public final class GovernmentRules {
                 '}';
     }
 
+    public List<SocialSecurityTaxRules>
+    getSocialSecurityTaxRules() {
+
+        return socialSecurityTaxRules;
+    }
+
+    public SocialSecurityTaxRules getSocialSecurityTaxRules(
+            TaxFilingStatus filingStatus) {
+
+        Objects.requireNonNull(
+                filingStatus,
+                "Filing status is required.");
+
+        return socialSecurityTaxRules
+                .stream()
+                .filter(rules ->
+                        rules.getFilingStatus()
+                                == filingStatus)
+                .findFirst()
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "No Social Security tax rules found for filing status: "
+                                        + filingStatus));
+    }
 
 }

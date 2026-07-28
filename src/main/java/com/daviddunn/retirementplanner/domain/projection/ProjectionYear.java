@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.domain.projection;
 
 
 import com.daviddunn.retirementplanner.domain.financial.Account;
+import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
 
 import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -24,10 +25,17 @@ public class ProjectionYear {
     private final BigDecimal portfolioWithdrawal;
     private final BigDecimal requiredMinimumDistribution;
     private final BigDecimal excessRmd;
+    private final BigDecimal taxFundingWithdrawal;
 
     private final BigDecimal endingInvestableAssets;
 
     private final List<ProjectedAccountSnapshot> endingAccountSnapshots;
+    private final BigDecimal adjustedGrossIncome;
+    private final BigDecimal taxableSocialSecurity;
+    private final BigDecimal federalTaxableIncome;
+    private final BigDecimal federalIncomeTax;
+
+
 
     public ProjectionYear(
             int projectionYear,
@@ -41,6 +49,22 @@ public class ProjectionYear {
             BigDecimal requiredMinimumDistribution,
             BigDecimal excessRmd,
             BigDecimal endingInvestableAssets) {
+
+
+        this.adjustedGrossIncome =
+                BigDecimal.ZERO;
+
+        this.taxableSocialSecurity =
+                BigDecimal.ZERO;
+
+        this.federalTaxableIncome =
+                BigDecimal.ZERO;
+
+        this.federalIncomeTax =
+                BigDecimal.ZERO;
+
+        this.taxFundingWithdrawal =
+                BigDecimal.ZERO;
 
         this.projectionYear = projectionYear;
         this.calendarYear = calendarYear;
@@ -91,6 +115,7 @@ public class ProjectionYear {
                         endingInvestableAssets,
                         "endingInvestableAssets");
 
+
         this.endingAccountSnapshots =
                 List.of();
     }
@@ -109,8 +134,24 @@ public class ProjectionYear {
             BigDecimal endingInvestableAssets,
             List<ProjectedAccountSnapshot> endingAccountSnapshots) {
 
+
+        this.adjustedGrossIncome =
+                BigDecimal.ZERO;
+
+        this.taxableSocialSecurity =
+                BigDecimal.ZERO;
+
+        this.federalTaxableIncome =
+                BigDecimal.ZERO;
+
+        this.federalIncomeTax =
+                BigDecimal.ZERO;
+
         this.projectionYear = projectionYear;
         this.calendarYear = calendarYear;
+
+        this.taxFundingWithdrawal =
+                BigDecimal.ZERO;
 
         this.beginningInvestableAssets =
                 Objects.requireNonNull(
@@ -164,6 +205,109 @@ public class ProjectionYear {
         this.endingAccountSnapshots =
                 List.copyOf(
                         endingAccountSnapshots);
+    }
+
+    public ProjectionYear(
+            int projectionYear,
+            int calendarYear,
+            BigDecimal beginningInvestableAssets,
+            BigDecimal investmentGrowth,
+            BigDecimal guaranteedIncome,
+            BigDecimal annualExpenses,
+            BigDecimal cashFlowNeed,
+            BigDecimal portfolioWithdrawal,
+            BigDecimal requiredMinimumDistribution,
+            BigDecimal excessRmd,
+            BigDecimal endingInvestableAssets,
+            List<ProjectedAccountSnapshot> endingAccountSnapshots,
+            FederalTaxCalculation federalTaxCalculation,
+            BigDecimal taxFundingWithdrawal) {
+
+        this.projectionYear = projectionYear;
+        this.calendarYear = calendarYear;
+
+        this.beginningInvestableAssets =
+                Objects.requireNonNull(
+                        beginningInvestableAssets,
+                        "beginningInvestableAssets");
+
+        this.investmentGrowth =
+                Objects.requireNonNull(
+                        investmentGrowth,
+                        "investmentGrowth");
+
+        this.guaranteedIncome =
+                Objects.requireNonNull(
+                        guaranteedIncome,
+                        "guaranteedIncome");
+
+        this.taxFundingWithdrawal =
+                Objects.requireNonNull(
+                        taxFundingWithdrawal,
+                        "Tax funding withdrawal is required.");
+
+        if (taxFundingWithdrawal.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Tax funding withdrawal cannot be negative.");
+        }
+
+        this.annualExpenses =
+                Objects.requireNonNull(
+                        annualExpenses,
+                        "annualExpenses");
+
+        this.cashFlowNeed =
+                Objects.requireNonNull(
+                        cashFlowNeed,
+                        "cashFlowNeed");
+
+        this.portfolioWithdrawal =
+                Objects.requireNonNull(
+                        portfolioWithdrawal,
+                        "portfolioWithdrawal");
+
+        this.requiredMinimumDistribution =
+                Objects.requireNonNull(
+                        requiredMinimumDistribution,
+                        "requiredMinimumDistribution");
+
+        this.excessRmd =
+                Objects.requireNonNull(
+                        excessRmd,
+                        "excessRmd");
+
+        this.endingInvestableAssets =
+                Objects.requireNonNull(
+                        endingInvestableAssets,
+                        "endingInvestableAssets");
+
+        Objects.requireNonNull(
+                endingAccountSnapshots,
+                "Ending account snapshots are required.");
+
+        this.endingAccountSnapshots =
+                List.copyOf(
+                        endingAccountSnapshots);
+
+        Objects.requireNonNull(
+                federalTaxCalculation,
+                "Federal tax calculation is required.");
+
+        this.adjustedGrossIncome =
+                federalTaxCalculation
+                        .getAdjustedGrossIncome();
+
+        this.taxableSocialSecurity =
+                federalTaxCalculation
+                        .getTaxableSocialSecurity();
+
+        this.federalTaxableIncome =
+                federalTaxCalculation
+                        .getTaxableIncome();
+
+        this.federalIncomeTax =
+                federalTaxCalculation
+                        .getFederalIncomeTax();
     }
 
     public int getProjectionYear() {
@@ -252,6 +396,25 @@ public class ProjectionYear {
                 .orElseThrow(
                         () -> new IllegalArgumentException(
                                 "Account is not part of this projection year."));
+    }
+
+    public BigDecimal getAdjustedGrossIncome() {
+        return adjustedGrossIncome;
+    }
+
+    public BigDecimal getTaxableSocialSecurity() {
+        return taxableSocialSecurity;
+    }
+
+    public BigDecimal getFederalTaxableIncome() {
+        return federalTaxableIncome;
+    }
+
+    public BigDecimal getFederalIncomeTax() {
+        return federalIncomeTax;
+    }
+    public BigDecimal getTaxFundingWithdrawal() {
+        return taxFundingWithdrawal;
     }
 
 }

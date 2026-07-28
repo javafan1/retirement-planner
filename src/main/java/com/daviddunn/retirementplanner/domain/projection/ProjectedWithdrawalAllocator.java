@@ -7,6 +7,8 @@ import com.daviddunn.retirementplanner.domain.rmd.RmdAccountCategory;
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.OwnerRmdResult;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
+import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
+import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalBreakdown;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -281,5 +283,335 @@ public final class ProjectedWithdrawalAllocator {
         }
 
         return updatedPortfolio;
+    }
+
+    public ProjectedWithdrawalAllocation allocateAdditionalWithdrawal(
+            ProjectedPortfolio portfolio,
+            BigDecimal withdrawalAmount,
+            WithdrawalStrategy withdrawalStrategy) {
+
+        Objects.requireNonNull(
+                portfolio,
+                "Projected portfolio is required.");
+
+        Objects.requireNonNull(
+                withdrawalAmount,
+                "Withdrawal amount is required.");
+
+        Objects.requireNonNull(
+                withdrawalStrategy,
+                "Withdrawal strategy is required.");
+
+        if (withdrawalAmount.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Withdrawal amount cannot be negative.");
+        }
+
+        BigDecimal cashWithdrawal =
+                BigDecimal.ZERO;
+
+        BigDecimal taxableWithdrawal =
+                BigDecimal.ZERO;
+
+        BigDecimal taxDeferredWithdrawal =
+                BigDecimal.ZERO;
+
+        BigDecimal rothWithdrawal =
+                BigDecimal.ZERO;
+
+        BigDecimal remaining =
+                withdrawalAmount;
+
+        ProjectedPortfolio updatedPortfolio =
+                portfolio;
+
+        List<ProjectedAccountBalance> orderedAccounts =
+                withdrawalStrategy.orderAccounts(
+                        portfolio);
+
+        for (ProjectedAccountBalance projected :
+                orderedAccounts) {
+
+            if (remaining.signum() == 0) {
+                break;
+            }
+
+            Account account =
+                    projected.getAccount();
+
+            BigDecimal available =
+                    updatedPortfolio.getBalance(
+                            account);
+
+            BigDecimal withdrawal =
+                    available.min(
+                            remaining);
+
+            if (withdrawal.signum() <= 0) {
+                continue;
+            }
+
+            updatedPortfolio =
+                    updatedPortfolio.withWithdrawal(
+                            account,
+                            withdrawal);
+
+            TaxTreatment taxTreatment =
+                    account
+                            .getType()
+                            .getTaxTreatment();
+
+            switch (taxTreatment) {
+
+                case CASH ->
+                        cashWithdrawal =
+                                cashWithdrawal.add(
+                                        withdrawal);
+
+                case TAXABLE ->
+                        taxableWithdrawal =
+                                taxableWithdrawal.add(
+                                        withdrawal);
+
+                case TAX_DEFERRED ->
+                        taxDeferredWithdrawal =
+                                taxDeferredWithdrawal.add(
+                                        withdrawal);
+
+                case ROTH ->
+                        rothWithdrawal =
+                                rothWithdrawal.add(
+                                        withdrawal);
+            }
+
+            remaining =
+                    remaining.subtract(
+                            withdrawal);
+        }
+
+        if (remaining.signum() > 0) {
+            throw new IllegalStateException(
+                    "Insufficient projected assets to satisfy withdrawal.");
+        }
+
+        WithdrawalBreakdown withdrawalBreakdown =
+                new WithdrawalBreakdown(
+                        cashWithdrawal,
+                        taxableWithdrawal,
+                        taxDeferredWithdrawal,
+                        rothWithdrawal);
+
+        return new ProjectedWithdrawalAllocation(
+                updatedPortfolio,
+                withdrawalBreakdown);
+    }
+
+    public ProjectedWithdrawalAllocation allocateHouseholdRmds(
+            ProjectedPortfolio portfolio,
+            HouseholdRmdResult householdRmdResult) {
+
+        Objects.requireNonNull(
+                portfolio,
+                "Projected portfolio is required.");
+
+        Objects.requireNonNull(
+                householdRmdResult,
+                "Household RMD result is required.");
+
+        ProjectedPortfolio updatedPortfolio =
+                applyHouseholdRmds(
+                        portfolio,
+                        householdRmdResult);
+
+        WithdrawalBreakdown withdrawalBreakdown =
+                calculateWithdrawalBreakdown(
+                        portfolio,
+                        updatedPortfolio);
+
+        return new ProjectedWithdrawalAllocation(
+                updatedPortfolio,
+                withdrawalBreakdown);
+    }
+
+    private WithdrawalBreakdown calculateWithdrawalBreakdown(
+            ProjectedPortfolio beginningPortfolio,
+            ProjectedPortfolio endingPortfolio) {
+
+        BigDecimal cashWithdrawal =
+                BigDecimal.ZERO;
+
+        BigDecimal taxableWithdrawal =
+                BigDecimal.ZERO;
+
+        BigDecimal taxDeferredWithdrawal =
+                BigDecimal.ZERO;
+
+        BigDecimal rothWithdrawal =
+                BigDecimal.ZERO;
+
+        for (ProjectedAccountBalance projected :
+                beginningPortfolio.getAccountBalances()) {
+
+            Account account =
+                    projected.getAccount();
+
+            BigDecimal beginningBalance =
+                    beginningPortfolio.getBalance(
+                            account);
+
+            BigDecimal endingBalance =
+                    endingPortfolio.getBalance(
+                            account);
+
+            BigDecimal withdrawal =
+                    beginningBalance.subtract(
+                            endingBalance);
+
+            if (withdrawal.signum() <= 0) {
+                continue;
+            }
+
+            TaxTreatment taxTreatment =
+                    account
+                            .getType()
+                            .getTaxTreatment();
+
+            switch (taxTreatment) {
+
+                case CASH ->
+                        cashWithdrawal =
+                                cashWithdrawal.add(
+                                        withdrawal);
+
+                case TAXABLE ->
+                        taxableWithdrawal =
+                                taxableWithdrawal.add(
+                                        withdrawal);
+
+                case TAX_DEFERRED ->
+                        taxDeferredWithdrawal =
+                                taxDeferredWithdrawal.add(
+                                        withdrawal);
+
+                case ROTH ->
+                        rothWithdrawal =
+                                rothWithdrawal.add(
+                                        withdrawal);
+            }
+        }
+
+        return new WithdrawalBreakdown(
+                cashWithdrawal,
+                taxableWithdrawal,
+                taxDeferredWithdrawal,
+                rothWithdrawal);
+    }
+
+    public WithdrawalBreakdown calculateWithdrawalBreakdown(
+            ProjectedPortfolio portfolio,
+            BigDecimal withdrawalAmount,
+            WithdrawalStrategy withdrawalStrategy) {
+
+        Objects.requireNonNull(
+                portfolio,
+                "Projected portfolio is required.");
+
+        Objects.requireNonNull(
+                withdrawalAmount,
+                "Withdrawal amount is required.");
+
+        Objects.requireNonNull(
+                withdrawalStrategy,
+                "Withdrawal strategy is required.");
+
+        if (withdrawalAmount.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Withdrawal amount cannot be negative.");
+        }
+
+        if (withdrawalAmount.signum() == 0) {
+            return WithdrawalBreakdown.zero();
+        }
+
+        BigDecimal remaining =
+                withdrawalAmount;
+
+        BigDecimal cashWithdrawal =
+                BigDecimal.ZERO;
+
+        BigDecimal taxableWithdrawal =
+                BigDecimal.ZERO;
+
+        BigDecimal taxDeferredWithdrawal =
+                BigDecimal.ZERO;
+
+        BigDecimal rothWithdrawal =
+                BigDecimal.ZERO;
+
+        List<ProjectedAccountBalance> orderedAccounts =
+                withdrawalStrategy.orderAccounts(
+                        portfolio);
+
+        for (ProjectedAccountBalance projected :
+                orderedAccounts) {
+
+            Account account =
+                    projected.getAccount();
+
+            BigDecimal available =
+                    portfolio.getBalance(
+                            account);
+
+            BigDecimal withdrawal =
+                    available.min(
+                            remaining);
+
+            if (withdrawal.signum() > 0) {
+
+                switch (account
+                        .getType()
+                        .getTaxTreatment()) {
+
+                    case CASH ->
+                            cashWithdrawal =
+                                    cashWithdrawal.add(
+                                            withdrawal);
+
+                    case TAXABLE ->
+                            taxableWithdrawal =
+                                    taxableWithdrawal.add(
+                                            withdrawal);
+
+                    case TAX_DEFERRED ->
+                            taxDeferredWithdrawal =
+                                    taxDeferredWithdrawal.add(
+                                            withdrawal);
+
+                    case ROTH ->
+                            rothWithdrawal =
+                                    rothWithdrawal.add(
+                                            withdrawal);
+                }
+
+                remaining =
+                        remaining.subtract(
+                                withdrawal);
+            }
+
+            if (remaining.signum() == 0) {
+                break;
+            }
+        }
+
+        if (remaining.signum() > 0) {
+            throw new IllegalStateException(
+                    "Insufficient projected assets to satisfy withdrawal.");
+        }
+
+        return new WithdrawalBreakdown(
+                cashWithdrawal,
+                taxableWithdrawal,
+                taxDeferredWithdrawal,
+                rothWithdrawal);
     }
 }
