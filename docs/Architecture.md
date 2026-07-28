@@ -1,3 +1,29 @@
+7.288
+
+
+                 MainWindow
+                      │
+                      ▼
+          ApplicationController
+             │              │
+             │              ▼
+             │        ProjectionEngine
+             │              │
+             ▼              ▼
+      RetirementPlan   Projection
+             │          │       │
+             │          │       ▼
+             │          │  ResultsView
+             │          ▼
+             │   ProjectionYearView
+             ▼
+    HouseholdView
+    AccountsView
+    IncomeSourcesView
+    ExpensesView
+    AssumptionsView
+
+
 7.26
 
 We have now proven end-to-end that the withdrawal strategy stored in the retirement plan actually changes account-level projection behavior. The original projection tests already establish the cash-flow/withdrawal mechanics we built on

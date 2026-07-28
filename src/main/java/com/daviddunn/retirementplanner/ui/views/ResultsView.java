@@ -1,8 +1,8 @@
 package com.daviddunn.retirementplanner.ui.views;
 
-import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+//import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
-import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
+//import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 
 import javafx.beans.property.ReadOnlyObjectWrapper;
@@ -20,14 +20,14 @@ public class ResultsView extends BorderPane {
 
     private final TableView<ProjectionYear> table;
 
-    private final ProjectionEngine projectionEngine;
+    //private final ProjectionEngine projectionEngine;
 
     private final Label summaryLabel;
 
     public ResultsView() {
 
-        projectionEngine =
-                new ProjectionEngine();
+        //projectionEngine =
+        //        new ProjectionEngine();
 
         table =
                 new TableView<>();
@@ -144,19 +144,15 @@ public class ResultsView extends BorderPane {
         return column;
     }
 
-    public void load(
-            RetirementPlan plan) {
+    public void load(Projection projection) {
 
-        if (plan == null) {
+        if (projection == null) {
 
             table.getItems().clear();
             summaryLabel.setText("");
 
             return;
         }
-
-        Projection projection =
-                projectionEngine.project(plan);
 
         table.getItems().setAll(
                 projection.getYears());

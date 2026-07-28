@@ -1,17 +1,11 @@
 package com.daviddunn.retirementplanner.ui;
 
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.projection.Projection;
+import com.daviddunn.retirementplanner.ui.charts.PortfolioChartView;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 
-import com.daviddunn.retirementplanner.ui.views.AccountsView;
-import com.daviddunn.retirementplanner.ui.views.AssumptionsView;
-import com.daviddunn.retirementplanner.ui.views.ExpensesView;
-
-
-import com.daviddunn.retirementplanner.ui.views.HouseholdView;
-import com.daviddunn.retirementplanner.ui.views.IncomeSourcesView;
-import com.daviddunn.retirementplanner.ui.views.ProjectionYearView;
-import com.daviddunn.retirementplanner.ui.views.ResultsView;
+import com.daviddunn.retirementplanner.ui.views.*;
 
 
 import javafx.geometry.Insets;
@@ -42,8 +36,11 @@ public class MainWindow {
     private final ExpensesView expensesView;
     private final AssumptionsView assumptionsView;
     private final ResultsView resultsView;
+    private final DashboardView dashboardView;
+    private final PortfolioChartView portfolioChartView;
 
     private final Label statusLabel;
+
 
     public MainWindow() {
 
@@ -53,20 +50,16 @@ public class MainWindow {
         accountsView = new AccountsView();
         incomeSourcesView = new IncomeSourcesView();
         projectionYearView = new ProjectionYearView();
+        expensesView = new ExpensesView();
+        assumptionsView = new AssumptionsView();
+        resultsView = new ResultsView();
+        dashboardView = new DashboardView();
+        portfolioChartView = new PortfolioChartView();
 
-
-         expensesView = new ExpensesView();
-         assumptionsView = new AssumptionsView();
-         resultsView = new ResultsView();
-
-        expensesView.setOnPlanChanged(
-                this::refreshResults);
-        incomeSourcesView.setOnPlanChanged(
-                this::refreshResults);
-        accountsView.setOnPlanChanged(
-                this::refreshResults);
-        assumptionsView.setOnPlanChanged(
-                this::refreshResults);
+        expensesView.setOnPlanChanged(this::refreshProjectionViews);
+        incomeSourcesView.setOnPlanChanged(this::refreshProjectionViews);
+        accountsView.setOnPlanChanged(this::refreshProjectionViews);
+        assumptionsView.setOnPlanChanged(this::refreshProjectionViews);
 
         statusLabel = new Label("Ready");
 
@@ -120,6 +113,14 @@ public class MainWindow {
         TabPane tabPane = new TabPane();
 
         tabPane.getTabs().add(
+                createTab("Dashboard", dashboardView));
+
+
+        tabPane.getTabs().add(
+                createTab("Portfolio Chart",
+                        portfolioChartView));
+
+        tabPane.getTabs().add(
                 createTab("Household", householdView));
 
         tabPane.getTabs().add(
@@ -129,7 +130,7 @@ public class MainWindow {
                 createTab("Income", incomeSourcesView));
 
         tabPane.getTabs().add(
-                createTab("Expenses",expensesView));
+                createTab("Expenses", expensesView));
 
         tabPane.getTabs().add(
                 createTab("Assumptions", assumptionsView));
@@ -167,15 +168,26 @@ public class MainWindow {
 
     private void loadCurrentPlan() {
 
+
+        Projection projection =
+                controller.getCurrentProjection();
+
+        dashboardView.load(projection);
+        projectionYearView.load(projection);
+        resultsView.load(projection);
+
         RetirementPlan plan = controller.getCurrentPlan();
+
 
         householdView.load(plan);
         accountsView.load(plan);
         incomeSourcesView.load(plan);
-        projectionYearView.load(plan);
         expensesView.load(plan);
         assumptionsView.load(plan);
-        resultsView.load(plan);
+
+
+        projectionYearView.load(projection);
+        resultsView.load(projection);
 
         statusLabel.setText("Ready");
     }
@@ -189,12 +201,7 @@ public class MainWindow {
         incomeSourcesView.save(plan);
         expensesView.save(plan);
         assumptionsView.save(plan);
-        //resultsView.save(plan);
 
-        // Future
-        // accountsView.save(plan);
-        // incomeView.save(plan);
-        // assumptionsView.save(plan);
     }
 
     private void onSave() {
@@ -210,8 +217,7 @@ public class MainWindow {
         try {
             controller.save();
             statusLabel.setText("Plan saved.");
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             statusLabel.setText("Save failed.");
             ex.printStackTrace();
         }
@@ -242,8 +248,7 @@ public class MainWindow {
             controller.saveAs(file.toPath());
 
             statusLabel.setText("Plan saved.");
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
 
             statusLabel.setText("Save failed.");
 
@@ -275,8 +280,7 @@ public class MainWindow {
             loadCurrentPlan();
 
             statusLabel.setText("Plan opened.");
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
 
             statusLabel.setText("Open failed.");
 
@@ -284,23 +288,25 @@ public class MainWindow {
         }
     }
 
-private void onExit() {
+    private void onExit() {
 
-    // Later we'll ask to save unsaved changes.
+        // Later we'll ask to save unsaved changes.
 
-    root.getScene().getWindow().hide();
-}
+        root.getScene().getWindow().hide();
+    }
 
-    private void refreshResults() {
+    private void refreshProjectionViews() {
 
-        RetirementPlan plan =
-                controller.getCurrentPlan();
+        controller.invalidateProjection();
 
-        projectionYearView.load(plan);
+        Projection projection =
+                controller.getCurrentProjection();
 
-        resultsView.load(plan);
+        dashboardView.load(projection);
+        portfolioChartView.load(projection);
+        projectionYearView.load(projection);
+        resultsView.load(projection);
 
-        statusLabel.setText(
-                "Projection updated.");
+        statusLabel.setText("Projection updated.");
     }
 }

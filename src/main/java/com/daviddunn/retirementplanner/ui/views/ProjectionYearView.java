@@ -1,9 +1,9 @@
 
 package com.daviddunn.retirementplanner.ui.views;
 
-import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+//import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
-import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
+//import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
@@ -17,7 +17,7 @@ import java.text.NumberFormat;
 
 public class ProjectionYearView extends BorderPane {
 
-    private final ProjectionEngine engine = new ProjectionEngine();
+    //private final ProjectionEngine engine = new ProjectionEngine();
 
     private Projection projection;
     private int currentYearIndex;
@@ -85,14 +85,9 @@ public class ProjectionYearView extends BorderPane {
         clear();
     }
 
-    public void load(RetirementPlan plan) {
+    public void load(Projection projection) {
 
-        if (plan == null) {
-            clear();
-            return;
-        }
-
-        projection = engine.project(plan);
+        this.projection = projection;
 
         if (projection == null || projection.isEmpty()) {
             clear();

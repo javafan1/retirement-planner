@@ -344,11 +344,11 @@ public class AssumptionsView extends VBox {
          * before JSON persistence.
          */
         if (plan == currentPlan) {
-            applyChanges();
+            applyChangesToModel();
         }
     }
 
-    private void applyChanges() {
+    private void applyChangesToModel() {
 
         if (currentPlan == null) {
             return;
@@ -433,17 +433,20 @@ public class AssumptionsView extends VBox {
             statusLabel.setText(
                     "Assumptions applied.");
 
-            /*
-             * Tell MainWindow that the plan changed
-             * so projections can be recalculated.
-             */
-            notifyPlanChanged();
+
         }
         catch (Exception ex) {
 
             statusLabel.setText(
                     "Please enter valid assumption values.");
         }
+    }
+
+    private void applyChanges() {
+
+        applyChangesToModel();
+
+        notifyPlanChanged();
     }
 
     private BigDecimal parsePercent(

@@ -68,11 +68,10 @@ public final class TaxAssumptions {
                 Objects.requireNonNull(
                         localIncomeTaxRate,
                         "Local income tax rate is required.");
-
         this.filingStatus =
-                Objects.requireNonNull(
-                        filingStatus,
-                        "Tax filing status is required.");
+                filingStatus != null
+                        ? filingStatus
+                        : TaxFilingStatus.MARRIED_FILING_JOINTLY;
     }
 
 
