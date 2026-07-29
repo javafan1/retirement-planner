@@ -1,4 +1,49 @@
-7.288
+7.28
+
+
+Right now, the projection is essentially doing this each year:
+
+✅ Applies investment growth.
+✅ Adds income.
+✅ Subtracts expenses.
+✅ Updates the investable portfolio balance.
+✅ Produces the yearly projection, dashboard, and portfolio chart.
+
+What it is not doing yet includes:
+
+❌ Federal income tax calculations.
+❌ State or local income taxes.
+❌ Progressive federal tax brackets.
+❌ Standard deduction.
+❌ Taxation of Social Security benefits.
+❌ RMD calculations beginning at the applicable age.
+❌ Automatic withdrawals from tax-deferred accounts to satisfy RMDs.
+❌ Medicare IRMAA surcharges.
+❌ Roth conversion modeling.
+❌ Tax-efficient withdrawal sequencing.
+The good news
+
+You've already laid some of the groundwork:
+
+PlanningAssumptions
+TaxAssumptions
+Economic assumptions
+Cached Projection
+Projection engine architecture
+
+That means we can add taxes without redesigning the application.
+
+The order I'd recommend
+
+Rather than trying to add everything at once, I'd build it in stages:
+
+Federal income tax calculation using tax brackets and the standard deduction.
+State and local income tax (Michigan is straightforward).
+Withdrawal planning, determining how much to take from taxable, tax-deferred, and Roth accounts.
+RMD engine, forcing minimum withdrawals once a person reaches the applicable RMD age.
+Social Security taxation.
+IRMAA premiums.
+Optional Roth conversion strategies.
 
 
                  MainWindow

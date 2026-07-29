@@ -166,18 +166,10 @@ public class MainWindow {
         return statusBar;
     }
 
+
     private void loadCurrentPlan() {
 
-
-        Projection projection =
-                controller.getCurrentProjection();
-
-        dashboardView.load(projection);
-        projectionYearView.load(projection);
-        resultsView.load(projection);
-
         RetirementPlan plan = controller.getCurrentPlan();
-
 
         householdView.load(plan);
         accountsView.load(plan);
@@ -185,9 +177,7 @@ public class MainWindow {
         expensesView.load(plan);
         assumptionsView.load(plan);
 
-
-        projectionYearView.load(projection);
-        resultsView.load(projection);
+        refreshProjectionViews();
 
         statusLabel.setText("Ready");
     }
