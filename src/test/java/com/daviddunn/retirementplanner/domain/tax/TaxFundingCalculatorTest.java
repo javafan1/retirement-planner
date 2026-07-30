@@ -7,7 +7,7 @@ import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountBalance;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.withdrawal.TaxDeferredFirstWithdrawalStrategy;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalBreakdown;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
@@ -122,7 +122,7 @@ class TaxFundingCalculatorTest {
                         portfolio,
                         existingWithdrawals,
                         withdrawalStrategy,
-                        TaxFilingStatus.MARRIED_FILING_JOINTLY,
+                        FilingStatus.MARRIED_FILING_JOINTLY,
                         rules);
 
         /*
@@ -219,7 +219,7 @@ class TaxFundingCalculatorTest {
                         portfolio,
                         existingWithdrawals,
                         withdrawalStrategy,
-                        TaxFilingStatus.MARRIED_FILING_JOINTLY,
+                        FilingStatus.MARRIED_FILING_JOINTLY,
                         rules);
 
         /*

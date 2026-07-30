@@ -7,14 +7,21 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
-public final class FederalTaxRules {
+public final class FederalTaxTable {
+
+    private final int taxYear;
 
     private final FilingStatus filingStatus;
+
     private final BigDecimal standardDeduction;
-    private final List<FederalTaxBracket> taxBrackets;
+
+    private final List<FederalTaxBracket> brackets;
 
     @JsonCreator
-    public FederalTaxRules(
+    public FederalTaxTable(
+
+            @JsonProperty("taxYear")
+            int taxYear,
 
             @JsonProperty("filingStatus")
             FilingStatus filingStatus,
@@ -22,8 +29,15 @@ public final class FederalTaxRules {
             @JsonProperty("standardDeduction")
             BigDecimal standardDeduction,
 
-            @JsonProperty("taxBrackets")
-            List<FederalTaxBracket> taxBrackets) {
+            @JsonProperty("brackets")
+            List<FederalTaxBracket> brackets) {
+
+        if (taxYear < 1900) {
+            throw new IllegalArgumentException(
+                    "Invalid tax year.");
+        }
+
+        this.taxYear = taxYear;
 
         this.filingStatus =
                 Objects.requireNonNull(
@@ -35,21 +49,20 @@ public final class FederalTaxRules {
                         standardDeduction,
                         "Standard deduction is required.");
 
-        this.taxBrackets =
+        this.brackets =
                 List.copyOf(
                         Objects.requireNonNull(
-                                taxBrackets,
+                                brackets,
                                 "Tax brackets are required."));
 
-        if (standardDeduction.signum() < 0) {
-            throw new IllegalArgumentException(
-                    "Standard deduction cannot be negative.");
-        }
-
-        if (this.taxBrackets.isEmpty()) {
+        if (brackets.isEmpty()) {
             throw new IllegalArgumentException(
                     "At least one tax bracket is required.");
         }
+    }
+
+    public int getTaxYear() {
+        return taxYear;
     }
 
     public FilingStatus getFilingStatus() {
@@ -60,20 +73,17 @@ public final class FederalTaxRules {
         return standardDeduction;
     }
 
-    public List<FederalTaxBracket> getTaxBrackets() {
-        return taxBrackets;
+    public List<FederalTaxBracket> getBrackets() {
+        return brackets;
     }
 
     @Override
     public String toString() {
-
-        return "FederalTaxRules{" +
-                "filingStatus=" +
-                filingStatus +
-                ", standardDeduction=" +
-                standardDeduction +
-                ", taxBrackets=" +
-                taxBrackets +
+        return "FederalTaxTable{" +
+                "taxYear=" + taxYear +
+                ", filingStatus=" + filingStatus +
+                ", standardDeduction=" + standardDeduction +
+                ", brackets=" + brackets +
                 '}';
     }
 }

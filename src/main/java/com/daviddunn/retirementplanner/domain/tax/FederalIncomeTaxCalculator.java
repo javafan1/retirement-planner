@@ -3,7 +3,7 @@ package com.daviddunn.retirementplanner.domain.tax;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 
 import java.math.BigDecimal;
 import java.util.Objects;
@@ -12,7 +12,7 @@ public final class FederalIncomeTaxCalculator {
 
     public BigDecimal calculateTax(
             BigDecimal taxableIncome,
-            TaxFilingStatus filingStatus,
+            FilingStatus filingStatus,
             GovernmentRules governmentRules) {
 
         Objects.requireNonNull(

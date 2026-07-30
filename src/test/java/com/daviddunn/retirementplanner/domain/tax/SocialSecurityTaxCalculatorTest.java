@@ -1,7 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -53,7 +53,7 @@ class SocialSecurityTaxCalculatorTest {
         BigDecimal taxableBenefits =
                 calculator.calculateTaxableBenefits(
                         taxIncome,
-                        TaxFilingStatus.MARRIED_FILING_JOINTLY,
+                        FilingStatus.MARRIED_FILING_JOINTLY,
                         rules);
 
         assertEquals(
@@ -91,7 +91,7 @@ class SocialSecurityTaxCalculatorTest {
         BigDecimal taxableBenefits =
                 calculator.calculateTaxableBenefits(
                         taxIncome,
-                        TaxFilingStatus.MARRIED_FILING_JOINTLY,
+                        FilingStatus.MARRIED_FILING_JOINTLY,
                         rules);
 
         assertEquals(
@@ -137,7 +137,7 @@ class SocialSecurityTaxCalculatorTest {
         BigDecimal taxableBenefits =
                 calculator.calculateTaxableBenefits(
                         taxIncome,
-                        TaxFilingStatus.MARRIED_FILING_JOINTLY,
+                        FilingStatus.MARRIED_FILING_JOINTLY,
                         rules);
 
         assertEquals(
@@ -165,7 +165,7 @@ class SocialSecurityTaxCalculatorTest {
         BigDecimal taxableBenefits =
                 calculator.calculateTaxableBenefits(
                         taxIncome,
-                        TaxFilingStatus.MARRIED_FILING_JOINTLY,
+                        FilingStatus.MARRIED_FILING_JOINTLY,
                         rules);
 
         assertEquals(

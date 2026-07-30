@@ -4,7 +4,7 @@ import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedWithdrawalAllocator;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalBreakdown;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
 
@@ -42,7 +42,7 @@ public final class TaxFundingCalculator {
             ProjectedPortfolio portfolio,
             WithdrawalBreakdown existingWithdrawals,
             WithdrawalStrategy withdrawalStrategy,
-            TaxFilingStatus filingStatus,
+            FilingStatus filingStatus,
             GovernmentRules governmentRules) {
 
         Objects.requireNonNull(

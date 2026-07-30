@@ -195,8 +195,8 @@ public class ProjectionEngine {
                         ? projectionStartDate
                         : LocalDate.of(
                         calendarYear,
-                        1,
-                        1);
+                        12,
+                        31);
 
         Household household =
                 plan.getHousehold();
@@ -351,6 +351,12 @@ public class ProjectionEngine {
                                 2,
                                 RoundingMode.HALF_UP);
 
+        Person primaryPerson =
+                household.getPrimaryPerson();
+
+        int primaryPersonAge =
+                primaryPerson.getAge(projectionDate);
+
         ProjectionYear projectionYear =
                 new ProjectionYear(
                         yearOffset,
@@ -366,7 +372,8 @@ public class ProjectionEngine {
                         endingAssets,
                         endingAccountSnapshots,
                         federalTaxCalculation,
-                        taxFundingWithdrawal);
+                        taxFundingWithdrawal,
+                        primaryPersonAge);
 
 
 

@@ -2,11 +2,12 @@ package com.daviddunn.retirementplanner.ui;
 
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.ui.charts.PortfolioChartView;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 
 import com.daviddunn.retirementplanner.ui.views.*;
-
+import com.daviddunn.retirementplanner.ui.dialogs.*;
 
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
@@ -41,7 +42,6 @@ public class MainWindow {
 
     private final Label statusLabel;
 
-
     public MainWindow() {
 
         controller = new ApplicationController();
@@ -56,20 +56,38 @@ public class MainWindow {
         dashboardView = new DashboardView();
         portfolioChartView = new PortfolioChartView();
 
-        expensesView.setOnPlanChanged(this::refreshProjectionViews);
-        incomeSourcesView.setOnPlanChanged(this::refreshProjectionViews);
-        accountsView.setOnPlanChanged(this::refreshProjectionViews);
-        assumptionsView.setOnPlanChanged(this::refreshProjectionViews);
-
         statusLabel = new Label("Ready");
 
         root = new BorderPane();
+
+        wireEvents();
 
         root.setTop(createMenuBar());
         root.setCenter(createTabPane());
         root.setBottom(createStatusBar());
 
+        //loadCurrentPlan();
+        controller.openLastPlan();
+
         loadCurrentPlan();
+    }
+
+    private void wireEvents() {
+
+        expensesView.setOnPlanChanged(
+                this::refreshProjectionViews);
+
+        incomeSourcesView.setOnPlanChanged(
+                this::refreshProjectionViews);
+
+        accountsView.setOnPlanChanged(
+                this::refreshProjectionViews);
+
+        assumptionsView.setOnPlanChanged(
+                this::refreshProjectionViews);
+
+        resultsView.setOnYearDoubleClick(
+                this::showProjectionYearSummary);
     }
 
     public Scene createScene() {
@@ -113,6 +131,9 @@ public class MainWindow {
         TabPane tabPane = new TabPane();
 
         tabPane.getTabs().add(
+                createTab("Results", resultsView));
+
+        tabPane.getTabs().add(
                 createTab("Dashboard", dashboardView));
 
 
@@ -138,8 +159,7 @@ public class MainWindow {
         tabPane.getTabs().add(
                 createTab("Projection", projectionYearView));
 
-        tabPane.getTabs().add(
-                createTab("Results", resultsView));
+
 
 //        tabPane.getTabs().add(createTab("Accounts", accountsView));
 //        tabPane.getTabs().add(createTab("Income", incomeView));
@@ -283,6 +303,16 @@ public class MainWindow {
         // Later we'll ask to save unsaved changes.
 
         root.getScene().getWindow().hide();
+    }
+
+    private void showProjectionYearSummary(
+            ProjectionYear projectionYear) {
+
+        ProjectionYearSummaryDialog dialog =
+                new ProjectionYearSummaryDialog(
+                        projectionYear);
+
+        dialog.show();
     }
 
     private void refreshProjectionViews() {

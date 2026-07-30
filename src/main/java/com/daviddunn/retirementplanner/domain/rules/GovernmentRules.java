@@ -107,7 +107,7 @@ public final class GovernmentRules {
     }
 
     public FederalTaxRules getFederalTaxRules(
-            TaxFilingStatus filingStatus) {
+            FilingStatus filingStatus) {
 
         Objects.requireNonNull(
                 filingStatus,
@@ -149,7 +149,7 @@ public final class GovernmentRules {
     }
 
     public SocialSecurityTaxRules getSocialSecurityTaxRules(
-            TaxFilingStatus filingStatus) {
+            FilingStatus filingStatus) {
 
         Objects.requireNonNull(
                 filingStatus,

@@ -1,7 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +36,7 @@ class FederalIncomeTaxCalculatorTest {
         BigDecimal tax =
                 calculator.calculateTax(
                         BigDecimal.ZERO,
-                        TaxFilingStatus.SINGLE,
+                        FilingStatus.SINGLE,
                         rules);
 
         assertEquals(
@@ -50,7 +50,7 @@ class FederalIncomeTaxCalculatorTest {
         BigDecimal tax =
                 calculator.calculateTax(
                         new BigDecimal("10000"),
-                        TaxFilingStatus.SINGLE,
+                        FilingStatus.SINGLE,
                         rules);
 
         assertEquals(
@@ -65,7 +65,7 @@ class FederalIncomeTaxCalculatorTest {
         BigDecimal tax =
                 calculator.calculateTax(
                         new BigDecimal("20000"),
-                        TaxFilingStatus.SINGLE,
+                        FilingStatus.SINGLE,
                         rules);
 
         /*
@@ -92,7 +92,7 @@ class FederalIncomeTaxCalculatorTest {
         BigDecimal tax =
                 calculator.calculateTax(
                         new BigDecimal("150000"),
-                        TaxFilingStatus.MARRIED_FILING_JOINTLY,
+                        FilingStatus.MARRIED_FILING_JOINTLY,
                         rules);
 
         /*
@@ -127,7 +127,7 @@ class FederalIncomeTaxCalculatorTest {
         BigDecimal tax =
                 calculator.calculateTax(
                         new BigDecimal("-10000"),
-                        TaxFilingStatus.SINGLE,
+                        FilingStatus.SINGLE,
                         rules);
 
         assertEquals(

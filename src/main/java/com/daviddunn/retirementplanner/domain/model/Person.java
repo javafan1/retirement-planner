@@ -168,4 +168,17 @@ public class Person {
                         ? new ArrayList<>()
                         : new ArrayList<>(incomeSources);
     }
+
+    @JsonIgnore
+    public int getAge(LocalDate date) {
+
+        Objects.requireNonNull(
+                date,
+                "Date is required.");
+
+        return Period.between(
+                        birthDate,
+                        date)
+                .getYears();
+    }
 }

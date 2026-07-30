@@ -1,7 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 
 import java.math.BigDecimal;
 import java.util.Objects;
@@ -25,7 +25,7 @@ public final class TaxCalculator {
 
     public TaxCalculation calculate(
             BigDecimal adjustedGrossIncome,
-            TaxFilingStatus filingStatus,
+            FilingStatus filingStatus,
             GovernmentRules governmentRules) {
 
         Objects.requireNonNull(

@@ -1,7 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 
 import java.math.BigDecimal;
 import java.util.Objects;
@@ -31,7 +31,7 @@ public final class FederalTaxCalculator {
 
     public FederalTaxCalculation calculate(
             TaxIncome taxIncome,
-            TaxFilingStatus filingStatus,
+            FilingStatus filingStatus,
             GovernmentRules governmentRules) {
 
         Objects.requireNonNull(

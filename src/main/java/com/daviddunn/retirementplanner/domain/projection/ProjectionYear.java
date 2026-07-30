@@ -34,6 +34,7 @@ public class ProjectionYear {
     private final BigDecimal taxableSocialSecurity;
     private final BigDecimal federalTaxableIncome;
     private final BigDecimal federalIncomeTax;
+    private final int primaryPersonAge;
 
 
 
@@ -48,7 +49,9 @@ public class ProjectionYear {
             BigDecimal portfolioWithdrawal,
             BigDecimal requiredMinimumDistribution,
             BigDecimal excessRmd,
-            BigDecimal endingInvestableAssets) {
+            BigDecimal endingInvestableAssets,
+            Integer primaryPersonAge
+    ) {
 
 
         this.adjustedGrossIncome =
@@ -66,8 +69,10 @@ public class ProjectionYear {
         this.taxFundingWithdrawal =
                 BigDecimal.ZERO;
 
+
         this.projectionYear = projectionYear;
         this.calendarYear = calendarYear;
+        this.primaryPersonAge = primaryPersonAge;
 
 
         this.beginningInvestableAssets =
@@ -132,7 +137,8 @@ public class ProjectionYear {
             BigDecimal requiredMinimumDistribution,
             BigDecimal excessRmd,
             BigDecimal endingInvestableAssets,
-            List<ProjectedAccountSnapshot> endingAccountSnapshots) {
+            List<ProjectedAccountSnapshot> endingAccountSnapshots, int primaryPersonAge) {
+
 
 
         this.adjustedGrossIncome =
@@ -148,6 +154,7 @@ public class ProjectionYear {
                 BigDecimal.ZERO;
 
         this.projectionYear = projectionYear;
+        this.primaryPersonAge = primaryPersonAge;
         this.calendarYear = calendarYear;
 
         this.taxFundingWithdrawal =
@@ -221,11 +228,11 @@ public class ProjectionYear {
             BigDecimal endingInvestableAssets,
             List<ProjectedAccountSnapshot> endingAccountSnapshots,
             FederalTaxCalculation federalTaxCalculation,
-            BigDecimal taxFundingWithdrawal) {
+            BigDecimal taxFundingWithdrawal, int primaryPersonAge) {
 
         this.projectionYear = projectionYear;
         this.calendarYear = calendarYear;
-
+        this.primaryPersonAge = primaryPersonAge;
         this.beginningInvestableAssets =
                 Objects.requireNonNull(
                         beginningInvestableAssets,
@@ -245,6 +252,7 @@ public class ProjectionYear {
                 Objects.requireNonNull(
                         taxFundingWithdrawal,
                         "Tax funding withdrawal is required.");
+
 
         if (taxFundingWithdrawal.signum() < 0) {
             throw new IllegalArgumentException(
@@ -415,6 +423,10 @@ public class ProjectionYear {
     }
     public BigDecimal getTaxFundingWithdrawal() {
         return taxFundingWithdrawal;
+    }
+
+    public int getPrimaryPersonAge() {
+        return primaryPersonAge;
     }
 
 }

@@ -3,7 +3,7 @@ package com.daviddunn.retirementplanner.persistence;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.rules.RmdLifeExpectancyFactor;
-import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 
 import org.junit.jupiter.api.Test;
 
@@ -50,7 +50,7 @@ class GovernmentRulesRepositoryTest {
 
         FederalTaxRules marriedRules =
                 rules.getFederalTaxRules(
-                        TaxFilingStatus
+                        FilingStatus
                                 .MARRIED_FILING_JOINTLY);
 
         assertEquals(
@@ -95,7 +95,7 @@ class GovernmentRulesRepositoryTest {
 
         FederalTaxRules singleRules =
                 rules.getFederalTaxRules(
-                        TaxFilingStatus.SINGLE);
+                        FilingStatus.SINGLE);
 
         assertEquals(
                 new BigDecimal("16100"),

@@ -10,13 +10,13 @@ public final class SocialSecurityTaxRules {
 
     private final BigDecimal firstThreshold;
     private final BigDecimal secondThreshold;
-    private final TaxFilingStatus filingStatus;
+    private final FilingStatus filingStatus;
 
     @JsonCreator
     public SocialSecurityTaxRules(
 
             @JsonProperty("filingStatus")
-            TaxFilingStatus filingStatus,
+            FilingStatus filingStatus,
 
             @JsonProperty("firstThreshold")
             BigDecimal firstThreshold,
@@ -60,7 +60,7 @@ public final class SocialSecurityTaxRules {
         return secondThreshold;
     }
 
-    public TaxFilingStatus getFilingStatus() {
+    public FilingStatus getFilingStatus() {
         return filingStatus;
     }
 

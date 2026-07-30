@@ -1,33 +1,36 @@
 package com.daviddunn.retirementplanner.ui.views;
 
-//import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
-//import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 
+import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.layout.BorderPane;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class ResultsView extends BorderPane {
 
     private final TableView<ProjectionYear> table;
 
-    //private final ProjectionEngine projectionEngine;
-
     private final Label summaryLabel;
 
-    public ResultsView() {
+    /**
+     * Invoked when the user double-clicks a projection year.
+     */
+    private Consumer<ProjectionYear> yearDoubleClickHandler;
 
-        //projectionEngine =
-        //        new ProjectionEngine();
+    public ResultsView() {
 
         table =
                 new TableView<>();
@@ -36,6 +39,10 @@ public class ResultsView extends BorderPane {
                 new Label();
 
         createColumns();
+        configureRowFactory();
+
+        table.setPlaceholder(
+                new Label("No projection available."));
 
         setPadding(
                 new Insets(10));
@@ -58,6 +65,13 @@ public class ResultsView extends BorderPane {
                         data.getValue()
                                 .getCalendarYear()));
 
+
+        TableColumn<ProjectionYear, Integer> ageColumn =
+                createIntegerColumn(
+                        "Age",
+                        ProjectionYear::getPrimaryPersonAge);
+
+
         TableColumn<ProjectionYear, BigDecimal> beginningAssetsColumn =
                 createMoneyColumn(
                         "Beginning Assets",
@@ -70,13 +84,23 @@ public class ResultsView extends BorderPane {
 
         TableColumn<ProjectionYear, BigDecimal> incomeColumn =
                 createMoneyColumn(
-                        "Guaranteed Income",
+                        "Income",
                         ProjectionYear::getGuaranteedIncome);
 
         TableColumn<ProjectionYear, BigDecimal> expensesColumn =
                 createMoneyColumn(
                         "Expenses",
                         ProjectionYear::getAnnualExpenses);
+
+        TableColumn<ProjectionYear, BigDecimal> federalTaxColumn =
+                createMoneyColumn(
+                        "Federal Tax",
+                        ProjectionYear::getFederalIncomeTax);
+
+        TableColumn<ProjectionYear, BigDecimal> rmdColumn =
+                createMoneyColumn(
+                        "RMD",
+                        ProjectionYear::getRequiredMinimumDistribution);
 
         TableColumn<ProjectionYear, BigDecimal> withdrawalColumn =
                 createMoneyColumn(
@@ -90,15 +114,43 @@ public class ResultsView extends BorderPane {
 
         table.getColumns().addAll(
                 yearColumn,
+                ageColumn,
                 beginningAssetsColumn,
                 growthColumn,
                 incomeColumn,
                 expensesColumn,
+                rmdColumn,
                 withdrawalColumn,
+                federalTaxColumn,
                 endingAssetsColumn);
 
         table.setColumnResizePolicy(
                 TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+    }
+
+    /**
+     * Configures double-click handling for projection years.
+     */
+    private void configureRowFactory() {
+
+        table.setRowFactory(tv -> {
+
+            TableRow<ProjectionYear> row =
+                    new TableRow<>();
+
+            row.setOnMouseClicked(event -> {
+
+                if (event.getClickCount() == 2
+                        && !row.isEmpty()
+                        && yearDoubleClickHandler != null) {
+
+                    yearDoubleClickHandler.accept(
+                            row.getItem());
+                }
+            });
+
+            return row;
+        });
     }
 
     private TableColumn<ProjectionYear, BigDecimal> createMoneyColumn(
@@ -123,20 +175,12 @@ public class ResultsView extends BorderPane {
                             BigDecimal value,
                             boolean empty) {
 
-                        super.updateItem(
-                                value,
-                                empty);
+                        super.updateItem(value, empty);
 
                         if (empty || value == null) {
-
                             setText(null);
-
                         } else {
-
-                            setText(
-                                    NumberFormat
-                                            .getCurrencyInstance()
-                                            .format(value));
+                            setText(UIFormatters.money(value));
                         }
                     }
                 });
@@ -185,7 +229,54 @@ public class ResultsView extends BorderPane {
                         + lastYear.getCalendarYear());
     }
 
+    /**
+     * Registers a handler invoked when the user
+     * double-clicks a projection year.
+     */
+    public void setOnYearDoubleClick(
+            Consumer<ProjectionYear> handler) {
+
+        this.yearDoubleClickHandler = handler;
+    }
+
     public TableView<ProjectionYear> getTable() {
         return table;
     }
+
+    private TableColumn<ProjectionYear, Integer> createIntegerColumn(
+            String title,
+            Function<ProjectionYear, Integer> valueProvider) {
+
+        TableColumn<ProjectionYear, Integer> column =
+                new TableColumn<>(title);
+
+        column.setCellValueFactory(cellData ->
+                new javafx.beans.property.SimpleObjectProperty<>(
+                        valueProvider.apply(cellData.getValue())));
+
+        column.setCellFactory(col ->
+                new TableCell<>() {
+
+                    @Override
+                    protected void updateItem(
+                            Integer value,
+                            boolean empty) {
+
+                        super.updateItem(value, empty);
+
+                        if (empty || value == null) {
+                            setText(null);
+                        } else {
+                            setText(value.toString());
+                        }
+
+                        setAlignment(Pos.CENTER);
+                    }
+                });
+
+        return column;
+    }
+
+
+
 }

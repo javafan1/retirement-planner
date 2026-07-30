@@ -2,7 +2,7 @@ package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 
 import java.math.BigDecimal;
 import java.util.Objects;
@@ -11,7 +11,7 @@ public final class FederalTaxableIncomeCalculator {
 
     public BigDecimal calculateTaxableIncome(
             BigDecimal adjustedGrossIncome,
-            TaxFilingStatus filingStatus,
+            FilingStatus filingStatus,
             GovernmentRules governmentRules) {
 
         Objects.requireNonNull(

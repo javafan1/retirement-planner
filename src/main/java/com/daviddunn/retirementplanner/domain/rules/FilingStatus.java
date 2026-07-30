@@ -1,6 +1,6 @@
 package com.daviddunn.retirementplanner.domain.rules;
 
-public enum TaxFilingStatus {
+public enum FilingStatus {
 
     SINGLE("Single"),
 
@@ -19,7 +19,7 @@ public enum TaxFilingStatus {
 
     private final String displayName;
 
-    TaxFilingStatus(
+    FilingStatus(
             String displayName) {
 
         this.displayName =

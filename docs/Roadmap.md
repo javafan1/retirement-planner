@@ -1,4 +1,50 @@
 
+7.29
+
+Phase 1 – Cash Flow Engine
+Annual income
+Annual expenses
+Investment growth
+Portfolio withdrawals
+End-of-year balances
+
+Status: ✅ Complete (MVP)
+
+Phase 2 – Tax Engine
+Federal tax brackets
+Standard deduction
+Filing status
+Michigan income tax
+Effective & marginal tax rates
+
+This is where we'll start today.
+
+Phase 3 – Withdrawal Engine
+Taxable accounts first
+Traditional IRA/401(k)
+Roth IRA
+Cash reserves
+Configurable withdrawal strategies
+Phase 4 – RMD Engine
+Calculate annual RMDs
+Apply IRS life expectancy tables
+Force minimum withdrawals
+Feed taxable income into the Tax Engine
+Phase 5 – Social Security
+Benefit timing
+Taxability of benefits
+Survivor benefits
+COLA
+Phase 6 – Medicare
+IRMAA
+Medicare premiums
+Net retirement income
+Phase 7 – Advanced Planning
+Roth conversions
+Multi-year tax optimization
+Legacy projections
+Monte Carlo simulation
+
 7.24
 
 v0.1    MVP

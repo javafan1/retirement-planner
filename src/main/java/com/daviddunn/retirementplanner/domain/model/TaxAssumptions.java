@@ -1,6 +1,6 @@
 package com.daviddunn.retirementplanner.domain.model;
 
-import com.daviddunn.retirementplanner.domain.rules.TaxFilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -15,7 +15,7 @@ public final class TaxAssumptions {
     private final BigDecimal stateIncomeTaxRate;
     private final BigDecimal localIncomeTaxRate;
 
-    private final TaxFilingStatus filingStatus;
+    private final FilingStatus filingStatus;
 
     public TaxAssumptions(
             BigDecimal federalTaxBracketGrowthRate,
@@ -28,7 +28,7 @@ public final class TaxAssumptions {
                 standardDeductionGrowthRate,
                 stateIncomeTaxRate,
                 localIncomeTaxRate,
-                TaxFilingStatus.MARRIED_FILING_JOINTLY);
+                FilingStatus.MARRIED_FILING_JOINTLY);
     }
 
     @JsonCreator
@@ -47,7 +47,7 @@ public final class TaxAssumptions {
             BigDecimal localIncomeTaxRate,
 
             @JsonProperty("filingStatus")
-            TaxFilingStatus filingStatus) {
+            FilingStatus filingStatus) {
 
         this.federalTaxBracketGrowthRate =
                 Objects.requireNonNull(
@@ -71,7 +71,7 @@ public final class TaxAssumptions {
         this.filingStatus =
                 filingStatus != null
                         ? filingStatus
-                        : TaxFilingStatus.MARRIED_FILING_JOINTLY;
+                        : FilingStatus.MARRIED_FILING_JOINTLY;
     }
 
 
@@ -91,7 +91,7 @@ public final class TaxAssumptions {
         return localIncomeTaxRate;
     }
 
-    public TaxFilingStatus getFilingStatus() {
+    public FilingStatus getFilingStatus() {
         return filingStatus;
     }
 
