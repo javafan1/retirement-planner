@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.income;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.model.Person;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -9,6 +10,12 @@ import java.time.LocalDate;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class PensionTest {
+
+    private final Person person =
+            new Person(
+                    "John",
+                    "Doe",
+                    LocalDate.of(1963, 1, 1));
 
     @Test
     void pensionStartingJulyPaysSixMonthsInFirstYear() {
@@ -24,6 +31,7 @@ class PensionTest {
 
         BigDecimal income =
                 pension.getAnnualIncome(
+                        person,
                         LocalDate.of(2026, 1, 1));
 
         assertEquals(
@@ -45,6 +53,7 @@ class PensionTest {
 
         BigDecimal income =
                 pension.getAnnualIncome(
+                        person,
                         LocalDate.of(2027, 1, 1));
 
         assertEquals(
@@ -66,6 +75,7 @@ class PensionTest {
 
         BigDecimal income =
                 pension.getAnnualIncome(
+                        person,
                         LocalDate.of(2025, 1, 1));
 
         assertEquals(
@@ -87,6 +97,7 @@ class PensionTest {
 
         BigDecimal income =
                 pension.getAnnualIncome(
+                        person,
                         LocalDate.of(2026, 1, 1));
 
         assertEquals(
@@ -108,6 +119,7 @@ class PensionTest {
 
         BigDecimal income =
                 pension.getAnnualIncome(
+                        person,
                         LocalDate.of(2026, 1, 1));
 
         assertEquals(
@@ -129,6 +141,7 @@ class PensionTest {
 
         BigDecimal income =
                 pension.getAnnualIncome(
+                        person,
                         LocalDate.of(2027, 1, 1));
 
         assertEquals(
@@ -150,11 +163,11 @@ class PensionTest {
 
         BigDecimal income =
                 pension.getAnnualIncome(
+                        person,
                         LocalDate.of(2027, 1, 1));
 
         assertEquals(
                 new BigDecimal("46512.00"),
                 income);
     }
-
 }

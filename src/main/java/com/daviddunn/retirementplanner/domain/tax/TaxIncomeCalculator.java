@@ -87,6 +87,7 @@ public final class TaxIncomeCalculator {
 
             BigDecimal annualIncome =
                     income.getAnnualIncome(
+                            person,
                             projectionDate);
 
             if (income instanceof Pension) {
@@ -107,6 +108,42 @@ public final class TaxIncomeCalculator {
                 pensionIncome,
                 socialSecurityIncome);
     }
+
+//    private IncomeTotals calculateIncome(
+//            Person person,
+//            LocalDate projectionDate) {
+//
+//        BigDecimal pensionIncome =
+//                BigDecimal.ZERO;
+//
+//        BigDecimal socialSecurityIncome =
+//                BigDecimal.ZERO;
+//
+//        for (IncomeSource income :
+//                person.getIncomeSources()) {
+//
+//            BigDecimal annualIncome =
+//                    income.getAnnualIncome(
+//                            projectionDate);
+//
+//            if (income instanceof Pension) {
+//
+//                pensionIncome =
+//                        pensionIncome.add(
+//                                annualIncome);
+//
+//            } else if (income instanceof SocialSecurityIncome) {
+//
+//                socialSecurityIncome =
+//                        socialSecurityIncome.add(
+//                                annualIncome);
+//            }
+//        }
+//
+//        return new IncomeTotals(
+//                pensionIncome,
+//                socialSecurityIncome);
+//    }
 
     private record IncomeTotals(
             BigDecimal pensionIncome,

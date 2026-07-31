@@ -2,6 +2,7 @@
 package com.daviddunn.retirementplanner.domain.income;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.model.Person;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -61,6 +62,7 @@ public class Pension extends IncomeSource {
 
     @Override
     protected BigDecimal calculateAnnualIncome(
+            Person person,
             LocalDate projectionDate,
             int activeMonths) {
 

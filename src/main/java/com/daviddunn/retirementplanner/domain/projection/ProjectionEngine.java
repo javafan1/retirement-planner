@@ -460,6 +460,7 @@ public class ProjectionEngine {
         return total;
     }
 
+
     private BigDecimal calculateIncome(
             Person person,
             LocalDate projectionDate) {
@@ -472,12 +473,12 @@ public class ProjectionEngine {
 
             total = total.add(
                     income.getAnnualIncome(
+                            person,
                             projectionDate));
         }
 
         return total;
     }
-
     private BigDecimal calculateProjectedExpenses(
             Household household,
             PlanningAssumptions assumptions,

@@ -17,7 +17,7 @@ public class Person {
     private String firstName;
     private String lastName;
     private LocalDate birthDate;
-    private List<Account> accounts = new ArrayList<>();
+    private final List<Account> accounts = new ArrayList<>();
 
     public Person() {
     }
@@ -70,7 +70,7 @@ public class Person {
                 .subtract(getTotalLiabilities());
     }
 
-    private List<IncomeSource> incomeSources =
+    private final List<IncomeSource> incomeSources =
             new ArrayList<>();
 
     public void addIncomeSource(IncomeSource incomeSource) {
@@ -111,7 +111,7 @@ public class Person {
 
         for (IncomeSource income : incomeSources) {
             total = total.add(
-                    income.getAnnualIncome(projectionDate));
+                    income.getAnnualIncome(this,projectionDate));
         }
 
         return total;
@@ -157,17 +157,35 @@ public class Person {
         this.birthDate = birthDate;
     }
 
+    //public void setAccounts(List<Account> accounts) {
+    //    this.accounts = accounts;
+    //}
+
     public void setAccounts(List<Account> accounts) {
-        this.accounts = accounts;
+
+        this.accounts.clear();
+
+        if (accounts != null) {
+            this.accounts.addAll(accounts);
+        }
     }
 
     public void setIncomeSources(List<IncomeSource> incomeSources) {
 
-        this.incomeSources =
-                incomeSources == null
-                        ? new ArrayList<>()
-                        : new ArrayList<>(incomeSources);
+        this.incomeSources.clear();
+
+        if (incomeSources != null) {
+            this.incomeSources.addAll(incomeSources);
+        }
     }
+
+//    public void setIncomeSources(List<IncomeSource> incomeSources) {
+//
+//        this.incomeSources =
+//                incomeSources == null
+//                        ? new ArrayList<>()
+//                        : new ArrayList<>(incomeSources);
+//    }
 
     @JsonIgnore
     public int getAge(LocalDate date) {

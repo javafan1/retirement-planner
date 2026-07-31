@@ -1,7 +1,7 @@
 package com.daviddunn.retirementplanner.domain.income;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
-
+import com.daviddunn.retirementplanner.domain.model.Person;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -83,6 +83,7 @@ public abstract class IncomeSource {
     //protected abstract BigDecimal calculateAnnualIncome(LocalDate projectionDate);
 
     protected abstract BigDecimal calculateAnnualIncome(
+            Person person,
             LocalDate projectionDate,
             int activeMonths);
 
@@ -116,7 +117,7 @@ public abstract class IncomeSource {
 
     @JsonIgnore
     public final BigDecimal getAnnualIncome(
-            LocalDate projectionDate) {
+            Person person, LocalDate projectionDate) {
 
         Objects.requireNonNull(projectionDate);
 
@@ -129,6 +130,7 @@ public abstract class IncomeSource {
         }
 
         return calculateAnnualIncome(
+                person,
                 projectionDate,
                 activeMonths);
     }

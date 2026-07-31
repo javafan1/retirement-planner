@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.income;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.model.Person;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -10,6 +11,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class SocialSecurityIncomeTest {
 
+    private final Person person =
+            new Person(
+                    "John",
+                    "Doe",
+                    LocalDate.of(1963, 1, 1));
+
     @Test
     void claimingAt67ReturnsFullRetirementBenefit() {
 
@@ -18,10 +25,11 @@ class SocialSecurityIncomeTest {
 
         BigDecimal annualIncome =
                 income.getAnnualIncome(
+                        person,
                         LocalDate.of(2030, 1, 1));
 
         assertEquals(
-                new BigDecimal("36000"),
+                new BigDecimal("36000.00"),
                 annualIncome);
     }
 
@@ -33,10 +41,11 @@ class SocialSecurityIncomeTest {
 
         BigDecimal annualIncome =
                 income.getAnnualIncome(
+                        person,
                         LocalDate.of(2030, 1, 1));
 
         assertEquals(
-                new BigDecimal("25200.0"),
+                new BigDecimal("25200.00"),
                 annualIncome);
     }
 
@@ -48,6 +57,7 @@ class SocialSecurityIncomeTest {
 
         BigDecimal annualIncome =
                 income.getAnnualIncome(
+                        person,
                         LocalDate.of(2030, 1, 1));
 
         assertEquals(
@@ -63,10 +73,27 @@ class SocialSecurityIncomeTest {
 
         BigDecimal annualIncome =
                 income.getAnnualIncome(
+                        person,
                         LocalDate.of(2029, 12, 31));
 
         assertEquals(
                 BigDecimal.ZERO,
+                annualIncome);
+    }
+
+    @Test
+    void socialSecurityAppliesColaAfterFirstYear() {
+
+        SocialSecurityIncome income =
+                createIncome(67);
+
+        BigDecimal annualIncome =
+                income.getAnnualIncome(
+                        person,
+                        LocalDate.of(2031, 1, 1));
+
+        assertEquals(
+                new BigDecimal("36900.00"),
                 annualIncome);
     }
 
@@ -80,27 +107,5 @@ class SocialSecurityIncomeTest {
                 new BigDecimal("3000"),
                 claimingAge,
                 new BigDecimal("0.025"));
-    }
-
-    @Test
-    void socialSecurityAppliesColaAfterFirstYear() {
-
-        SocialSecurityIncome income =
-                new SocialSecurityIncome(
-                        "Social Security",
-                        AccountOwnership.PRIMARY,
-                        LocalDate.of(2030, 1, 1),
-                        null,
-                        new BigDecimal("3000"),
-                        67,
-                        new BigDecimal("0.025"));
-
-        BigDecimal annualIncome =
-                income.getAnnualIncome(
-                        LocalDate.of(2031, 1, 1));
-
-        assertEquals(
-                new BigDecimal("36900.000"),
-                annualIncome);
     }
 }

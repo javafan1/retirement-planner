@@ -1,28 +1,20 @@
+
 package com.daviddunn.retirementplanner.domain.income;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.model.Person;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Objects;
 
 public class SocialSecurityIncome extends IncomeSource {
 
-    private static final BigDecimal AGE_62_FACTOR = BigDecimal.valueOf(0.70);
-    private static final BigDecimal AGE_63_FACTOR = BigDecimal.valueOf(0.75);
-    private static final BigDecimal AGE_64_FACTOR = BigDecimal.valueOf(0.80);
-    private static final BigDecimal AGE_65_FACTOR = BigDecimal.valueOf(0.867);
-    private static final BigDecimal AGE_66_FACTOR = BigDecimal.valueOf(0.933);
-    private static final BigDecimal AGE_68_FACTOR = BigDecimal.valueOf(1.08);
-    private static final BigDecimal AGE_69_FACTOR = BigDecimal.valueOf(1.16);
-    private static final BigDecimal AGE_70_FACTOR = BigDecimal.valueOf(1.24);
-
     private final BigDecimal fullRetirementMonthlyBenefit;
-
     private final int claimingAge;
-
     private final BigDecimal annualColaRate;
 
     @JsonCreator
@@ -49,13 +41,21 @@ public class SocialSecurityIncome extends IncomeSource {
             @JsonProperty("annualColaRate")
             BigDecimal annualColaRate) {
 
-        super(name, ownership, startDate, endDate);
+        super(
+                name,
+                ownership,
+                startDate,
+                endDate);
 
         this.fullRetirementMonthlyBenefit =
-                Objects.requireNonNull(fullRetirementMonthlyBenefit);
+                Objects.requireNonNull(
+                        fullRetirementMonthlyBenefit,
+                        "Full retirement monthly benefit is required.");
 
         this.annualColaRate =
-                Objects.requireNonNull(annualColaRate);
+                Objects.requireNonNull(
+                        annualColaRate,
+                        "Annual COLA rate is required.");
 
         if (claimingAge < 62 || claimingAge > 70) {
             throw new IllegalArgumentException(
@@ -63,6 +63,35 @@ public class SocialSecurityIncome extends IncomeSource {
         }
 
         this.claimingAge = claimingAge;
+    }
+
+    @Override
+    protected BigDecimal calculateAnnualIncome(
+            Person person,
+            LocalDate projectionDate,
+            int activeMonths) {
+
+        BigDecimal monthlyBenefit =
+                SocialSecurityBenefitCalculator.calculateMonthlyBenefit(
+                        fullRetirementMonthlyBenefit,
+                        person.getBirthDate(),
+                        claimingAge);
+
+        int yearsReceivingBenefits =
+                Math.max(
+                        projectionDate.getYear()
+                                - getStartDate().getYear(),
+                        0);
+
+        BigDecimal colaMultiplier =
+                BigDecimal.ONE
+                        .add(annualColaRate)
+                        .pow(yearsReceivingBenefits);
+
+        return monthlyBenefit
+                .multiply(colaMultiplier)
+                .multiply(BigDecimal.valueOf(activeMonths))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     public BigDecimal getFullRetirementMonthlyBenefit() {
@@ -76,74 +105,116 @@ public class SocialSecurityIncome extends IncomeSource {
     public BigDecimal getAnnualColaRate() {
         return annualColaRate;
     }
+}
+/*package com.daviddunn.retirementplanner.domain.income;
+
+
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.util.Objects;
+
+public class SocialSecurityIncome extends IncomeSource {
+
+    private final BigDecimal fullRetirementMonthlyBenefit;
+    private final int claimingAge;
+    private final BigDecimal annualColaRate;
+
+    @JsonCreator
+    public SocialSecurityIncome(
+
+            @JsonProperty("name")
+            String name,
+
+            @JsonProperty("ownership")
+            AccountOwnership ownership,
+
+            @JsonProperty("startDate")
+            LocalDate startDate,
+
+            @JsonProperty("endDate")
+            LocalDate endDate,
+
+            @JsonProperty("fullRetirementMonthlyBenefit")
+            BigDecimal fullRetirementMonthlyBenefit,
+
+            @JsonProperty("claimingAge")
+            int claimingAge,
+
+            @JsonProperty("annualColaRate")
+            BigDecimal annualColaRate) {
+
+        super(
+                name,
+                ownership,
+                startDate,
+                endDate);
+
+        this.fullRetirementMonthlyBenefit =
+                Objects.requireNonNull(
+                        fullRetirementMonthlyBenefit,
+                        "Full retirement monthly benefit is required.");
+
+        this.claimingAge = claimingAge;
+
+        this.annualColaRate =
+                Objects.requireNonNull(
+                        annualColaRate,
+                        "Annual COLA rate is required.");
+
+        if (claimingAge < 62 || claimingAge > 70) {
+            throw new IllegalArgumentException(
+                    "Claiming age must be between 62 and 70.");
+        }
+    }
 
     @Override
     protected BigDecimal calculateAnnualIncome(
             LocalDate projectionDate,
             int activeMonths) {
 
-        BigDecimal monthlyBenefit =
-                calculateMonthlyBenefit();
+        LocalDate birthDate =
+                getStartDate().minusYears(claimingAge);
 
-        int yearsSinceStart =
+        BigDecimal monthlyBenefit =
+                SocialSecurityBenefitCalculator.calculateMonthlyBenefit(
+                        fullRetirementMonthlyBenefit,
+                        birthDate,
+                        claimingAge);
+
+        int yearsReceivingBenefits =
                 Math.max(
-                        0,
                         projectionDate.getYear()
-                                - getStartDate().getYear());
+                                - getStartDate().getYear(),
+                        0);
 
         BigDecimal colaMultiplier =
                 BigDecimal.ONE
                         .add(annualColaRate)
-                        .pow(yearsSinceStart);
+                        .pow(yearsReceivingBenefits);
 
-        BigDecimal adjustedMonthlyBenefit =
-                monthlyBenefit.multiply(
-                        colaMultiplier);
-
-        return adjustedMonthlyBenefit
-                .multiply(
-                        BigDecimal.valueOf(activeMonths));
+        return monthlyBenefit
+                .multiply(colaMultiplier)
+                .multiply(BigDecimal.valueOf(activeMonths))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
-//    @Override
-//    protected BigDecimal calculateAnnualIncome(
-//            LocalDate projectionDate,
-//            int activeMonths) {
-//
-//        BigDecimal monthlyBenefit =
-//                calculateMonthlyBenefit();
-//
-//        // TODO: Apply COLA next.
-//
-//        return monthlyBenefit.multiply(
-//                BigDecimal.valueOf(activeMonths));
-//    }
+    public BigDecimal getFullRetirementMonthlyBenefit() {
+        return fullRetirementMonthlyBenefit;
+    }
 
-    private BigDecimal calculateMonthlyBenefit() {
+    public int getClaimingAge() {
+        return claimingAge;
+    }
 
-        return switch (claimingAge) {
-
-            case 62 -> fullRetirementMonthlyBenefit.multiply(AGE_62_FACTOR);
-
-            case 63 -> fullRetirementMonthlyBenefit.multiply(AGE_63_FACTOR);
-
-            case 64 -> fullRetirementMonthlyBenefit.multiply(AGE_64_FACTOR);
-
-            case 65 -> fullRetirementMonthlyBenefit.multiply(AGE_65_FACTOR);
-
-            case 66 -> fullRetirementMonthlyBenefit.multiply(AGE_66_FACTOR);
-
-            case 67 -> fullRetirementMonthlyBenefit;
-
-            case 68 -> fullRetirementMonthlyBenefit.multiply(AGE_68_FACTOR);
-
-            case 69 -> fullRetirementMonthlyBenefit.multiply(AGE_69_FACTOR);
-
-            case 70 -> fullRetirementMonthlyBenefit.multiply(AGE_70_FACTOR);
-
-            default ->
-                    throw new IllegalStateException(
-                            "Unexpected claiming age: " + claimingAge);
-        };
+    public BigDecimal getAnnualColaRate() {
+        return annualColaRate;
     }
 }
+
+*/
+
