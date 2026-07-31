@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.ui;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
+import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionSummary;
 import com.daviddunn.retirementplanner.ui.charts.PortfolioChartView;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 
@@ -322,7 +323,10 @@ public class MainWindow {
         Projection projection =
                 controller.getCurrentProjection();
 
-        dashboardView.load(projection);
+        ProjectionSummary summary =
+                controller.getCurrentProjectionSummary();
+
+        dashboardView.load(summary);
         portfolioChartView.load(projection);
         projectionYearView.load(projection);
         resultsView.load(projection);

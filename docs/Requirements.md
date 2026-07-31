@@ -1,4 +1,16 @@
+7.31
 
+Tax Optimization Tab
+
+✓ Keep me below the next IRMAA bracket
+
+✓ Fill the 22% federal bracket
+
+✓ Minimize lifetime taxes
+
+✓ Delay Social Security until age 70
+
+✓ Compare Roth conversion strategies
 
 7.24.26
 

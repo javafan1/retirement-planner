@@ -5,20 +5,31 @@ import com.daviddunn.retirementplanner.domain.projection.statistics.ProjectionSt
 
 import java.util.Objects;
 
-public final class ProjectionSummary {
+public class ProjectionSummary {
 
     private final Projection projection;
     private final ProjectionStatistics statistics;
+    private final IncomeSummary incomeSummary;
 
     public ProjectionSummary(
             Projection projection,
-            ProjectionStatistics statistics) {
+            ProjectionStatistics statistics,
+            IncomeSummary incomeSummary) {
 
         this.projection =
-                Objects.requireNonNull(projection);
+                Objects.requireNonNull(
+                        projection,
+                        "Projection is required.");
 
         this.statistics =
-                Objects.requireNonNull(statistics);
+                Objects.requireNonNull(
+                        statistics,
+                        "Statistics are required.");
+
+        this.incomeSummary =
+                Objects.requireNonNull(
+                        incomeSummary,
+                        "Income summary is required.");
     }
 
     public Projection getProjection() {
@@ -27,5 +38,9 @@ public final class ProjectionSummary {
 
     public ProjectionStatistics getStatistics() {
         return statistics;
+    }
+
+    public IncomeSummary getIncomeSummary() {
+        return incomeSummary;
     }
 }

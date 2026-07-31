@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import com.daviddunn.retirementplanner.domain.projection.statistics.ProjectionStatisticsService;
+import com.daviddunn.retirementplanner.domain.projection.summary.IncomeSummaryService;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionSummary;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionSummaryService;
 import com.daviddunn.retirementplanner.persistence.JsonApplicationSettingsRepository;
@@ -20,10 +21,11 @@ public class ApplicationController {
     private RetirementPlan currentPlan;
     private ProjectionSummary currentProjectionSummary;
     private Path currentFile;
-
+    private Projection currentProjection;
     private final ProjectionEngine projectionEngine;
     private final ProjectionSummaryService projectionSummaryService;
     private final RetirementPlanRepository repository;
+
 
     private final JsonApplicationSettingsRepository
             applicationSettingsRepository;
@@ -38,7 +40,8 @@ public class ApplicationController {
 
         projectionSummaryService =
                 new ProjectionSummaryService(
-                        new ProjectionStatisticsService());
+                        new ProjectionStatisticsService(),
+                        new IncomeSummaryService());
 
         repository =
                 new JsonRetirementPlanRepository();
@@ -61,8 +64,14 @@ public class ApplicationController {
      */
     public Projection getCurrentProjection() {
 
-        return getCurrentProjectionSummary()
-                .getProjection();
+        if (currentProjection == null) {
+
+            currentProjection =
+                    projectionEngine.project(
+                            currentPlan);
+        }
+
+        return currentProjection;
     }
 
     /**
@@ -72,16 +81,16 @@ public class ApplicationController {
 
         if (currentProjectionSummary == null) {
 
-            Projection projection =
-                    projectionEngine.project(currentPlan);
-
             currentProjectionSummary =
                     projectionSummaryService.summarize(
-                            projection);
+                            currentPlan,
+                            getCurrentProjection());
         }
 
         return currentProjectionSummary;
     }
+
+
 
     public void invalidateProjection() {
         currentProjectionSummary = null;
@@ -195,6 +204,9 @@ public class ApplicationController {
     }
 
     private void projectionChanged() {
+
+        currentProjection = null;
         currentProjectionSummary = null;
     }
+
 }

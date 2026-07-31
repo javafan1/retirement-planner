@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.projection.summary;
 
+import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
+import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.projection.statistics.ProjectionStatistics;
@@ -10,13 +12,15 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 class ProjectionSummaryServiceTest {
 
     private final ProjectionSummaryService summaryService =
             new ProjectionSummaryService(
-                    new ProjectionStatisticsService());
+                    new ProjectionStatisticsService(),
+                    new IncomeSummaryService());
 
     @Test
     void summarizeReturnsOriginalProjection() {
@@ -26,7 +30,9 @@ class ProjectionSummaryServiceTest {
                 projectionYear(150_000));
 
         ProjectionSummary summary =
-                summaryService.summarize(projection);
+                summaryService.summarize(
+                        retirementPlan(),
+                        projection);
 
         assertSame(
                 projection,
@@ -42,7 +48,9 @@ class ProjectionSummaryServiceTest {
                 projectionYear(800_000));
 
         ProjectionSummary summary =
-                summaryService.summarize(projection);
+                summaryService.summarize(
+                        retirementPlan(),
+                        projection);
 
         ProjectionStatistics statistics =
                 summary.getStatistics();
@@ -56,9 +64,28 @@ class ProjectionSummaryServiceTest {
                 statistics.getLowestInvestableAssets());
     }
 
+    @Test
+    void summarizeCreatesIncomeSummary() {
+
+        Projection projection = projection(
+                projectionYear(100_000));
+
+        ProjectionSummary summary =
+                summaryService.summarize(
+                        retirementPlan(),
+                        projection);
+
+        assertNotNull(
+                summary.getIncomeSummary());
+    }
+
     // -----------------------------------------------------------------
     // Test Helpers
     // -----------------------------------------------------------------
+
+    private RetirementPlan retirementPlan() {
+        return RetirementPlanFactory.createEmptyPlan();
+    }
 
     private Projection projection(ProjectionYear... years) {
 
@@ -71,10 +98,12 @@ class ProjectionSummaryServiceTest {
         return projection;
     }
 
-    private ProjectionYear projectionYear(long endingInvestableAssets) {
+    private ProjectionYear projectionYear(
+            long endingInvestableAssets) {
 
         return ProjectionYearBuilder.aProjectionYear()
-                .withEndingInvestableAssets(endingInvestableAssets)
+                .withEndingInvestableAssets(
+                        endingInvestableAssets)
                 .build();
     }
 }
