@@ -63,4 +63,10 @@ public final class TaxIncome {
 
         return amount;
     }
+
+    public BigDecimal getMichiganRetirementIncome() {
+
+        return pensionIncome
+                .add(taxDeferredWithdrawals);
+    }
 }

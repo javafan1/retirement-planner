@@ -1,3 +1,21 @@
+8.01
+
+My recommendation for your project
+
+After looking through hundreds of your classes over the last few weeks, I'd adopt this convention everywhere:
+
+Whole numbers
+
+BigDecimal.valueOf(150_000)
+BigDecimal.valueOf(32_200)
+BigDecimal.valueOf(80_000)
+
+Decimal values
+
+new BigDecimal("0.025")
+new BigDecimal("0.07")
+new BigDecimal("3.14159")
+
 7.23 
 
 I think we should eventually model each person like this

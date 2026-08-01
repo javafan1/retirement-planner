@@ -1,7 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
-import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 
 import java.math.BigDecimal;
 import java.util.Objects;
@@ -71,7 +71,8 @@ public final class FederalTaxCalculator {
                                 taxableSocialSecurity);
 
         /*
-         * Apply the standard deduction.
+         * Apply the (already projected)
+         * standard deduction.
          */
         BigDecimal taxableIncome =
                 taxableIncomeCalculator
@@ -81,8 +82,8 @@ public final class FederalTaxCalculator {
                                 governmentRules);
 
         /*
-         * Apply the progressive federal
-         * income-tax brackets.
+         * Apply the (already projected)
+         * progressive tax brackets.
          */
         BigDecimal federalIncomeTax =
                 incomeTaxCalculator.calculateTax(

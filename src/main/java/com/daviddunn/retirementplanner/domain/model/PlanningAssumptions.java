@@ -272,6 +272,18 @@ public final class PlanningAssumptions {
                 WithdrawalStrategyType.TAXABLE_FIRST);
     }
 
+    @JsonIgnore
+    public BigDecimal getInflationRate() {
+
+        return getExpectedAnnualInflationRate();
+    }
+
+    @JsonIgnore
+    public BigDecimal getInvestmentReturnRate() {
+
+        return getExpectedAnnualInvestmentReturn();
+    }
+
     @Override
     public String toString() {
 

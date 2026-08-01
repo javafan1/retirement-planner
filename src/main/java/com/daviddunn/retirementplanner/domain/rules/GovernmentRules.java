@@ -18,6 +18,9 @@ public final class GovernmentRules {
 
     private final RmdRules rmdRules;
 
+    private final MichiganTaxRules
+            michiganTaxRules;
+
 
     @JsonCreator
     public GovernmentRules(
@@ -33,6 +36,9 @@ public final class GovernmentRules {
 
             @JsonProperty("federalTaxRules")
             List<FederalTaxRules> federalTaxRules,
+
+            @JsonProperty("michiganTaxRules")
+            MichiganTaxRules michiganTaxRules,
 
             @JsonProperty("socialSecurityTaxRules")
             List<SocialSecurityTaxRules> socialSecurityTaxRules,
@@ -68,6 +74,11 @@ public final class GovernmentRules {
             throw new IllegalArgumentException(
                     "At least one federal tax rule is required.");
         }
+
+        this.michiganTaxRules =
+                Objects.requireNonNull(
+                        michiganTaxRules,
+                        "Michigan tax rules are required.");
 
         this.socialSecurityTaxRules =
                 List.copyOf(
@@ -125,6 +136,10 @@ public final class GovernmentRules {
                                         + filingStatus));
     }
 
+    public MichiganTaxRules getMichiganTaxRules() {
+        return michiganTaxRules;
+    }
+
     @Override
     public String toString() {
 
@@ -137,6 +152,8 @@ public final class GovernmentRules {
                 effectiveDate +
                 ", federalTaxRules=" +
                 federalTaxRules +
+                ", michiganTaxRules=" +
+                michiganTaxRules +
                 ", rmdRules=" +
                 rmdRules +
                 '}';

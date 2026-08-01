@@ -1,6 +1,22 @@
 
-7.29
 
+8.1
+com.daviddunn.retirementplanner.domain.tax
+│
+├── FederalTaxCalculator
+├── FederalTaxCalculation
+├── TaxIncome
+├── TaxIncomeCalculator
+│
+└── state
+│
+├── StateIncomeTax
+├── StateIncomeTaxCalculator
+├── StateTaxParameters
+└── michigan
+├── MichiganIncomeTaxCalculator
+├── MichiganRetirementDeductionCalculator
+└── MichiganTaxParameters
 
 
 7.28

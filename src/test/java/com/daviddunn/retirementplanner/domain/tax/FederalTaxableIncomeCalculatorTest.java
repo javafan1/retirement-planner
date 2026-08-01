@@ -1,9 +1,8 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
-import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -39,13 +38,6 @@ class FederalTaxableIncomeCalculatorTest {
                         FilingStatus.MARRIED_FILING_JOINTLY,
                         rules);
 
-        /*
-         * $150,000 AGI
-         * - $32,200 standard deduction
-         * ----------------------------
-         * $117,800 taxable income
-         */
-
         assertEquals(
                 0,
                 new BigDecimal("117800")
@@ -60,13 +52,6 @@ class FederalTaxableIncomeCalculatorTest {
                         new BigDecimal("50000"),
                         FilingStatus.SINGLE,
                         rules);
-
-        /*
-         * $50,000 AGI
-         * - $16,100 standard deduction
-         * ----------------------------
-         * $33,900 taxable income
-         */
 
         assertEquals(
                 0,
@@ -85,8 +70,8 @@ class FederalTaxableIncomeCalculatorTest {
 
         assertEquals(
                 0,
-                BigDecimal.ZERO
-                        .compareTo(taxableIncome));
+                BigDecimal.ZERO.compareTo(
+                        taxableIncome));
     }
 
     @Test
@@ -100,8 +85,8 @@ class FederalTaxableIncomeCalculatorTest {
 
         assertEquals(
                 0,
-                BigDecimal.ZERO
-                        .compareTo(taxableIncome));
+                BigDecimal.ZERO.compareTo(
+                        taxableIncome));
     }
 
     @Test
@@ -115,7 +100,7 @@ class FederalTaxableIncomeCalculatorTest {
 
         assertEquals(
                 0,
-                BigDecimal.ZERO
-                        .compareTo(taxableIncome));
+                BigDecimal.ZERO.compareTo(
+                        taxableIncome));
     }
 }

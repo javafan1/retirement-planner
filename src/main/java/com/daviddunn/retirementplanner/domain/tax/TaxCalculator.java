@@ -1,7 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
-import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 
 import java.math.BigDecimal;
 import java.util.Objects;
