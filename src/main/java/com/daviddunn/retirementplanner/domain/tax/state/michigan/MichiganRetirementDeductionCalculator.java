@@ -11,7 +11,7 @@ public final class MichiganRetirementDeductionCalculator {
     public BigDecimal calculate(
             BigDecimal retirementIncome,
             FilingStatus filingStatus,
-            MichiganTaxRules michiganTaxRules) {
+            MichiganTaxRules projectedMichiganTaxRules) {
 
         Objects.requireNonNull(
                 retirementIncome,
@@ -22,13 +22,13 @@ public final class MichiganRetirementDeductionCalculator {
                 "Filing status is required.");
 
         Objects.requireNonNull(
-                michiganTaxRules,
+                projectedMichiganTaxRules,
                 "Michigan tax rules are required.");
 
         BigDecimal deductionLimit =
                 determineDeductionLimit(
                         filingStatus,
-                        michiganTaxRules);
+                        projectedMichiganTaxRules);
 
         return retirementIncome.min(
                 deductionLimit);

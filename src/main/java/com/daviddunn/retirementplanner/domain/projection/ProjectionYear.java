@@ -5,6 +5,8 @@ import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
 
 import java.util.List;
+
+import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.math.BigDecimal;
@@ -34,6 +36,7 @@ public class ProjectionYear {
     private final BigDecimal taxableSocialSecurity;
     private final BigDecimal federalTaxableIncome;
     private final BigDecimal federalIncomeTax;
+    private final BigDecimal michiganIncomeTax;
     private final int primaryPersonAge;
 
 
@@ -67,6 +70,9 @@ public class ProjectionYear {
                 BigDecimal.ZERO;
 
         this.taxFundingWithdrawal =
+                BigDecimal.ZERO;
+
+        this.michiganIncomeTax =
                 BigDecimal.ZERO;
 
 
@@ -153,6 +159,9 @@ public class ProjectionYear {
         this.federalIncomeTax =
                 BigDecimal.ZERO;
 
+        this.michiganIncomeTax =
+                BigDecimal.ZERO;
+
         this.projectionYear = projectionYear;
         this.primaryPersonAge = primaryPersonAge;
         this.calendarYear = calendarYear;
@@ -228,6 +237,7 @@ public class ProjectionYear {
             BigDecimal endingInvestableAssets,
             List<ProjectedAccountSnapshot> endingAccountSnapshots,
             FederalTaxCalculation federalTaxCalculation,
+            MichiganTaxCalculation michiganTaxCalculation,
             BigDecimal taxFundingWithdrawal, int primaryPersonAge) {
 
         this.projectionYear = projectionYear;
@@ -316,6 +326,10 @@ public class ProjectionYear {
         this.federalIncomeTax =
                 federalTaxCalculation
                         .getFederalIncomeTax();
+
+        this.michiganIncomeTax =
+                michiganTaxCalculation
+                        .incomeTax();
     }
 
     public int getProjectionYear() {
@@ -429,4 +443,7 @@ public class ProjectionYear {
         return primaryPersonAge;
     }
 
+    public BigDecimal getMichiganIncomeTax() {
+        return michiganIncomeTax;
+    }
 }

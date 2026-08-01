@@ -32,7 +32,7 @@ public final class FederalTaxCalculator {
     public FederalTaxCalculation calculate(
             TaxIncome taxIncome,
             FilingStatus filingStatus,
-            GovernmentRules governmentRules) {
+            GovernmentRules projectedGovernmentRules) {
 
         Objects.requireNonNull(
                 taxIncome,
@@ -43,7 +43,7 @@ public final class FederalTaxCalculator {
                 "Filing status is required.");
 
         Objects.requireNonNull(
-                governmentRules,
+                projectedGovernmentRules,
                 "Government rules are required.");
 
         /*
@@ -55,7 +55,7 @@ public final class FederalTaxCalculator {
                         .calculateTaxableBenefits(
                                 taxIncome,
                                 filingStatus,
-                                governmentRules);
+                                projectedGovernmentRules);
 
         /*
          * Current MVP AGI:
@@ -79,7 +79,7 @@ public final class FederalTaxCalculator {
                         .calculateTaxableIncome(
                                 adjustedGrossIncome,
                                 filingStatus,
-                                governmentRules);
+                                projectedGovernmentRules);
 
         /*
          * Apply the (already projected)
@@ -89,7 +89,7 @@ public final class FederalTaxCalculator {
                 incomeTaxCalculator.calculateTax(
                         taxableIncome,
                         filingStatus,
-                        governmentRules);
+                        projectedGovernmentRules);
 
         return new FederalTaxCalculation(
                 adjustedGrossIncome,

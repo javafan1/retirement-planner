@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.testutil;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountSnapshot;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
+import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -31,6 +32,11 @@ public class ProjectionYearBuilder {
     private FederalTaxCalculation federalTaxCalculation =
             FederalTaxCalculationBuilder
                     .aFederalTaxCalculation()
+                    .build();
+
+    private MichiganTaxCalculation michiganTaxCalculation =
+            MichiganTaxCalculationBuilder
+                    .aMichiganTaxCalculation()
                     .build();
 
     public static ProjectionYearBuilder aProjectionYear() {
@@ -111,7 +117,6 @@ public class ProjectionYearBuilder {
         this.endingAccountSnapshots =
                 Objects.requireNonNull(snapshots);
 
-
         return this;
     }
 
@@ -119,6 +124,15 @@ public class ProjectionYearBuilder {
             FederalTaxCalculation calculation) {
 
         this.federalTaxCalculation =
+                Objects.requireNonNull(calculation);
+
+        return this;
+    }
+
+    public ProjectionYearBuilder withMichiganTaxCalculation(
+            MichiganTaxCalculation calculation) {
+
+        this.michiganTaxCalculation =
                 Objects.requireNonNull(calculation);
 
         return this;
@@ -140,6 +154,7 @@ public class ProjectionYearBuilder {
                 endingInvestableAssets,
                 endingAccountSnapshots,
                 federalTaxCalculation,
+                michiganTaxCalculation,
                 taxFundingWithdrawal,
                 primaryPersonAge
         );

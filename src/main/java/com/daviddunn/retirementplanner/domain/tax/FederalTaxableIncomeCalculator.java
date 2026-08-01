@@ -12,7 +12,7 @@ public final class FederalTaxableIncomeCalculator {
     public BigDecimal calculateTaxableIncome(
             BigDecimal adjustedGrossIncome,
             FilingStatus filingStatus,
-            GovernmentRules governmentRules) {
+            GovernmentRules projectedGovernmentRules) {
 
         Objects.requireNonNull(
                 adjustedGrossIncome,
@@ -23,7 +23,7 @@ public final class FederalTaxableIncomeCalculator {
                 "Filing status is required.");
 
         Objects.requireNonNull(
-                governmentRules,
+                projectedGovernmentRules,
                 "Government rules are required.");
 
         if (adjustedGrossIncome.signum() <= 0) {
@@ -31,7 +31,7 @@ public final class FederalTaxableIncomeCalculator {
         }
 
         FederalTaxRules taxRules =
-                governmentRules.getFederalTaxRules(
+                projectedGovernmentRules.getFederalTaxRules(
                         filingStatus);
 
         BigDecimal taxableIncome =

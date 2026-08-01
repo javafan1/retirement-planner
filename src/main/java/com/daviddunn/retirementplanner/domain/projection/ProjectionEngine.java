@@ -10,15 +10,10 @@ import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.OwnerRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.RmdBalanceSnapshot;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
+import com.daviddunn.retirementplanner.domain.tax.*;
+import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
 import com.daviddunn.retirementplanner.domain.withdrawal.*;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
-import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
-import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculator;
-
-import com.daviddunn.retirementplanner.domain.tax.TaxIncomeCalculator;
-
-import com.daviddunn.retirementplanner.domain.tax.TaxFundingCalculator;
-import com.daviddunn.retirementplanner.domain.tax.TaxFundingResult;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -33,6 +28,8 @@ public class ProjectionEngine {
     private final ProjectedWithdrawalAllocator withdrawalAllocator;
 
     private final TaxFundingCalculator taxFundingCalculator;
+    private final GovernmentRuleProjectionService
+            governmentRuleProjectionService;
 
 
     public ProjectionEngine() {
@@ -46,7 +43,8 @@ public class ProjectionEngine {
         this.withdrawalAllocator =
                 new ProjectedWithdrawalAllocator();
 
-
+        this.governmentRuleProjectionService =
+                new GovernmentRuleProjectionService();
 
         this.taxFundingCalculator =
                 new TaxFundingCalculator();
@@ -183,6 +181,12 @@ public class ProjectionEngine {
         LocalDate projectionStartDate =
                 assumptions.getProjectionStartDate();
 
+        GovernmentRules projectedGovernmentRules =
+                governmentRuleProjectionService.project(
+                        governmentRules,
+                        assumptions,
+                        calendarYear);
+
         BigDecimal investmentGrowth =
                 calculateInvestmentGrowth(
                         beginningAssets,
@@ -296,7 +300,7 @@ public class ProjectionEngine {
                         assumptions
                                 .getTaxAssumptions()
                                 .getFilingStatus(),
-                        governmentRules);
+                        projectedGovernmentRules);
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();
@@ -307,6 +311,9 @@ public class ProjectionEngine {
 
         FederalTaxCalculation federalTaxCalculation =
                 taxFundingResult.getFederalTaxCalculation();
+
+        MichiganTaxCalculation michiganTaxCalculation =
+                taxFundingResult.getMichiganTaxCalculation();
 
         ProjectedPortfolio portfolioAfterTaxWithdrawal =
                 withdrawalAllocator.applyAdditionalWithdrawal(
@@ -372,6 +379,7 @@ public class ProjectionEngine {
                         endingAssets,
                         endingAccountSnapshots,
                         federalTaxCalculation,
+                        michiganTaxCalculation,
                         taxFundingWithdrawal,
                         primaryPersonAge);
 
