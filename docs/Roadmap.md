@@ -1,4 +1,24 @@
 
+
+8.2 
+
+That gives us room to use the same assumption later for:
+
+Medicare Part B
+Medicare Part D
+Medigap premiums
+Medicare Advantage premiums
+Long-term care insurance
+Out-of-pocket medical expenses
+
+In other words, we'd have four major economic assumptions in your planner:
+
+Assumption	Suggested Default
+General Inflation	2.5%
+Investment Return	7.0%
+Healthcare Cost Growth	5.5%
+Social Security COLA	2.5–3.0%
+
 7.29
 
 Phase 1 – Cash Flow Engine
