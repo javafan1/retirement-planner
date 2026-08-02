@@ -1,8 +1,10 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
+import com.daviddunn.retirementplanner.domain.medicare.IrmaaRuleProjectionService;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
+import com.daviddunn.retirementplanner.domain.rules.IrmaaRules;
 import com.daviddunn.retirementplanner.domain.rules.MichiganTaxRules;
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxRuleProjectionService;
 
@@ -18,6 +20,9 @@ public final class GovernmentRuleProjectionService {
     private final MichiganTaxRuleProjectionService
             michiganTaxRuleProjectionService;
 
+    private final IrmaaRuleProjectionService
+            irmaaRuleProjectionService;
+
     public GovernmentRuleProjectionService() {
 
         this.federalTaxRuleProjectionService =
@@ -25,6 +30,9 @@ public final class GovernmentRuleProjectionService {
 
         this.michiganTaxRuleProjectionService =
                 new MichiganTaxRuleProjectionService();
+
+        this.irmaaRuleProjectionService =
+                new IrmaaRuleProjectionService();
     }
 
     public GovernmentRules project(
@@ -61,12 +69,20 @@ public final class GovernmentRuleProjectionService {
                         projectionYear,
                         planningAssumptions);
 
+        IrmaaRules projectedIrmaaRules =
+                irmaaRuleProjectionService.project(
+                        publishedRules.getIrmaaRules(),
+                        publishedRules.getTaxYear(),
+                        projectionYear,
+                        planningAssumptions);
+
         return new GovernmentRules(
                 publishedRules.getRulesVersion(),
                 projectionYear,
                 publishedRules.getEffectiveDate(),
                 projectedFederalRules,
                 projectedMichiganRules,
+                projectedIrmaaRules,
                 publishedRules.getSocialSecurityTaxRules(),
                 publishedRules.getRmdRules());
     }

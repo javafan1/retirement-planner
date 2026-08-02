@@ -21,6 +21,8 @@ public final class GovernmentRules {
     private final MichiganTaxRules
             michiganTaxRules;
 
+    private final IrmaaRules
+            irmaaRules;
 
     @JsonCreator
     public GovernmentRules(
@@ -39,6 +41,9 @@ public final class GovernmentRules {
 
             @JsonProperty("michiganTaxRules")
             MichiganTaxRules michiganTaxRules,
+
+            @JsonProperty("irmaaRules")
+            IrmaaRules irmaaRules,
 
             @JsonProperty("socialSecurityTaxRules")
             List<SocialSecurityTaxRules> socialSecurityTaxRules,
@@ -79,6 +84,11 @@ public final class GovernmentRules {
                 Objects.requireNonNull(
                         michiganTaxRules,
                         "Michigan tax rules are required.");
+
+        this.irmaaRules =
+                Objects.requireNonNull(
+                        irmaaRules,
+                        "IRMAA rules are required.");
 
         this.socialSecurityTaxRules =
                 List.copyOf(
@@ -154,6 +164,8 @@ public final class GovernmentRules {
                 federalTaxRules +
                 ", michiganTaxRules=" +
                 michiganTaxRules +
+                ", irmaaRules=" +
+                irmaaRules +
                 ", rmdRules=" +
                 rmdRules +
                 '}';
@@ -182,6 +194,10 @@ public final class GovernmentRules {
                         new IllegalArgumentException(
                                 "No Social Security tax rules found for filing status: "
                                         + filingStatus));
+    }
+
+    public IrmaaRules getIrmaaRules() {
+        return irmaaRules;
     }
 
 }

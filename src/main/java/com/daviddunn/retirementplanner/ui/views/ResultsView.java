@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
@@ -117,6 +118,15 @@ public class ResultsView extends BorderPane {
                         "Portfolio Withdrawal",
                         ProjectionYear::getPortfolioWithdrawal);
 
+        TableColumn<ProjectionYear, String> medicareColumn =
+                new TableColumn<>("Medicare");
+
+        medicareColumn.setCellValueFactory(cellData ->
+                new ReadOnlyStringWrapper(
+                        UIFormatters.money(
+                                cellData.getValue()
+                                        .getAnnualMedicarePremium())));
+
         TableColumn<ProjectionYear, BigDecimal> endingAssetsColumn =
                 createMoneyColumn(
                         "Ending Assets",
@@ -134,6 +144,7 @@ public class ResultsView extends BorderPane {
                 federalTaxColumn,
                 michiganTaxColumn,
                 totalTaxColumn,
+                medicareColumn,
                 endingAssetsColumn);
 
         table.setColumnResizePolicy(

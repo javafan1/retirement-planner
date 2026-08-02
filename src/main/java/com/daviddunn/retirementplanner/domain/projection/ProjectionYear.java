@@ -2,11 +2,14 @@ package com.daviddunn.retirementplanner.domain.projection;
 
 
 import com.daviddunn.retirementplanner.domain.financial.Account;
+import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculation;
+import com.daviddunn.retirementplanner.domain.rules.IrmaaBracket;
 import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
 
 import java.util.List;
 
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
+import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.math.BigDecimal;
@@ -47,6 +50,9 @@ public class ProjectionYear {
 
     private final BigDecimal michiganTaxableIncome;
 
+    private final MedicarePremiumCalculation
+            medicarePremiumCalculation;
+
     public ProjectionYear(
             int projectionYear,
             int calendarYear,
@@ -86,6 +92,7 @@ public class ProjectionYear {
         this.michiganRetirementIncome = BigDecimal.ZERO;
         this.michiganRetirementDeduction = BigDecimal.ZERO;
         this.michiganTaxableIncome = BigDecimal.ZERO;
+        this.medicarePremiumCalculation = null;
 
 
         this.projectionYear = projectionYear;
@@ -180,6 +187,7 @@ public class ProjectionYear {
         this.michiganRetirementIncome = BigDecimal.ZERO;
         this.michiganRetirementDeduction = BigDecimal.ZERO;
         this.michiganTaxableIncome = BigDecimal.ZERO;
+        this.medicarePremiumCalculation = null;
 
         this.projectionYear = projectionYear;
         this.primaryPersonAge = primaryPersonAge;
@@ -257,7 +265,9 @@ public class ProjectionYear {
             List<ProjectedAccountSnapshot> endingAccountSnapshots,
             FederalTaxCalculation federalTaxCalculation,
             MichiganTaxCalculation michiganTaxCalculation,
-            BigDecimal taxFundingWithdrawal, int primaryPersonAge) {
+            MedicarePremiumCalculation medicarePremiumCalculation,
+            BigDecimal taxFundingWithdrawal,
+            int primaryPersonAge) {
 
         this.projectionYear = projectionYear;
         this.calendarYear = calendarYear;
@@ -365,6 +375,16 @@ public class ProjectionYear {
 
         this.michiganIncomeTax =
                 michiganTaxCalculation.incomeTax();
+
+        Objects.requireNonNull(
+                medicarePremiumCalculation,
+                "Medicare premium calculation is required.");
+
+        this.medicarePremiumCalculation = medicarePremiumCalculation;
+
+
+
+
 
 
     }
@@ -506,4 +526,59 @@ public class ProjectionYear {
         return federalStandardDeduction;
     }
 
+
+    public BigDecimal getAnnualMedicarePremium() {
+
+        return medicarePremiumCalculation
+                .totalAnnualMedicarePremium();
+    }
+
+    public BigDecimal getMonthlyPartBPremium() {
+
+        return medicarePremiumCalculation
+                .monthlyPartBPremium();
+    }
+
+    public BigDecimal getMonthlyPartDPremium() {
+
+        return medicarePremiumCalculation
+                .monthlyPartDPremium();
+    }
+
+    public BigDecimal getModifiedAdjustedGrossIncome() {
+
+        return medicarePremiumCalculation
+                .modifiedAdjustedGrossIncome();
+    }
+
+    public MedicarePremiumCalculation
+    getMedicarePremiumCalculation() {
+
+        return medicarePremiumCalculation;
+    }
+
+    public BigDecimal getAnnualPartBPremium() {
+
+        return medicarePremiumCalculation
+                .annualPartBPremium();
+    }
+
+    public BigDecimal getAnnualPartDPremium() {
+
+        return medicarePremiumCalculation
+                .annualPartDPremium();
+    }
+
+    public IrmaaBracket getIrmaaBracket() {
+
+        return medicarePremiumCalculation
+                .irmaaBracket();
+    }
+
+    public String getIrmaaBracketDisplay() {
+
+        return medicarePremiumCalculation
+                .irmaaBracket()
+                .getDisplayRange();
+    }
 }

@@ -80,6 +80,24 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 year);
 
         // ----------------------------------------------------
+// Medicare
+// ----------------------------------------------------
+
+        row = addMedicareSection(
+                grid,
+                row,
+                year);
+
+// ----------------------------------------------------
+// Totals
+// ----------------------------------------------------
+
+        addTotalsSection(
+                grid,
+                row,
+                year);
+
+        // ----------------------------------------------------
         // Totals
         // ----------------------------------------------------
 
@@ -283,6 +301,87 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 year.getMichiganIncomeTax());
 
         return addBlankRow(row);
+    }
+
+    private int addMedicareSection(
+            GridPane grid,
+            int row,
+            ProjectionYear year) {
+
+        row = addSectionHeading(
+                grid,
+                row,
+                "Medicare");
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Modified Adjusted Gross Income",
+                year.getModifiedAdjustedGrossIncome());
+
+        row = addTextRow(
+                grid,
+                row,
+                "IRMAA Bracket",
+                year.getIrmaaBracketDisplay());
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Monthly Part B Premium",
+                year.getMonthlyPartBPremium());
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Annual Part B Premium",
+                year.getAnnualPartBPremium());
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Monthly Part D Premium",
+                year.getMonthlyPartDPremium());
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Annual Part D Premium",
+                year.getAnnualPartDPremium());
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Total Annual Medicare Premium",
+                year.getAnnualMedicarePremium());
+
+        return addBlankRow(row);
+    }
+
+    private int addTextRow(
+            GridPane grid,
+            int row,
+            String description,
+            String value) {
+
+        grid.add(
+                new Label(description),
+                0,
+                row);
+
+        Label valueLabel =
+                new Label(value);
+
+        GridPane.setHalignment(
+                valueLabel,
+                HPos.RIGHT);
+
+        grid.add(
+                valueLabel,
+                1,
+                row);
+
+        return row + 1;
     }
 
     private int addTotalsSection(

@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.testutil;
 
+import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculation;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountSnapshot;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
@@ -37,6 +38,11 @@ public class ProjectionYearBuilder {
     private MichiganTaxCalculation michiganTaxCalculation =
             MichiganTaxCalculationBuilder
                     .aMichiganTaxCalculation()
+                    .build();
+
+    private MedicarePremiumCalculation medicarePremiumCalculation =
+            MedicarePremiumCalculationBuilder
+                    .aMedicarePremiumCalculation()
                     .build();
 
     public static ProjectionYearBuilder aProjectionYear() {
@@ -138,6 +144,15 @@ public class ProjectionYearBuilder {
         return this;
     }
 
+    public ProjectionYearBuilder withMedicarePremiumCalculation(
+            MedicarePremiumCalculation calculation) {
+
+        this.medicarePremiumCalculation =
+                Objects.requireNonNull(calculation);
+
+        return this;
+    }
+
     public ProjectionYear build() {
 
         return new ProjectionYear(
@@ -155,6 +170,7 @@ public class ProjectionYearBuilder {
                 endingAccountSnapshots,
                 federalTaxCalculation,
                 michiganTaxCalculation,
+                medicarePremiumCalculation,
                 taxFundingWithdrawal,
                 primaryPersonAge
         );

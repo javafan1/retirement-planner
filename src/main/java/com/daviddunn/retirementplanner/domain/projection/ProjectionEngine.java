@@ -1,13 +1,14 @@
 package com.daviddunn.retirementplanner.domain.projection;
 
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
+import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculation;
+import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculator;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdCalculator;
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdResult;
-import com.daviddunn.retirementplanner.domain.rmd.OwnerRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.RmdBalanceSnapshot;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.tax.*;
@@ -31,6 +32,8 @@ public class ProjectionEngine {
     private final GovernmentRuleProjectionService
             governmentRuleProjectionService;
 
+    private final MedicarePremiumCalculator
+            medicarePremiumCalculator;
 
     public ProjectionEngine() {
 
@@ -48,6 +51,9 @@ public class ProjectionEngine {
 
         this.taxFundingCalculator =
                 new TaxFundingCalculator();
+
+        this.medicarePremiumCalculator =
+                new MedicarePremiumCalculator();
 
 
         try {
@@ -303,9 +309,7 @@ public class ProjectionEngine {
                         portfolioAfterAdditionalWithdrawal,
                         totalWithdrawalBreakdown,
                         withdrawalStrategy,
-                        assumptions
-                                .getTaxAssumptions()
-                                .getFilingStatus(),
+                        getFilingStatus(assumptions),
                         projectedGovernmentRules);
 
         BigDecimal taxFundingWithdrawal =
@@ -320,6 +324,18 @@ public class ProjectionEngine {
 
         MichiganTaxCalculation michiganTaxCalculation =
                 taxFundingResult.getMichiganTaxCalculation();
+
+        int coveredIndividuals =
+                calculateCoveredMedicareParticipants(
+                        household,
+                        projectionDate);
+
+        MedicarePremiumCalculation medicarePremiumCalculation =
+                medicarePremiumCalculator.calculate(
+                        federalTaxCalculation,
+                        getFilingStatus(assumptions),
+                        projectedGovernmentRules,
+                        coveredIndividuals);
 
         ProjectedPortfolio portfolioAfterTaxWithdrawal =
                 withdrawalAllocator.applyAdditionalWithdrawal(
@@ -386,14 +402,20 @@ public class ProjectionEngine {
                         endingAccountSnapshots,
                         federalTaxCalculation,
                         michiganTaxCalculation,
+                        medicarePremiumCalculation,
                         taxFundingWithdrawal,
                         primaryPersonAge);
-
 
 
         return new ProjectionYearCalculation(
                 projectionYear,
                 endingPortfolio);
+    }
+
+    private static com.daviddunn.retirementplanner.domain.rules.FilingStatus getFilingStatus(PlanningAssumptions assumptions) {
+        return assumptions
+                .getTaxAssumptions()
+                .getFilingStatus();
     }
 
     private HouseholdRmdResult calculateRequiredMinimumDistribution(
@@ -552,6 +574,8 @@ public class ProjectionEngine {
                         requiredMinimumDistribution);
     }
 
+
+
     private BigDecimal calculateEndingAssets(
             BigDecimal beginningAssets,
             BigDecimal investmentGrowth,
@@ -576,7 +600,26 @@ public class ProjectionEngine {
                         RoundingMode.HALF_UP);
     }
 
+    private int calculateCoveredMedicareParticipants(
+            Household household,
+            LocalDate projectionDate) {
 
+        int participants = 0;
+
+        if (household.getPrimaryPerson()
+                .getAge(projectionDate) >= 65) {
+
+            participants++;
+        }
+
+        if (household.getSpouse()
+                .getAge(projectionDate) >= 65) {
+
+            participants++;
+        }
+
+        return participants;
+    }
 
 
 }
