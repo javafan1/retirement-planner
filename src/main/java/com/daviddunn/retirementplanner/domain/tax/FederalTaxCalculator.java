@@ -70,6 +70,13 @@ public final class FederalTaxCalculator {
                         .add(
                                 taxableSocialSecurity);
 
+        BigDecimal standardDeduction =
+                projectedGovernmentRules
+                        .getFederalTaxRules(
+                                filingStatus)
+                        .getStandardDeduction();
+
+
         /*
          * Apply the (already projected)
          * standard deduction.
@@ -80,6 +87,7 @@ public final class FederalTaxCalculator {
                                 adjustedGrossIncome,
                                 filingStatus,
                                 projectedGovernmentRules);
+
 
         /*
          * Apply the (already projected)
@@ -94,6 +102,7 @@ public final class FederalTaxCalculator {
         return new FederalTaxCalculation(
                 adjustedGrossIncome,
                 taxableSocialSecurity,
+                standardDeduction,
                 taxableIncome,
                 federalIncomeTax);
     }

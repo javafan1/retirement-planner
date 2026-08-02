@@ -217,6 +217,12 @@ public class ProjectionEngine {
                         yearOffset,
                         projectionStartDate);
 
+//        System.out.println(
+//                "Projection year "
+//                        + calendarYear
+//                        + " annual expenses = "
+//                        + annualExpenses);
+
         /*
          * Calculate the complete household RMD
          * result rather than immediately reducing

@@ -10,6 +10,7 @@ public class FederalTaxCalculationBuilder {
     private BigDecimal taxableSocialSecurity = BigDecimal.ZERO;
     private BigDecimal taxableIncome = BigDecimal.ZERO;
     private BigDecimal federalIncomeTax = BigDecimal.ZERO;
+    private BigDecimal standardDeduction = BigDecimal.ZERO;
 
     public static FederalTaxCalculationBuilder aFederalTaxCalculation() {
         return new FederalTaxCalculationBuilder();
@@ -38,11 +39,18 @@ public class FederalTaxCalculationBuilder {
         return this;
     }
 
+    public FederalTaxCalculationBuilder withStamdardDeduction(long amount) {
+        standardDeduction= BigDecimal.valueOf(amount);
+        return this;
+    }
+
+
     public FederalTaxCalculation build() {
 
         return new FederalTaxCalculation(
                 adjustedGrossIncome,
                 taxableSocialSecurity,
+                standardDeduction,
                 taxableIncome,
                 federalIncomeTax);
     }

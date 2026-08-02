@@ -35,11 +35,17 @@ public class ProjectionYear {
     private final BigDecimal adjustedGrossIncome;
     private final BigDecimal taxableSocialSecurity;
     private final BigDecimal federalTaxableIncome;
+    private final BigDecimal federalStandardDeduction;
     private final BigDecimal federalIncomeTax;
     private final BigDecimal michiganIncomeTax;
     private final int primaryPersonAge;
 
 
+    private final BigDecimal michiganRetirementIncome;
+
+    private final BigDecimal michiganRetirementDeduction;
+
+    private final BigDecimal michiganTaxableIncome;
 
     public ProjectionYear(
             int projectionYear,
@@ -66,6 +72,9 @@ public class ProjectionYear {
         this.federalTaxableIncome =
                 BigDecimal.ZERO;
 
+        this.federalStandardDeduction =
+                BigDecimal.ZERO;
+
         this.federalIncomeTax =
                 BigDecimal.ZERO;
 
@@ -74,6 +83,9 @@ public class ProjectionYear {
 
         this.michiganIncomeTax =
                 BigDecimal.ZERO;
+        this.michiganRetirementIncome = BigDecimal.ZERO;
+        this.michiganRetirementDeduction = BigDecimal.ZERO;
+        this.michiganTaxableIncome = BigDecimal.ZERO;
 
 
         this.projectionYear = projectionYear;
@@ -156,11 +168,18 @@ public class ProjectionYear {
         this.federalTaxableIncome =
                 BigDecimal.ZERO;
 
+        this.federalStandardDeduction =
+                BigDecimal.ZERO;
+
         this.federalIncomeTax =
                 BigDecimal.ZERO;
 
         this.michiganIncomeTax =
                 BigDecimal.ZERO;
+
+        this.michiganRetirementIncome = BigDecimal.ZERO;
+        this.michiganRetirementDeduction = BigDecimal.ZERO;
+        this.michiganTaxableIncome = BigDecimal.ZERO;
 
         this.projectionYear = projectionYear;
         this.primaryPersonAge = primaryPersonAge;
@@ -263,6 +282,8 @@ public class ProjectionYear {
                         taxFundingWithdrawal,
                         "Tax funding withdrawal is required.");
 
+        this.federalStandardDeduction =
+                federalTaxCalculation.getStandardDeduction();
 
         if (taxFundingWithdrawal.signum() < 0) {
             throw new IllegalArgumentException(
@@ -323,13 +344,29 @@ public class ProjectionYear {
                 federalTaxCalculation
                         .getTaxableIncome();
 
+
+
         this.federalIncomeTax =
                 federalTaxCalculation
                         .getFederalIncomeTax();
 
+        Objects.requireNonNull(
+                michiganTaxCalculation,
+                "Michigan tax calculation is required.");
+
+        this.michiganRetirementIncome =
+                michiganTaxCalculation.retirementIncome();
+
+        this.michiganRetirementDeduction =
+                michiganTaxCalculation.retirementDeduction();
+
+        this.michiganTaxableIncome =
+                michiganTaxCalculation.taxableIncome();
+
         this.michiganIncomeTax =
-                michiganTaxCalculation
-                        .incomeTax();
+                michiganTaxCalculation.incomeTax();
+
+
     }
 
     public int getProjectionYear() {
@@ -446,4 +483,27 @@ public class ProjectionYear {
     public BigDecimal getMichiganIncomeTax() {
         return michiganIncomeTax;
     }
+
+    public BigDecimal getMichiganRetirementIncome() {
+        return michiganRetirementIncome;
+    }
+
+    public BigDecimal getMichiganRetirementDeduction() {
+        return michiganRetirementDeduction;
+    }
+
+    public BigDecimal getMichiganTaxableIncome() {
+        return michiganTaxableIncome;
+    }
+
+    public BigDecimal getTotalIncomeTax() {
+
+        return federalIncomeTax.add(
+                michiganIncomeTax);
+    }
+
+    public BigDecimal getFederalStandardDeduction() {
+        return federalStandardDeduction;
+    }
+
 }

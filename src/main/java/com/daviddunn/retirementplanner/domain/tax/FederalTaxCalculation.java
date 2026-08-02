@@ -9,10 +9,12 @@ public final class FederalTaxCalculation {
     private final BigDecimal taxableSocialSecurity;
     private final BigDecimal taxableIncome;
     private final BigDecimal federalIncomeTax;
+    private final BigDecimal standardDeduction;
 
     public FederalTaxCalculation(
             BigDecimal adjustedGrossIncome,
             BigDecimal taxableSocialSecurity,
+            BigDecimal standardDeduction,
             BigDecimal taxableIncome,
             BigDecimal federalIncomeTax) {
 
@@ -31,6 +33,11 @@ public final class FederalTaxCalculation {
                         taxableIncome,
                         "Taxable income");
 
+        this.standardDeduction =
+                requireNonNegative(
+                        standardDeduction,
+                        "Standard Deduction");
+
         this.federalIncomeTax =
                 requireNonNegative(
                         federalIncomeTax,
@@ -43,6 +50,10 @@ public final class FederalTaxCalculation {
 
     public BigDecimal getTaxableSocialSecurity() {
         return taxableSocialSecurity;
+    }
+
+    public BigDecimal getStandardDeduction() {
+        return standardDeduction;
     }
 
     public BigDecimal getTaxableIncome() {

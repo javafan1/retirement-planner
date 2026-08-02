@@ -97,6 +97,16 @@ public class ResultsView extends BorderPane {
                         "Federal Tax",
                         ProjectionYear::getFederalIncomeTax);
 
+        TableColumn<ProjectionYear, BigDecimal> michiganTaxColumn =
+                createMoneyColumn(
+                        "Michigan Tax",
+                        ProjectionYear::getMichiganIncomeTax);
+
+        TableColumn<ProjectionYear, BigDecimal> totalTaxColumn =
+                createMoneyColumn(
+                        "Total Tax",
+                        ProjectionYear::getTotalIncomeTax);
+
         TableColumn<ProjectionYear, BigDecimal> rmdColumn =
                 createMoneyColumn(
                         "RMD",
@@ -122,6 +132,8 @@ public class ResultsView extends BorderPane {
                 rmdColumn,
                 withdrawalColumn,
                 federalTaxColumn,
+                michiganTaxColumn,
+                totalTaxColumn,
                 endingAssetsColumn);
 
         table.setColumnResizePolicy(

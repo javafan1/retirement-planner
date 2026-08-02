@@ -309,8 +309,8 @@ public class MainWindow {
     private void showProjectionYearSummary(
             ProjectionYear projectionYear) {
 
-        ProjectionYearSummaryDialog dialog =
-                new ProjectionYearSummaryDialog(
+        ProjectionYearDetailsDialog dialog =
+                new ProjectionYearDetailsDialog(
                         projectionYear);
 
         dialog.show();

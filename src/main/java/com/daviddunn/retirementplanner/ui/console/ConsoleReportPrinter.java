@@ -10,6 +10,8 @@ import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.util.CurrencyFormatter;
 import com.daviddunn.retirementplanner.util.Money;
 
+import java.math.BigDecimal;
+
 public class ConsoleReportPrinter {
 
     public void printRetirementPlan(RetirementPlan plan) {
@@ -44,41 +46,88 @@ public class ConsoleReportPrinter {
         System.out.println("Projection");
         System.out.println("========================================");
     }
-
     private void printProjectionYear(
             ProjectionYear year) {
 
         System.out.println();
         System.out.println(year.getCalendarYear());
+        System.out.printf("Age: %d%n",
+                year.getPrimaryPersonAge());
 
-        System.out.printf("%-30s %15s%n",
+        printSection("Portfolio");
+
+        printMoney(
                 "Beginning Assets",
-                CurrencyFormatter.format(
-                        year.getBeginningInvestableAssets()));
+                year.getBeginningInvestableAssets());
 
-        System.out.printf("%-30s %15s%n",
+        printMoney(
                 "Investment Growth",
-                CurrencyFormatter.format(
-                        year.getInvestmentGrowth()));
+                year.getInvestmentGrowth());
 
-        System.out.printf("%-30s %15s%n",
-                "Guaranteed Income",
-                CurrencyFormatter.format(
-                        year.getGuaranteedIncome()));
-
-        System.out.printf("%-30s %15s%n",
-                "Expenses",
-                CurrencyFormatter.format(
-                        year.getAnnualExpenses()));
-
-        System.out.println("----------------------------------------");
-
-        System.out.printf("%-30s %15s%n",
+        printMoney(
                 "Ending Assets",
-                CurrencyFormatter.format(
-                        year.getEndingInvestableAssets()));
-    }
+                year.getEndingInvestableAssets());
 
+        printSection("Cash Flow");
+
+        printMoney(
+                "Guaranteed Income",
+                year.getGuaranteedIncome());
+
+        printMoney(
+                "Portfolio Withdrawal",
+                year.getPortfolioWithdrawal());
+
+        printMoney(
+                "Tax Funding Withdrawal",
+                year.getTaxFundingWithdrawal());
+
+        printMoney(
+                "Required Minimum Distribution",
+                year.getRequiredMinimumDistribution());
+
+        printMoney(
+                "Excess RMD",
+                year.getExcessRmd());
+
+        printMoney(
+                "Cash Flow Need",
+                year.getCashFlowNeed());
+
+        printMoney(
+                "Annual Expenses",
+                year.getAnnualExpenses());
+
+        printSection("Federal Tax");
+
+        printMoney(
+                "Adjusted Gross Income",
+                year.getAdjustedGrossIncome());
+
+        printMoney(
+                "Taxable Social Security",
+                year.getTaxableSocialSecurity());
+
+        printMoney(
+                "Federal Taxable Income",
+                year.getFederalTaxableIncome());
+
+        printMoney(
+                "Federal Income Tax",
+                year.getFederalIncomeTax());
+
+        printSection("Michigan Tax");
+
+        printMoney(
+                "Michigan Income Tax",
+                year.getMichiganIncomeTax());
+
+        printSection("Total Taxes");
+
+        printMoney(
+                "Total Income Tax",
+                year.getTotalIncomeTax());
+    }
     public void print(){
         this.printHeader();
 
@@ -200,6 +249,22 @@ public class ConsoleReportPrinter {
                         .multiply(Money.of("100")));
 
         System.out.println();
+    }
+    private void printSection(String title) {
+
+        System.out.println();
+        System.out.println(title);
+        System.out.println("----------------------------------------");
+    }
+
+    private void printMoney(
+            String label,
+            BigDecimal amount) {
+
+        System.out.printf(
+                "%-35s %15s%n",
+                label,
+                CurrencyFormatter.format(amount));
     }
 
 }

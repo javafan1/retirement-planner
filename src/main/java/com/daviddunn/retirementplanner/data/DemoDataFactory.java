@@ -3,6 +3,7 @@
 package com.daviddunn.retirementplanner.data;
 
 import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
+import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.financial.RothIRA;
 import com.daviddunn.retirementplanner.domain.financial.TraditionalIRA;
 import com.daviddunn.retirementplanner.domain.income.Pension;
@@ -25,7 +26,14 @@ public final class DemoDataFactory {
         addDavidIncome(david);
         addLisaIncome(lisa);
 
-        Household household = new Household(david, lisa);
+        //Household household = new Household(david, lisa);
+        Household household =
+                new Household(david, lisa);
+
+        household.addExpense(
+                new Expense(
+                        "Living Expenses",
+                        Money.of("108000")));
 
         AccountPortfolio portfolio = createPortfolio();
 

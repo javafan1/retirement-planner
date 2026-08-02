@@ -93,7 +93,7 @@ public class ApplicationController {
 
 
     public void invalidateProjection() {
-        currentProjectionSummary = null;
+        projectionChanged();
     }
 
     public RetirementPlan newPlan() {

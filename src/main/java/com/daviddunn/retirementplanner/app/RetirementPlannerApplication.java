@@ -46,8 +46,8 @@ public class RetirementPlannerApplication {
             RetirementPlan loadedPlan =
                     repository.load(file);
 
-            System.out.println(loadedPlan.getHousehold()
-                    .getHouseholdName());
+            //System.out.println(loadedPlan.getHousehold()
+            //        .getHouseholdName());
         } catch (
                 IOException e) {
 

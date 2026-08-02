@@ -17,10 +17,10 @@ public class ProjectionChartBuilder {
 
         for (ProjectionYear year : projection.getYears()) {
 
-            System.out.println(
-                    "Year = " + year.getCalendarYear()
-                            + ", Assets = "
-                            + year.getEndingInvestableAssets());
+//            System.out.println(
+//                    "Year = " + year.getCalendarYear()
+//                            + ", Assets = "
+//                            + year.getEndingInvestableAssets());
 
             series.getData().add(
                     new XYChart.Data<>(
