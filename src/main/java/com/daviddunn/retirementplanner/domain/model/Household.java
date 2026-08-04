@@ -118,18 +118,18 @@ public class Household {
         return primaryPerson.getGuaranteedIncome(projectionDate)
                 .add(spouse.getGuaranteedIncome(projectionDate));
     }
-
-    @JsonIgnore
-    public BigDecimal getTotalAnnualExpenses() {
-
-        BigDecimal total = BigDecimal.ZERO;
-
-        for (Expense expense : expenses) {
-            total = total.add(expense.getAnnualAmount());
-        }
-
-        return total;
-    }
+//
+//    @JsonIgnore
+//    public BigDecimal getTotalAnnualExpenses() {
+//
+//        BigDecimal total = BigDecimal.ZERO;
+//
+//        for (Expense expense : expenses) {
+//            total = total.add(expense.getAnnualAmount());
+//        }
+//
+//        return total;
+//    }
 
 //    @JsonIgnore
 //    public List<Account> getAllAccounts() {

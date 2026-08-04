@@ -22,6 +22,7 @@ import javafx.scene.control.TabPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.stage.FileChooser;
+import javafx.stage.Stage;
 
 import java.io.File;
 
@@ -40,7 +41,7 @@ public class MainWindow {
     private final ResultsView resultsView;
     private final DashboardView dashboardView;
     private final PortfolioChartView portfolioChartView;
-
+    private Stage stage;
     private final Label statusLabel;
 
     public MainWindow() {
@@ -109,6 +110,8 @@ public class MainWindow {
         saveAsItem.setOnAction(e -> onSaveAs());
         openItem.setOnAction(e -> onOpen());
         exitItem.setOnAction(e -> onExit());
+
+        newItem.setOnAction(e -> onNew());
 
         fileMenu.getItems().addAll(
                 newItem,
@@ -197,6 +200,7 @@ public class MainWindow {
         incomeSourcesView.load(plan);
         expensesView.load(plan);
         assumptionsView.load(plan);
+        updateWindowTitle();
 
         refreshProjectionViews();
 
@@ -259,6 +263,9 @@ public class MainWindow {
             controller.saveAs(file.toPath());
 
             statusLabel.setText("Plan saved.");
+
+            updateWindowTitle();
+
         } catch (Exception ex) {
 
             statusLabel.setText("Save failed.");
@@ -290,6 +297,8 @@ public class MainWindow {
 
             loadCurrentPlan();
 
+            updateWindowTitle();
+
             statusLabel.setText("Plan opened.");
         } catch (Exception ex) {
 
@@ -320,17 +329,88 @@ public class MainWindow {
 
         controller.invalidateProjection();
 
-        Projection projection =
-                controller.getCurrentProjection();
+        try {
+            Projection projection =
+                    controller.getCurrentProjection();
 
-        ProjectionSummary summary =
-                controller.getCurrentProjectionSummary();
+            ProjectionSummary summary =
+                    controller.getCurrentProjectionSummary();
 
-        dashboardView.load(summary);
-        portfolioChartView.load(projection);
-        projectionYearView.load(projection);
-        resultsView.load(projection);
+            dashboardView.load(summary);
+            portfolioChartView.load(projection);
+            projectionYearView.load(projection);
+            resultsView.load(projection);
 
-        statusLabel.setText("Projection updated.");
+            statusLabel.setText("Projection updated.");
+        }
+        catch (Exception ex) {
+
+            ex.printStackTrace();
+
+            statusLabel.setText(
+                    "Projection unavailable.");
+        }
     }
+
+    public void setStage(Stage stage) {
+
+        this.stage = stage;
+
+        updateWindowTitle();
+    }
+
+//    private void updateWindowTitle() {
+//
+//        if (stage == null) {
+//            return;
+//        }
+//
+//        stage.setTitle(
+//                "Retirement Planner - "
+//                        + controller.getCurrentPlanDisplayName());
+//    }
+
+    private void updateWindowTitle() {
+
+        if (stage == null) {
+            return;
+        }
+
+        StringBuilder title =
+                new StringBuilder("Retirement Planner");
+
+        title.append(" - ");
+
+        if (controller.hasCurrentFile()) {
+
+            title.append(
+                    controller.getCurrentFile()
+                            .getFileName());
+        }
+        else {
+
+            title.append("Untitled");
+        }
+
+        if (controller.isModified()) {
+
+            title.append(" *");
+        }
+
+        stage.setTitle(
+                title.toString());
+    }
+
+    private void onNew() {
+
+        controller.newPlan();
+
+        loadCurrentPlan();
+
+        updateWindowTitle();
+
+        statusLabel.setText("New plan.");
+    }
+
+
 }

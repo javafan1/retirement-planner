@@ -187,16 +187,43 @@ public class Person {
 //                        : new ArrayList<>(incomeSources);
 //    }
 
+//    @JsonIgnore
+//    public int getAge(LocalDate date) {
+//
+//        Objects.requireNonNull(
+//                date,
+//                "Date is required.");
+//
+//        return Period.between(
+//                        birthDate,
+//                        date)
+//                .getYears();
+//    }
+
     @JsonIgnore
     public int getAge(LocalDate date) {
 
         Objects.requireNonNull(
+                birthDate,
+                "Birth date is required.");
+
+        Objects.requireNonNull(
                 date,
-                "Date is required.");
+                "Projection date is required.");
 
         return Period.between(
                         birthDate,
                         date)
                 .getYears();
+    }
+
+    @Override
+    public String toString() {
+
+        return "Person{" +
+                "firstName='" + firstName + '\'' +
+                ", lastName='" + lastName + '\'' +
+                ", birthDate=" + birthDate +
+                '}';
     }
 }

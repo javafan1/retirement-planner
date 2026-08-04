@@ -1,5 +1,19 @@
 
 
+8.3
+
+I also want to point out something that has become clear over the past several weeks.
+
+When we started, we were focused on building a retirement planner. As we've worked through taxes, Medicare, and now growth models, we've naturally evolved toward a layered architecture:
+
+Economic assumptions (how the world changes)
+Projection engine (what happens under those assumptions)
+Strategy engine (what decisions the user makes)
+Comparison engine (how different strategies compare)
+
+That's a very clean separation, and I think it will make the application much easier to extend over time without accumulating lots of special-case logic.
+
+
 8.1
 com.daviddunn.retirementplanner.domain.tax
 │

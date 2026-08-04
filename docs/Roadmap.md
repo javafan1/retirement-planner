@@ -1,6 +1,58 @@
 
 
+8.3
+
+
+Version 1.1 — Economic Growth Engine
+✅ CompoundGrowthService
+✅ Healthcare Inflation assumption
+✅ Expense Growth Models
+✅ Medicare Premium Growth
+✅ Remove duplicated compound-growth calculations
+
+Version 1.2 — Roth Conversion Simulation
+Strategy framework
+Traditional → Roth transfers
+Results View enhancements
+Projection Year details
+
+Version 1.3 — Strategy Comparison
+Baseline vs. strategy
+Lifetime tax comparison
+Lifetime Medicare comparison
+Lifetime RMD comparison
+After-tax estate comparison
+
+If I were writing Version 1.0 today, it would be:
+
+-Core Projection ✅
+Assets
+Income
+Expenses
+Taxes
+RMDs
+Medicare
+-Roth Conversion Simulation (next)
+Strategy selection
+Asset migration
+Tax impact
+Results view
+Details dialog
+-Strategy Comparison
+Baseline vs. strategy
+Lifetime summaries
+RMD reduction
+Medicare savings
+After-tax estate
+-Additional Decision Modules
+Social Security claiming
+Pension start dates
+Withdrawal strategies
+
 8.2 
+
+
+
 
 That gives us room to use the same assumption later for:
 

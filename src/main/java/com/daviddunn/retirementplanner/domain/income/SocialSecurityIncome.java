@@ -3,6 +3,8 @@ package com.daviddunn.retirementplanner.domain.income;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.Person;
+import com.daviddunn.retirementplanner.domain.projection.CompoundGrowthService;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -16,6 +18,8 @@ public class SocialSecurityIncome extends IncomeSource {
     private final BigDecimal fullRetirementMonthlyBenefit;
     private final int claimingAge;
     private final BigDecimal annualColaRate;
+    private final CompoundGrowthService
+            compoundGrowthService;
 
     @JsonCreator
     public SocialSecurityIncome(
@@ -63,6 +67,42 @@ public class SocialSecurityIncome extends IncomeSource {
         }
 
         this.claimingAge = claimingAge;
+
+        this.compoundGrowthService =
+                new CompoundGrowthService();
+    }
+//
+//    @Override
+//    protected BigDecimal calculateAnnualIncome(
+//            Person person,
+//            LocalDate projectionDate,
+//            int activeMonths) {
+//
+//        BigDecimal monthlyBenefit =
+//                SocialSecurityBenefitCalculator.calculateMonthlyBenefit(
+//                        fullRetirementMonthlyBenefit,
+//                        person.getBirthDate(),
+//                        claimingAge);
+//
+//        int yearsReceivingBenefits =
+//                Math.max(
+//                        projectionDate.getYear()
+//                                - getStartDate().getYear(),
+//                        0);
+//
+//        BigDecimal colaMultiplier =
+//                BigDecimal.ONE
+//                        .add(annualColaRate)
+//                        .pow(yearsReceivingBenefits);
+//
+//        return monthlyBenefit
+//                .multiply(colaMultiplier)
+//                .multiply(BigDecimal.valueOf(activeMonths))
+//                .setScale(2, RoundingMode.HALF_UP);
+//    }
+//
+public BigDecimal getFullRetirementMonthlyBenefit() {
+        return fullRetirementMonthlyBenefit;
     }
 
     @Override
@@ -83,19 +123,17 @@ public class SocialSecurityIncome extends IncomeSource {
                                 - getStartDate().getYear(),
                         0);
 
-        BigDecimal colaMultiplier =
-                BigDecimal.ONE
-                        .add(annualColaRate)
-                        .pow(yearsReceivingBenefits);
+        BigDecimal projectedMonthlyBenefit =
+                compoundGrowthService.project(
+                        monthlyBenefit,
+                        annualColaRate,
+                        yearsReceivingBenefits);
 
-        return monthlyBenefit
-                .multiply(colaMultiplier)
+        return projectedMonthlyBenefit
                 .multiply(BigDecimal.valueOf(activeMonths))
-                .setScale(2, RoundingMode.HALF_UP);
-    }
-
-    public BigDecimal getFullRetirementMonthlyBenefit() {
-        return fullRetirementMonthlyBenefit;
+                .setScale(
+                        2,
+                        RoundingMode.HALF_UP);
     }
 
     public int getClaimingAge() {

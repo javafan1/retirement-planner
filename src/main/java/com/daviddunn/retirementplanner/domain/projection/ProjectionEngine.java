@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.projection;
 
+import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculation;
 import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculator;
@@ -15,6 +16,8 @@ import com.daviddunn.retirementplanner.domain.tax.*;
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
 import com.daviddunn.retirementplanner.domain.withdrawal.*;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
+import com.daviddunn.retirementplanner.domain.projection.CompoundGrowthService;
+
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -35,6 +38,8 @@ public class ProjectionEngine {
     private final MedicarePremiumCalculator
             medicarePremiumCalculator;
 
+    private final CompoundGrowthService compoundGrowthService;
+
     public ProjectionEngine() {
 
         this.withdrawalCalculator =
@@ -54,6 +59,8 @@ public class ProjectionEngine {
 
         this.medicarePremiumCalculator =
                 new MedicarePremiumCalculator();
+
+        this.compoundGrowthService = new CompoundGrowthService();
 
 
         try {
@@ -78,6 +85,7 @@ public class ProjectionEngine {
 
         Projection projection =
                 new Projection();
+
 
         /*
          * Create an independent projected portfolio
@@ -221,7 +229,7 @@ public class ProjectionEngine {
                         household,
                         assumptions,
                         yearOffset,
-                        projectionStartDate);
+                        projectionDate);
 
 //        System.out.println(
 //                "Projection year "
@@ -329,6 +337,8 @@ public class ProjectionEngine {
                 calculateCoveredMedicareParticipants(
                         household,
                         projectionDate);
+
+
 
         MedicarePremiumCalculation medicarePremiumCalculation =
                 medicarePremiumCalculator.calculate(
@@ -515,52 +525,147 @@ public class ProjectionEngine {
 
         return total;
     }
+
     private BigDecimal calculateProjectedExpenses(
             Household household,
             PlanningAssumptions assumptions,
             int yearOffset,
-            LocalDate projectionStartDate) {
+            LocalDate projectionDate) {
 
-        BigDecimal inflationMultiplier =
-                BigDecimal.ONE
-                        .add(
-                                assumptions
-                                        .getExpectedAnnualInflationRate())
-                        .pow(yearOffset);
+        BigDecimal totalExpenses =
+                BigDecimal.ZERO;
 
-        BigDecimal annualExpenses =
-                household
-                        .getTotalAnnualExpenses()
-                        .multiply(
-                                inflationMultiplier);
+        //CompoundGrowthService compoundGrowthService = new CompoundGrowthService();
 
-        /*
-         * Only the first projection year can
-         * represent a partial calendar year.
-         */
-        if (yearOffset == 0) {
+        for (Expense expense : household.getExpenses()) {
 
-            int activeMonths =
-                    13 -
-                            projectionStartDate
-                                    .getMonthValue();
+            if (!expense.isActive(projectionDate)) {
+                continue;
+            }
 
-            annualExpenses =
-                    annualExpenses
-                            .multiply(
-                                    BigDecimal.valueOf(
-                                            activeMonths))
-                            .divide(
-                                    BigDecimal.valueOf(12),
-                                    2,
-                                    RoundingMode.HALF_UP);
+//            BigDecimal growthRate =
+//                    getExpenseGrowthRate(
+//                            expense,
+//                            assumptions);
+
+
+                    ;
+            BigDecimal projectedExpense =
+                    calculateProjectedExpense(
+                            expense,
+                            assumptions,
+                            yearOffset);
+
+            /*
+             * Only the first projection year may
+             * represent a partial calendar year.
+             *
+             * For Version 1, all active expenses are
+             * prorated equally. A future enhancement
+             * will prorate each expense individually
+             * based on its own start and end dates.
+             */
+            if (yearOffset == 0) {
+
+                int activeMonths =
+                        13 -
+                                projectionDate
+                                        .getMonthValue();
+
+                projectedExpense =
+                        projectedExpense
+                                .multiply(
+                                        BigDecimal.valueOf(
+                                                activeMonths))
+                                .divide(
+                                        BigDecimal.valueOf(12),
+                                        2,
+                                        RoundingMode.HALF_UP);
+            }
+
+            totalExpenses =
+                    totalExpenses.add(
+                            projectedExpense);
         }
 
-        return annualExpenses
-                .setScale(
-                        2,
-                        RoundingMode.HALF_UP);
+        return totalExpenses.setScale(
+                2,
+                RoundingMode.HALF_UP);
     }
+
+    private BigDecimal getExpenseGrowthRate(
+            Expense expense,
+            PlanningAssumptions assumptions) {
+
+        return expense.isHealthcareExpense()
+                ? assumptions.getHealthcareInflationRate()
+                : assumptions.getGeneralInflationRate();
+    }
+
+    private BigDecimal calculateProjectedExpense(
+            Expense expense,
+            PlanningAssumptions assumptions,
+            int yearOffset) {
+
+
+
+        BigDecimal growthRate =
+                getExpenseGrowthRate(
+                        expense,
+                        assumptions);
+
+        return compoundGrowthService.project(
+                expense.getAnnualAmount(),
+                growthRate,
+                yearOffset);
+    }
+
+//    private BigDecimal calculateProjectedExpenses(
+//            Household household,
+//            PlanningAssumptions assumptions,
+//            int yearOffset,
+//            LocalDate projectionStartDate) {
+//
+//        BigDecimal inflationMultiplier =
+//                BigDecimal.ONE
+//                        .add(
+//                                assumptions
+//                                        .getExpectedAnnualInflationRate())
+//                        .pow(yearOffset);
+//
+//        BigDecimal annualExpenses =
+//                household
+//                        .getTotalAnnualExpenses()
+//                        .multiply(
+//                                inflationMultiplier);
+//
+//        /*
+//         * Only the first projection year can
+//         * represent a partial calendar year.
+//         */
+//        if (yearOffset == 0) {
+//
+//            int activeMonths =
+//                    13 -
+//                            projectionStartDate
+//                                    .getMonthValue();
+//
+//            annualExpenses =
+//                    annualExpenses
+//                            .multiply(
+//                                    BigDecimal.valueOf(
+//                                            activeMonths))
+//                            .divide(
+//                                    BigDecimal.valueOf(12),
+//                                    2,
+//                                    RoundingMode.HALF_UP);
+//        }
+//
+//        return annualExpenses
+//                .setScale(
+//                        2,
+//                        RoundingMode.HALF_UP);
+//    }
 
     private WithdrawalResult calculatePortfolioWithdrawal(
             BigDecimal guaranteedIncome,
@@ -599,6 +704,27 @@ public class ProjectionEngine {
                         2,
                         RoundingMode.HALF_UP);
     }
+//
+//    private int calculateCoveredMedicareParticipants(
+//            Household household,
+//            LocalDate projectionDate) {
+//
+//        int participants = 0;
+//
+//        if (household.getPrimaryPerson()
+//                .getAge(projectionDate) >= 65) {
+//
+//            participants++;
+//        }
+//
+//        if (household.getSpouse()
+//                .getAge(projectionDate) >= 65) {
+//
+//            participants++;
+//        }
+//
+//        return participants;
+//    }
 
     private int calculateCoveredMedicareParticipants(
             Household household,
@@ -606,15 +732,17 @@ public class ProjectionEngine {
 
         int participants = 0;
 
-        if (household.getPrimaryPerson()
-                .getAge(projectionDate) >= 65) {
+        Person primary = household.getPrimaryPerson();
 
+        if (primary.getBirthDate() != null &&
+                primary.getAge(projectionDate) >= 65) {
             participants++;
         }
 
-        if (household.getSpouse()
-                .getAge(projectionDate) >= 65) {
+        Person spouse = household.getSpouse();
 
+        if (spouse.getBirthDate() != null &&
+                spouse.getAge(projectionDate) >= 65) {
             participants++;
         }
 

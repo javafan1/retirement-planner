@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.views;
 
 import com.daviddunn.retirementplanner.domain.financial.Expense;
+import com.daviddunn.retirementplanner.domain.financial.GrowthCategory;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.ui.dialogs.ExpenseDialog;
@@ -15,6 +16,8 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 
 import java.text.NumberFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
 public class ExpensesView extends BorderPane {
@@ -32,12 +35,17 @@ public class ExpensesView extends BorderPane {
     private final NumberFormat currency =
             NumberFormat.getCurrencyInstance();
 
+    private final DateTimeFormatter dateFormatter =
+            DateTimeFormatter.ofPattern("M/d/yyyy");
+
     public ExpensesView() {
 
         table = new TableView<>();
+
         table.setRowFactory(tv -> {
 
-            TableRow<Expense> row = new TableRow<>();
+            TableRow<Expense> row =
+                    new TableRow<>();
 
             row.setOnMouseClicked(event -> {
 
@@ -105,12 +113,63 @@ public class ExpensesView extends BorderPane {
                                 cellData.getValue()
                                         .getAnnualAmount())));
 
+        TableColumn<Expense, String> growthColumn =
+                new TableColumn<>("Growth");
+
+        growthColumn.setCellValueFactory(cellData ->
+                new ReadOnlyStringWrapper(
+                        formatGrowthCategory(
+                                cellData.getValue()
+                                        .getGrowthCategory())));
+
+        TableColumn<Expense, String> effectiveColumn =
+                new TableColumn<>("Effective");
+
+        effectiveColumn.setCellValueFactory(cellData ->
+                new ReadOnlyStringWrapper(
+                        formatDate(
+                                cellData.getValue()
+                                        .getStartDate())));
+
+        TableColumn<Expense, String> endColumn =
+                new TableColumn<>("End");
+
+        endColumn.setCellValueFactory(cellData ->
+                new ReadOnlyStringWrapper(
+                        formatDate(
+                                cellData.getValue()
+                                        .getEndDate())));
+
         table.getColumns().addAll(
                 descriptionColumn,
-                amountColumn);
+                amountColumn,
+                growthColumn,
+                effectiveColumn,
+                endColumn);
 
         table.setColumnResizePolicy(
                 TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+    }
+
+    private String formatGrowthCategory(
+            GrowthCategory category) {
+
+        return switch (category) {
+
+            case GENERAL -> "General";
+
+            case HEALTHCARE -> "Healthcare";
+        };
+    }
+
+    private String formatDate(
+            LocalDate date) {
+
+        if (date == null) {
+            return "—";
+        }
+
+        return date.format(dateFormatter);
     }
 
     public void load(RetirementPlan plan) {

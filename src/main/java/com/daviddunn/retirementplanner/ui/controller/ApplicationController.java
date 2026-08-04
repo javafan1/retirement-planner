@@ -25,7 +25,7 @@ public class ApplicationController {
     private final ProjectionEngine projectionEngine;
     private final ProjectionSummaryService projectionSummaryService;
     private final RetirementPlanRepository repository;
-
+    private boolean modified;
 
     private final JsonApplicationSettingsRepository
             applicationSettingsRepository;
@@ -103,6 +103,8 @@ public class ApplicationController {
 
         currentFile = null;
 
+        modified = false;
+
         projectionChanged();
 
         return currentPlan;
@@ -114,9 +116,23 @@ public class ApplicationController {
 
         currentPlan =
                 repository.load(file);
+//
+//        System.out.println(
+//                "Primary Birth Date = "
+//                        + currentPlan.getHousehold()
+//                        .getPrimaryPerson()
+//                        .getBirthDate());
+//
+//        System.out.println(
+//                "Spouse Birth Date = "
+//                        + currentPlan.getHousehold()
+//                        .getSpouse()
+//                        .getBirthDate());
 
         currentFile =
                 file;
+
+        modified = false;
 
         applicationSettings.setLastOpenedPlan(
                 file.toString());
@@ -131,6 +147,10 @@ public class ApplicationController {
 
     public boolean openLastPlan() {
 
+        System.out.println(
+                "Opening plan: "
+                        + applicationSettings.getLastOpenedPlan());
+
         if (!applicationSettings.isAutomaticallyOpenLastPlan()) {
             return false;
         }
@@ -139,10 +159,26 @@ public class ApplicationController {
             return false;
         }
 
+        System.out.println(
+                "Opening plan: "
+                        + applicationSettings.getLastOpenedPlan());
+
         try {
 
             open(Path.of(
                     applicationSettings.getLastOpenedPlan()));
+
+            System.out.println(
+                    "Primary Birth Date = "
+                            + currentPlan.getHousehold()
+                            .getPrimaryPerson()
+                            .getBirthDate());
+
+            System.out.println(
+                    "Spouse Birth Date = "
+                            + currentPlan.getHousehold()
+                            .getSpouse()
+                            .getBirthDate());
 
             return true;
 
@@ -170,6 +206,8 @@ public class ApplicationController {
                 currentPlan,
                 currentFile);
 
+        modified = false;
+
         applicationSettings.setLastOpenedPlan(
                 currentFile.toString());
 
@@ -187,6 +225,8 @@ public class ApplicationController {
 
         currentFile =
                 file;
+
+        modified = false;
 
         applicationSettings.setLastOpenedPlan(
                 file.toString());
@@ -207,6 +247,36 @@ public class ApplicationController {
 
         currentProjection = null;
         currentProjectionSummary = null;
+    }
+
+    public String getCurrentPlanName() {
+
+        if (currentFile == null) {
+            return "Untitled";
+        }
+
+        return currentFile
+                .getFileName()
+                .toString();
+    }
+
+    public String getCurrentPlanDisplayName() {
+
+        if (currentFile == null) {
+            return "Untitled";
+        }
+
+        return currentFile.getFileName().toString();
+    }
+
+    public void markModified() {
+
+        modified = true;
+    }
+
+    public boolean isModified() {
+
+        return modified;
     }
 
 }

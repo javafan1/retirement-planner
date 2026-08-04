@@ -1,3 +1,45 @@
+8.3 
+
+
+I also had another idea overnight
+
+I think we should introduce Goals.
+
+Imagine a user saying:
+
+My Goals
+
+☑ Minimize Lifetime Tax
+
+☑ Minimize RMDs
+
+☐ Maximize Estate
+
+☑ Avoid Higher IRMAA
+
+☐ Maximize Annual Income
+
+Now the planner isn't trying to optimize one number.
+
+It's trying to satisfy the user's priorities.
+
+That could eventually influence recommendations or comparisons without forcing a single "best" strategy.
+
+3. Comparison (my favorite)
+
+This is where I think the planner becomes unique.
+
+Metric	Baseline	Fill 22%	Difference
+Total Roth Conversions	$0	$1.18M	+$1.18M
+Lifetime Federal Tax	$1.24M	$1.42M	+$180k
+Lifetime Michigan Tax	$310k	$349k	+$39k
+Lifetime Medicare Premiums	$248k	$221k	−$27k
+Lifetime RMDs	$2.34M	$1.47M	−$870k
+Traditional Balance at 90	$2.1M	$0.9M	−$1.2M
+Roth Balance at 90	$0.4M	$1.7M	+$1.3M
+Estate After Tax	$5.8M	$6.3M	+$500k
+
+
 7.31
 
 Tax Optimization Tab

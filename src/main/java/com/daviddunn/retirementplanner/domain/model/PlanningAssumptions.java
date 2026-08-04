@@ -284,6 +284,27 @@ public final class PlanningAssumptions {
         return getExpectedAnnualInvestmentReturn();
     }
 
+    @JsonIgnore
+    public BigDecimal getGeneralInflationRate() {
+
+        return economicAssumptions
+                .getGeneralInflationRate();
+    }
+
+    @JsonIgnore
+    public BigDecimal getHealthcareInflationRate() {
+
+        return economicAssumptions
+                .getHealthcareInflationRate();
+    }
+
+    @JsonIgnore
+    public BigDecimal getSocialSecurityColaRate() {
+
+        return economicAssumptions
+                .getSocialSecurityColaRate();
+    }
+
     @Override
     public String toString() {
 

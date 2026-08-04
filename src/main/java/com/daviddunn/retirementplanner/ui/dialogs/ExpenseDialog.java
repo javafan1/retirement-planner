@@ -1,16 +1,25 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.domain.financial.Expense;
+import com.daviddunn.retirementplanner.domain.financial.GrowthCategory;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public class ExpenseDialog extends Dialog<Expense> {
 
     private final TextField descriptionField;
     private final TextField annualAmountField;
+
+    private final ComboBox<GrowthCategory> growthCategoryComboBox;
+
+    private final DatePicker effectiveDatePicker;
+    private final DatePicker endDatePicker;
+
+    private Expense result;
 
     public ExpenseDialog(Expense expense) {
 
@@ -23,7 +32,17 @@ public class ExpenseDialog extends Dialog<Expense> {
         }
 
         descriptionField = new TextField();
+        descriptionField.setPrefColumnCount(30);
+
         annualAmountField = new TextField();
+        annualAmountField.setPrefColumnCount(12);
+
+        growthCategoryComboBox = new ComboBox<>();
+        growthCategoryComboBox.getItems().addAll(GrowthCategory.values());
+        growthCategoryComboBox.setValue(GrowthCategory.GENERAL);
+
+        effectiveDatePicker = new DatePicker();
+        endDatePicker = new DatePicker();
 
         /*
          * Populate fields when editing.
@@ -36,6 +55,15 @@ public class ExpenseDialog extends Dialog<Expense> {
             annualAmountField.setText(
                     expense.getAnnualAmount()
                             .toPlainString());
+
+            growthCategoryComboBox.setValue(
+                    expense.getGrowthCategory());
+
+            effectiveDatePicker.setValue(
+                    expense.getStartDate());
+
+            endDatePicker.setValue(
+                    expense.getEndDate());
         }
 
         GridPane grid = new GridPane();
@@ -64,26 +92,88 @@ public class ExpenseDialog extends Dialog<Expense> {
         grid.add(
                 annualAmountField,
                 1,
+                row++);
+
+        grid.add(
+                new Label("Growth Category:"),
+                0,
                 row);
 
+        grid.add(
+                growthCategoryComboBox,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Effective Date:"),
+                0,
+                row);
+
+        grid.add(
+                effectiveDatePicker,
+                1,
+                row++);
+
+        grid.add(
+                new Label("End Date:"),
+                0,
+                row);
+
+        grid.add(
+                endDatePicker,
+                1,
+                row++);
+
         getDialogPane().setContent(grid);
+
+        ButtonType okButtonType =
+                ButtonType.OK;
 
         getDialogPane()
                 .getButtonTypes()
                 .addAll(
-                        ButtonType.OK,
+                        okButtonType,
                         ButtonType.CANCEL);
+
+        Button okButton =
+                (Button) getDialogPane()
+                        .lookupButton(okButtonType);
+
+        okButton.addEventFilter(
+                javafx.event.ActionEvent.ACTION,
+                event -> {
+
+                    if (!validateAndBuildExpense()) {
+                        event.consume();
+                    }
+                });
 
         setResultConverter(button -> {
 
-            if (button != ButtonType.OK) {
-                return null;
+            if (button == okButtonType) {
+                return result;
             }
+
+            return null;
+        });
+    }
+
+    private boolean validateAndBuildExpense() {
+
+        try {
 
             String description =
                     descriptionField
                             .getText()
                             .trim();
+
+            if (description.isBlank()) {
+
+                showValidationError(
+                        "Description is required.");
+
+                return false;
+            }
 
             BigDecimal annualAmount =
                     new BigDecimal(
@@ -91,9 +181,55 @@ public class ExpenseDialog extends Dialog<Expense> {
                                     .getText()
                                     .trim());
 
-            return new Expense(
-                    description,
-                    annualAmount);
-        });
+            LocalDate effectiveDate =
+                    effectiveDatePicker.getValue();
+
+            LocalDate endDate =
+                    endDatePicker.getValue();
+
+            if (effectiveDate != null &&
+                    endDate != null &&
+                    endDate.isBefore(effectiveDate)) {
+
+                showValidationError(
+                        "The end date cannot be before the effective date.");
+
+                return false;
+            }
+
+            result =
+                    new Expense(
+                            description,
+                            annualAmount,
+                            growthCategoryComboBox.getValue(),
+                            effectiveDate,
+                            endDate);
+
+            return true;
+
+        } catch (NumberFormatException ex) {
+
+            showValidationError(
+                    "Please enter a valid annual amount.");
+
+            return false;
+        }
+    }
+
+    private void showValidationError(
+            String message) {
+
+        Alert alert =
+                new Alert(Alert.AlertType.ERROR);
+
+        alert.setTitle(
+                "Invalid Expense");
+
+        alert.setHeaderText(
+                "Unable to save expense");
+
+        alert.setContentText(message);
+
+        alert.showAndWait();
     }
 }
