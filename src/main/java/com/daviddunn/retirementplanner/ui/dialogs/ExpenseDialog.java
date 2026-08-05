@@ -1,7 +1,9 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.domain.financial.Expense;
+import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
 import com.daviddunn.retirementplanner.domain.financial.GrowthCategory;
+
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
@@ -14,19 +16,29 @@ public class ExpenseDialog extends Dialog<Expense> {
     private final TextField descriptionField;
     private final TextField annualAmountField;
 
+    private final ComboBox<ExpenseType> expenseTypeComboBox;
     private final ComboBox<GrowthCategory> growthCategoryComboBox;
 
     private final DatePicker effectiveDatePicker;
     private final DatePicker endDatePicker;
 
+    private final Label amountLabel;
+    private final Label effectiveDateLabel;
+    private final Label endDateLabel;
+
     private Expense result;
+
+    private final Label growthCategoryLabel;
+
+
 
     public ExpenseDialog(Expense expense) {
 
         if (expense == null) {
             setTitle("Add Expense");
             setHeaderText("Enter expense information.");
-        } else {
+        }
+        else {
             setTitle("Edit Expense");
             setHeaderText("Update expense information.");
         }
@@ -37,16 +49,43 @@ public class ExpenseDialog extends Dialog<Expense> {
         annualAmountField = new TextField();
         annualAmountField.setPrefColumnCount(12);
 
+        expenseTypeComboBox = new ComboBox<>();
+        expenseTypeComboBox.getItems().addAll(
+                ExpenseType.values());
+        expenseTypeComboBox.setValue(
+                ExpenseType.RECURRING);
+
         growthCategoryComboBox = new ComboBox<>();
-        growthCategoryComboBox.getItems().addAll(GrowthCategory.values());
-        growthCategoryComboBox.setValue(GrowthCategory.GENERAL);
+        growthCategoryComboBox.getItems().addAll(
+                GrowthCategory.values());
+        growthCategoryComboBox.setValue(
+                GrowthCategory.GENERAL);
 
         effectiveDatePicker = new DatePicker();
         endDatePicker = new DatePicker();
 
-        /*
-         * Populate fields when editing.
-         */
+        effectiveDatePicker.valueProperty().addListener(
+                (obs, oldDate, newDate) -> {
+
+                    if (expenseTypeComboBox.getValue()
+                            == ExpenseType.ONE_TIME) {
+
+                        endDatePicker.setValue(newDate);
+                    }
+                });
+
+        growthCategoryLabel =
+                new Label("Growth Category:");
+
+        amountLabel =
+                new Label("Annual Amount:");
+
+        effectiveDateLabel =
+                new Label("Effective Date:");
+
+        endDateLabel =
+                new Label("End Date:");
+
         if (expense != null) {
 
             descriptionField.setText(
@@ -55,6 +94,9 @@ public class ExpenseDialog extends Dialog<Expense> {
             annualAmountField.setText(
                     expense.getAnnualAmount()
                             .toPlainString());
+
+            expenseTypeComboBox.setValue(
+                    expense.getExpenseType());
 
             growthCategoryComboBox.setValue(
                     expense.getGrowthCategory());
@@ -65,6 +107,11 @@ public class ExpenseDialog extends Dialog<Expense> {
             endDatePicker.setValue(
                     expense.getEndDate());
         }
+
+        expenseTypeComboBox
+                .valueProperty()
+                .addListener((obs, oldValue, newValue) ->
+                        updateExpenseTypeControls(newValue));
 
         GridPane grid = new GridPane();
 
@@ -85,7 +132,17 @@ public class ExpenseDialog extends Dialog<Expense> {
                 row++);
 
         grid.add(
-                new Label("Annual Amount:"),
+                new Label("Expense Type:"),
+                0,
+                row);
+
+        grid.add(
+                expenseTypeComboBox,
+                1,
+                row++);
+
+        grid.add(
+                amountLabel,
                 0,
                 row);
 
@@ -95,7 +152,7 @@ public class ExpenseDialog extends Dialog<Expense> {
                 row++);
 
         grid.add(
-                new Label("Growth Category:"),
+                growthCategoryLabel,
                 0,
                 row);
 
@@ -105,7 +162,7 @@ public class ExpenseDialog extends Dialog<Expense> {
                 row++);
 
         grid.add(
-                new Label("Effective Date:"),
+                effectiveDateLabel,
                 0,
                 row);
 
@@ -115,7 +172,7 @@ public class ExpenseDialog extends Dialog<Expense> {
                 row++);
 
         grid.add(
-                new Label("End Date:"),
+                endDateLabel,
                 0,
                 row);
 
@@ -125,6 +182,9 @@ public class ExpenseDialog extends Dialog<Expense> {
                 row++);
 
         getDialogPane().setContent(grid);
+
+        updateExpenseTypeControls(
+                expenseTypeComboBox.getValue());
 
         ButtonType okButtonType =
                 ButtonType.OK;
@@ -148,14 +208,13 @@ public class ExpenseDialog extends Dialog<Expense> {
                     }
                 });
 
-        setResultConverter(button -> {
+        setResultConverter(button ->
 
-            if (button == okButtonType) {
-                return result;
-            }
+                button == okButtonType
+                        ? result
+                        : null);
 
-            return null;
-        });
+
     }
 
     private boolean validateAndBuildExpense() {
@@ -184,33 +243,58 @@ public class ExpenseDialog extends Dialog<Expense> {
             LocalDate effectiveDate =
                     effectiveDatePicker.getValue();
 
-            LocalDate endDate =
-                    endDatePicker.getValue();
+            LocalDate endDate;
 
-            if (effectiveDate != null &&
-                    endDate != null &&
-                    endDate.isBefore(effectiveDate)) {
+            if (expenseTypeComboBox.getValue()
+                    == ExpenseType.ONE_TIME) {
 
-                showValidationError(
-                        "The end date cannot be before the effective date.");
+                if (effectiveDate == null) {
 
-                return false;
+                    showValidationError(
+                            "A purchase date is required.");
+
+                    return false;
+                }
+
+                endDate = effectiveDate;
+
+            } else {
+
+                endDate =
+                        endDatePicker.getValue();
+
+                if (effectiveDate != null &&
+                        endDate != null &&
+                        endDate.isBefore(effectiveDate)) {
+
+                    showValidationError(
+                            "The end date cannot be before the effective date.");
+
+                    return false;
+                }
             }
+
+            GrowthCategory growthCategory =
+                    expenseTypeComboBox.getValue() ==
+                            ExpenseType.ONE_TIME
+                            ? GrowthCategory.GENERAL
+                            : growthCategoryComboBox.getValue();
 
             result =
                     new Expense(
                             description,
                             annualAmount,
-                            growthCategoryComboBox.getValue(),
+                            growthCategory,
                             effectiveDate,
-                            endDate);
-
+                            endDate,
+                            expenseTypeComboBox.getValue());
             return true;
 
-        } catch (NumberFormatException ex) {
+        }
+        catch (NumberFormatException ex) {
 
             showValidationError(
-                    "Please enter a valid annual amount.");
+                    "Please enter a valid amount.");
 
             return false;
         }
@@ -228,8 +312,54 @@ public class ExpenseDialog extends Dialog<Expense> {
         alert.setHeaderText(
                 "Unable to save expense");
 
-        alert.setContentText(message);
+        alert.setContentText(
+                message);
 
         alert.showAndWait();
     }
+
+    private void updateExpenseTypeControls(
+            ExpenseType expenseType) {
+
+        boolean oneTime =
+                expenseType == ExpenseType.ONE_TIME;
+
+        amountLabel.setMinWidth(130);
+
+        amountLabel.setText(
+                oneTime
+                        ? "Purchase Amount:"
+                        : "Annual Amount:");
+
+        effectiveDateLabel.setText(
+                oneTime
+                        ? "Purchase Date:"
+                        : "Effective Date:");
+
+        /*
+         * One-time expenses use a single purchase date.
+         * Internally we keep the end date synchronized
+         * with the purchase date.
+         */
+        if (oneTime) {
+
+            endDatePicker.setValue(
+                    effectiveDatePicker.getValue());
+        }
+
+        endDateLabel.setVisible(!oneTime);
+        endDateLabel.setManaged(!oneTime);
+
+        endDatePicker.setVisible(!oneTime);
+        endDatePicker.setManaged(!oneTime);
+
+        growthCategoryLabel.setVisible(!oneTime);
+        growthCategoryLabel.setManaged(!oneTime);
+
+        growthCategoryComboBox.setVisible(!oneTime);
+        growthCategoryComboBox.setManaged(!oneTime);
+    }
+
+
+
 }

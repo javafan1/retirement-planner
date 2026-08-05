@@ -16,6 +16,8 @@ public final class PlanningAssumptions {
     private final int projectionLengthYears;
     private final LocalDate projectionStartDate;
 
+
+
     /*
      * Jackson constructor.
      *

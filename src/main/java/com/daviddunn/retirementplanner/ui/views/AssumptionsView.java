@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 
+import com.daviddunn.retirementplanner.ui.controls.HelpLabel;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.DatePicker;
@@ -12,9 +13,12 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
 import java.math.BigDecimal;
+import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
+import com.daviddunn.retirementplanner.ui.help.HelpText;
 
 public class AssumptionsView extends VBox {
 
@@ -29,6 +33,8 @@ public class AssumptionsView extends VBox {
      */
     private final TextField investmentReturnField;
     private final TextField inflationRateField;
+    private final TextField healthcareInflationField;
+    private final TextField socialSecurityColaField;
 
     /*
      * Tax assumptions.
@@ -70,6 +76,12 @@ public class AssumptionsView extends VBox {
                 new TextField();
 
         inflationRateField =
+                new TextField();
+
+        healthcareInflationField =
+                new TextField();
+
+        socialSecurityColaField =
                 new TextField();
 
         /*
@@ -176,26 +188,76 @@ public class AssumptionsView extends VBox {
                 2,
                 1);
 
+//        grid.add(
+//                new Label("Annual Investment Return (%):"),
+//                0,
+//                row);
+
+
         grid.add(
-                new Label("Expected Investment Return (%):"),
+                new Label("Annual Investment Return (%):"),
                 0,
+                row);
+
+        grid.add(
+                new HelpIcon(
+                        HelpText.INVESTMENT_RETURN),
+                1,
                 row);
 
         grid.add(
                 investmentReturnField,
-                1,
+                2,
                 row++);
 
+
         grid.add(
-                new Label("Expected Inflation Rate (%):"),
+                new Label("General Inflation Rate (%):"),
                 0,
                 row);
 
         grid.add(
-                inflationRateField,
+                new HelpIcon(
+                        HelpText.GENERAL_INFLATION),
                 1,
+                row);
+
+        grid.add(
+                inflationRateField,
+                2,
                 row++);
 
+        grid.add(
+                new Label("Healthcare Inflation Rate (%):"),
+                0,
+                row);
+
+        grid.add(
+                new HelpIcon(
+                        HelpText.HEALTHCARE_INFLATION),
+                1,
+                row);
+
+        grid.add(
+                healthcareInflationField,
+                2,
+                row++);
+
+        grid.add(
+                new Label("Social Security COLA (%):"),
+                0,
+                row);
+
+        grid.add(
+                new HelpIcon(
+                        HelpText.SOCIAL_SECURITY_COLA),
+                1,
+                row);
+
+        grid.add(
+                socialSecurityColaField,
+                2,
+                row++);
         /*
          * =================================================
          * Tax Assumptions
@@ -309,6 +371,16 @@ public class AssumptionsView extends VBox {
                         economicAssumptions
                                 .getExpectedAnnualInflationRate()));
 
+        healthcareInflationField.setText(
+                toPercent(
+                        economicAssumptions
+                                .getHealthcareInflationRate()));
+
+        socialSecurityColaField.setText(
+                toPercent(
+                        economicAssumptions
+                                .getSocialSecurityColaRate()));
+
         /*
          * Tax assumptions.
          */
@@ -384,6 +456,14 @@ public class AssumptionsView extends VBox {
                             inflationRateField
                                     .getText());
 
+            BigDecimal healthcareInflationRate =
+                    parsePercent(
+                            healthcareInflationField.getText());
+
+            BigDecimal socialSecurityColaRate =
+                    parsePercent(
+                            socialSecurityColaField.getText());
+
             /*
              * Tax assumptions.
              */
@@ -410,7 +490,9 @@ public class AssumptionsView extends VBox {
             EconomicAssumptions economicAssumptions =
                     new EconomicAssumptions(
                             investmentReturn,
-                            inflationRate);
+                            inflationRate,
+                            healthcareInflationRate,
+                            socialSecurityColaRate);
 
             TaxAssumptions taxAssumptions =
                     new TaxAssumptions(

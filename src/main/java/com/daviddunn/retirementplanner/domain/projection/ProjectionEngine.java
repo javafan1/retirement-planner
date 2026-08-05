@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.projection;
 
 import com.daviddunn.retirementplanner.domain.financial.Expense;
+import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculation;
 import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculator;
@@ -539,17 +540,18 @@ public class ProjectionEngine {
 
         for (Expense expense : household.getExpenses()) {
 
-            if (!expense.isActive(projectionDate)) {
+//            if (!expense.isActive(projectionDate)) {
+//                continue;
+//            }
+
+            if (!expense.isActiveDuringYear(
+                    projectionDate.getYear(),
+                    assumptions.getProjectionStartDate())) {
+
                 continue;
             }
 
-//            BigDecimal growthRate =
-//                    getExpenseGrowthRate(
-//                            expense,
-//                            assumptions);
 
-
-                    ;
             BigDecimal projectedExpense =
                     calculateProjectedExpense(
                             expense,
@@ -565,7 +567,8 @@ public class ProjectionEngine {
              * will prorate each expense individually
              * based on its own start and end dates.
              */
-            if (yearOffset == 0) {
+            if (yearOffset == 0 &&
+                    expense.getExpenseType() == ExpenseType.RECURRING) {
 
                 int activeMonths =
                         13 -
@@ -619,53 +622,6 @@ public class ProjectionEngine {
                 growthRate,
                 yearOffset);
     }
-
-//    private BigDecimal calculateProjectedExpenses(
-//            Household household,
-//            PlanningAssumptions assumptions,
-//            int yearOffset,
-//            LocalDate projectionStartDate) {
-//
-//        BigDecimal inflationMultiplier =
-//                BigDecimal.ONE
-//                        .add(
-//                                assumptions
-//                                        .getExpectedAnnualInflationRate())
-//                        .pow(yearOffset);
-//
-//        BigDecimal annualExpenses =
-//                household
-//                        .getTotalAnnualExpenses()
-//                        .multiply(
-//                                inflationMultiplier);
-//
-//        /*
-//         * Only the first projection year can
-//         * represent a partial calendar year.
-//         */
-//        if (yearOffset == 0) {
-//
-//            int activeMonths =
-//                    13 -
-//                            projectionStartDate
-//                                    .getMonthValue();
-//
-//            annualExpenses =
-//                    annualExpenses
-//                            .multiply(
-//                                    BigDecimal.valueOf(
-//                                            activeMonths))
-//                            .divide(
-//                                    BigDecimal.valueOf(12),
-//                                    2,
-//                                    RoundingMode.HALF_UP);
-//        }
-//
-//        return annualExpenses
-//                .setScale(
-//                        2,
-//                        RoundingMode.HALF_UP);
-//    }
 
     private WithdrawalResult calculatePortfolioWithdrawal(
             BigDecimal guaranteedIncome,
@@ -748,6 +704,7 @@ public class ProjectionEngine {
 
         return participants;
     }
+
 
 
 }

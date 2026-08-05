@@ -17,6 +17,11 @@ public class MainApplication extends Application {
 
         Scene scene = window.createScene();
 
+        scene.getStylesheets().add(
+                getClass()
+                        .getResource("/css/application.css")
+                        .toExternalForm());
+
         stage.setScene(scene);
 
         stage.show();

@@ -1,0 +1,11 @@
+.help-icon {
+
+    -fx-text-fill: #1976D2;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+
+.help-icon:hover {
+
+    -fx-text-fill: #0D47A1;
+}

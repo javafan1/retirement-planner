@@ -1,10 +1,13 @@
 package com.daviddunn.retirementplanner.ui.views;
 
 import com.daviddunn.retirementplanner.domain.financial.Expense;
+import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
 import com.daviddunn.retirementplanner.domain.financial.GrowthCategory;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.ui.dialogs.ExpenseDialog;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.Region;
 
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
@@ -96,6 +99,15 @@ public class ExpensesView extends BorderPane {
 
     private void createColumns() {
 
+        TableColumn<Expense, String> typeColumn =
+                new TableColumn<>("Type");
+
+        typeColumn.setCellValueFactory(cellData ->
+                new ReadOnlyStringWrapper(
+                        formatExpenseType(
+                                cellData.getValue()
+                                        .getExpenseType())));
+
         TableColumn<Expense, String> descriptionColumn =
                 new TableColumn<>("Description");
 
@@ -105,22 +117,32 @@ public class ExpensesView extends BorderPane {
                                 .getDescription()));
 
         TableColumn<Expense, String> amountColumn =
-                new TableColumn<>("Annual Amount");
+                new TableColumn<>("Amount");
 
         amountColumn.setCellValueFactory(cellData ->
                 new ReadOnlyStringWrapper(
                         currency.format(
                                 cellData.getValue()
                                         .getAnnualAmount())));
+        amountColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
 
         TableColumn<Expense, String> growthColumn =
                 new TableColumn<>("Growth");
 
-        growthColumn.setCellValueFactory(cellData ->
-                new ReadOnlyStringWrapper(
-                        formatGrowthCategory(
-                                cellData.getValue()
-                                        .getGrowthCategory())));
+        growthColumn.setCellValueFactory(cellData -> {
+
+            Expense expense =
+                    cellData.getValue();
+
+            if (expense.isOneTimeExpense()) {
+
+                return new ReadOnlyStringWrapper("—");
+            }
+
+            return new ReadOnlyStringWrapper(
+                    formatGrowthCategory(
+                            expense.getGrowthCategory()));
+        });
 
         TableColumn<Expense, String> effectiveColumn =
                 new TableColumn<>("Effective");
@@ -134,13 +156,23 @@ public class ExpensesView extends BorderPane {
         TableColumn<Expense, String> endColumn =
                 new TableColumn<>("End");
 
-        endColumn.setCellValueFactory(cellData ->
-                new ReadOnlyStringWrapper(
-                        formatDate(
-                                cellData.getValue()
-                                        .getEndDate())));
+        endColumn.setCellValueFactory(cellData -> {
+
+            Expense expense =
+                    cellData.getValue();
+
+            if (expense.isOneTimeExpense()) {
+
+                return new ReadOnlyStringWrapper("—");
+            }
+
+            return new ReadOnlyStringWrapper(
+                    formatDate(
+                            expense.getEndDate()));
+        });
 
         table.getColumns().addAll(
+                typeColumn,
                 descriptionColumn,
                 amountColumn,
                 growthColumn,
@@ -299,5 +331,16 @@ public class ExpensesView extends BorderPane {
         if (onPlanChanged != null) {
             onPlanChanged.run();
         }
+    }
+
+    private String formatExpenseType(
+            ExpenseType expenseType) {
+
+        return switch (expenseType) {
+
+            case RECURRING -> "Recurring";
+
+            case ONE_TIME -> "One-Time";
+        };
     }
 }

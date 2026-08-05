@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.financial;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -21,6 +22,8 @@ public class Expense {
 
     private final LocalDate endDate;
 
+    private final ExpenseType expenseType;
+
     public Expense(
             String description,
             BigDecimal annualAmount) {
@@ -30,7 +33,8 @@ public class Expense {
                 annualAmount,
                 GrowthCategory.GENERAL,
                 null,
-                null);
+                null,
+                ExpenseType.RECURRING);
     }
 
     public Expense(
@@ -43,7 +47,8 @@ public class Expense {
                 annualAmount,
                 growthCategory,
                 null,
-                null);
+                null,
+                ExpenseType.RECURRING);
     }
 
     @JsonCreator
@@ -62,7 +67,10 @@ public class Expense {
             LocalDate startDate,
 
             @JsonProperty("endDate")
-            LocalDate endDate) {
+            LocalDate endDate,
+
+            @JsonProperty("expenseType")
+            ExpenseType expenseType) {
 
         this.description =
                 Objects.requireNonNull(
@@ -79,11 +87,14 @@ public class Expense {
                         ? GrowthCategory.GENERAL
                         : growthCategory;
 
-        this.startDate =
-                startDate;
+        this.startDate = startDate;
 
-        this.endDate =
-                endDate;
+        this.endDate = endDate;
+
+        this.expenseType =
+                expenseType == null
+                        ? ExpenseType.RECURRING
+                        : expenseType;
 
         if (startDate != null
                 && endDate != null
@@ -114,10 +125,22 @@ public class Expense {
         return endDate;
     }
 
+    public ExpenseType getExpenseType() {
+        return expenseType;
+    }
+
+    @JsonIgnore
     public boolean isHealthcareExpense() {
 
         return growthCategory ==
                 GrowthCategory.HEALTHCARE;
+    }
+
+    @JsonIgnore
+    public boolean isOneTimeExpense() {
+
+        return expenseType ==
+                ExpenseType.ONE_TIME;
     }
 
     public boolean isActive(
@@ -142,9 +165,56 @@ public class Expense {
         return true;
     }
 
+    @JsonIgnore
     public boolean isAlwaysActive() {
 
         return startDate == null &&
                 endDate == null;
+    }
+
+    @JsonIgnore
+    public boolean isActiveDuringYear(
+            int projectionYear,
+            LocalDate projectionStartDate) {
+
+        Objects.requireNonNull(
+                projectionStartDate,
+                "Projection start date is required.");
+
+        LocalDate yearStart;
+
+        if (projectionYear ==
+                projectionStartDate.getYear()) {
+
+            yearStart = projectionStartDate;
+
+        } else {
+
+            yearStart =
+                    LocalDate.of(
+                            projectionYear,
+                            1,
+                            1);
+        }
+
+        LocalDate yearEnd =
+                LocalDate.of(
+                        projectionYear,
+                        12,
+                        31);
+
+        if (startDate != null &&
+                startDate.isAfter(yearEnd)) {
+
+            return false;
+        }
+
+        if (endDate != null &&
+                endDate.isBefore(yearStart)) {
+
+            return false;
+        }
+
+        return true;
     }
 }

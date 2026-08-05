@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.medicare;
 
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionMath;
 import com.daviddunn.retirementplanner.domain.rules.IrmaaBracket;
 import com.daviddunn.retirementplanner.domain.rules.IrmaaRules;
 
@@ -33,11 +34,40 @@ public final class IrmaaRuleProjectionService {
         int yearsToProject =
                 projectedTaxYear - publishedTaxYear;
 
-        BigDecimal inflationMultiplier =
-                BigDecimal.ONE.add(
-                                planningAssumptions
-                                        .getExpectedAnnualInflationRate())
-                        .pow(yearsToProject);
+        /*
+         * IRMAA income thresholds are projected
+         * using the general inflation rate.
+         */
+//        BigDecimal incomeThresholdMultiplier =
+//                BigDecimal.ONE
+//                        .add(
+//                                planningAssumptions
+//                                        .getExpectedAnnualInflationRate())
+//                        .pow(yearsToProject);
+
+        BigDecimal incomeThresholdMultiplier =
+                ProjectionMath.calculateGrowthMultiplier(
+                        planningAssumptions
+                                .getExpectedAnnualInflationRate(),
+                        yearsToProject);
+
+
+
+        /*
+         * Medicare premiums are projected
+         * using the healthcare inflation rate.
+         */
+//        BigDecimal healthcareCostMultiplier =
+//                BigDecimal.ONE
+//                        .add(
+//                                planningAssumptions
+//                                        .getHealthcareInflationRate())
+//                        .pow(yearsToProject);
+        BigDecimal healthcareCostMultiplier =
+                ProjectionMath.calculateGrowthMultiplier(
+                        planningAssumptions
+                                .getHealthcareInflationRate(),
+                        yearsToProject);
 
         List<IrmaaBracket> projectedBrackets =
                 new ArrayList<>();
@@ -47,7 +77,8 @@ public final class IrmaaRuleProjectionService {
 
             BigDecimal projectedMinimumIncome =
                     bracket.getMinimumModifiedAdjustedGrossIncome()
-                            .multiply(inflationMultiplier)
+                            .multiply(
+                                    incomeThresholdMultiplier)
                             .setScale(
                                     0,
                                     RoundingMode.HALF_UP);
@@ -60,22 +91,47 @@ public final class IrmaaRuleProjectionService {
 
                 projectedMaximumIncome =
                         bracket.getMaximumModifiedAdjustedGrossIncome()
-                                .multiply(inflationMultiplier)
+                                .multiply(
+                                        incomeThresholdMultiplier)
                                 .setScale(
                                         0,
                                         RoundingMode.HALF_UP);
             }
+
+            BigDecimal projectedMonthlyPartBPremium =
+                    bracket.getMonthlyPartBPremium()
+                            .multiply(
+                                    healthcareCostMultiplier)
+                            .setScale(
+                                    2,
+                                    RoundingMode.HALF_UP);
+
+            BigDecimal projectedMonthlyPartDPremium =
+                    bracket.getMonthlyPartDPremium()
+                            .multiply(
+                                    healthcareCostMultiplier)
+                            .setScale(
+                                    2,
+                                    RoundingMode.HALF_UP);
 
             projectedBrackets.add(
                     new IrmaaBracket(
                             bracket.getFilingStatus(),
                             projectedMinimumIncome,
                             projectedMaximumIncome,
-                            bracket.getMonthlyPartBPremium(),
-                            bracket.getMonthlyPartDPremium()));
+                            projectedMonthlyPartBPremium,
+                            projectedMonthlyPartDPremium));
         }
 
-        return new IrmaaRules(
-                projectedBrackets);
+        return new IrmaaRules(projectedBrackets);
+    }
+
+    private static BigDecimal calculateGrowthMultiplier(
+            BigDecimal annualRate,
+            int years) {
+
+        return BigDecimal.ONE
+                .add(annualRate)
+                .pow(years);
     }
 }
