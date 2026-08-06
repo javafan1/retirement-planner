@@ -113,4 +113,9 @@ public abstract class Account {
     public TaxTreatment getTaxTreatment() {
         return getType().getTaxTreatment();
     }
+
+    @JsonIgnore
+    public boolean isEligibleForRothConversion() {
+        return false;
+    }
 }

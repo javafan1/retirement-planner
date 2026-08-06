@@ -1,4 +1,24 @@
 
+8.6 roadmap
+
+Here's the roadmap I have in mind for today
+Phase 1 – Domain
+✅ Create RothConversionStrategy enum
+✅ Add it to WithdrawalAssumptions
+✅ Update JSON serialization/deserialization
+✅ Update RetirementPlanFactory and any sample/demo data
+Phase 2 – UI
+✅ Add a "Roth Conversion Strategy" control to the Assumptions view
+✅ Add help text explaining what "Fill 22% Bracket" means (using the help icon infrastructure we built)
+Phase 3 – Planning Engine
+✅ Create TaxBracketCapacityCalculator
+✅ Create RothConversionPlanner
+✅ Unit test both thoroughly
+Phase 4 – Projection Engine
+Integrate the planner into the annual projection
+Update account balances
+Recalculate taxes after the conversion
+Store the conversion amount in ProjectionYear
 
 8.3
 

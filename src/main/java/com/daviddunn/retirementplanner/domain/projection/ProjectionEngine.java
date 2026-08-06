@@ -1,14 +1,13 @@
 package com.daviddunn.retirementplanner.domain.projection;
 
 import com.daviddunn.retirementplanner.domain.financial.Expense;
+import com.daviddunn.retirementplanner.domain.model.*;
+import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
+import com.daviddunn.retirementplanner.domain.withdrawal.RothConversionPlanner;
 import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculation;
 import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculator;
-import com.daviddunn.retirementplanner.domain.model.Household;
-import com.daviddunn.retirementplanner.domain.model.Person;
-import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
-import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdCalculator;
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.RmdBalanceSnapshot;
@@ -17,7 +16,9 @@ import com.daviddunn.retirementplanner.domain.tax.*;
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
 import com.daviddunn.retirementplanner.domain.withdrawal.*;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
+
 import com.daviddunn.retirementplanner.domain.projection.CompoundGrowthService;
+
 
 
 import java.math.BigDecimal;
@@ -40,6 +41,11 @@ public class ProjectionEngine {
             medicarePremiumCalculator;
 
     private final CompoundGrowthService compoundGrowthService;
+    private final RothConversionPlanner
+            rothConversionPlanner;
+
+    private final TaxIncomeCalculator
+            taxIncomeCalculator;
 
     public ProjectionEngine() {
 
@@ -62,6 +68,11 @@ public class ProjectionEngine {
                 new MedicarePremiumCalculator();
 
         this.compoundGrowthService = new CompoundGrowthService();
+
+
+        this.taxIncomeCalculator = new TaxIncomeCalculator();
+
+        this.rothConversionPlanner = new RothConversionPlanner();
 
 
         try {
@@ -271,6 +282,12 @@ public class ProjectionEngine {
                                 RoundingMode.HALF_UP);
 
 
+        BigDecimal availableTraditionalBalance =
+                plan
+                        .getAccountPortfolio()
+                        .getEligibleTraditionalBalance(
+                                AccountOwnership.PRIMARY);
+
         ProjectedPortfolio portfolioAfterGrowth =
                 projectedPortfolio.withGrowth(
                         investmentGrowth);
@@ -309,6 +326,24 @@ public class ProjectionEngine {
         WithdrawalBreakdown totalWithdrawalBreakdown =
                 rmdWithdrawalBreakdown.plus(
                         withdrawalBreakdown);
+
+        TaxIncome baseTaxIncome =
+                taxIncomeCalculator.calculate(
+                        household,
+                        projectionDate,
+                        totalWithdrawalBreakdown
+                                .getTaxDeferredWithdrawal());
+
+        FederalTaxRules federalTaxRules =
+                projectedGovernmentRules.getFederalTaxRules(
+                        getFilingStatus(assumptions));
+
+        RothConversionResult rothConversionResult =
+                rothConversionPlanner.plan(
+                        federalTaxRules,
+                        assumptions,
+                        baseTaxIncome,
+                        availableTraditionalBalance);
 
 
         TaxFundingResult taxFundingResult =

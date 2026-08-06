@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.model;
 
+import com.daviddunn.retirementplanner.domain.withdrawal.RothConversionStrategy;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -305,6 +306,13 @@ public final class PlanningAssumptions {
 
         return economicAssumptions
                 .getSocialSecurityColaRate();
+    }
+
+    @JsonIgnore
+    public RothConversionStrategy getRothConversionStrategy() {
+
+        return withdrawalAssumptions
+                .getRothConversionStrategy();
     }
 
     @Override
