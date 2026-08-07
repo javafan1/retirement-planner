@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.model;
 
+import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
 import com.daviddunn.retirementplanner.domain.rmd.RmdAccountCategory;
 
 public enum AccountType {
@@ -98,6 +99,29 @@ public enum AccountType {
 
             default ->
                     RmdAccountCategory.NOT_APPLICABLE;
+        };
+    }
+
+    public ProjectionAssetType getProjectionAssetType() {
+
+        return switch (this) {
+
+            case BROKERAGE,
+                 CHECKING,
+                 SAVINGS ->
+                    ProjectionAssetType.TAXABLE;
+
+            case TRADITIONAL_IRA,
+                 ROLLOVER_IRA,
+                 TRADITIONAL_401K,
+                 TRADITIONAL_403B,
+                 INHERITED_TRADITIONAL_IRA ->
+                    ProjectionAssetType.TAX_DEFERRED;
+
+            case ROTH_IRA,
+                 ROTH_401K,
+                 INHERITED_ROTH_IRA ->
+                    ProjectionAssetType.ROTH;
         };
     }
 

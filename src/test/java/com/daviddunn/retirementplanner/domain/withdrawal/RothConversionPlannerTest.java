@@ -41,7 +41,7 @@ class RothConversionPlannerTest {
                         BigDecimal.ZERO,
                         new BigDecimal("30000"));
 
-        RothConversionResult result =
+        RothConversionPlan result =
                 planner.plan(
                         federalTaxRules,
                         assumptions,
@@ -66,7 +66,7 @@ class RothConversionPlannerTest {
                         BigDecimal.ZERO,
                         new BigDecimal("30000"));
 
-        RothConversionResult result =
+        RothConversionPlan result =
                 planner.plan(
                         federalTaxRules,
                         assumptions,
@@ -106,7 +106,7 @@ class RothConversionPlannerTest {
                         BigDecimal.ZERO,
                         new BigDecimal("30000"));
 
-        RothConversionResult result =
+        RothConversionPlan result =
                 planner.plan(
                         federalTaxRules,
                         assumptions,
@@ -131,7 +131,7 @@ class RothConversionPlannerTest {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO);
 
-        RothConversionResult result =
+        RothConversionPlan result =
                 planner.plan(
                         federalTaxRules,
                         assumptions,
@@ -156,7 +156,7 @@ class RothConversionPlannerTest {
                         BigDecimal.ZERO,
                         new BigDecimal("30000"));
 
-        RothConversionResult result =
+        RothConversionPlan result =
                 planner.plan(
                         federalTaxRules,
                         assumptions,

@@ -3,11 +3,11 @@ package com.daviddunn.retirementplanner.domain.withdrawal;
 import java.math.BigDecimal;
 import java.util.Objects;
 
-public final class RothConversionResult {
+public final class RothConversionPlan {
 
     private final BigDecimal conversionAmount;
 
-    public RothConversionResult(
+    public RothConversionPlan(
             BigDecimal conversionAmount) {
 
         this.conversionAmount =

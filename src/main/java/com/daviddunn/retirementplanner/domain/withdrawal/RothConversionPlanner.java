@@ -31,7 +31,7 @@ public final class RothConversionPlanner {
                 new FederalTaxBracketLookupService();
     }
 
-    public RothConversionResult plan(
+    public RothConversionPlan plan(
 
             FederalTaxRules federalTaxRules,
 
@@ -65,7 +65,7 @@ public final class RothConversionPlanner {
         if (strategy ==
                 RothConversionStrategy.NONE) {
 
-            return new RothConversionResult(
+            return new RothConversionPlan(
                     BigDecimal.ZERO);
         }
 
@@ -107,7 +107,7 @@ public final class RothConversionPlanner {
                     BigDecimal.ZERO;
         }
 
-        return new RothConversionResult(
+        return new RothConversionPlan(
                 conversionAmount);
     }
 

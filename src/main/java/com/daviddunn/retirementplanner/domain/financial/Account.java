@@ -4,6 +4,7 @@ import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.AccountType;
 
 import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -117,5 +118,10 @@ public abstract class Account {
     @JsonIgnore
     public boolean isEligibleForRothConversion() {
         return false;
+    }
+
+    @JsonIgnore
+    public ProjectionAssetType getProjectionAssetType() {
+        return getType().getProjectionAssetType();
     }
 }

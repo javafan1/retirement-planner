@@ -17,9 +17,6 @@ import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalc
 import com.daviddunn.retirementplanner.domain.withdrawal.*;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
 
-import com.daviddunn.retirementplanner.domain.projection.CompoundGrowthService;
-
-
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -334,16 +331,7 @@ public class ProjectionEngine {
                         totalWithdrawalBreakdown
                                 .getTaxDeferredWithdrawal());
 
-        FederalTaxRules federalTaxRules =
-                projectedGovernmentRules.getFederalTaxRules(
-                        getFilingStatus(assumptions));
 
-        RothConversionResult rothConversionResult =
-                rothConversionPlanner.plan(
-                        federalTaxRules,
-                        assumptions,
-                        baseTaxIncome,
-                        availableTraditionalBalance);
 
 
         TaxFundingResult taxFundingResult =
