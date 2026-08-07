@@ -11,8 +11,14 @@ public final class TestMoney {
     public static BigDecimal money(String value) {
 
         return new BigDecimal(value)
-                .setScale(
-                        2,
-                        RoundingMode.HALF_UP);
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public static BigDecimal zero() {
+        return money("0");
+    }
+
+    public static BigDecimal percent(String value) {
+        return new BigDecimal(value);
     }
 }

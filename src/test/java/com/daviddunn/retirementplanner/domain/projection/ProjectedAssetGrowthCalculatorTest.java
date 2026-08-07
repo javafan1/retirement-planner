@@ -2,8 +2,7 @@ package com.daviddunn.retirementplanner.domain.projection;
 
 import org.junit.jupiter.api.Test;
 
-import java.math.BigDecimal;
-
+import static com.daviddunn.retirementplanner.domain.financial.TestMoney.money;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ProjectedAssetGrowthCalculatorTest {
@@ -16,29 +15,29 @@ class ProjectedAssetGrowthCalculatorTest {
 
         ProjectedAssetPools pools =
                 new ProjectedAssetPools(
-                        new BigDecimal("100000"),
-                        new BigDecimal("500000"),
-                        new BigDecimal("250000"));
+                        money("100000"),
+                        money("500000"),
+                        money("250000"));
 
         ProjectedAssetPools result =
                 calculator.applyGrowth(
                         pools,
-                        BigDecimal.ZERO);
+                        money("0"));
 
         assertEquals(
-                new BigDecimal("100000.00"),
+                money("100000"),
                 result.getTaxableBalance());
 
         assertEquals(
-                new BigDecimal("500000.00"),
+                money("500000"),
                 result.getTaxDeferredBalance());
 
         assertEquals(
-                new BigDecimal("250000.00"),
+                money("250000"),
                 result.getRothBalance());
 
         assertEquals(
-                new BigDecimal("850000.00"),
+                money("850000"),
                 result.getTotalBalance());
     }
 
@@ -47,29 +46,29 @@ class ProjectedAssetGrowthCalculatorTest {
 
         ProjectedAssetPools pools =
                 new ProjectedAssetPools(
-                        new BigDecimal("100000"),
-                        new BigDecimal("500000"),
-                        new BigDecimal("250000"));
+                        money("100000"),
+                        money("500000"),
+                        money("250000"));
 
         ProjectedAssetPools result =
                 calculator.applyGrowth(
                         pools,
-                        new BigDecimal("0.08"));
+                        money("0.08"));
 
         assertEquals(
-                new BigDecimal("108000.00"),
+                money("108000"),
                 result.getTaxableBalance());
 
         assertEquals(
-                new BigDecimal("540000.00"),
+                money("540000"),
                 result.getTaxDeferredBalance());
 
         assertEquals(
-                new BigDecimal("270000.00"),
+                money("270000"),
                 result.getRothBalance());
 
         assertEquals(
-                new BigDecimal("918000.00"),
+                money("918000"),
                 result.getTotalBalance());
     }
 
@@ -78,29 +77,29 @@ class ProjectedAssetGrowthCalculatorTest {
 
         ProjectedAssetPools pools =
                 new ProjectedAssetPools(
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO);
+                        money("0"),
+                        money("0"),
+                        money("0"));
 
         ProjectedAssetPools result =
                 calculator.applyGrowth(
                         pools,
-                        new BigDecimal("0.10"));
+                        money("0.10"));
 
         assertEquals(
-                new BigDecimal("0.00"),
+                money("0"),
                 result.getTaxableBalance());
 
         assertEquals(
-                new BigDecimal("0.00"),
+                money("0"),
                 result.getTaxDeferredBalance());
 
         assertEquals(
-                new BigDecimal("0.00"),
+                money("0"),
                 result.getRothBalance());
 
         assertEquals(
-                new BigDecimal("0.00"),
+                money("0"),
                 result.getTotalBalance());
     }
 
@@ -109,29 +108,29 @@ class ProjectedAssetGrowthCalculatorTest {
 
         ProjectedAssetPools pools =
                 new ProjectedAssetPools(
-                        new BigDecimal("250000"),
-                        new BigDecimal("1000000"),
-                        new BigDecimal("500000"));
+                        money("250000"),
+                        money("1000000"),
+                        money("500000"));
 
         ProjectedAssetPools result =
                 calculator.applyGrowth(
                         pools,
-                        new BigDecimal("0.05"));
+                        money("0.05"));
 
         assertEquals(
-                new BigDecimal("262500.00"),
+                money("262500"),
                 result.getTaxableBalance());
 
         assertEquals(
-                new BigDecimal("1050000.00"),
+                money("1050000"),
                 result.getTaxDeferredBalance());
 
         assertEquals(
-                new BigDecimal("525000.00"),
+                money("525000"),
                 result.getRothBalance());
 
         assertEquals(
-                new BigDecimal("1837500.00"),
+                money("1837500"),
                 result.getTotalBalance());
     }
 }
