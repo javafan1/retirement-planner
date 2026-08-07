@@ -1,4 +1,28 @@
 
+8.7
+
+                 RetirementPlan
+                       │
+                       ▼
+          ProjectedAssetPoolsBuilder
+                       │
+                       ▼
+              ProjectedAssetPools
+                       │
+        ┌──────────────┼───────────────┐
+        ▼              ▼               ▼
+Investment      Withdrawals      Roth Conversions
+Growth           / RMDs
+│              │               │
+└──────────────┼───────────────┘
+▼
+ProjectedAssetPools
+│
+▼
+Tax Calculations
+│
+▼
+ProjectionYear
 
 8.3
 
