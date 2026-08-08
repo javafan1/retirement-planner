@@ -114,6 +114,49 @@ public final class ProjectedAssetPools {
                 rothBalance);
     }
 
+    public static ProjectedAssetPools from(
+            ProjectedPortfolio portfolio) {
+
+        Objects.requireNonNull(
+                portfolio,
+                "Projected portfolio is required.");
+
+        BigDecimal taxable =
+                BigDecimal.ZERO;
+
+        BigDecimal taxDeferred =
+                BigDecimal.ZERO;
+
+        BigDecimal roth =
+                BigDecimal.ZERO;
+
+        for (ProjectedAccountBalance projected :
+                portfolio.getAccountBalances()) {
+
+            BigDecimal balance =
+                    projected.getBalance();
+
+            switch (projected.getAccount()
+                    .getType()
+                    .getProjectionAssetType()) {
+
+                case TAXABLE ->
+                        taxable = taxable.add(balance);
+
+                case TAX_DEFERRED ->
+                        taxDeferred = taxDeferred.add(balance);
+
+                case ROTH ->
+                        roth = roth.add(balance);
+            }
+        }
+
+        return new ProjectedAssetPools(
+                taxable,
+                taxDeferred,
+                roth);
+    }
+
 
     @Override
     public String toString() {
