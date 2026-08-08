@@ -49,6 +49,8 @@ public final class ProjectedAssetPools {
                 .add(rothBalance);
     }
 
+
+
     private static BigDecimal requireNonNegative(
             BigDecimal amount,
             String description) {
@@ -65,6 +67,53 @@ public final class ProjectedAssetPools {
 
         return amount;
     }
+
+    public ProjectedAssetPools convertTaxDeferredToRoth(
+            BigDecimal amount) {
+
+        Objects.requireNonNull(
+                amount,
+                "Conversion amount is required.");
+
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Conversion amount cannot be negative.");
+        }
+
+        if (amount.compareTo(taxDeferredBalance) > 0) {
+            throw new IllegalArgumentException(
+                    "Insufficient tax-deferred assets to perform Roth conversion.");
+        }
+
+        return new ProjectedAssetPools(
+                taxableBalance,
+                taxDeferredBalance.subtract(amount),
+                rothBalance.add(amount));
+    }
+
+    public ProjectedAssetPools withdrawFromTaxable(
+            BigDecimal amount) {
+
+        Objects.requireNonNull(
+                amount,
+                "Withdrawal amount is required.");
+
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Withdrawal amount cannot be negative.");
+        }
+
+        if (amount.compareTo(taxableBalance) > 0) {
+            throw new IllegalArgumentException(
+                    "Insufficient taxable assets.");
+        }
+
+        return new ProjectedAssetPools(
+                taxableBalance.subtract(amount),
+                taxDeferredBalance,
+                rothBalance);
+    }
+
 
     @Override
     public String toString() {
