@@ -2,6 +2,8 @@ package com.daviddunn.retirementplanner.ui.views;
 
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
+import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountSnapshot;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
 
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import javafx.beans.property.ReadOnlyObjectWrapper;
@@ -115,7 +117,7 @@ public class ResultsView extends BorderPane {
 
         TableColumn<ProjectionYear, BigDecimal> withdrawalColumn =
                 createMoneyColumn(
-                        "Portfolio Withdrawal",
+                        "Withdrawal",
                         ProjectionYear::getPortfolioWithdrawal);
 
         TableColumn<ProjectionYear, String> medicareColumn =
@@ -126,6 +128,24 @@ public class ResultsView extends BorderPane {
                         UIFormatters.money(
                                 cellData.getValue()
                                         .getAnnualMedicarePremium())));
+
+
+        TableColumn<ProjectionYear, BigDecimal> taxDeferredColumn =
+                createMoneyColumn(
+                        "Tax-Deferred",
+                        year ->
+                                getEndingBalanceByAssetType(
+                                        year,
+                                        ProjectionAssetType.TAX_DEFERRED));
+
+        TableColumn<ProjectionYear, BigDecimal> rothColumn =
+                createMoneyColumn(
+                        "Roth",
+                        year ->
+                                getEndingBalanceByAssetType(
+                                        year,
+                                        ProjectionAssetType.ROTH));
+
 
         TableColumn<ProjectionYear, BigDecimal> endingAssetsColumn =
                 createMoneyColumn(
@@ -145,6 +165,8 @@ public class ResultsView extends BorderPane {
                 michiganTaxColumn,
                 totalTaxColumn,
                 medicareColumn,
+                taxDeferredColumn,
+                rothColumn,
                 endingAssetsColumn);
 
         table.setColumnResizePolicy(
@@ -300,6 +322,21 @@ public class ResultsView extends BorderPane {
         return column;
     }
 
+    private BigDecimal getEndingBalanceByAssetType(
+            ProjectionYear year,
+            ProjectionAssetType assetType) {
 
+        return year
+                .getEndingAccountSnapshots()
+                .stream()
+                .filter(snapshot ->
+                        snapshot.getAccount()
+                                .getProjectionAssetType()
+                                == assetType)
+                .map(ProjectedAccountSnapshot::getEndingBalance)
+                .reduce(
+                        BigDecimal.ZERO,
+                        BigDecimal::add);
+    }
 
 }

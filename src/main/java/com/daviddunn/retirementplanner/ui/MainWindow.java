@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionSummary;
 import com.daviddunn.retirementplanner.ui.charts.PortfolioChartView;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
+import com.daviddunn.retirementplanner.ui.views.RothConversionView;
 
 import com.daviddunn.retirementplanner.ui.views.*;
 import com.daviddunn.retirementplanner.ui.dialogs.*;
@@ -41,6 +42,7 @@ public class MainWindow {
     private final ResultsView resultsView;
     private final DashboardView dashboardView;
     private final PortfolioChartView portfolioChartView;
+    private final RothConversionView rothConversionView;
     private Stage stage;
     private final Label statusLabel;
 
@@ -57,6 +59,8 @@ public class MainWindow {
         resultsView = new ResultsView();
         dashboardView = new DashboardView();
         portfolioChartView = new PortfolioChartView();
+        rothConversionView =
+                new RothConversionView();
 
         statusLabel = new Label("Ready");
 
@@ -90,6 +94,9 @@ public class MainWindow {
 
         resultsView.setOnYearDoubleClick(
                 this::showProjectionYearSummary);
+
+        rothConversionView.setOnPlanChanged(
+                this::refreshProjectionViews);
     }
 
     public Scene createScene() {
@@ -163,6 +170,11 @@ public class MainWindow {
         tabPane.getTabs().add(
                 createTab("Projection", projectionYearView));
 
+        tabPane.getTabs().add(
+                createTab(
+                        "Roth Conversion",
+                        rothConversionView));
+
 
 
 //        tabPane.getTabs().add(createTab("Accounts", accountsView));
@@ -200,6 +212,7 @@ public class MainWindow {
         incomeSourcesView.load(plan);
         expensesView.load(plan);
         assumptionsView.load(plan);
+        rothConversionView.load(plan);
         updateWindowTitle();
 
         refreshProjectionViews();
@@ -216,6 +229,7 @@ public class MainWindow {
         incomeSourcesView.save(plan);
         expensesView.save(plan);
         assumptionsView.save(plan);
+        rothConversionView.save(plan);
 
     }
 

@@ -2,9 +2,11 @@ package com.daviddunn.retirementplanner.persistence;
 
 import com.daviddunn.retirementplanner.data.RothConversionDemoFactory;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -100,6 +102,69 @@ class RothConversionPersistenceTest {
                     loaded
                             .getRothConversionRequest()
                             .getStopRule());
+
+        } finally {
+
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void persistsOneTimeRothConversionRequest() throws IOException {
+
+        RetirementPlan originalPlan =
+                RothConversionDemoFactory
+                        .createRetirementPlan();
+
+        RothConversionRequest request =
+                new RothConversionRequest(
+                        true,
+                        2027,
+                        new BigDecimal("50000"),
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD);
+
+        originalPlan.setRothConversionRequest(request);
+
+        Path file =
+                Files.createTempFile(
+                        "roth-conversion-test",
+                        ".json");
+
+        try {
+
+            RetirementPlanRepository repository =
+                    new JsonRetirementPlanRepository();
+
+            repository.save(
+                    originalPlan,
+                    file);
+
+            RetirementPlan loadedPlan =
+                    repository.load(file);
+
+            RothConversionRequest loadedRequest =
+                    loadedPlan.getRothConversionRequest();
+
+            assertNotNull(
+                    loadedRequest);
+
+            assertTrue(
+                    loadedRequest.isEnabled());
+
+            assertEquals(
+                    2027,
+                    loadedRequest.getStartYear());
+
+            assertEquals(
+                    0,
+                    new BigDecimal("50000")
+                            .compareTo(
+                                    loadedRequest
+                                            .getAnnualAmount()));
+
+            assertEquals(
+                    RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                    loadedRequest.getStopRule());
 
         } finally {
 
