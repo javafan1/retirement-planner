@@ -172,6 +172,7 @@ public class ProjectionYearBuilder {
                 michiganTaxCalculation,
                 medicarePremiumCalculation,
                 taxFundingWithdrawal,
+                BigDecimal.ZERO,
                 primaryPersonAge
         );
     }

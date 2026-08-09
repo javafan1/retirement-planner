@@ -147,9 +147,9 @@ public class ApplicationController {
 
     public boolean openLastPlan() {
 
-        System.out.println(
-                "Opening plan: "
-                        + applicationSettings.getLastOpenedPlan());
+//        System.out.println(
+//                "Opening plan: "
+//                        + applicationSettings.getLastOpenedPlan());
 
         if (!applicationSettings.isAutomaticallyOpenLastPlan()) {
             return false;
@@ -158,27 +158,27 @@ public class ApplicationController {
         if (!applicationSettings.hasLastOpenedPlan()) {
             return false;
         }
-
-        System.out.println(
-                "Opening plan: "
-                        + applicationSettings.getLastOpenedPlan());
+//
+//        System.out.println(
+//                "Opening plan: "
+//                        + applicationSettings.getLastOpenedPlan());
 
         try {
 
             open(Path.of(
                     applicationSettings.getLastOpenedPlan()));
 
-            System.out.println(
-                    "Primary Birth Date = "
-                            + currentPlan.getHousehold()
-                            .getPrimaryPerson()
-                            .getBirthDate());
-
-            System.out.println(
-                    "Spouse Birth Date = "
-                            + currentPlan.getHousehold()
-                            .getSpouse()
-                            .getBirthDate());
+//            System.out.println(
+//                    "Primary Birth Date = "
+//                            + currentPlan.getHousehold()
+//                            .getPrimaryPerson()
+//                            .getBirthDate());
+//
+//            System.out.println(
+//                    "Spouse Birth Date = "
+//                            + currentPlan.getHousehold()
+//                            .getSpouse()
+//                            .getBirthDate());
 
             return true;
 

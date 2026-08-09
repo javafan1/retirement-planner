@@ -4,7 +4,7 @@ import java.util.Objects;
 
 public final class ScheduledRothConversionPolicy {
 
-    public boolean shouldExecuteConversion(
+    public boolean shouldExecuteConvert(
             RothConversionRequest request,
             int calendarYear,
             boolean householdSubjectToRmd) {
@@ -17,7 +17,7 @@ public final class ScheduledRothConversionPolicy {
             return false;
         }
 
-        if (calendarYear < request.getStartYear()) {
+        if (calendarYear != request.getStartYear()) {
             return false;
         }
 

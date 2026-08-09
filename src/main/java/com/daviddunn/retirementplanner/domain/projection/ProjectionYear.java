@@ -35,24 +35,31 @@ public class ProjectionYear {
     private final BigDecimal endingInvestableAssets;
 
     private final List<ProjectedAccountSnapshot> endingAccountSnapshots;
+
     private final BigDecimal adjustedGrossIncome;
     private final BigDecimal taxableSocialSecurity;
     private final BigDecimal federalTaxableIncome;
     private final BigDecimal federalStandardDeduction;
     private final BigDecimal federalIncomeTax;
     private final BigDecimal michiganIncomeTax;
+
     private final int primaryPersonAge;
 
-
     private final BigDecimal michiganRetirementIncome;
-
     private final BigDecimal michiganRetirementDeduction;
-
     private final BigDecimal michiganTaxableIncome;
 
     private final MedicarePremiumCalculation
             medicarePremiumCalculation;
 
+    private final BigDecimal rothConversion;
+
+
+    /*
+     * Existing compatibility constructor.
+     *
+     * Roth conversion defaults to zero.
+     */
     public ProjectionYear(
             int projectionYear,
             int calendarYear,
@@ -65,40 +72,16 @@ public class ProjectionYear {
             BigDecimal requiredMinimumDistribution,
             BigDecimal excessRmd,
             BigDecimal endingInvestableAssets,
-            Integer primaryPersonAge
-    ) {
+            Integer primaryPersonAge) {
 
+        this.projectionYear =
+                projectionYear;
 
-        this.adjustedGrossIncome =
-                BigDecimal.ZERO;
+        this.calendarYear =
+                calendarYear;
 
-        this.taxableSocialSecurity =
-                BigDecimal.ZERO;
-
-        this.federalTaxableIncome =
-                BigDecimal.ZERO;
-
-        this.federalStandardDeduction =
-                BigDecimal.ZERO;
-
-        this.federalIncomeTax =
-                BigDecimal.ZERO;
-
-        this.taxFundingWithdrawal =
-                BigDecimal.ZERO;
-
-        this.michiganIncomeTax =
-                BigDecimal.ZERO;
-        this.michiganRetirementIncome = BigDecimal.ZERO;
-        this.michiganRetirementDeduction = BigDecimal.ZERO;
-        this.michiganTaxableIncome = BigDecimal.ZERO;
-        this.medicarePremiumCalculation = null;
-
-
-        this.projectionYear = projectionYear;
-        this.calendarYear = calendarYear;
-        this.primaryPersonAge = primaryPersonAge;
-
+        this.primaryPersonAge =
+                primaryPersonAge;
 
         this.beginningInvestableAssets =
                 Objects.requireNonNull(
@@ -145,27 +128,6 @@ public class ProjectionYear {
                         endingInvestableAssets,
                         "endingInvestableAssets");
 
-
-        this.endingAccountSnapshots =
-                List.of();
-    }
-
-    public ProjectionYear(
-            int projectionYear,
-            int calendarYear,
-            BigDecimal beginningInvestableAssets,
-            BigDecimal investmentGrowth,
-            BigDecimal guaranteedIncome,
-            BigDecimal annualExpenses,
-            BigDecimal cashFlowNeed,
-            BigDecimal portfolioWithdrawal,
-            BigDecimal requiredMinimumDistribution,
-            BigDecimal excessRmd,
-            BigDecimal endingInvestableAssets,
-            List<ProjectedAccountSnapshot> endingAccountSnapshots, int primaryPersonAge) {
-
-
-
         this.adjustedGrossIncome =
                 BigDecimal.ZERO;
 
@@ -181,20 +143,60 @@ public class ProjectionYear {
         this.federalIncomeTax =
                 BigDecimal.ZERO;
 
+        this.taxFundingWithdrawal =
+                BigDecimal.ZERO;
+
         this.michiganIncomeTax =
                 BigDecimal.ZERO;
 
-        this.michiganRetirementIncome = BigDecimal.ZERO;
-        this.michiganRetirementDeduction = BigDecimal.ZERO;
-        this.michiganTaxableIncome = BigDecimal.ZERO;
-        this.medicarePremiumCalculation = null;
-
-        this.projectionYear = projectionYear;
-        this.primaryPersonAge = primaryPersonAge;
-        this.calendarYear = calendarYear;
-
-        this.taxFundingWithdrawal =
+        this.michiganRetirementIncome =
                 BigDecimal.ZERO;
+
+        this.michiganRetirementDeduction =
+                BigDecimal.ZERO;
+
+        this.michiganTaxableIncome =
+                BigDecimal.ZERO;
+
+        this.medicarePremiumCalculation =
+                null;
+
+        this.endingAccountSnapshots =
+                List.of();
+
+        this.rothConversion =
+                BigDecimal.ZERO;
+    }
+
+
+    /*
+     * Compatibility constructor with account snapshots.
+     *
+     * Roth conversion defaults to zero.
+     */
+    public ProjectionYear(
+            int projectionYear,
+            int calendarYear,
+            BigDecimal beginningInvestableAssets,
+            BigDecimal investmentGrowth,
+            BigDecimal guaranteedIncome,
+            BigDecimal annualExpenses,
+            BigDecimal cashFlowNeed,
+            BigDecimal portfolioWithdrawal,
+            BigDecimal requiredMinimumDistribution,
+            BigDecimal excessRmd,
+            BigDecimal endingInvestableAssets,
+            List<ProjectedAccountSnapshot> endingAccountSnapshots,
+            int primaryPersonAge) {
+
+        this.projectionYear =
+                projectionYear;
+
+        this.calendarYear =
+                calendarYear;
+
+        this.primaryPersonAge =
+                primaryPersonAge;
 
         this.beginningInvestableAssets =
                 Objects.requireNonNull(
@@ -248,8 +250,52 @@ public class ProjectionYear {
         this.endingAccountSnapshots =
                 List.copyOf(
                         endingAccountSnapshots);
+
+        this.adjustedGrossIncome =
+                BigDecimal.ZERO;
+
+        this.taxableSocialSecurity =
+                BigDecimal.ZERO;
+
+        this.federalTaxableIncome =
+                BigDecimal.ZERO;
+
+        this.federalStandardDeduction =
+                BigDecimal.ZERO;
+
+        this.federalIncomeTax =
+                BigDecimal.ZERO;
+
+        this.taxFundingWithdrawal =
+                BigDecimal.ZERO;
+
+        this.michiganIncomeTax =
+                BigDecimal.ZERO;
+
+        this.michiganRetirementIncome =
+                BigDecimal.ZERO;
+
+        this.michiganRetirementDeduction =
+                BigDecimal.ZERO;
+
+        this.michiganTaxableIncome =
+                BigDecimal.ZERO;
+
+        this.medicarePremiumCalculation =
+                null;
+
+        this.rothConversion =
+                BigDecimal.ZERO;
     }
 
+
+    /*
+     * Full projection constructor.
+     *
+     * This constructor is used when tax calculations,
+     * Medicare calculations, account snapshots, and
+     * Roth conversion results are available.
+     */
     public ProjectionYear(
             int projectionYear,
             int calendarYear,
@@ -267,11 +313,18 @@ public class ProjectionYear {
             MichiganTaxCalculation michiganTaxCalculation,
             MedicarePremiumCalculation medicarePremiumCalculation,
             BigDecimal taxFundingWithdrawal,
+            BigDecimal rothConversion,
             int primaryPersonAge) {
 
-        this.projectionYear = projectionYear;
-        this.calendarYear = calendarYear;
-        this.primaryPersonAge = primaryPersonAge;
+        this.projectionYear =
+                projectionYear;
+
+        this.calendarYear =
+                calendarYear;
+
+        this.primaryPersonAge =
+                primaryPersonAge;
+
         this.beginningInvestableAssets =
                 Objects.requireNonNull(
                         beginningInvestableAssets,
@@ -286,19 +339,6 @@ public class ProjectionYear {
                 Objects.requireNonNull(
                         guaranteedIncome,
                         "guaranteedIncome");
-
-        this.taxFundingWithdrawal =
-                Objects.requireNonNull(
-                        taxFundingWithdrawal,
-                        "Tax funding withdrawal is required.");
-
-        this.federalStandardDeduction =
-                federalTaxCalculation.getStandardDeduction();
-
-        if (taxFundingWithdrawal.signum() < 0) {
-            throw new IllegalArgumentException(
-                    "Tax funding withdrawal cannot be negative.");
-        }
 
         this.annualExpenses =
                 Objects.requireNonNull(
@@ -354,7 +394,9 @@ public class ProjectionYear {
                 federalTaxCalculation
                         .getTaxableIncome();
 
-
+        this.federalStandardDeduction =
+                federalTaxCalculation
+                        .getStandardDeduction();
 
         this.federalIncomeTax =
                 federalTaxCalculation
@@ -365,29 +407,49 @@ public class ProjectionYear {
                 "Michigan tax calculation is required.");
 
         this.michiganRetirementIncome =
-                michiganTaxCalculation.retirementIncome();
+                michiganTaxCalculation
+                        .retirementIncome();
 
         this.michiganRetirementDeduction =
-                michiganTaxCalculation.retirementDeduction();
+                michiganTaxCalculation
+                        .retirementDeduction();
 
         this.michiganTaxableIncome =
-                michiganTaxCalculation.taxableIncome();
+                michiganTaxCalculation
+                        .taxableIncome();
 
         this.michiganIncomeTax =
-                michiganTaxCalculation.incomeTax();
+                michiganTaxCalculation
+                        .incomeTax();
 
         Objects.requireNonNull(
                 medicarePremiumCalculation,
                 "Medicare premium calculation is required.");
 
-        this.medicarePremiumCalculation = medicarePremiumCalculation;
+        this.medicarePremiumCalculation =
+                medicarePremiumCalculation;
 
+        this.taxFundingWithdrawal =
+                Objects.requireNonNull(
+                        taxFundingWithdrawal,
+                        "Tax funding withdrawal is required.");
 
+        if (taxFundingWithdrawal.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Tax funding withdrawal cannot be negative.");
+        }
 
+        this.rothConversion =
+                Objects.requireNonNull(
+                        rothConversion,
+                        "Roth conversion is required.");
 
-
-
+        if (rothConversion.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Roth conversion cannot be negative.");
+        }
     }
+
 
     public int getProjectionYear() {
         return projectionYear;
@@ -436,6 +498,10 @@ public class ProjectionYear {
 
     public BigDecimal getEndingInvestableAssets() {
         return endingInvestableAssets;
+    }
+
+    public BigDecimal getRothConversion() {
+        return rothConversion;
     }
 
     @JsonIgnore
@@ -492,6 +558,7 @@ public class ProjectionYear {
     public BigDecimal getFederalIncomeTax() {
         return federalIncomeTax;
     }
+
     public BigDecimal getTaxFundingWithdrawal() {
         return taxFundingWithdrawal;
     }
@@ -525,7 +592,6 @@ public class ProjectionYear {
     public BigDecimal getFederalStandardDeduction() {
         return federalStandardDeduction;
     }
-
 
     public BigDecimal getAnnualMedicarePremium() {
 

@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.model;
 
 import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -13,13 +14,25 @@ public class RetirementPlan {
 
     private PlanningAssumptions planningAssumptions;
 
+    private RothConversionRequest rothConversionRequest;
+
     @JsonCreator
     public RetirementPlan(
-            @JsonProperty("household") Household household,
-            @JsonProperty("accountPortfolio") AccountPortfolio accountPortfolio,
-            @JsonProperty("planningAssumptions") PlanningAssumptions planningAssumptions) {
+            @JsonProperty("household")
+            Household household,
 
-        this.household = Objects.requireNonNull(household);
+            @JsonProperty("accountPortfolio")
+            AccountPortfolio accountPortfolio,
+
+            @JsonProperty("planningAssumptions")
+            PlanningAssumptions planningAssumptions,
+
+            @JsonProperty("rothConversionRequest")
+            RothConversionRequest rothConversionRequest) {
+
+        this.household =
+                Objects.requireNonNull(
+                        household);
 
         this.accountPortfolio =
                 accountPortfolio != null
@@ -27,7 +40,29 @@ public class RetirementPlan {
                         : new AccountPortfolio();
 
         this.planningAssumptions =
-                Objects.requireNonNull(planningAssumptions);
+                Objects.requireNonNull(
+                        planningAssumptions);
+
+        this.rothConversionRequest =
+                rothConversionRequest;
+    }
+
+    /*
+     * Existing application compatibility constructor.
+     *
+     * Plans created before Roth conversion support
+     * simply have no conversion request.
+     */
+    public RetirementPlan(
+            Household household,
+            AccountPortfolio accountPortfolio,
+            PlanningAssumptions planningAssumptions) {
+
+        this(
+                household,
+                accountPortfolio,
+                planningAssumptions,
+                null);
     }
 
     public Household getHousehold() {
@@ -42,11 +77,22 @@ public class RetirementPlan {
         return accountPortfolio;
     }
 
+    public RothConversionRequest getRothConversionRequest() {
+        return rothConversionRequest;
+    }
+
     public void setPlanningAssumptions(
             PlanningAssumptions planningAssumptions) {
 
         this.planningAssumptions =
                 Objects.requireNonNull(
                         planningAssumptions);
+    }
+
+    public void setRothConversionRequest(
+            RothConversionRequest rothConversionRequest) {
+
+        this.rothConversionRequest =
+                rothConversionRequest;
     }
 }

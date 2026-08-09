@@ -329,6 +329,16 @@ public final class ProjectedWithdrawalAllocator {
                 withdrawalStrategy.orderAccounts(
                         portfolio);
 
+
+        for (ProjectedAccountBalance projected :
+                orderedAccounts) {
+
+//            System.out.println(
+//                    projected.getAccount().getName()
+//                            + " = "
+//                            + projected.getBalance());
+        }
+
         for (ProjectedAccountBalance projected :
                 orderedAccounts) {
 

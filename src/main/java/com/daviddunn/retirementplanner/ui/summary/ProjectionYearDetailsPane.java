@@ -1,5 +1,8 @@
 package com.daviddunn.retirementplanner.ui.summary;
 
+
+import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountSnapshot;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import javafx.geometry.HPos;
@@ -97,14 +100,6 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 row,
                 year);
 
-        // ----------------------------------------------------
-        // Totals
-        // ----------------------------------------------------
-
-        addTotalsSection(
-                grid,
-                row,
-                year);
 
         content.getChildren().add(grid);
 
@@ -148,6 +143,38 @@ public class ProjectionYearDetailsPane extends BorderPane {
         row = addMoneyRow(
                 grid,
                 row,
+                "Tax-Deferred Accounts",
+                getEndingBalanceByAssetType(
+                        year,
+                        ProjectionAssetType.TAX_DEFERRED));
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Roth Accounts",
+                getEndingBalanceByAssetType(
+                        year,
+                        ProjectionAssetType.ROTH));
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Taxable Accounts",
+                getEndingBalanceByAssetType(
+                        year,
+                        ProjectionAssetType.TAXABLE));
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Cash Accounts",
+                getEndingBalanceByAssetType(
+                        year,
+                        ProjectionAssetType.TAXABLE));
+
+        row = addMoneyRow(
+                grid,
+                row,
                 "Ending Assets",
                 year.getEndingInvestableAssets());
 
@@ -175,6 +202,12 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 row,
                 "Portfolio Withdrawal",
                 year.getPortfolioWithdrawal());
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Roth Conversion",
+                year.getRothConversion());
 
         row = addMoneyRow(
                 grid,
@@ -499,5 +532,22 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 row);
 
         return row + 1;
+    }
+
+    private BigDecimal getEndingBalanceByAssetType(
+            ProjectionYear year,
+            ProjectionAssetType assetType) {
+
+        return year
+                .getEndingAccountSnapshots()
+                .stream()
+                .filter(snapshot ->
+                        snapshot.getAccount()
+                                .getProjectionAssetType()
+                                == assetType)
+                .map(ProjectedAccountSnapshot::getEndingBalance)
+                .reduce(
+                        BigDecimal.ZERO,
+                        BigDecimal::add);
     }
 }

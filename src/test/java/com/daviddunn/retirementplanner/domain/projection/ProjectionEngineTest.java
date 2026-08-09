@@ -16,6 +16,8 @@ import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 import com.daviddunn.retirementplanner.domain.model.WithdrawalAssumptions;
 import com.daviddunn.retirementplanner.domain.model.WithdrawalStrategyType;
 
+import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -1918,5 +1920,145 @@ ProjectionYear
                         .compareTo(
                                 year.getTaxFundingWithdrawal()
                                         .setScale(2, RoundingMode.HALF_UP)));
+    }
+
+    @Test
+    void projectionAppliesOneTimeRothConversion() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        RothIRA rothIra =
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        portfolio.addAccount(
+                rothIra);
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        2,
+                        LocalDate.of(2026, 1, 1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        plan.setRothConversionRequest(
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        new BigDecimal("50000"),
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD));
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear firstYear =
+                projection.getYearAt(0);
+
+        ProjectionYear secondYear =
+                projection.getYearAt(1);
+
+        /*
+         * First year:
+         *
+         * Traditional IRA:
+         * $100,000 - $50,000 = $50,000
+         */
+        assertEquals(
+                0,
+                new BigDecimal("50000")
+                        .compareTo(
+                                firstYear.getEndingBalance(
+                                        traditionalIra)));
+
+        /*
+         * Roth IRA:
+         * $100,000 + $50,000 = $150,000
+         */
+        assertEquals(
+                0,
+                new BigDecimal("150000")
+                        .compareTo(
+                                firstYear.getEndingBalance(
+                                        rothIra)));
+
+        /*
+         * A conversion is a transfer, so total
+         * investable assets remain $200,000.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("200000")
+                        .compareTo(
+                                firstYear
+                                        .getEndingInvestableAssets()));
+
+        /*
+         * Second year:
+         *
+         * No second $50,000 conversion should occur.
+         *
+         * Therefore the balances remain:
+         *
+         * Traditional IRA = $50,000
+         * Roth IRA        = $150,000
+         */
+        assertEquals(
+                0,
+                new BigDecimal("50000")
+                        .compareTo(
+                                secondYear.getEndingBalance(
+                                        traditionalIra)));
+
+        assertEquals(
+                0,
+                new BigDecimal("150000")
+                        .compareTo(
+                                secondYear.getEndingBalance(
+                                        rothIra)));
+
+        assertEquals(
+                0,
+                new BigDecimal("200000")
+                        .compareTo(
+                                secondYear
+                                        .getEndingInvestableAssets()));
     }
 }

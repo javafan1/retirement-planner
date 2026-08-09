@@ -2,6 +2,9 @@ package com.daviddunn.retirementplanner.domain.projection;
 
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.model.*;
+import com.daviddunn.retirementplanner.domain.roth.ProjectedPortfolioRothConverter;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
+import com.daviddunn.retirementplanner.domain.roth.ScheduledRothConversionPolicy;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.withdrawal.RothConversionPlanner;
 import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
@@ -43,6 +46,19 @@ public class ProjectionEngine {
 
     private final TaxIncomeCalculator
             taxIncomeCalculator;
+//
+//    private final RothConversionPlanner
+//            rothConversionPlanner;
+//
+//    private final TaxIncomeCalculator
+//            taxIncomeCalculator;
+
+    private final ScheduledRothConversionPolicy
+            scheduledRothConversionPolicy;
+
+    private final ProjectedPortfolioRothConverter
+            projectedPortfolioRothConverter ;
+
 
     public ProjectionEngine() {
 
@@ -69,7 +85,15 @@ public class ProjectionEngine {
 
         this.taxIncomeCalculator = new TaxIncomeCalculator();
 
-        this.rothConversionPlanner = new RothConversionPlanner();
+
+        this.rothConversionPlanner =
+                new RothConversionPlanner();
+
+        this.scheduledRothConversionPolicy =
+                new ScheduledRothConversionPolicy();
+
+        this.projectedPortfolioRothConverter =
+                new ProjectedPortfolioRothConverter();
 
 
         try {
@@ -387,6 +411,38 @@ public class ProjectionEngine {
                         .withAdditionalCash(
                                 withdrawalResult.getExcessRmd());
 
+        RothConversionRequest rothConversionRequest =
+                plan.getRothConversionRequest();
+
+        boolean householdSubjectToRmd =
+                householdRmdResult
+                        .getTotalRmd()
+                        .signum() > 0;
+
+        BigDecimal rothConversion =
+                BigDecimal.ZERO;
+
+
+
+
+        if (rothConversionRequest != null &&
+                scheduledRothConversionPolicy
+                        .shouldExecuteConvert(
+                                rothConversionRequest,
+                                calendarYear,
+                                householdSubjectToRmd)) {
+
+
+            rothConversion =
+                    rothConversionRequest
+                            .getAnnualAmount();
+
+            endingPortfolio =
+                    projectedPortfolioRothConverter.convert(
+                            endingPortfolio,
+                            AccountOwnership.PRIMARY,
+                            rothConversion);
+        }
         List<ProjectedAccountSnapshot> endingAccountSnapshots =
                 endingPortfolio
                         .getAccountBalances()
@@ -420,6 +476,7 @@ public class ProjectionEngine {
         int primaryPersonAge =
                 primaryPerson.getAge(projectionDate);
 
+
         ProjectionYear projectionYear =
                 new ProjectionYear(
                         yearOffset,
@@ -438,6 +495,7 @@ public class ProjectionEngine {
                         michiganTaxCalculation,
                         medicarePremiumCalculation,
                         taxFundingWithdrawal,
+                        rothConversion,
                         primaryPersonAge);
 
 
