@@ -123,7 +123,8 @@ class TaxFundingCalculatorTest {
                         existingWithdrawals,
                         withdrawalStrategy,
                         FilingStatus.MARRIED_FILING_JOINTLY,
-                        rules);
+                        rules,
+                        BigDecimal.ZERO);
 
         /*
          * The tax-funding withdrawal itself comes
@@ -220,7 +221,7 @@ class TaxFundingCalculatorTest {
                         existingWithdrawals,
                         withdrawalStrategy,
                         FilingStatus.MARRIED_FILING_JOINTLY,
-                        rules);
+                        rules,BigDecimal.ZERO);
 
         /*
          * Pension                       $18,000

@@ -1921,7 +1921,6 @@ ProjectionYear
                                 year.getTaxFundingWithdrawal()
                                         .setScale(2, RoundingMode.HALF_UP)));
     }
-
     @Test
     void projectionAppliesOneTimeRothConversion() {
 
@@ -1996,21 +1995,56 @@ ProjectionYear
                 projection.getYearAt(1);
 
         /*
-         * First year:
+         * 2026:
          *
-         * Traditional IRA:
-         * $100,000 - $50,000 = $50,000
+         * A one-time $50,000 Roth conversion occurs.
          */
         assertEquals(
                 0,
                 new BigDecimal("50000")
                         .compareTo(
-                                firstYear.getEndingBalance(
-                                        traditionalIra)));
+                                firstYear.getRothConversion()));
 
         /*
-         * Roth IRA:
-         * $100,000 + $50,000 = $150,000
+         * The $50,000 conversion is taxable income
+         * and therefore creates federal income tax.
+         */
+        assertTrue(
+                firstYear
+                        .getFederalIncomeTax()
+                        .compareTo(BigDecimal.ZERO) > 0);
+
+        /*
+         * This test scenario produces no Michigan
+         * income tax.
+         */
+        assertEquals(
+                0,
+                BigDecimal.ZERO
+                        .compareTo(
+                                firstYear
+                                        .getMichiganIncomeTax()));
+
+        /*
+         * Federal tax is funded by an additional
+         * portfolio withdrawal.
+         */
+        /*
+         * Federal tax is funded by an additional
+         * portfolio withdrawal.
+         */
+        assertTrue(
+                firstYear
+                        .getFederalIncomeTax()
+                        .subtract(
+                                firstYear.getTaxFundingWithdrawal())
+                        .abs()
+                        .compareTo(
+                                new BigDecimal("0.01")) < 0);
+
+        /*
+         * The Roth IRA receives the full $50,000
+         * conversion.
          */
         assertEquals(
                 0,
@@ -2020,45 +2054,53 @@ ProjectionYear
                                         rothIra)));
 
         /*
-         * A conversion is a transfer, so total
-         * investable assets remain $200,000.
+         * The Traditional IRA is reduced by:
+         *
+         * $50,000 conversion
+         * + $1,977.77758 tax funding
+         *
+         * = $48,022.22242 remaining.
          */
         assertEquals(
                 0,
-                new BigDecimal("200000")
+                new BigDecimal("48022.22242")
+                        .compareTo(
+                                firstYear.getEndingBalance(
+                                        traditionalIra)));
+
+        /*
+         * Total ending assets are reduced only by
+         * the taxes. The conversion itself is a
+         * transfer between accounts.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("198022.22")
                         .compareTo(
                                 firstYear
                                         .getEndingInvestableAssets()));
 
         /*
-         * Second year:
+         * 2027:
          *
-         * No second $50,000 conversion should occur.
-         *
-         * Therefore the balances remain:
-         *
-         * Traditional IRA = $50,000
-         * Roth IRA        = $150,000
+         * The conversion was one-time, so there is
+         * no second $50,000 conversion.
          */
         assertEquals(
                 0,
-                new BigDecimal("50000")
+                BigDecimal.ZERO
                         .compareTo(
-                                secondYear.getEndingBalance(
-                                        traditionalIra)));
+                                secondYear.getRothConversion()));
 
+        /*
+         * There is no Roth-conversion tax funding
+         * withdrawal in 2027.
+         */
         assertEquals(
                 0,
-                new BigDecimal("150000")
-                        .compareTo(
-                                secondYear.getEndingBalance(
-                                        rothIra)));
-
-        assertEquals(
-                0,
-                new BigDecimal("200000")
+                BigDecimal.ZERO
                         .compareTo(
                                 secondYear
-                                        .getEndingInvestableAssets()));
+                                        .getTaxFundingWithdrawal()));
     }
 }

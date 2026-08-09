@@ -348,14 +348,38 @@ public class ProjectionEngine {
                 rmdWithdrawalBreakdown.plus(
                         withdrawalBreakdown);
 
+        RothConversionRequest rothConversionRequest =
+                plan.getRothConversionRequest();
+
+        boolean householdSubjectToRmd =
+                householdRmdResult
+                        .getTotalRmd()
+                        .signum() > 0;
+
+        BigDecimal rothConversion =
+                BigDecimal.ZERO;
+
+        if (rothConversionRequest != null &&
+                scheduledRothConversionPolicy
+                        .shouldExecuteConvert(
+                                rothConversionRequest,
+                                calendarYear,
+                                householdSubjectToRmd)) {
+
+
+            rothConversion =
+                    rothConversionRequest
+                            .getAnnualAmount();
+
+        }
+
         TaxIncome baseTaxIncome =
                 taxIncomeCalculator.calculate(
                         household,
                         projectionDate,
                         totalWithdrawalBreakdown
-                                .getTaxDeferredWithdrawal());
-
-
+                                .getTaxDeferredWithdrawal(),
+                        rothConversion);
 
 
         TaxFundingResult taxFundingResult =
@@ -366,7 +390,8 @@ public class ProjectionEngine {
                         totalWithdrawalBreakdown,
                         withdrawalStrategy,
                         getFilingStatus(assumptions),
-                        projectedGovernmentRules);
+                        projectedGovernmentRules,
+                        rothConversion);
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();
@@ -411,31 +436,9 @@ public class ProjectionEngine {
                         .withAdditionalCash(
                                 withdrawalResult.getExcessRmd());
 
-        RothConversionRequest rothConversionRequest =
-                plan.getRothConversionRequest();
-
-        boolean householdSubjectToRmd =
-                householdRmdResult
-                        .getTotalRmd()
-                        .signum() > 0;
-
-        BigDecimal rothConversion =
-                BigDecimal.ZERO;
 
 
-
-
-        if (rothConversionRequest != null &&
-                scheduledRothConversionPolicy
-                        .shouldExecuteConvert(
-                                rothConversionRequest,
-                                calendarYear,
-                                householdSubjectToRmd)) {
-
-
-            rothConversion =
-                    rothConversionRequest
-                            .getAnnualAmount();
+        if (rothConversion.signum() > 0) {
 
             endingPortfolio =
                     projectedPortfolioRothConverter.convert(
@@ -443,6 +446,8 @@ public class ProjectionEngine {
                             AccountOwnership.PRIMARY,
                             rothConversion);
         }
+
+
         List<ProjectedAccountSnapshot> endingAccountSnapshots =
                 endingPortfolio
                         .getAccountBalances()

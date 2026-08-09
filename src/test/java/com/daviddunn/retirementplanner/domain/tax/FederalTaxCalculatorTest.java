@@ -67,7 +67,7 @@ Federal income tax                 $4,478
                 new TaxIncome(
                         new BigDecimal("18000"),
                         new BigDecimal("60000"),
-                        new BigDecimal("25000"));
+                        new BigDecimal("25000"),BigDecimal.ZERO);
 
         FederalTaxCalculation calculation =
                 calculator.calculate(

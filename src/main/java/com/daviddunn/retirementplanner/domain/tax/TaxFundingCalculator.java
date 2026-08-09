@@ -56,7 +56,8 @@ public final class TaxFundingCalculator {
             WithdrawalBreakdown existingWithdrawals,
             WithdrawalStrategy withdrawalStrategy,
             FilingStatus filingStatus,
-            GovernmentRules projectedGovernmentRules) {
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal rothConversion) {
 
         Objects.requireNonNull(
                 household,
@@ -85,6 +86,15 @@ public final class TaxFundingCalculator {
         Objects.requireNonNull(
                 projectedGovernmentRules,
                 "Projected government rules are required.");
+
+        Objects.requireNonNull(
+                rothConversion,
+                "Roth conversion is required.");
+
+        if (rothConversion.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Roth conversion cannot be negative.");
+        }
 
         BigDecimal additionalWithdrawal =
                 BigDecimal.ZERO;
@@ -119,7 +129,8 @@ public final class TaxFundingCalculator {
                             household,
                             projectionDate,
                             totalWithdrawals
-                                    .getTaxDeferredWithdrawal());
+                                    .getTaxDeferredWithdrawal(),
+                            rothConversion);
 
             FederalTaxCalculation federalTaxCalculation =
                     federalTaxCalculator.calculate(
@@ -169,7 +180,8 @@ public final class TaxFundingCalculator {
                                 household,
                                 projectionDate,
                                 finalTotalWithdrawals
-                                        .getTaxDeferredWithdrawal());
+                                        .getTaxDeferredWithdrawal(),
+                                rothConversion);
 
                 FederalTaxCalculation finalFederalTaxCalculation =
                         federalTaxCalculator.calculate(

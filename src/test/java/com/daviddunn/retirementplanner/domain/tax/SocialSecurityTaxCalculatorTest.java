@@ -37,7 +37,7 @@ class SocialSecurityTaxCalculatorTest {
                 new TaxIncome(
                         new BigDecimal("10000"),
                         new BigDecimal("20000"),
-                        BigDecimal.ZERO);
+                        BigDecimal.ZERO,BigDecimal.ZERO);
 
         /*
          * MFJ combined income:
@@ -69,7 +69,7 @@ class SocialSecurityTaxCalculatorTest {
                 new TaxIncome(
                         new BigDecimal("25000"),
                         new BigDecimal("20000"),
-                        BigDecimal.ZERO);
+                        BigDecimal.ZERO,BigDecimal.ZERO);
 
         /*
          * MFJ combined income:
@@ -108,7 +108,7 @@ class SocialSecurityTaxCalculatorTest {
                 new TaxIncome(
                         new BigDecimal("43000"),
                         new BigDecimal("60000"),
-                        BigDecimal.ZERO);
+                        BigDecimal.ZERO,BigDecimal.ZERO);
 
         /*
          * MFJ combined income:
@@ -154,7 +154,7 @@ class SocialSecurityTaxCalculatorTest {
                 new TaxIncome(
                         new BigDecimal("200000"),
                         new BigDecimal("60000"),
-                        BigDecimal.ZERO);
+                        BigDecimal.ZERO,BigDecimal.ZERO);
 
         /*
          * Maximum taxable Social Security:
