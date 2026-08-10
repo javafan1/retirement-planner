@@ -14,6 +14,7 @@ public final class RothConversionRequest {
     private final BigDecimal annualAmount;
     private final RothConversionStopRule stopRule;
     private final RothConversionFrequency frequency;
+    private final RothConversionStrategy strategy;
 
     @JsonCreator
     public RothConversionRequest(
@@ -28,6 +29,9 @@ public final class RothConversionRequest {
 
             @JsonProperty("stopRule")
             RothConversionStopRule stopRule,
+
+            @JsonProperty("strategy")
+            RothConversionStrategy strategy,
 
             @JsonProperty("frequency")
             RothConversionFrequency frequency) {
@@ -63,6 +67,15 @@ public final class RothConversionRequest {
                         frequency,
                         "Frequency is required.");
 
+        this.strategy =
+                Objects.requireNonNull(
+                        strategy,
+                        "Strategy is required.");
+
+    }
+
+    public RothConversionStrategy getStrategy() {
+        return strategy;
     }
 
     public boolean isEnabled() {

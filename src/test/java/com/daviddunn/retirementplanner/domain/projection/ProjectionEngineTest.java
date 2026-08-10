@@ -19,6 +19,7 @@ import com.daviddunn.retirementplanner.domain.model.WithdrawalStrategyType;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -1981,7 +1982,9 @@ ProjectionYear
                         true,
                         2026,
                         new BigDecimal("50000"),
-                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD, RothConversionFrequency.ONE_TIME));
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy.FIXED_AMOUNT,
+                        RothConversionFrequency.ONE_TIME));
 
         ProjectionEngine engine =
                 new ProjectionEngine();
@@ -2167,6 +2170,7 @@ ProjectionYear
                         2026,
                         new BigDecimal("50000"),
                         RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy.FIXED_AMOUNT,
                         RothConversionFrequency.ANNUAL));
 
         ProjectionEngine engine =
@@ -2343,6 +2347,7 @@ ProjectionYear
                         2026,
                         new BigDecimal("50000"),
                         RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy.FIXED_AMOUNT,
                         RothConversionFrequency.ANNUAL));
 
         ProjectionEngine engine =

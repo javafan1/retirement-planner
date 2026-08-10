@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
 
+import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
@@ -446,6 +447,7 @@ public class RothConversionView extends VBox {
                             conversionYear,
                             conversionAmount,
                             stopRule,
+                            RothConversionStrategy.FIXED_AMOUNT,
                             frequency);
 
 

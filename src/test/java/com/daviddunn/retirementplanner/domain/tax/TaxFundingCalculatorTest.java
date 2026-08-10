@@ -255,4 +255,122 @@ class TaxFundingCalculatorTest {
                                         .getFederalTaxCalculation()
                                         .getFederalIncomeTax()));
     }
+
+    @Test
+    void rothConversionIncreasesFederalTaxableIncome() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        primary.addIncomeSource(
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2026, 1, 1),
+                        null,
+                        new BigDecimal("1500"),
+                        BigDecimal.ZERO));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        BrokerageAccount brokerage =
+                new BrokerageAccount(
+                        "Brokerage",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        brokerage,
+                                        new BigDecimal("100000"))));
+
+        /*
+         * Existing Traditional IRA withdrawal:
+         *
+         * Pension                    $18,000
+         * IRA withdrawal              25,000
+         *                             -------
+         * AGI                         $43,000
+         *
+         * Standard deduction         -32,200
+         *                             -------
+         * Taxable income              $10,800
+         */
+        WithdrawalBreakdown existingWithdrawals =
+                new WithdrawalBreakdown(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        new BigDecimal("25000"),
+                        BigDecimal.ZERO);
+
+        WithdrawalStrategy withdrawalStrategy =
+                new TaxableFirstWithdrawalStrategy();
+
+        /*
+         * First calculate taxes with no Roth conversion.
+         */
+        TaxFundingResult withoutConversion =
+                calculator.calculate(
+                        household,
+                        LocalDate.of(2026, 1, 1),
+                        portfolio,
+                        existingWithdrawals,
+                        withdrawalStrategy,
+                        FilingStatus.MARRIED_FILING_JOINTLY,
+                        rules,
+                        BigDecimal.ZERO);
+
+        /*
+         * Now calculate taxes with a $50,000
+         * Roth conversion.
+         *
+         * Under the current tax model:
+         *
+         * Existing taxable income      $10,800
+         * Roth conversion               50,000
+         *                              -------
+         * Expected taxable income      $60,800
+         */
+        TaxFundingResult withConversion =
+                calculator.calculate(
+                        household,
+                        LocalDate.of(2026, 1, 1),
+                        portfolio,
+                        existingWithdrawals,
+                        withdrawalStrategy,
+                        FilingStatus.MARRIED_FILING_JOINTLY,
+                        rules,
+                        new BigDecimal("50000"));
+
+        assertEquals(
+                0,
+                new BigDecimal("10800")
+                        .compareTo(
+                                withoutConversion
+                                        .getFederalTaxCalculation()
+                                        .getTaxableIncome()));
+
+        assertEquals(
+                0,
+                new BigDecimal("60800")
+                        .compareTo(
+                                withConversion
+                                        .getFederalTaxCalculation()
+                                        .getTaxableIncome()));
+    }
+
 }

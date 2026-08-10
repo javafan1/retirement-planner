@@ -22,6 +22,7 @@ class ScheduledRothConversionPolicyTest {
                         2026,
                         new BigDecimal("50000"),
                         RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy.FIXED_AMOUNT,
                         RothConversionFrequency.ONE_TIME);
 
         assertTrue(
@@ -47,6 +48,7 @@ class ScheduledRothConversionPolicyTest {
                         2026,
                         new BigDecimal("50000"),
                         RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy.FIXED_AMOUNT,
                         RothConversionFrequency.ANNUAL);
 
         assertTrue(
@@ -78,6 +80,7 @@ class ScheduledRothConversionPolicyTest {
                         2026,
                         new BigDecimal("50000"),
                         RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy.FIXED_AMOUNT,
                         RothConversionFrequency.ANNUAL);
 
         assertFalse(
@@ -97,6 +100,7 @@ class ScheduledRothConversionPolicyTest {
                         2026,
                         new BigDecimal("50000"),
                         RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy.FIXED_AMOUNT,
                         RothConversionFrequency.ANNUAL);
 
         assertTrue(
@@ -128,6 +132,7 @@ class ScheduledRothConversionPolicyTest {
                         2026,
                         new BigDecimal("50000"),
                         RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy.FIXED_AMOUNT,
                         RothConversionFrequency.ANNUAL);
 
         assertFalse(
@@ -147,6 +152,7 @@ class ScheduledRothConversionPolicyTest {
                         2026,
                         new BigDecimal("50000"),
                         RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy.FIXED_AMOUNT,
                         RothConversionFrequency.ANNUAL);
 
         assertFalse(
