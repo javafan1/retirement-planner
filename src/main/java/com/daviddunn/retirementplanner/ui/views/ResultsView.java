@@ -18,7 +18,6 @@ import javafx.scene.control.TableView;
 import javafx.scene.layout.BorderPane;
 
 import java.math.BigDecimal;
-import java.text.NumberFormat;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -138,6 +137,19 @@ public class ResultsView extends BorderPane {
                                         year,
                                         ProjectionAssetType.TAX_DEFERRED));
 
+
+        /*
+         * Roth conversion performed during the year.
+         *
+         * This is the annual conversion amount,
+         * not the ending Roth account balance.
+         */
+        TableColumn<ProjectionYear, BigDecimal> rothConversionColumn =
+                createMoneyColumn(
+                        "Roth Conversion",
+                        ProjectionYear::getRothConversion);
+
+
         TableColumn<ProjectionYear, BigDecimal> rothColumn =
                 createMoneyColumn(
                         "Roth",
@@ -166,6 +178,7 @@ public class ResultsView extends BorderPane {
                 totalTaxColumn,
                 medicareColumn,
                 taxDeferredColumn,
+                rothConversionColumn,
                 rothColumn,
                 endingAssetsColumn);
 
@@ -200,9 +213,7 @@ public class ResultsView extends BorderPane {
 
     private TableColumn<ProjectionYear, BigDecimal> createMoneyColumn(
             String title,
-            java.util.function.Function<
-                    ProjectionYear,
-                    BigDecimal> valueFunction) {
+            Function<ProjectionYear, BigDecimal> valueFunction) {
 
         TableColumn<ProjectionYear, BigDecimal> column =
                 new TableColumn<>(title);
@@ -338,5 +349,4 @@ public class ResultsView extends BorderPane {
                         BigDecimal.ZERO,
                         BigDecimal::add);
     }
-
 }

@@ -68,10 +68,82 @@ public final class ProjectedPortfolioRothConverter {
                 destinationBalance.add(amount));
     }
 
+//    private ProjectedAccountBalance findSourceAccount(
+//            ProjectedPortfolio portfolio,
+//            AccountOwnership ownership,
+//            BigDecimal amount) {
+//
+//        return portfolio.getAccountBalances()
+//                .stream()
+//                .filter(projected ->
+//                        projected.getAccount().getOwnership()
+//                                == ownership)
+//                .filter(projected ->
+//                        projected.getAccount()
+//                                .getProjectionAssetType()
+//                                == ProjectionAssetType.TAX_DEFERRED)
+//                .peek(projected ->
+//                        System.out.println(
+//                                "ROTH SOURCE CHECK: "
+//                                        + projected.getAccount().getName()
+//                                        + " balance="
+//                                        + projected.getBalance()
+//                                        + " requested="
+//                                        + amount))
+//                .filter(projected ->
+//                        projected.getBalance()
+//                                .compareTo(amount) >= 0)
+//                .findFirst()
+//                .orElseThrow(() ->
+//                        new IllegalStateException(
+//                                "No eligible tax-deferred account found."));
+//        return portfolio.getAccountBalances()
+//                .stream()
+//                .filter(projected ->
+//                        projected.getAccount().getOwnership()
+//                                == ownership)
+//                .filter(projected ->
+//                        projected.getAccount()
+//                                .getProjectionAssetType()
+//                                == ProjectionAssetType.TAX_DEFERRED)
+//                .filter(projected ->
+//                        projected.getBalance()
+//                                .compareTo(amount) >= 0)
+//                .findFirst()
+//                .orElseThrow(() ->
+//                        new IllegalStateException(
+//                                "No eligible tax-deferred account found."));
+//    }
+
     private ProjectedAccountBalance findSourceAccount(
             ProjectedPortfolio portfolio,
             AccountOwnership ownership,
             BigDecimal amount) {
+
+//        System.out.println();
+//        System.out.println("===== ROTH CONVERSION SOURCE CHECK =====");
+//        System.out.println("Requested ownership = " + ownership);
+//        System.out.println("Requested amount    = " + amount);
+//
+//        for (ProjectedAccountBalance projected :
+//                portfolio.getAccountBalances()) {
+//
+//            Account account =
+//                    projected.getAccount();
+//
+//            System.out.println(
+//                    "Account = "
+//                            + account.getName()
+//                            + " | ownership = "
+//                            + account.getOwnership()
+//                            + " | assetType = "
+//                            + account.getProjectionAssetType()
+//                            + " | balance = "
+//                            + projected.getBalance());
+//        }
+//
+//        System.out.println("========================================");
+//        System.out.println();
 
         return portfolio.getAccountBalances()
                 .stream()

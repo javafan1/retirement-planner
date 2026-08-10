@@ -17,10 +17,18 @@ public final class ScheduledRothConversionPolicy {
             return false;
         }
 
-        if (calendarYear != request.getStartYear()) {
+        /*
+         * Conversion cannot occur before the
+         * requested start year.
+         */
+        if (calendarYear < request.getStartYear()) {
             return false;
         }
 
+        /*
+         * Stop when the household becomes subject
+         * to its first RMD.
+         */
         if (request.getStopRule() ==
                 RothConversionStopRule.FIRST_HOUSEHOLD_RMD
                 && householdSubjectToRmd) {
@@ -28,6 +36,22 @@ public final class ScheduledRothConversionPolicy {
             return false;
         }
 
+        /*
+         * A one-time conversion occurs only in
+         * the requested start year.
+         */
+        if (request.getFrequency() ==
+                RothConversionFrequency.ONE_TIME
+                && calendarYear != request.getStartYear()) {
+
+            return false;
+        }
+
+        /*
+         * An annual conversion continues every year
+         * beginning with the requested start year,
+         * subject to the stop rule above.
+         */
         return true;
     }
 }

@@ -16,6 +16,7 @@ import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 import com.daviddunn.retirementplanner.domain.model.WithdrawalAssumptions;
 import com.daviddunn.retirementplanner.domain.model.WithdrawalStrategyType;
 
+import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
 import org.junit.jupiter.api.Test;
@@ -1980,7 +1981,7 @@ ProjectionYear
                         true,
                         2026,
                         new BigDecimal("50000"),
-                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD));
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD, RothConversionFrequency.ONE_TIME));
 
         ProjectionEngine engine =
                 new ProjectionEngine();
@@ -2102,5 +2103,295 @@ ProjectionYear
                         .compareTo(
                                 secondYear
                                         .getTaxFundingWithdrawal()));
+
+
     }
+
+    @Test
+    void projectionAppliesAnnualRothConversionsUntilFirstHouseholdRmd() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("500000"));
+
+        RothIRA rothIra =
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        portfolio.addAccount(
+                rothIra);
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        3,
+                        LocalDate.of(2026, 1, 1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        plan.setRothConversionRequest(
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        new BigDecimal("50000"),
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionFrequency.ANNUAL));
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear firstYear =
+                projection.getYearAt(0);
+
+        ProjectionYear secondYear =
+                projection.getYearAt(1);
+
+        ProjectionYear thirdYear =
+                projection.getYearAt(2);
+
+        /*
+         * A $50,000 Roth conversion should occur
+         * in each of the three projection years.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("50000")
+                        .compareTo(
+                                firstYear.getRothConversion()));
+
+        assertEquals(
+                0,
+                new BigDecimal("50000")
+                        .compareTo(
+                                secondYear.getRothConversion()));
+
+        assertEquals(
+                0,
+                new BigDecimal("50000")
+                        .compareTo(
+                                thirdYear.getRothConversion()));
+
+        /*
+         * Roth IRA:
+         *
+         * Starting balance = $100,000
+         *
+         * 2026 = $150,000
+         * 2027 = $200,000
+         * 2028 = $250,000
+         */
+        assertEquals(
+                0,
+                new BigDecimal("150000")
+                        .compareTo(
+                                firstYear.getEndingBalance(
+                                        rothIra)));
+
+        assertEquals(
+                0,
+                new BigDecimal("200000")
+                        .compareTo(
+                                secondYear.getEndingBalance(
+                                        rothIra)));
+
+        assertEquals(
+                0,
+                new BigDecimal("250000")
+                        .compareTo(
+                                thirdYear.getEndingBalance(
+                                        rothIra)));
+
+        /*
+         * The Traditional IRA is reduced by both
+         * the Roth conversion and the additional
+         * withdrawal used to fund the resulting
+         * federal income tax.
+         *
+         * Each year:
+         *
+         * $50,000 conversion
+         * $1,977.77758 tax funding withdrawal
+         *
+         * After three years:
+         *
+         * $500,000
+         * - $150,000 conversions
+         * - $5,933.33274 tax funding
+         * = $344,066.66726
+         */
+        assertEquals(
+                0,
+                new BigDecimal("448022.22242000000000")
+                        .compareTo(
+                                firstYear.getEndingBalance(
+                                        traditionalIra)));
+
+        assertEquals(
+                0,
+                new BigDecimal("396044.44484000000000")
+                        .compareTo(
+                                secondYear.getEndingBalance(
+                                        traditionalIra)));
+
+        assertEquals(
+                0,
+                new BigDecimal("344066.66726000000000")
+                        .compareTo(
+                                thirdYear.getEndingBalance(
+                                        traditionalIra)));
+    }
+
+    @Test
+    void annualRothConversionStopsInFirstHouseholdRmdYear() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        RothIRA rothIra =
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        portfolio.addAccount(
+                rothIra);
+
+        /*
+         * Project from 2026 through 2038.
+         *
+         * 2026 = year 0
+         * 2037 = year 11
+         * 2038 = year 12
+         */
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        13,
+                        LocalDate.of(2026, 1, 1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        plan.setRothConversionRequest(
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        new BigDecimal("50000"),
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionFrequency.ANNUAL));
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        /*
+         * 2037 is the year immediately before
+         * David becomes subject to RMDs.
+         */
+        ProjectionYear year2037 =
+                projection.getYearAt(11);
+
+        /*
+         * 2038 is the first household RMD year.
+         */
+        ProjectionYear year2038 =
+                projection.getYearAt(12);
+
+        /*
+         * The annual Roth conversion should still
+         * occur in the year immediately before RMDs.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("50000")
+                        .compareTo(
+                                year2037.getRothConversion()));
+
+        /*
+         * The conversion must stop in the first
+         * household RMD year.
+         */
+        assertEquals(
+                0,
+                BigDecimal.ZERO
+                        .compareTo(
+                                year2038.getRothConversion()));
+
+        /*
+         * Once RMDs begin, the Traditional IRA
+         * should have an RMD for the year.
+         */
+        assertTrue(
+                year2038
+                        .getRequiredMinimumDistribution()
+                        .signum() > 0);
+    }
+
 }

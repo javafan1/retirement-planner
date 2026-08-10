@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.persistence;
 
 import com.daviddunn.retirementplanner.data.RothConversionDemoFactory;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
 import org.junit.jupiter.api.Test;
@@ -121,7 +122,7 @@ class RothConversionPersistenceTest {
                         true,
                         2027,
                         new BigDecimal("50000"),
-                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD);
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD, RothConversionFrequency.ONE_TIME);
 
         originalPlan.setRothConversionRequest(request);
 

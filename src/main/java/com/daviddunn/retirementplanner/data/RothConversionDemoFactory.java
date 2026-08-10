@@ -8,6 +8,7 @@ import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
 
@@ -80,7 +81,9 @@ public final class RothConversionDemoFactory {
                         true,
                         2026,
                         new BigDecimal("50000"),
-                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD);
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionFrequency.ONE_TIME
+                );
 
         return new RetirementPlan(
                 household,

@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.views;
 
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
 
@@ -23,6 +24,9 @@ public class RothConversionView extends VBox {
     private final TextField conversionYearField;
 
     private final TextField conversionAmountField;
+
+    private final ComboBox<RothConversionFrequency>
+            frequencyComboBox;
 
     private final ComboBox<RothConversionStopRule>
             stopRuleComboBox;
@@ -54,13 +58,13 @@ public class RothConversionView extends VBox {
 
         /*
          * =================================================
-         * One-Time Roth Conversion
+         * Roth Conversion
          * =================================================
          */
 
         Label heading =
                 new Label(
-                        "One-Time Roth Conversion");
+                        "Roth Conversion");
 
         heading.setStyle(
                 "-fx-font-weight: bold;");
@@ -88,7 +92,7 @@ public class RothConversionView extends VBox {
 
         enabledCheckBox =
                 new CheckBox(
-                        "Enable one-time Roth conversion");
+                        "Enable Roth conversion");
 
         grid.add(
                 enabledCheckBox,
@@ -134,6 +138,36 @@ public class RothConversionView extends VBox {
 
         grid.add(
                 conversionAmountField,
+                1,
+                row++);
+
+
+        /*
+         * Conversion frequency.
+         */
+
+        grid.add(
+                new Label(
+                        "Frequency:"),
+                0,
+                row);
+
+
+        frequencyComboBox =
+                new ComboBox<>();
+
+        frequencyComboBox
+                .getItems()
+                .addAll(
+                        RothConversionFrequency.values());
+
+        frequencyComboBox
+                .getSelectionModel()
+                .select(
+                        RothConversionFrequency.ONE_TIME);
+
+        grid.add(
+                frequencyComboBox,
                 1,
                 row++);
 
@@ -217,6 +251,12 @@ public class RothConversionView extends VBox {
 
             conversionAmountField.setText("");
 
+            frequencyComboBox
+                    .getSelectionModel()
+                    .select(
+                            RothConversionFrequency
+                                    .ONE_TIME);
+
             stopRuleComboBox
                     .getSelectionModel()
                     .select(
@@ -243,6 +283,12 @@ public class RothConversionView extends VBox {
                         .getAnnualAmount()
                         .stripTrailingZeros()
                         .toPlainString());
+
+
+        frequencyComboBox
+                .getSelectionModel()
+                .select(
+                        request.getFrequency());
 
 
         stopRuleComboBox
@@ -361,6 +407,21 @@ public class RothConversionView extends VBox {
 
 
             /*
+             * Conversion frequency.
+             */
+
+            RothConversionFrequency frequency =
+                    frequencyComboBox.getValue();
+
+
+            if (frequency == null) {
+
+                throw new IllegalArgumentException(
+                        "Conversion frequency is required.");
+            }
+
+
+            /*
              * Stop rule.
              */
 
@@ -384,7 +445,8 @@ public class RothConversionView extends VBox {
                             true,
                             conversionYear,
                             conversionAmount,
-                            stopRule);
+                            stopRule,
+                            frequency);
 
 
             currentPlan.setRothConversionRequest(
