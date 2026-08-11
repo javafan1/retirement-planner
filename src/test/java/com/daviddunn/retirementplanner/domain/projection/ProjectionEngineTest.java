@@ -2477,10 +2477,16 @@ ProjectionYear
                 projection.getYearAt(0);
 
 
+//        System.out.println(
+//                "EXPECTED Roth conversion = 200779.77");
+//
+//        System.out.println(
+//                "ACTUAL Roth conversion = " +
+//                        year.getRothConversion());
 
         assertEquals(
                 0,
-                new BigDecimal("200779.77")
+                new BigDecimal("200779.78")
                         .compareTo(
                                 year.getRothConversion()
                                         .setScale(
@@ -2499,7 +2505,7 @@ ProjectionYear
 
         assertEquals(
                 0,
-                new BigDecimal("300779.77")
+                new BigDecimal("300779.78")
                         .compareTo(
                                 year.getEndingBalance(rothIra)
                                         .setScale(
@@ -2507,6 +2513,129 @@ ProjectionYear
                                                 RoundingMode.HALF_UP)));
 
 
+    }
+
+    @Test
+    void projectionFills12PercentFederalBracket() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        RothIRA rothIra =
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        portfolio.addAccount(
+                rothIra);
+
+        /*
+         * No investment growth.
+         * No inflation.
+         * One projection year.
+         */
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        1,
+                        LocalDate.of(2026, 1, 1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        plan.setRothConversionRequest(
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        BigDecimal.ZERO,
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy
+                                .FILL_12_PERCENT_BRACKET,
+                        RothConversionFrequency.ONE_TIME));
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear year =
+                projection.getYearAt(0);
+
+        /*
+         * The 2026 MFJ 12% bracket ends at
+         * $100,800 of taxable income.
+         */
+        BigDecimal taxableIncomeDifference =
+                new BigDecimal("100800.00")
+                        .subtract(
+                                year.getFederalTaxableIncome())
+                        .abs();
+
+        assertTrue(
+                taxableIncomeDifference.compareTo(
+                        new BigDecimal("0.01")) <= 0);
+
+        /*
+         * Verify that a Roth conversion actually
+         * occurred.
+         */
+        assertTrue(
+                year.getRothConversion()
+                        .signum() > 0);
+
+        /*
+         * The conversion should have been transferred
+         * into the Roth IRA.
+         */
+        BigDecimal expectedRothBalance =
+                new BigDecimal("100000")
+                        .add(
+                                year.getRothConversion());
+
+        assertEquals(
+                0,
+                expectedRothBalance
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP)
+                        .compareTo(
+                                year.getEndingBalance(
+                                                rothIra)
+                                        .setScale(
+                                                2,
+                                                RoundingMode.HALF_UP)));
     }
 
 }

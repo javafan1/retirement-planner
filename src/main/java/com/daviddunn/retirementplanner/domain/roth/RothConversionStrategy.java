@@ -4,5 +4,9 @@ public enum RothConversionStrategy {
 
     FIXED_AMOUNT,
 
-    FILL_22_PERCENT_BRACKET
+    FILL_12_PERCENT_BRACKET,
+
+    FILL_22_PERCENT_BRACKET,
+
+    FILL_24_PERCENT_BRACKET
 }

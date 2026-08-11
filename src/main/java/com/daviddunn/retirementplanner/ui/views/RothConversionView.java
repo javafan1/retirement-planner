@@ -572,10 +572,13 @@ public class RothConversionView extends VBox {
             RothConversionFrequency frequency;
 
 
-            if (strategy ==
-                    RothConversionStrategy
-                            .FILL_22_PERCENT_BRACKET) {
+            if (strategy !=
+                    RothConversionStrategy.FIXED_AMOUNT) {
 
+                /*
+                 * All bracket-fill strategies are
+                 * inherently annual.
+                 */
                 frequency =
                         RothConversionFrequency.ANNUAL;
 
@@ -583,7 +586,6 @@ public class RothConversionView extends VBox {
 
                 frequency =
                         frequencyComboBox.getValue();
-
 
                 if (frequency == null) {
 

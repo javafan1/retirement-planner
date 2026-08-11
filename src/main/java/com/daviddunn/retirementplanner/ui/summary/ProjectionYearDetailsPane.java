@@ -151,18 +151,26 @@ public class ProjectionYearDetailsPane extends BorderPane {
         row = addMoneyRow(
                 grid,
                 row,
+                "Taxable Accounts",
+                getEndingBalanceByAssetType(
+                        year,
+                        ProjectionAssetType.TAXABLE));
+
+        row = addMoneyRow(
+                grid,
+                row,
                 "Roth Accounts",
                 getEndingBalanceByAssetType(
                         year,
                         ProjectionAssetType.ROTH));
 
+
+
         row = addMoneyRow(
                 grid,
                 row,
-                "Taxable Accounts",
-                getEndingBalanceByAssetType(
-                        year,
-                        ProjectionAssetType.TAXABLE));
+                "Accumulated RMD Cash",
+                year.getUnallocatedCash());
 
         row = addMoneyRow(
                 grid,
@@ -226,6 +234,8 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 row,
                 "Excess RMD",
                 year.getExcessRmd());
+
+
 
         return addBlankRow(row);
     }

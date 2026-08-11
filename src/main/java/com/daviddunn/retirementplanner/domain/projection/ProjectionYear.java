@@ -54,6 +54,10 @@ public class ProjectionYear {
 
     private final BigDecimal rothConversion;
 
+    private final BigDecimal unallocatedCash;
+
+
+
 
     /*
      * Existing compatibility constructor.
@@ -127,6 +131,20 @@ public class ProjectionYear {
                 Objects.requireNonNull(
                         endingInvestableAssets,
                         "endingInvestableAssets");
+
+
+        this.unallocatedCash = BigDecimal.ZERO;
+//        this.unallocatedCash =
+//                Objects.requireNonNull(
+//                        unallocatedCash,
+//                        "Unallocated cash is required.");
+//
+//        if (unallocatedCash.signum() < 0) {
+//            throw new IllegalArgumentException(
+//                    "Unallocated cash cannot be negative.");
+//        }
+
+
 
         this.adjustedGrossIncome =
                 BigDecimal.ZERO;
@@ -247,6 +265,8 @@ public class ProjectionYear {
                 endingAccountSnapshots,
                 "Ending account snapshots are required.");
 
+        this.unallocatedCash = BigDecimal.ZERO;
+
         this.endingAccountSnapshots =
                 List.copyOf(
                         endingAccountSnapshots);
@@ -307,6 +327,7 @@ public class ProjectionYear {
             BigDecimal portfolioWithdrawal,
             BigDecimal requiredMinimumDistribution,
             BigDecimal excessRmd,
+            BigDecimal unallocatedCash,
             BigDecimal endingInvestableAssets,
             List<ProjectedAccountSnapshot> endingAccountSnapshots,
             FederalTaxCalculation federalTaxCalculation,
@@ -439,6 +460,11 @@ public class ProjectionYear {
                     "Tax funding withdrawal cannot be negative.");
         }
 
+        this.unallocatedCash =
+                Objects.requireNonNull(
+                        unallocatedCash,
+                        "unallocatedCash");
+
         this.rothConversion =
                 Objects.requireNonNull(
                         rothConversion,
@@ -543,6 +569,12 @@ public class ProjectionYear {
                                 "Account is not part of this projection year."));
     }
 
+//    public BigDecimal getUnallocatedCash() {
+//
+//
+//        return this.getEndingBalance();
+//    }
+
     public BigDecimal getAdjustedGrossIncome() {
         return adjustedGrossIncome;
     }
@@ -646,5 +678,9 @@ public class ProjectionYear {
         return medicarePremiumCalculation
                 .irmaaBracket()
                 .getDisplayRange();
+    }
+
+    public BigDecimal getUnallocatedCash() {
+        return unallocatedCash;
     }
 }

@@ -158,6 +158,11 @@ public class ResultsView extends BorderPane {
                                         year,
                                         ProjectionAssetType.ROTH));
 
+        TableColumn<ProjectionYear, BigDecimal> accumulatedRmdCashColumn =
+                createMoneyColumn(
+                        "TTL RMD Cash",
+                        ProjectionYear::getUnallocatedCash);
+
 
         TableColumn<ProjectionYear, BigDecimal> endingAssetsColumn =
                 createMoneyColumn(
@@ -173,13 +178,14 @@ public class ResultsView extends BorderPane {
                 expensesColumn,
                 rmdColumn,
                 withdrawalColumn,
+                rothConversionColumn,
                 federalTaxColumn,
                 michiganTaxColumn,
                 totalTaxColumn,
                 medicareColumn,
                 taxDeferredColumn,
-                rothConversionColumn,
                 rothColumn,
+                accumulatedRmdCashColumn,
                 endingAssetsColumn);
 
         table.setColumnResizePolicy(

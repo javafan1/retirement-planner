@@ -128,6 +128,10 @@ public final class RothConversionBracketFillCalculator {
          * Iterate because a tax-deferred tax-funding
          * withdrawal can itself increase taxable income.
          */
+
+        BigDecimal previousConversion = null;
+        BigDecimal previousDifference = null;
+
         for (int iteration = 0;
              iteration < MAX_ITERATIONS;
              iteration++) {
@@ -160,19 +164,49 @@ public final class RothConversionBracketFillCalculator {
                 return rothConversion;
             }
 
-            /*
-             * Increase or decrease the conversion
-             * by the amount needed to reach the
-             * bracket ceiling.
-             */
-            rothConversion =
-                    rothConversion.add(
-                            difference);
+            BigDecimal currentConversion =
+                    rothConversion;
 
-            /*
-             * Never allow the calculated conversion
-             * to become negative.
-             */
+            if (previousConversion != null &&
+                    previousDifference != null &&
+                    previousDifference.signum()
+                            != difference.signum()) {
+
+                BigDecimal denominator =
+                        difference.subtract(
+                                previousDifference);
+
+                BigDecimal conversionDifference =
+                        previousConversion
+                                .subtract(
+                                        currentConversion);
+
+                BigDecimal adjustment =
+                        difference
+                                .multiply(
+                                        conversionDifference)
+                                .divide(
+                                        denominator,
+                                        20,
+                                        java.math.RoundingMode.HALF_UP);
+
+                rothConversion =
+                        currentConversion.add(
+                                adjustment);
+
+            } else {
+
+                rothConversion =
+                        currentConversion.add(
+                                difference);
+            }
+
+            previousConversion =
+                    currentConversion;
+
+            previousDifference =
+                    difference;
+
             if (rothConversion.signum() < 0) {
                 return BigDecimal.ZERO;
             }

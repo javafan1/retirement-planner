@@ -166,6 +166,7 @@ public class ProjectionYearBuilder {
                 portfolioWithdrawal,
                 requiredMinimumDistribution,
                 excessRmd,
+                BigDecimal.ZERO,
                 endingInvestableAssets,
                 endingAccountSnapshots,
                 federalTaxCalculation,
