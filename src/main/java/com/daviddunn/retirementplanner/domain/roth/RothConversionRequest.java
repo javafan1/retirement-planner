@@ -68,9 +68,9 @@ public final class RothConversionRequest {
                         "Frequency is required.");
 
         this.strategy =
-                Objects.requireNonNull(
-                        strategy,
-                        "Strategy is required.");
+                strategy == null
+                        ? RothConversionStrategy.FIXED_AMOUNT
+                        : strategy;
 
     }
 

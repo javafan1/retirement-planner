@@ -6,7 +6,7 @@ import com.daviddunn.retirementplanner.domain.roth.*;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
-import com.daviddunn.retirementplanner.domain.withdrawal.RothConversionPlanner;
+
 import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculation;
@@ -26,8 +26,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
-import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 
 public class ProjectionEngine {
 
@@ -44,17 +42,11 @@ public class ProjectionEngine {
             medicarePremiumCalculator;
 
     private final CompoundGrowthService compoundGrowthService;
-    private final RothConversionPlanner
-            rothConversionPlanner;
+
 
     private final TaxIncomeCalculator
             taxIncomeCalculator;
-//
-//    private final RothConversionPlanner
-//            rothConversionPlanner;
-//
-//    private final TaxIncomeCalculator
-//            taxIncomeCalculator;
+
 
     private final ScheduledRothConversionPolicy
             scheduledRothConversionPolicy;
@@ -65,8 +57,7 @@ public class ProjectionEngine {
     private final FederalTaxBracketCalculator
             federalTaxBracketCalculator;
 
-    private final RothConversionBracketFillStrategy
-            rothConversionBracketFillStrategy;
+
 
     private final RothConversionBracketFillCalculator
             rothConversionBracketFillCalculator;
@@ -98,8 +89,6 @@ public class ProjectionEngine {
         this.taxIncomeCalculator = new TaxIncomeCalculator();
 
 
-        this.rothConversionPlanner =
-                new RothConversionPlanner();
 
         this.scheduledRothConversionPolicy =
                 new ScheduledRothConversionPolicy();
@@ -111,8 +100,7 @@ public class ProjectionEngine {
                 new FederalTaxBracketCalculator();
 
 
-        this.rothConversionBracketFillStrategy =
-                new RothConversionBracketFillStrategy();
+
 
         this.rothConversionBracketFillCalculator =
                 new RothConversionBracketFillCalculator();

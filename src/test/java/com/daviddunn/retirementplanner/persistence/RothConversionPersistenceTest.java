@@ -53,13 +53,29 @@ class RothConversionPersistenceTest {
         }
     }
 
+
     @Test
-    void preservesRothConversionRequestThroughJsonRoundTrip()
+    void preservesAnnualFixedAmountRothConversionRequestThroughJsonRoundTrip()
             throws Exception {
 
-        RetirementPlan original =
+        RetirementPlan originalPlan =
                 RothConversionDemoFactory
                         .createRetirementPlan();
+
+        RothConversionRequest request =
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        new BigDecimal("50000"),
+                        RothConversionStopRule
+                                .FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy
+                                .FIXED_AMOUNT,
+                        RothConversionFrequency
+                                .ANNUAL);
+
+        originalPlan.setRothConversionRequest(
+                request);
 
         Path file =
                 Files.createTempFile(
@@ -72,38 +88,46 @@ class RothConversionPersistenceTest {
                     new JsonRetirementPlanRepository();
 
             repository.save(
-                    original,
+                    originalPlan,
                     file);
 
             RetirementPlan loaded =
                     repository.load(file);
 
+            RothConversionRequest loadedRequest =
+                    loaded.getRothConversionRequest();
+
             assertNotNull(
-                    loaded.getRothConversionRequest());
+                    loadedRequest);
 
             assertTrue(
-                    loaded.getRothConversionRequest()
-                            .isEnabled());
+                    loadedRequest.isEnabled());
 
             assertEquals(
                     2026,
-                    loaded.getRothConversionRequest()
-                            .getStartYear());
+                    loadedRequest.getStartYear());
 
             assertEquals(
                     0,
                     new BigDecimal("50000")
                             .compareTo(
-                                    loaded
-                                            .getRothConversionRequest()
+                                    loadedRequest
                                             .getAnnualAmount()));
 
             assertEquals(
                     RothConversionStopRule
                             .FIRST_HOUSEHOLD_RMD,
-                    loaded
-                            .getRothConversionRequest()
-                            .getStopRule());
+                    loadedRequest.getStopRule());
+
+            assertEquals(
+                    RothConversionStrategy
+                            .FIXED_AMOUNT,
+                    loadedRequest.getStrategy());
+
+            assertEquals(
+                    RothConversionFrequency
+                            .ANNUAL,
+                    loadedRequest.getFrequency());
 
         } finally {
 
@@ -111,8 +135,10 @@ class RothConversionPersistenceTest {
         }
     }
 
+
     @Test
-    void persistsOneTimeRothConversionRequest() throws IOException {
+    void persistsOneTimeRothConversionRequest()
+            throws IOException {
 
         RetirementPlan originalPlan =
                 RothConversionDemoFactory
@@ -123,11 +149,15 @@ class RothConversionPersistenceTest {
                         true,
                         2027,
                         new BigDecimal("50000"),
-                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
-                        RothConversionStrategy.FIXED_AMOUNT,
-                        RothConversionFrequency.ONE_TIME);
+                        RothConversionStopRule
+                                .FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy
+                                .FIXED_AMOUNT,
+                        RothConversionFrequency
+                                .ONE_TIME);
 
-        originalPlan.setRothConversionRequest(request);
+        originalPlan.setRothConversionRequest(
+                request);
 
         Path file =
                 Files.createTempFile(
@@ -147,7 +177,8 @@ class RothConversionPersistenceTest {
                     repository.load(file);
 
             RothConversionRequest loadedRequest =
-                    loadedPlan.getRothConversionRequest();
+                    loadedPlan
+                            .getRothConversionRequest();
 
             assertNotNull(
                     loadedRequest);
@@ -167,8 +198,101 @@ class RothConversionPersistenceTest {
                                             .getAnnualAmount()));
 
             assertEquals(
-                    RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                    RothConversionStopRule
+                            .FIRST_HOUSEHOLD_RMD,
                     loadedRequest.getStopRule());
+
+            assertEquals(
+                    RothConversionStrategy
+                            .FIXED_AMOUNT,
+                    loadedRequest.getStrategy());
+
+            assertEquals(
+                    RothConversionFrequency
+                            .ONE_TIME,
+                    loadedRequest.getFrequency());
+
+        } finally {
+
+            Files.deleteIfExists(file);
+        }
+    }
+
+
+    @Test
+    void persistsFill22PercentBracketRothConversionRequest()
+            throws Exception {
+
+        RetirementPlan originalPlan =
+                RothConversionDemoFactory
+                        .createRetirementPlan();
+
+        RothConversionRequest request =
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        BigDecimal.ZERO,
+                        RothConversionStopRule
+                                .FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy
+                                .FILL_22_PERCENT_BRACKET,
+                        RothConversionFrequency
+                                .ANNUAL);
+
+        originalPlan.setRothConversionRequest(
+                request);
+
+        Path file =
+                Files.createTempFile(
+                        "roth-conversion-test",
+                        ".json");
+
+        try {
+
+            RetirementPlanRepository repository =
+                    new JsonRetirementPlanRepository();
+
+            repository.save(
+                    originalPlan,
+                    file);
+
+            RetirementPlan loadedPlan =
+                    repository.load(file);
+
+            RothConversionRequest loadedRequest =
+                    loadedPlan
+                            .getRothConversionRequest();
+
+            assertNotNull(
+                    loadedRequest);
+
+            assertTrue(
+                    loadedRequest.isEnabled());
+
+            assertEquals(
+                    2026,
+                    loadedRequest.getStartYear());
+
+            assertEquals(
+                    0,
+                    BigDecimal.ZERO.compareTo(
+                            loadedRequest
+                                    .getAnnualAmount()));
+
+            assertEquals(
+                    RothConversionStopRule
+                            .FIRST_HOUSEHOLD_RMD,
+                    loadedRequest.getStopRule());
+
+            assertEquals(
+                    RothConversionStrategy
+                            .FILL_22_PERCENT_BRACKET,
+                    loadedRequest.getStrategy());
+
+            assertEquals(
+                    RothConversionFrequency
+                            .ANNUAL,
+                    loadedRequest.getFrequency());
 
         } finally {
 

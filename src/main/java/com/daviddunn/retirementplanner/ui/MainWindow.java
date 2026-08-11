@@ -167,8 +167,8 @@ public class MainWindow {
         tabPane.getTabs().add(
                 createTab("Assumptions", assumptionsView));
 
-        tabPane.getTabs().add(
-                createTab("Projection", projectionYearView));
+        //tabPane.getTabs().add(
+        //        createTab("Projection", projectionYearView));
 
         tabPane.getTabs().add(
                 createTab(

@@ -4,8 +4,8 @@ import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
-
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
+
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
@@ -24,10 +24,17 @@ public class RothConversionView extends VBox {
 
     private final TextField conversionYearField;
 
+    private final Label conversionAmountLabel;
+
     private final TextField conversionAmountField;
+
+    private final Label frequencyLabel;
 
     private final ComboBox<RothConversionFrequency>
             frequencyComboBox;
+
+    private final ComboBox<RothConversionStrategy>
+            strategyComboBox;
 
     private final ComboBox<RothConversionStopRule>
             stopRuleComboBox;
@@ -104,6 +111,42 @@ public class RothConversionView extends VBox {
 
 
         /*
+         * Strategy.
+         */
+
+        grid.add(
+                new Label(
+                        "Strategy:"),
+                0,
+                row);
+
+
+        strategyComboBox =
+                new ComboBox<>();
+
+        strategyComboBox
+                .getItems()
+                .addAll(
+                        RothConversionStrategy.values());
+
+        strategyComboBox
+                .getSelectionModel()
+                .select(
+                        RothConversionStrategy.FIXED_AMOUNT);
+
+        strategyComboBox
+                .valueProperty()
+                .addListener(
+                        (observable, oldValue, newValue) ->
+                                updateStrategyFields());
+
+        grid.add(
+                strategyComboBox,
+                1,
+                row++);
+
+
+        /*
          * Conversion year.
          */
 
@@ -127,9 +170,12 @@ public class RothConversionView extends VBox {
          * Conversion amount.
          */
 
-        grid.add(
+        conversionAmountLabel =
                 new Label(
-                        "Conversion Amount:"),
+                        "Conversion Amount:");
+
+        grid.add(
+                conversionAmountLabel,
                 0,
                 row);
 
@@ -147,9 +193,12 @@ public class RothConversionView extends VBox {
          * Conversion frequency.
          */
 
-        grid.add(
+        frequencyLabel =
                 new Label(
-                        "Frequency:"),
+                        "Frequency:");
+
+        grid.add(
+                frequencyLabel,
                 0,
                 row);
 
@@ -198,7 +247,6 @@ public class RothConversionView extends VBox {
                         RothConversionStopRule
                                 .FIRST_HOUSEHOLD_RMD);
 
-
         grid.add(
                 stopRuleComboBox,
                 1,
@@ -230,6 +278,67 @@ public class RothConversionView extends VBox {
         getChildren().addAll(
                 grid,
                 statusLabel);
+
+
+        /*
+         * Configure the initial field visibility.
+         */
+
+        updateStrategyFields();
+    }
+
+
+    private void updateStrategyFields() {
+
+        boolean fixedAmount =
+                strategyComboBox.getValue()
+                        == RothConversionStrategy.FIXED_AMOUNT;
+
+
+        /*
+         * Fixed-dollar conversions require
+         * both an amount and a frequency.
+         */
+
+        conversionAmountLabel.setVisible(
+                fixedAmount);
+
+        conversionAmountLabel.setManaged(
+                fixedAmount);
+
+        conversionAmountField.setVisible(
+                fixedAmount);
+
+        conversionAmountField.setManaged(
+                fixedAmount);
+
+        frequencyLabel.setVisible(
+                fixedAmount);
+
+        frequencyLabel.setManaged(
+                fixedAmount);
+
+        frequencyComboBox.setVisible(
+                fixedAmount);
+
+        frequencyComboBox.setManaged(
+                fixedAmount);
+
+
+        /*
+         * A bracket-fill conversion is calculated
+         * by the projection engine and therefore
+         * does not require an amount or frequency
+         * from the user.
+         */
+
+        if (!fixedAmount) {
+
+            frequencyComboBox
+                    .getSelectionModel()
+                    .select(
+                            RothConversionFrequency.ANNUAL);
+        }
     }
 
 
@@ -252,6 +361,12 @@ public class RothConversionView extends VBox {
 
             conversionAmountField.setText("");
 
+            strategyComboBox
+                    .getSelectionModel()
+                    .select(
+                            RothConversionStrategy
+                                    .FIXED_AMOUNT);
+
             frequencyComboBox
                     .getSelectionModel()
                     .select(
@@ -266,6 +381,8 @@ public class RothConversionView extends VBox {
 
             statusLabel.setText("");
 
+            updateStrategyFields();
+
             return;
         }
 
@@ -279,11 +396,25 @@ public class RothConversionView extends VBox {
                         request.getStartYear()));
 
 
-        conversionAmountField.setText(
-                request
-                        .getAnnualAmount()
-                        .stripTrailingZeros()
-                        .toPlainString());
+        strategyComboBox
+                .getSelectionModel()
+                .select(
+                        request.getStrategy());
+
+
+        if (request.getStrategy()
+                == RothConversionStrategy.FIXED_AMOUNT) {
+
+            conversionAmountField.setText(
+                    request
+                            .getAnnualAmount()
+                            .stripTrailingZeros()
+                            .toPlainString());
+
+        } else {
+
+            conversionAmountField.setText("");
+        }
 
 
         frequencyComboBox
@@ -298,6 +429,8 @@ public class RothConversionView extends VBox {
                         request.getStopRule());
 
 
+        updateStrategyFields();
+
         statusLabel.setText("");
     }
 
@@ -308,16 +441,10 @@ public class RothConversionView extends VBox {
         /*
          * Match the existing AssumptionsView
          * persistence pattern.
-         *
-         * The controls are already applied to
-         * currentPlan when Apply is clicked.
-         *
-         * Save therefore only needs to make sure
-         * the current plan reference is the plan
-         * being persisted.
          */
 
         if (plan == currentPlan) {
+
             applyChangesToModel();
         }
     }
@@ -379,46 +506,90 @@ public class RothConversionView extends VBox {
 
 
             /*
-             * Conversion amount.
+             * Strategy.
              */
 
-            String amountText =
-                    conversionAmountField
-                            .getText()
-                            .trim();
+            RothConversionStrategy strategy =
+                    strategyComboBox.getValue();
 
 
-            if (amountText.isEmpty()) {
+            if (strategy == null) {
 
                 throw new IllegalArgumentException(
-                        "Conversion amount is required.");
+                        "Conversion strategy is required.");
             }
 
 
+            /*
+             * Conversion amount.
+             *
+             * Fixed-dollar conversions require
+             * a user-entered amount.
+             *
+             * Bracket-fill conversions calculate
+             * the amount automatically.
+             */
+
             BigDecimal conversionAmount =
-                    new BigDecimal(
-                            amountText);
+                    BigDecimal.ZERO;
 
 
-            if (conversionAmount.signum() < 0) {
+            if (strategy ==
+                    RothConversionStrategy.FIXED_AMOUNT) {
 
-                throw new IllegalArgumentException(
-                        "Conversion amount cannot be negative.");
+                String amountText =
+                        conversionAmountField
+                                .getText()
+                                .trim();
+
+
+                if (amountText.isEmpty()) {
+
+                    throw new IllegalArgumentException(
+                            "Conversion amount is required.");
+                }
+
+
+                conversionAmount =
+                        new BigDecimal(
+                                amountText);
+
+
+                if (conversionAmount.signum() < 0) {
+
+                    throw new IllegalArgumentException(
+                            "Conversion amount cannot be negative.");
+                }
             }
 
 
             /*
              * Conversion frequency.
+             *
+             * Bracket-fill is inherently annual.
              */
 
-            RothConversionFrequency frequency =
-                    frequencyComboBox.getValue();
+            RothConversionFrequency frequency;
 
 
-            if (frequency == null) {
+            if (strategy ==
+                    RothConversionStrategy
+                            .FILL_22_PERCENT_BRACKET) {
 
-                throw new IllegalArgumentException(
-                        "Conversion frequency is required.");
+                frequency =
+                        RothConversionFrequency.ANNUAL;
+
+            } else {
+
+                frequency =
+                        frequencyComboBox.getValue();
+
+
+                if (frequency == null) {
+
+                    throw new IllegalArgumentException(
+                            "Conversion frequency is required.");
+                }
             }
 
 
@@ -447,7 +618,7 @@ public class RothConversionView extends VBox {
                             conversionYear,
                             conversionAmount,
                             stopRule,
-                            RothConversionStrategy.FIXED_AMOUNT,
+                            strategy,
                             frequency);
 
 
