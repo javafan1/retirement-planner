@@ -2,9 +2,9 @@ package com.daviddunn.retirementplanner.domain.projection;
 
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.model.*;
-import com.daviddunn.retirementplanner.domain.roth.ProjectedPortfolioRothConverter;
-import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
-import com.daviddunn.retirementplanner.domain.roth.ScheduledRothConversionPolicy;
+import com.daviddunn.retirementplanner.domain.roth.*;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
+import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.withdrawal.RothConversionPlanner;
 import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
@@ -25,6 +25,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+
+import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
+import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 
 public class ProjectionEngine {
 
@@ -58,6 +61,15 @@ public class ProjectionEngine {
 
     private final ProjectedPortfolioRothConverter
             projectedPortfolioRothConverter ;
+
+    private final FederalTaxBracketCalculator
+            federalTaxBracketCalculator;
+
+    private final RothConversionBracketFillStrategy
+            rothConversionBracketFillStrategy;
+
+    private final RothConversionBracketFillCalculator
+            rothConversionBracketFillCalculator;
 
 
     public ProjectionEngine() {
@@ -94,6 +106,16 @@ public class ProjectionEngine {
 
         this.projectedPortfolioRothConverter =
                 new ProjectedPortfolioRothConverter();
+
+        this.federalTaxBracketCalculator =
+                new FederalTaxBracketCalculator();
+
+
+        this.rothConversionBracketFillStrategy =
+                new RothConversionBracketFillStrategy();
+
+        this.rothConversionBracketFillCalculator =
+                new RothConversionBracketFillCalculator();
 
 
         try {
@@ -264,11 +286,7 @@ public class ProjectionEngine {
                         yearOffset,
                         projectionDate);
 
-//        System.out.println(
-//                "Projection year "
-//                        + calendarYear
-//                        + " annual expenses = "
-//                        + annualExpenses);
+
 
         /*
          * Calculate the complete household RMD
@@ -366,13 +384,51 @@ public class ProjectionEngine {
                                 calendarYear,
                                 householdSubjectToRmd)) {
 
+            if (rothConversionRequest.getStrategy()
+                    == RothConversionStrategy.FIXED_AMOUNT) {
 
-            rothConversion =
-                    rothConversionRequest
-                            .getAnnualAmount();
+                rothConversion =
+                        rothConversionRequest
+                                .getAnnualAmount();
 
+            } else if (rothConversionRequest.getStrategy()
+                    == RothConversionStrategy.FILL_22_PERCENT_BRACKET) {
+
+                /*
+                 * Get the federal tax rules for the
+                 * household's filing status.
+                 */
+                FederalTaxRules federalTaxRules =
+                        projectedGovernmentRules
+                                .getFederalTaxRules(
+                                        getFilingStatus(assumptions));
+
+                /*
+                 * Find the 22% federal tax bracket.
+                 */
+                FederalTaxBracket targetBracket =
+                        federalTaxBracketCalculator.findBracket(
+                                federalTaxRules,
+                                new BigDecimal("0.22"));
+
+                /*
+                 * Calculate the Roth conversion required
+                 * to fill the bracket after accounting for
+                 * the tax-funding withdrawal.
+                 */
+                rothConversion =
+                        rothConversionBracketFillCalculator
+                                .calculateConversion(
+                                        household,
+                                        projectionDate,
+                                        portfolioAfterAdditionalWithdrawal,
+                                        totalWithdrawalBreakdown,
+                                        withdrawalStrategy,
+                                        getFilingStatus(assumptions),
+                                        projectedGovernmentRules,
+                                        targetBracket);
+            }
         }
-
         TaxIncome baseTaxIncome =
                 taxIncomeCalculator.calculate(
                         household,

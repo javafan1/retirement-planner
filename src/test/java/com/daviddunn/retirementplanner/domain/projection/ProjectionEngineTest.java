@@ -2399,4 +2399,114 @@ ProjectionYear
                         .signum() > 0);
     }
 
+    @Test
+    void projectionFills22PercentFederalBracket() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        RothIRA rothIra =
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        portfolio.addAccount(
+                rothIra);
+
+        /*
+         * No investment growth.
+         * No inflation.
+         * One projection year.
+         */
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        1,
+                        LocalDate.of(2026, 1, 1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        plan.setRothConversionRequest(
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        BigDecimal.ZERO,
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy.FILL_22_PERCENT_BRACKET,
+                        RothConversionFrequency.ONE_TIME));
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear year =
+                projection.getYearAt(0);
+
+
+
+        assertEquals(
+                0,
+                new BigDecimal("200779.77")
+                        .compareTo(
+                                year.getRothConversion()
+                                        .setScale(
+                                                2,
+                                                RoundingMode.HALF_UP)));
+
+        BigDecimal taxableIncomeDifference =
+                new BigDecimal("211400.00")
+                        .subtract(
+                                year.getFederalTaxableIncome())
+                        .abs();
+
+        assertTrue(
+                taxableIncomeDifference.compareTo(
+                        new BigDecimal("0.01")) <= 0);
+
+        assertEquals(
+                0,
+                new BigDecimal("300779.77")
+                        .compareTo(
+                                year.getEndingBalance(rothIra)
+                                        .setScale(
+                                                2,
+                                                RoundingMode.HALF_UP)));
+
+
+    }
+
 }
