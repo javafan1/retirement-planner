@@ -426,7 +426,6 @@ public class ProjectionYearDetailsPane extends BorderPane {
 
         return row + 1;
     }
-
     private int addTotalsSection(
             GridPane grid,
             int row,
@@ -442,6 +441,12 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 row,
                 "Total Income Tax",
                 year.getTotalIncomeTax());
+
+        row = addPercentageRow(
+                grid,
+                row,
+                "Combined Effective Tax Rate",
+                year.getCombinedEffectiveTaxRate());
 
         return row;
     }
@@ -531,6 +536,33 @@ public class ProjectionYearDetailsPane extends BorderPane {
         Label valueLabel =
                 new Label(
                         UIFormatters.money(value));
+
+        GridPane.setHalignment(
+                valueLabel,
+                HPos.RIGHT);
+
+        grid.add(
+                valueLabel,
+                1,
+                row);
+
+        return row + 1;
+    }
+
+    private int addPercentageRow(
+            GridPane grid,
+            int row,
+            String description,
+            BigDecimal value) {
+
+        grid.add(
+                new Label(description),
+                0,
+                row);
+
+        Label valueLabel =
+                new Label(
+                        UIFormatters.percent(value));
 
         GridPane.setHalignment(
                 valueLabel,

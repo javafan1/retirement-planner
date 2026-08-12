@@ -6,10 +6,10 @@ import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculatio
 import com.daviddunn.retirementplanner.domain.rules.IrmaaBracket;
 import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
 
+import java.math.RoundingMode;
 import java.util.List;
 
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
-import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.math.BigDecimal;
@@ -55,6 +55,8 @@ public class ProjectionYear {
     private final BigDecimal rothConversion;
 
     private final BigDecimal unallocatedCash;
+
+    private final BigDecimal combinedEffectiveTaxRate;
 
 
 
@@ -131,6 +133,9 @@ public class ProjectionYear {
                 Objects.requireNonNull(
                         endingInvestableAssets,
                         "endingInvestableAssets");
+
+        this.combinedEffectiveTaxRate =
+                BigDecimal.ZERO;
 
 
         this.unallocatedCash = BigDecimal.ZERO;
@@ -280,6 +285,9 @@ public class ProjectionYear {
         this.federalTaxableIncome =
                 BigDecimal.ZERO;
 
+        this.combinedEffectiveTaxRate =
+                BigDecimal.ZERO;
+
         this.federalStandardDeduction =
                 BigDecimal.ZERO;
 
@@ -423,6 +431,8 @@ public class ProjectionYear {
                 federalTaxCalculation
                         .getFederalIncomeTax();
 
+
+
         Objects.requireNonNull(
                 michiganTaxCalculation,
                 "Michigan tax calculation is required.");
@@ -442,6 +452,22 @@ public class ProjectionYear {
         this.michiganIncomeTax =
                 michiganTaxCalculation
                         .incomeTax();
+
+        BigDecimal totalIncomeTax =
+                this.federalIncomeTax
+                        .add(this.michiganIncomeTax);
+
+        if (this.adjustedGrossIncome.signum() == 0) {
+            this.combinedEffectiveTaxRate =
+                    BigDecimal.ZERO;
+        } else {
+            this.combinedEffectiveTaxRate =
+                    totalIncomeTax
+                            .divide(
+                                    this.adjustedGrossIncome,
+                                    10,
+                                    RoundingMode.HALF_UP);
+        }
 
         Objects.requireNonNull(
                 medicarePremiumCalculation,
@@ -589,6 +615,10 @@ public class ProjectionYear {
 
     public BigDecimal getFederalIncomeTax() {
         return federalIncomeTax;
+    }
+
+    public BigDecimal getCombinedEffectiveTaxRate() {
+        return combinedEffectiveTaxRate;
     }
 
     public BigDecimal getTaxFundingWithdrawal() {

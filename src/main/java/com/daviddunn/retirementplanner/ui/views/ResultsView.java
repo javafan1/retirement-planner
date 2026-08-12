@@ -99,6 +99,12 @@ public class ResultsView extends BorderPane {
                         "Federal Tax",
                         ProjectionYear::getFederalIncomeTax);
 
+        TableColumn<ProjectionYear, BigDecimal> combinedEffectiveTaxRateColumn =
+                createPercentageColumn(
+                        "Effective Tax Rate",
+                        ProjectionYear::getCombinedEffectiveTaxRate);
+
+
         TableColumn<ProjectionYear, BigDecimal> michiganTaxColumn =
                 createMoneyColumn(
                         "Michigan Tax",
@@ -181,6 +187,7 @@ public class ResultsView extends BorderPane {
                 rothConversionColumn,
                 federalTaxColumn,
                 michiganTaxColumn,
+                combinedEffectiveTaxRateColumn,
                 totalTaxColumn,
                 medicareColumn,
                 taxDeferredColumn,
@@ -355,4 +362,40 @@ public class ResultsView extends BorderPane {
                         BigDecimal.ZERO,
                         BigDecimal::add);
     }
+
+    private TableColumn<ProjectionYear, BigDecimal> createPercentageColumn(
+            String title,
+            Function<ProjectionYear, BigDecimal> valueFunction) {
+
+        TableColumn<ProjectionYear, BigDecimal> column =
+                new TableColumn<>(title);
+
+        column.setCellValueFactory(data ->
+                new ReadOnlyObjectWrapper<>(
+                        valueFunction.apply(
+                                data.getValue())));
+
+        column.setCellFactory(c ->
+                new TableCell<>() {
+
+                    @Override
+                    protected void updateItem(
+                            BigDecimal value,
+                            boolean empty) {
+
+                        super.updateItem(value, empty);
+
+                        if (empty || value == null) {
+                            setText(null);
+                        } else {
+                            setText(
+                                    UIFormatters.percent(
+                                            value));
+                        }
+                    }
+                });
+
+        return column;
+    }
+
 }
