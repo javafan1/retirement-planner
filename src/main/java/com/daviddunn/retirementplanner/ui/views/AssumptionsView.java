@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.ui.controls.HelpLabel;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
@@ -43,6 +44,7 @@ public class AssumptionsView extends VBox {
     private final TextField standardDeductionGrowthField;
     private final TextField stateIncomeTaxRateField;
     private final TextField localIncomeTaxRateField;
+    private final TextField estimatedHeirTaxRateField;
 
     private final Label statusLabel;
 
@@ -97,6 +99,9 @@ public class AssumptionsView extends VBox {
                 new TextField();
 
         localIncomeTaxRateField =
+                new TextField();
+
+        estimatedHeirTaxRateField =
                 new TextField();
 
         statusLabel =
@@ -324,6 +329,18 @@ public class AssumptionsView extends VBox {
                 1,
                 row++);
 
+
+        grid.add(
+                new Label(
+                        "Estimated Heir Tax Rate (%):"),
+                0,
+                row);
+
+        grid.add(
+                estimatedHeirTaxRateField,
+                1,
+                row++);
+
         grid.add(
                 applyButton,
                 1,
@@ -403,6 +420,11 @@ public class AssumptionsView extends VBox {
                 toPercent(
                         taxAssumptions
                                 .getLocalIncomeTaxRate()));
+
+        estimatedHeirTaxRateField.setText(
+                toPercent(
+                        taxAssumptions
+                                .getEstimatedHeirTaxRateOnTaxDeferredAssets()));
 
         statusLabel.setText("");
     }
@@ -487,6 +509,11 @@ public class AssumptionsView extends VBox {
                             localIncomeTaxRateField
                                     .getText());
 
+            BigDecimal estimatedHeirTaxRate =
+                    parsePercent(
+                            estimatedHeirTaxRateField
+                                    .getText());
+
             EconomicAssumptions economicAssumptions =
                     new EconomicAssumptions(
                             investmentReturn,
@@ -494,12 +521,20 @@ public class AssumptionsView extends VBox {
                             healthcareInflationRate,
                             socialSecurityColaRate);
 
+            FilingStatus filingStatus =
+                    currentPlan
+                            .getPlanningAssumptions()
+                            .getTaxAssumptions()
+                            .getFilingStatus();
+
             TaxAssumptions taxAssumptions =
                     new TaxAssumptions(
                             federalBracketGrowth,
                             standardDeductionGrowth,
                             stateIncomeTaxRate,
-                            localIncomeTaxRate);
+                            localIncomeTaxRate,
+                            filingStatus,
+                            estimatedHeirTaxRate);
 
             PlanningAssumptions updated =
                     new PlanningAssumptions(

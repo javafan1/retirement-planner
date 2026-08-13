@@ -58,7 +58,8 @@ public class ProjectionYear {
 
     private final BigDecimal combinedEffectiveTaxRate;
 
-
+    private final BigDecimal estimatedHeirTax;
+    private final BigDecimal afterTaxEstateValue;
 
 
     /*
@@ -149,7 +150,11 @@ public class ProjectionYear {
 //                    "Unallocated cash cannot be negative.");
 //        }
 
+        this.estimatedHeirTax =
+                BigDecimal.ZERO;
 
+        this.afterTaxEstateValue =
+                BigDecimal.ZERO;
 
         this.adjustedGrossIncome =
                 BigDecimal.ZERO;
@@ -272,6 +277,12 @@ public class ProjectionYear {
 
         this.unallocatedCash = BigDecimal.ZERO;
 
+        this.estimatedHeirTax =
+                BigDecimal.ZERO;
+
+        this.afterTaxEstateValue =
+                BigDecimal.ZERO;
+
         this.endingAccountSnapshots =
                 List.copyOf(
                         endingAccountSnapshots);
@@ -343,6 +354,8 @@ public class ProjectionYear {
             MedicarePremiumCalculation medicarePremiumCalculation,
             BigDecimal taxFundingWithdrawal,
             BigDecimal rothConversion,
+            BigDecimal estimatedHeirTax,
+            BigDecimal afterTaxEstateValue,
             int primaryPersonAge) {
 
         this.projectionYear =
@@ -500,6 +513,27 @@ public class ProjectionYear {
             throw new IllegalArgumentException(
                     "Roth conversion cannot be negative.");
         }
+        this.estimatedHeirTax =
+                Objects.requireNonNull(
+                        estimatedHeirTax,
+                        "Estimated heir tax is required.");
+
+        if (estimatedHeirTax.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Estimated heir tax cannot be negative.");
+        }
+
+        this.afterTaxEstateValue =
+                Objects.requireNonNull(
+                        afterTaxEstateValue,
+                        "After-tax estate value is required.");
+
+        if (afterTaxEstateValue.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "After-tax estate value cannot be negative.");
+        }
+
+
     }
 
 
@@ -712,5 +746,13 @@ public class ProjectionYear {
 
     public BigDecimal getUnallocatedCash() {
         return unallocatedCash;
+    }
+
+    public BigDecimal getEstimatedHeirTax() {
+        return estimatedHeirTax;
+    }
+
+    public BigDecimal getAfterTaxEstateValue() {
+        return afterTaxEstateValue;
     }
 }

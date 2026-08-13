@@ -175,6 +175,11 @@ public class ResultsView extends BorderPane {
                         "Ending Assets",
                         ProjectionYear::getEndingInvestableAssets);
 
+        TableColumn<ProjectionYear, BigDecimal> afterTaxEstateValueColumn =
+                createMoneyColumn(
+                        "Estate Value",
+                        ProjectionYear::getAfterTaxEstateValue);
+
         table.getColumns().addAll(
                 yearColumn,
                 ageColumn,
@@ -193,7 +198,8 @@ public class ResultsView extends BorderPane {
                 taxDeferredColumn,
                 rothColumn,
                 accumulatedRmdCashColumn,
-                endingAssetsColumn);
+                endingAssetsColumn,
+                afterTaxEstateValueColumn);
 
         table.setColumnResizePolicy(
                 TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);

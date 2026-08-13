@@ -17,6 +17,9 @@ public final class TaxAssumptions {
 
     private final FilingStatus filingStatus;
 
+    private final BigDecimal
+            estimatedHeirTaxRateOnTaxDeferredAssets;
+
     public TaxAssumptions(
             BigDecimal federalTaxBracketGrowthRate,
             BigDecimal standardDeductionGrowthRate,
@@ -28,7 +31,8 @@ public final class TaxAssumptions {
                 standardDeductionGrowthRate,
                 stateIncomeTaxRate,
                 localIncomeTaxRate,
-                FilingStatus.MARRIED_FILING_JOINTLY);
+                FilingStatus.MARRIED_FILING_JOINTLY,
+                new BigDecimal("0.25"));
     }
 
     @JsonCreator
@@ -47,7 +51,10 @@ public final class TaxAssumptions {
             BigDecimal localIncomeTaxRate,
 
             @JsonProperty("filingStatus")
-            FilingStatus filingStatus) {
+            FilingStatus filingStatus,
+
+            @JsonProperty("estimatedHeirTaxRateOnTaxDeferredAssets")
+            BigDecimal estimatedHeirTaxRateOnTaxDeferredAssets) {
 
         this.federalTaxBracketGrowthRate =
                 Objects.requireNonNull(
@@ -72,6 +79,19 @@ public final class TaxAssumptions {
                 filingStatus != null
                         ? filingStatus
                         : FilingStatus.MARRIED_FILING_JOINTLY;
+
+        this.estimatedHeirTaxRateOnTaxDeferredAssets =
+                estimatedHeirTaxRateOnTaxDeferredAssets != null
+                        ? estimatedHeirTaxRateOnTaxDeferredAssets
+                        : new BigDecimal("0.25");
+
+        if (this.estimatedHeirTaxRateOnTaxDeferredAssets.signum() < 0
+                || this.estimatedHeirTaxRateOnTaxDeferredAssets.compareTo(BigDecimal.ONE) > 0) {
+
+            throw new IllegalArgumentException(
+                    "Estimated heir tax rate must be between 0 and 1.");
+        }
+
     }
 
 
@@ -95,6 +115,10 @@ public final class TaxAssumptions {
         return filingStatus;
     }
 
+    public BigDecimal getEstimatedHeirTaxRateOnTaxDeferredAssets() {
+        return estimatedHeirTaxRateOnTaxDeferredAssets;
+    }
+
     @Override
     public String toString() {
 
@@ -107,7 +131,10 @@ public final class TaxAssumptions {
                 stateIncomeTaxRate +
                 ", localIncomeTaxRate=" +
                 localIncomeTaxRate +
-                ", filingStatus=" + filingStatus +
+                ", filingStatus=" +
+                filingStatus +
+                ", estimatedHeirTaxRateOnTaxDeferredAssets=" +
+                estimatedHeirTaxRateOnTaxDeferredAssets +
                 '}';
     }
 }

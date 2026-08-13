@@ -1,6 +1,6 @@
 package com.daviddunn.retirementplanner.ui.summary;
 
-
+import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountSnapshot;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
@@ -83,23 +83,31 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 year);
 
         // ----------------------------------------------------
-// Medicare
-// ----------------------------------------------------
+        // Medicare
+        // ----------------------------------------------------
 
         row = addMedicareSection(
                 grid,
                 row,
                 year);
 
-// ----------------------------------------------------
-// Totals
-// ----------------------------------------------------
+        // ----------------------------------------------------
+        // Totals
+        // ----------------------------------------------------
 
-        addTotalsSection(
+        row = addTotalsSection(
                 grid,
                 row,
                 year);
 
+        // ----------------------------------------------------
+        // Estimated Estate Value
+        // ----------------------------------------------------
+
+        addEstateSection(
+                grid,
+                row,
+                year);
 
         content.getChildren().add(grid);
 
@@ -152,9 +160,9 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 grid,
                 row,
                 "Taxable Accounts",
-                getEndingBalanceByAssetType(
+                getEndingBalanceByTaxTreatment(
                         year,
-                        ProjectionAssetType.TAXABLE));
+                        TaxTreatment.TAXABLE));
 
         row = addMoneyRow(
                 grid,
@@ -163,8 +171,6 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 getEndingBalanceByAssetType(
                         year,
                         ProjectionAssetType.ROTH));
-
-
 
         row = addMoneyRow(
                 grid,
@@ -176,9 +182,9 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 grid,
                 row,
                 "Cash Accounts",
-                getEndingBalanceByAssetType(
+                getEndingBalanceByTaxTreatment(
                         year,
-                        ProjectionAssetType.TAXABLE));
+                        TaxTreatment.CASH));
 
         row = addMoneyRow(
                 grid,
@@ -235,8 +241,6 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 "Excess RMD",
                 year.getExcessRmd());
 
-
-
         return addBlankRow(row);
     }
 
@@ -286,7 +290,6 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 row,
                 "Taxable Social Security",
                 year.getTaxableSocialSecurity());
-
 
         row = addMoneyRow(
                 grid,
@@ -401,31 +404,6 @@ public class ProjectionYearDetailsPane extends BorderPane {
         return addBlankRow(row);
     }
 
-    private int addTextRow(
-            GridPane grid,
-            int row,
-            String description,
-            String value) {
-
-        grid.add(
-                new Label(description),
-                0,
-                row);
-
-        Label valueLabel =
-                new Label(value);
-
-        GridPane.setHalignment(
-                valueLabel,
-                HPos.RIGHT);
-
-        grid.add(
-                valueLabel,
-                1,
-                row);
-
-        return row + 1;
-    }
     private int addTotalsSection(
             GridPane grid,
             int row,
@@ -448,7 +426,38 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 "Combined Effective Tax Rate",
                 year.getCombinedEffectiveTaxRate());
 
-        return row;
+        return addBlankRow(row);
+    }
+
+    private int addEstateSection(
+            GridPane grid,
+            int row,
+            ProjectionYear year) {
+
+        row = addSectionHeading(
+                grid,
+                row,
+                "Estimated Estate Value");
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Gross Estate Value",
+                year.getEndingInvestableAssets());
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Estimated Heir Tax",
+                year.getEstimatedHeirTax());
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Projected After-Tax Estate",
+                year.getAfterTaxEstateValue());
+
+        return addBlankRow(row);
     }
 
     private int addBlankRow(
@@ -576,6 +585,32 @@ public class ProjectionYearDetailsPane extends BorderPane {
         return row + 1;
     }
 
+    private int addTextRow(
+            GridPane grid,
+            int row,
+            String description,
+            String value) {
+
+        grid.add(
+                new Label(description),
+                0,
+                row);
+
+        Label valueLabel =
+                new Label(value);
+
+        GridPane.setHalignment(
+                valueLabel,
+                HPos.RIGHT);
+
+        grid.add(
+                valueLabel,
+                1,
+                row);
+
+        return row + 1;
+    }
+
     private BigDecimal getEndingBalanceByAssetType(
             ProjectionYear year,
             ProjectionAssetType assetType) {
@@ -587,6 +622,24 @@ public class ProjectionYearDetailsPane extends BorderPane {
                         snapshot.getAccount()
                                 .getProjectionAssetType()
                                 == assetType)
+                .map(ProjectedAccountSnapshot::getEndingBalance)
+                .reduce(
+                        BigDecimal.ZERO,
+                        BigDecimal::add);
+    }
+
+    private BigDecimal getEndingBalanceByTaxTreatment(
+            ProjectionYear year,
+            TaxTreatment taxTreatment) {
+
+        return year
+                .getEndingAccountSnapshots()
+                .stream()
+                .filter(snapshot ->
+                        snapshot
+                                .getAccount()
+                                .getTaxTreatment()
+                                == taxTreatment)
                 .map(ProjectedAccountSnapshot::getEndingBalance)
                 .reduce(
                         BigDecimal.ZERO,

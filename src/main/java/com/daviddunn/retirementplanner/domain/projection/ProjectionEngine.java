@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.projection;
 
+import com.daviddunn.retirementplanner.domain.estate.AfterTaxEstateCalculator;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.roth.*;
@@ -64,6 +65,9 @@ public class ProjectionEngine {
 
     private final RothConversionTargetBracketResolver
             rothConversionTargetBracketResolver;
+
+    private final AfterTaxEstateCalculator afterTaxEstateCalculator =
+            new AfterTaxEstateCalculator();
 
 
     public ProjectionEngine() {
@@ -546,6 +550,24 @@ public class ProjectionEngine {
         int primaryPersonAge =
                 primaryPerson.getAge(projectionDate);
 
+//        AfterTaxEstateCalculator afterTaxEstateCalculator =
+//                new AfterTaxEstateCalculator();
+
+        BigDecimal heirTaxRate =
+                plan.getPlanningAssumptions()
+                        .getTaxAssumptions()
+                        .getEstimatedHeirTaxRateOnTaxDeferredAssets();
+
+        BigDecimal estimatedHeirTax =
+                afterTaxEstateCalculator.calculateEstimatedTax(
+                        endingAccountSnapshots,
+                        heirTaxRate);
+
+        BigDecimal afterTaxEstateValue =
+                afterTaxEstateCalculator.calculateAfterTaxEstateValue(
+                        endingAssets,
+                        estimatedHeirTax);
+
 
         ProjectionYear projectionYear =
                 new ProjectionYear(
@@ -567,8 +589,9 @@ public class ProjectionEngine {
                         medicarePremiumCalculation,
                         taxFundingWithdrawal,
                         rothConversion,
+                        estimatedHeirTax,
+                        afterTaxEstateValue,
                         primaryPersonAge);
-
 
         return new ProjectionYearCalculation(
                 projectionYear,

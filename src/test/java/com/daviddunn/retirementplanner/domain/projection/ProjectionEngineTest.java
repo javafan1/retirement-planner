@@ -3,18 +3,11 @@ package com.daviddunn.retirementplanner.domain.projection;
 import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.financial.TraditionalIRA;
+import com.daviddunn.retirementplanner.domain.financial.SavingsAccount;
 import com.daviddunn.retirementplanner.domain.income.Pension;
-import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
-import com.daviddunn.retirementplanner.domain.model.Household;
-import com.daviddunn.retirementplanner.domain.model.Person;
-import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
-import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.financial.RothIRA;
 import com.daviddunn.retirementplanner.domain.financial.BrokerageAccount;
-import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
-import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
-import com.daviddunn.retirementplanner.domain.model.WithdrawalAssumptions;
-import com.daviddunn.retirementplanner.domain.model.WithdrawalStrategyType;
 
 import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
@@ -2636,6 +2629,161 @@ ProjectionYear
                                         .setScale(
                                                 2,
                                                 RoundingMode.HALF_UP)));
+    }
+
+    @Test
+    void projectionCalculatesAfterTaxEstateValue() {
+
+        /*
+         * No income.
+         * No expenses.
+         * No investment growth.
+         *
+         * Ending portfolio should therefore remain:
+         *
+         * Traditional IRA     $1,000,000
+         * Roth IRA               200,000
+         * Brokerage              300,000
+         * Savings                100,000
+         *                    ------------
+         * Total                $1,600,000
+         *
+         * Only the Traditional IRA is subject
+         * to the assumed 25% heir tax rate.
+         *
+         * Estimated heir tax:
+         *
+         * $1,000,000 × 25% = $250,000
+         *
+         * After-tax estate:
+         *
+         * $1,600,000 - $250,000
+         * = $1,350,000
+         */
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        RothIRA rothIra =
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("200000"));
+
+        BrokerageAccount brokerage =
+                new BrokerageAccount(
+                        "Brokerage",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("300000"));
+
+        SavingsAccount savings =
+                new SavingsAccount(
+                        "Savings",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        portfolio.addAccount(
+                rothIra);
+
+        portfolio.addAccount(
+                brokerage);
+
+        portfolio.addAccount(
+                savings);
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                com.daviddunn.retirementplanner.domain.rules.FilingStatus.MARRIED_FILING_JOINTLY,
+                                new BigDecimal("0.25")),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        1,
+
+                        LocalDate.of(
+                                2026,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear year =
+                projection.getYearAt(0);
+
+        /*
+         * No growth or withdrawals.
+         */
+        assertEquals(
+                new BigDecimal("1600000.00"),
+                year.getEndingInvestableAssets());
+
+        /*
+         * Only the $1,000,000 Traditional IRA
+         * is subject to the 25% heir tax assumption.
+         */
+        assertEquals(
+                0,
+                new BigDecimal("250000.00")
+                        .compareTo(
+                                year.getEstimatedHeirTax()));
+
+        /*
+         * After-tax estate:
+         *
+         * $1,600,000 - $250,000
+         * = $1,350,000
+         */
+        assertEquals(
+                0,
+                new BigDecimal("1350000.00")
+                        .compareTo(
+                                year.getAfterTaxEstateValue()));
     }
 
 }

@@ -26,6 +26,14 @@ public class ProjectionYearBuilder {
     private BigDecimal excessRmd = BigDecimal.ZERO;
     private BigDecimal taxFundingWithdrawal = BigDecimal.ZERO;
     private BigDecimal endingInvestableAssets = BigDecimal.ZERO;
+    private BigDecimal unallocatedCash =
+            BigDecimal.ZERO;
+
+    private BigDecimal estimatedHeirTax =
+            BigDecimal.ZERO;
+
+    private BigDecimal afterTaxEstateValue =
+            BigDecimal.ZERO;
 
     private List<ProjectedAccountSnapshot> endingAccountSnapshots =
             List.of();
@@ -144,6 +152,33 @@ public class ProjectionYearBuilder {
         return this;
     }
 
+    public ProjectionYearBuilder withUnallocatedCash(
+            long amount) {
+
+        this.unallocatedCash =
+                BigDecimal.valueOf(amount);
+
+        return this;
+    }
+
+    public ProjectionYearBuilder withEstimatedHeirTax(
+            long amount) {
+
+        this.estimatedHeirTax =
+                BigDecimal.valueOf(amount);
+
+        return this;
+    }
+
+    public ProjectionYearBuilder withAfterTaxEstateValue(
+            long amount) {
+
+        this.afterTaxEstateValue =
+                BigDecimal.valueOf(amount);
+
+        return this;
+    }
+
     public ProjectionYearBuilder withMedicarePremiumCalculation(
             MedicarePremiumCalculation calculation) {
 
@@ -166,7 +201,7 @@ public class ProjectionYearBuilder {
                 portfolioWithdrawal,
                 requiredMinimumDistribution,
                 excessRmd,
-                BigDecimal.ZERO,
+                unallocatedCash,
                 endingInvestableAssets,
                 endingAccountSnapshots,
                 federalTaxCalculation,
@@ -174,6 +209,8 @@ public class ProjectionYearBuilder {
                 medicarePremiumCalculation,
                 taxFundingWithdrawal,
                 BigDecimal.ZERO,
+                estimatedHeirTax,
+                afterTaxEstateValue,
                 primaryPersonAge
         );
     }
