@@ -16,6 +16,7 @@ public class PensionDialog extends Dialog<Pension> {
     private final DatePicker startDatePicker;
     private final DatePicker endDatePicker;
     private final TextField monthlyBenefitField;
+    private final TextField survivorMonthlyBenefitField;
     private final TextField colaRateField;
 
     public PensionDialog(Pension pension) {
@@ -48,6 +49,9 @@ public class PensionDialog extends Dialog<Pension> {
 
         monthlyBenefitField = new TextField();
 
+        survivorMonthlyBenefitField =
+                new TextField();
+
         /*
          * COLA is stored as a decimal:
          *
@@ -55,7 +59,8 @@ public class PensionDialog extends Dialog<Pension> {
          * 0.02  = 2%
          * 0.025 = 2.5%
          */
-        colaRateField = new TextField("0.0");
+        colaRateField =
+                new TextField("0.0");
 
         /*
          * Populate controls when editing
@@ -79,14 +84,26 @@ public class PensionDialog extends Dialog<Pension> {
                     pension.getMonthlyBenefit()
                             .toPlainString());
 
+            if (pension.getSurvivorMonthlyBenefit()
+                    != null) {
+
+                survivorMonthlyBenefitField.setText(
+                        pension
+                                .getSurvivorMonthlyBenefit()
+                                .toPlainString());
+            }
+
             colaRateField.setText(
                     pension.getAnnualColaRate()
                             .toPlainString());
         }
 
-        GridPane grid = new GridPane();
+        GridPane grid =
+                new GridPane();
 
-        grid.setPadding(new Insets(15));
+        grid.setPadding(
+                new Insets(15));
+
         grid.setHgap(10);
         grid.setVgap(10);
 
@@ -143,6 +160,17 @@ public class PensionDialog extends Dialog<Pension> {
                 row++);
 
         grid.add(
+                new Label(
+                        "Survivor Monthly Benefit:"),
+                0,
+                row);
+
+        grid.add(
+                survivorMonthlyBenefitField,
+                1,
+                row++);
+
+        grid.add(
                 new Label("Annual COLA Rate:"),
                 0,
                 row);
@@ -152,7 +180,8 @@ public class PensionDialog extends Dialog<Pension> {
                 1,
                 row);
 
-        getDialogPane().setContent(grid);
+        getDialogPane()
+                .setContent(grid);
 
         getDialogPane()
                 .getButtonTypes()
@@ -186,6 +215,23 @@ public class PensionDialog extends Dialog<Pension> {
                                     .getText()
                                     .trim());
 
+            /*
+             * Survivor benefit is optional.
+             *
+             * Blank = this pension has no
+             * survivor benefit.
+             */
+            String survivorText =
+                    survivorMonthlyBenefitField
+                            .getText()
+                            .trim();
+
+            BigDecimal survivorMonthlyBenefit =
+                    survivorText.isEmpty()
+                            ? null
+                            : new BigDecimal(
+                            survivorText);
+
             BigDecimal annualColaRate =
                     new BigDecimal(
                             colaRateField
@@ -198,7 +244,8 @@ public class PensionDialog extends Dialog<Pension> {
                     startDate,
                     endDate,
                     monthlyBenefit,
-                    annualColaRate);
+                    annualColaRate,
+                    survivorMonthlyBenefit);
         });
     }
 }

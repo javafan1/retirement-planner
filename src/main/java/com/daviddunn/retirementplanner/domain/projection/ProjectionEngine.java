@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.domain.projection;
 
 import com.daviddunn.retirementplanner.domain.estate.AfterTaxEstateCalculator;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
+import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.SocialSecuritySurvivorBenefitCalculator;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.roth.*;
@@ -692,6 +693,72 @@ public class ProjectionEngine {
                         projectionDate,
                         assumptions));
 
+        total = total.add(
+                calculateSurvivorPensionIncome(
+                        household,
+                        projectionDate,
+                        assumptions));
+
+        return total;
+    }
+
+    private BigDecimal calculateSurvivorPensionIncome(
+            Household household,
+            LocalDate projectionDate,
+            PlanningAssumptions assumptions) {
+
+        DeathScenario deathScenario =
+                assumptions
+                        .getDeathScenarioAssumptions()
+                        .getDeathScenario();
+
+        if (deathScenario == DeathScenario.BOTH_SURVIVE) {
+            return BigDecimal.ZERO;
+        }
+
+        Person deceasedPerson;
+
+        if (deathScenario == DeathScenario.PRIMARY_DIES) {
+
+            deceasedPerson =
+                    household.getPrimaryPerson();
+
+        } else {
+
+            deceasedPerson =
+                    household.getSpouse();
+        }
+
+        /*
+         * Survivor benefits do not begin until the
+         * death scenario is active.
+         */
+        if (!assumptions
+                .getDeathScenarioAssumptions()
+                .isDeathScenarioActive(
+                        projectionDate.getYear())) {
+
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal total =
+                BigDecimal.ZERO;
+
+        /*
+         * Find all pensions belonging to the deceased
+         * person that provide survivor benefits.
+         */
+        for (IncomeSource income :
+                deceasedPerson.getIncomeSources()) {
+
+            if (income instanceof Pension pension) {
+
+                total = total.add(
+                        pension.getAnnualSurvivorIncome(
+                                projectionDate));
+            }
+        }
+
         return total;
     }
 
@@ -820,19 +887,7 @@ public class ProjectionEngine {
                                 survivingPerson.getBirthDate(),
                                 survivorClaimingAge);
 
-//        int survivorAge =
-//                survivingPerson.getAge(
-//                        projectionDate);
-//
-//        /*
-//         * Calculate the survivor benefit.
-//         */
-//        BigDecimal survivorMonthlyBenefit =
-//                SocialSecuritySurvivorBenefitCalculator
-//                        .calculateMonthlyBenefit(
-//                                deceasedMonthlyBenefit,
-//                                survivingPerson.getBirthDate(),
-//                                survivorAge);
+
 
         /*
          * The survivor does not receive both benefits.

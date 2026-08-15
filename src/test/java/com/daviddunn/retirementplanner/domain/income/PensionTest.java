@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class PensionTest {
 
@@ -169,5 +170,94 @@ class PensionTest {
         assertEquals(
                 new BigDecimal("46512.00"),
                 income);
+    }
+
+    @Test
+    void pensionStoresSurvivorMonthlyBenefit() {
+
+        Pension pension =
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2026, 1, 1),
+                        null,
+                        new BigDecimal("3800"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("1900"));
+
+        assertEquals(
+                new BigDecimal("1900"),
+                pension.getSurvivorMonthlyBenefit());
+    }
+
+    @Test
+    void pensionWithoutSurvivorBenefitReturnsNull() {
+
+        Pension pension =
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2026, 1, 1),
+                        null,
+                        new BigDecimal("3800"),
+                        BigDecimal.ZERO);
+
+        assertNull(
+                pension.getSurvivorMonthlyBenefit());
+    }
+
+    @Test
+    void survivorBenefitDoesNotChangePensionIncome() {
+
+        Pension pension =
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2026, 1, 1),
+                        null,
+                        new BigDecimal("3800"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("1900"));
+
+        BigDecimal income =
+                pension.getAnnualIncome(
+                        person,
+                        LocalDate.of(2026, 1, 1));
+
+        assertEquals(
+                new BigDecimal("45600"),
+                income);
+    }
+
+    @Test
+    void pensionWithSurvivorBenefitStillEndsOnPensionEndDate() {
+
+        Pension pension =
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2020, 1, 1),
+                        LocalDate.of(2035, 12, 31),
+                        new BigDecimal("3800"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("1900"));
+
+        BigDecimal income =
+                pension.getAnnualIncome(
+                        person,
+                        LocalDate.of(2035, 1, 1));
+
+        assertEquals(
+                new BigDecimal("45600"),
+                income);
+
+        BigDecimal incomeAfterEndDate =
+                pension.getAnnualIncome(
+                        person,
+                        LocalDate.of(2036, 1, 1));
+
+        assertEquals(
+                BigDecimal.ZERO,
+                incomeAfterEndDate);
     }
 }

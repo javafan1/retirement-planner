@@ -1,25 +1,30 @@
 package com.daviddunn.retirementplanner.ui.views;
 
+import com.daviddunn.retirementplanner.domain.model.DeathScenario;
+import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
+import com.daviddunn.retirementplanner.domain.model.WithdrawalAssumptions;
 
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
+import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
 import com.daviddunn.retirementplanner.ui.controls.HelpLabel;
+import com.daviddunn.retirementplanner.ui.help.HelpText;
+
+
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
 import java.math.BigDecimal;
-import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
-import com.daviddunn.retirementplanner.ui.help.HelpText;
 
 public class AssumptionsView extends VBox {
 
@@ -28,6 +33,17 @@ public class AssumptionsView extends VBox {
      */
     private final DatePicker projectionStartDatePicker;
     private final TextField projectionLengthField;
+
+    /*
+     * Death scenario assumptions.
+     */
+    private final ComboBox<DeathScenario>
+            deathScenarioComboBox;
+
+    private final TextField deathYearField;
+
+    private final ComboBox<Integer>
+            survivorClaimingAgeComboBox;
 
     /*
      * Economic assumptions.
@@ -70,6 +86,37 @@ public class AssumptionsView extends VBox {
 
         projectionLengthField =
                 new TextField();
+
+        /*
+         * Death scenario fields.
+         */
+        deathScenarioComboBox =
+                new ComboBox<>();
+
+        deathScenarioComboBox
+                .getItems()
+                .addAll(
+                        DeathScenario.values());
+
+        deathYearField =
+                new TextField();
+
+        survivorClaimingAgeComboBox =
+                new ComboBox<>();
+
+        for (int age = 62; age <= 70; age++) {
+            survivorClaimingAgeComboBox
+                    .getItems()
+                    .add(age);
+        }
+
+        deathScenarioComboBox
+                .valueProperty()
+                .addListener(
+                        (observable,
+                         oldValue,
+                         newValue) ->
+                                updateDeathScenarioFields());
 
         /*
          * Economic fields.
@@ -137,14 +184,14 @@ public class AssumptionsView extends VBox {
                 projectionHeading,
                 0,
                 row++,
-                2,
+                3,
                 1);
 
         grid.add(
                 new Separator(),
                 0,
                 row++,
-                2,
+                3,
                 1);
 
         grid.add(
@@ -169,6 +216,62 @@ public class AssumptionsView extends VBox {
 
         /*
          * =================================================
+         * Death Scenario
+         * =================================================
+         */
+
+        Label deathScenarioHeading =
+                new Label("Death Scenario");
+
+        deathScenarioHeading.setStyle(
+                "-fx-font-weight: bold;");
+
+        grid.add(
+                deathScenarioHeading,
+                0,
+                row++,
+                3,
+                1);
+
+        grid.add(
+                new Separator(),
+                0,
+                row++,
+                3,
+                1);
+
+        grid.add(
+                new Label("Death Scenario:"),
+                0,
+                row);
+
+        grid.add(
+                deathScenarioComboBox,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Death Year:"),
+                0,
+                row);
+
+        grid.add(
+                deathYearField,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Survivor Claiming Age:"),
+                0,
+                row);
+
+        grid.add(
+                survivorClaimingAgeComboBox,
+                1,
+                row++);
+
+        /*
+         * =================================================
          * Economic Assumptions
          * =================================================
          */
@@ -183,24 +286,19 @@ public class AssumptionsView extends VBox {
                 economicHeading,
                 0,
                 row++,
-                2,
+                3,
                 1);
 
         grid.add(
                 new Separator(),
                 0,
                 row++,
-                2,
+                3,
                 1);
 
-//        grid.add(
-//                new Label("Annual Investment Return (%):"),
-//                0,
-//                row);
-
-
         grid.add(
-                new Label("Annual Investment Return (%):"),
+                new Label(
+                        "Annual Investment Return (%):"),
                 0,
                 row);
 
@@ -215,9 +313,9 @@ public class AssumptionsView extends VBox {
                 2,
                 row++);
 
-
         grid.add(
-                new Label("General Inflation Rate (%):"),
+                new Label(
+                        "General Inflation Rate (%):"),
                 0,
                 row);
 
@@ -233,7 +331,8 @@ public class AssumptionsView extends VBox {
                 row++);
 
         grid.add(
-                new Label("Healthcare Inflation Rate (%):"),
+                new Label(
+                        "Healthcare Inflation Rate (%):"),
                 0,
                 row);
 
@@ -249,7 +348,8 @@ public class AssumptionsView extends VBox {
                 row++);
 
         grid.add(
-                new Label("Social Security COLA (%):"),
+                new Label(
+                        "Social Security COLA (%):"),
                 0,
                 row);
 
@@ -263,6 +363,7 @@ public class AssumptionsView extends VBox {
                 socialSecurityColaField,
                 2,
                 row++);
+
         /*
          * =================================================
          * Tax Assumptions
@@ -279,18 +380,19 @@ public class AssumptionsView extends VBox {
                 taxHeading,
                 0,
                 row++,
-                2,
+                3,
                 1);
 
         grid.add(
                 new Separator(),
                 0,
                 row++,
-                2,
+                3,
                 1);
 
         grid.add(
-                new Label("Federal Tax Bracket Growth (%):"),
+                new Label(
+                        "Federal Tax Bracket Growth (%):"),
                 0,
                 row);
 
@@ -300,7 +402,8 @@ public class AssumptionsView extends VBox {
                 row++);
 
         grid.add(
-                new Label("Standard Deduction Growth (%):"),
+                new Label(
+                        "Standard Deduction Growth (%):"),
                 0,
                 row);
 
@@ -310,7 +413,8 @@ public class AssumptionsView extends VBox {
                 row++);
 
         grid.add(
-                new Label("State Income Tax Rate (%):"),
+                new Label(
+                        "State Income Tax Rate (%):"),
                 0,
                 row);
 
@@ -320,7 +424,8 @@ public class AssumptionsView extends VBox {
                 row++);
 
         grid.add(
-                new Label("Local Income Tax Rate (%):"),
+                new Label(
+                        "Local Income Tax Rate (%):"),
                 0,
                 row);
 
@@ -328,7 +433,6 @@ public class AssumptionsView extends VBox {
                 localIncomeTaxRateField,
                 1,
                 row++);
-
 
         grid.add(
                 new Label(
@@ -349,6 +453,11 @@ public class AssumptionsView extends VBox {
         getChildren().addAll(
                 grid,
                 statusLabel);
+
+        /*
+         * Establish the initial disabled state.
+         */
+        updateDeathScenarioFields();
     }
 
     public void load(
@@ -360,20 +469,51 @@ public class AssumptionsView extends VBox {
                 plan.getPlanningAssumptions();
 
         EconomicAssumptions economicAssumptions =
-                assumptions.getEconomicAssumptions();
+                assumptions
+                        .getEconomicAssumptions();
 
         TaxAssumptions taxAssumptions =
-                assumptions.getTaxAssumptions();
+                assumptions
+                        .getTaxAssumptions();
+
+        DeathScenarioAssumptions
+                deathScenarioAssumptions =
+                assumptions
+                        .getDeathScenarioAssumptions();
 
         /*
          * Projection.
          */
         projectionStartDatePicker.setValue(
-                assumptions.getProjectionStartDate());
+                assumptions
+                        .getProjectionStartDate());
 
         projectionLengthField.setText(
                 Integer.toString(
-                        assumptions.getProjectionLengthYears()));
+                        assumptions
+                                .getProjectionLengthYears()));
+
+        /*
+         * Death scenario.
+         */
+        deathScenarioComboBox.setValue(
+                deathScenarioAssumptions
+                        .getDeathScenario());
+
+        Integer deathYear =
+                deathScenarioAssumptions
+                        .getDeathYear();
+
+        deathYearField.setText(
+                deathYear != null
+                        ? Integer.toString(deathYear)
+                        : "");
+
+        survivorClaimingAgeComboBox.setValue(
+                deathScenarioAssumptions
+                        .getSurvivorClaimingAge());
+
+        updateDeathScenarioFields();
 
         /*
          * Economic assumptions.
@@ -466,6 +606,56 @@ public class AssumptionsView extends VBox {
                                     .trim());
 
             /*
+             * Death scenario.
+             */
+            DeathScenario deathScenario =
+                    deathScenarioComboBox.getValue();
+
+            if (deathScenario == null) {
+
+                throw new IllegalArgumentException(
+                        "Death scenario is required.");
+            }
+
+            Integer deathYear = null;
+            Integer survivorClaimingAge = null;
+
+            if (deathScenario != DeathScenario.BOTH_SURVIVE) {
+
+                String deathYearText =
+                        deathYearField
+                                .getText()
+                                .trim();
+
+                if (deathYearText.isEmpty()) {
+
+                    throw new IllegalArgumentException(
+                            "Death year is required.");
+                }
+
+                deathYear =
+                        Integer.parseInt(
+                                deathYearText);
+
+                survivorClaimingAge =
+                        survivorClaimingAgeComboBox
+                                .getValue();
+
+                if (survivorClaimingAge == null) {
+
+                    throw new IllegalArgumentException(
+                            "Survivor claiming age is required.");
+                }
+            }
+
+            DeathScenarioAssumptions
+                    deathScenarioAssumptions =
+                    new DeathScenarioAssumptions(
+                            deathScenario,
+                            deathYear,
+                            survivorClaimingAge);
+
+            /*
              * Economic assumptions.
              */
             BigDecimal investmentReturn =
@@ -480,11 +670,13 @@ public class AssumptionsView extends VBox {
 
             BigDecimal healthcareInflationRate =
                     parsePercent(
-                            healthcareInflationField.getText());
+                            healthcareInflationField
+                                    .getText());
 
             BigDecimal socialSecurityColaRate =
                     parsePercent(
-                            socialSecurityColaField.getText());
+                            socialSecurityColaField
+                                    .getText());
 
             /*
              * Tax assumptions.
@@ -514,14 +706,19 @@ public class AssumptionsView extends VBox {
                             estimatedHeirTaxRateField
                                     .getText());
 
-            EconomicAssumptions economicAssumptions =
+            EconomicAssumptions
+                    economicAssumptions =
                     new EconomicAssumptions(
                             investmentReturn,
                             inflationRate,
                             healthcareInflationRate,
                             socialSecurityColaRate);
 
-            FilingStatus filingStatus =
+            /*
+             * Preserve the existing filing status.
+             */
+            FilingStatus
+                    filingStatus =
                     currentPlan
                             .getPlanningAssumptions()
                             .getTaxAssumptions()
@@ -536,10 +733,25 @@ public class AssumptionsView extends VBox {
                             filingStatus,
                             estimatedHeirTaxRate);
 
+            /*
+             * Preserve the existing withdrawal assumptions.
+             */
+            WithdrawalAssumptions
+                    withdrawalAssumptions =
+                    currentPlan
+                            .getPlanningAssumptions()
+                            .getWithdrawalAssumptions();
+
+            /*
+             * Rebuild PlanningAssumptions while
+             * preserving all current assumption groups.
+             */
             PlanningAssumptions updated =
                     new PlanningAssumptions(
                             economicAssumptions,
                             taxAssumptions,
+                            withdrawalAssumptions,
+                            deathScenarioAssumptions,
                             projectionLength,
                             projectionStartDatePicker
                                     .getValue());
@@ -549,7 +761,6 @@ public class AssumptionsView extends VBox {
 
             statusLabel.setText(
                     "Assumptions applied.");
-
 
         }
         catch (Exception ex) {
@@ -564,6 +775,21 @@ public class AssumptionsView extends VBox {
         applyChangesToModel();
 
         notifyPlanChanged();
+    }
+
+    private void updateDeathScenarioFields() {
+
+        boolean deathScenarioActive =
+                deathScenarioComboBox.getValue()
+                        != null
+                        && deathScenarioComboBox.getValue()
+                        != DeathScenario.BOTH_SURVIVE;
+
+        deathYearField.setDisable(
+                !deathScenarioActive);
+
+        survivorClaimingAgeComboBox.setDisable(
+                !deathScenarioActive);
     }
 
     private BigDecimal parsePercent(

@@ -3484,4 +3484,628 @@ ProjectionYear
     }
 
 
+    @Test
+    void projectionUsesPensionSurvivorBenefitWhenPrimaryDies() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        primary.addIncomeSource(
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        new BigDecimal("0.02"),
+                        new BigDecimal("1500")));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.PRIMARY_DIES,
+                                2035,
+                                67),
+
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        Projection projection =
+                new ProjectionEngine()
+                        .project(plan);
+
+        ProjectionYear year2034 =
+                projection.getYearAt(0);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        /*
+         * 2034:
+         *
+         * David is alive and receives his
+         * $3,000/month pension.
+         *
+         * $3,000 × 12 = $36,000
+         */
+        assertEquals(
+                new BigDecimal("38967.56"),
+                year2034
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+        /*
+         * 2035:
+         *
+         * David has died.
+         *
+         * Lisa receives the survivor pension:
+         *
+         * $1,500 × 1.02^5 × 12
+         *
+         * = $19,120.92 approximately.
+         */
+        assertEquals(
+                new BigDecimal("19873.45"),
+                year2035
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+    }
+
+    @Test
+    void pensionWithoutSurvivorBenefitStopsWhenPrimaryDies() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        primary.addIncomeSource(
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        BigDecimal.ZERO));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.PRIMARY_DIES,
+                                2035,
+                                67),
+
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        Projection projection =
+                new ProjectionEngine()
+                        .project(plan);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        assertEquals(
+                BigDecimal.ZERO.setScale(
+                        2,
+                        RoundingMode.HALF_UP),
+                year2035
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+    }
+
+    @Test
+    void survivorPensionWithZeroColaRemainsLevel() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        primary.addIncomeSource(
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("1500")));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.PRIMARY_DIES,
+                                2035,
+                                67),
+
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        Projection projection =
+                new ProjectionEngine()
+                        .project(plan);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        assertEquals(
+                new BigDecimal("18000.00"),
+                year2035
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+    }
+
+    @Test
+    void survivorPensionStopsAtPensionEndDate() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        primary.addIncomeSource(
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        LocalDate.of(2035, 6, 30),
+                        new BigDecimal("3000"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("1500")));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.PRIMARY_DIES,
+                                2034,
+                                67),
+
+                        3,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        Projection projection =
+                new ProjectionEngine()
+                        .project(plan);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        ProjectionYear year2036 =
+                projection.getYearAt(2);
+
+        /*
+         * Survivor receives the pension for only
+         * six months in 2035.
+         *
+         * $1,500 × 6 = $9,000
+         */
+        assertEquals(
+                new BigDecimal("9000.00"),
+                year2035
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+
+        /*
+         * The pension has ended.
+         *
+         * No survivor pension in 2036.
+         */
+        assertEquals(
+                BigDecimal.ZERO.setScale(
+                        2,
+                        RoundingMode.HALF_UP),
+                year2036
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+    }
+
+    @Test
+    void projectionUsesPensionSurvivorBenefitWhenSpouseDies() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        spouse.addIncomeSource(
+                new Pension(
+                        "Spouse Pension",
+                        AccountOwnership.SPOUSE,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("1500")));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.SPOUSE_DIES,
+                                2035,
+                                67),
+
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        Projection projection =
+                new ProjectionEngine()
+                        .project(plan);
+
+        ProjectionYear year2034 =
+                projection.getYearAt(0);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        /*
+         * 2034:
+         *
+         * Lisa is alive and receives:
+         *
+         * $3,000 × 12 = $36,000
+         */
+        assertEquals(
+                new BigDecimal("36000.00"),
+                year2034
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+
+        /*
+         * 2035:
+         *
+         * Lisa dies.
+         *
+         * David receives:
+         *
+         * $1,500 × 12 = $18,000
+         */
+        assertEquals(
+                new BigDecimal("18000.00"),
+                year2035
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+    }
+
+    @Test
+    void projectionCombinesMultiplePensionSurvivorBenefits() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        primary.addIncomeSource(
+                new Pension(
+                        "Primary Pension One",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("1500")));
+
+        primary.addIncomeSource(
+                new Pension(
+                        "Primary Pension Two",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("1000"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("400")));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.PRIMARY_DIES,
+                                2035,
+                                67),
+
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        Projection projection =
+                new ProjectionEngine()
+                        .project(plan);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        /*
+         * David dies in 2035.
+         *
+         * Pension One survivor benefit:
+         * $1,500 × 12 = $18,000
+         *
+         * Pension Two survivor benefit:
+         * $400 × 12 = $4,800
+         *
+         * Total survivor pension:
+         * $22,800
+         */
+        assertEquals(
+                new BigDecimal("22800.00"),
+                year2035
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+    }
 }
