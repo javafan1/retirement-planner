@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.financial.TraditionalIRA;
 import com.daviddunn.retirementplanner.domain.financial.SavingsAccount;
 import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.financial.RothIRA;
 import com.daviddunn.retirementplanner.domain.financial.BrokerageAccount;
@@ -2785,5 +2786,702 @@ ProjectionYear
                         .compareTo(
                                 year.getAfterTaxEstateValue()));
     }
+
+    @Test
+    void projectionStopsPrimaryIncomeWhenPrimaryDies() {
+
+        /*
+         * Primary dies in 2035.
+         *
+         * Our death-year convention is:
+         *
+         * 2034 -> both spouses are alive
+         * 2035 -> primary is considered deceased
+         *
+         * Therefore primary income should be included
+         * through 2034, but not in 2035.
+         *
+         * Spouse income continues.
+         */
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        /*
+         * Primary pension:
+         * $3,000/month = $36,000/year.
+         */
+        primary.addIncomeSource(
+                new Pension(
+                        "Primary Pension",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        BigDecimal.ZERO));
+
+        /*
+         * Spouse pension:
+         * $2,000/month = $24,000/year.
+         */
+        spouse.addIncomeSource(
+                new Pension(
+                        "Spouse Pension",
+                        AccountOwnership.SPOUSE,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("2000"),
+                        BigDecimal.ZERO));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        /*
+         * No investment growth.
+         * No inflation.
+         * No expenses.
+         *
+         * Project:
+         *
+         * 2034 -> both alive
+         * 2035 -> primary deceased
+         */
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.PRIMARY_DIES,
+                                2035),
+
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear year2034 =
+                projection.getYearAt(0);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        /*
+         * 2034:
+         *
+         * Primary pension = $36,000
+         * Spouse pension  = $24,000
+         *                  --------
+         * Total            = $60,000
+         */
+        assertEquals(
+                new BigDecimal("60000"),
+                year2034.getGuaranteedIncome());
+
+        /*
+         * 2035:
+         *
+         * Primary pension stops.
+         *
+         * Spouse pension continues:
+         *
+         * $24,000
+         */
+        assertEquals(
+                new BigDecimal("24000"),
+                year2035.getGuaranteedIncome());
+    }
+
+    @Test
+    void projectionAppliesPrimarySurvivorSocialSecurityWhenPrimaryDies() {
+
+        /*
+         * Primary dies in 2035.
+         *
+         * 2034 -> both spouses are alive
+         * 2035 -> primary is deceased
+         *
+         * Primary Social Security stops.
+         * Spouse Social Security continues and is
+         * increased to the applicable survivor benefit.
+         */
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        /*
+         * Primary Social Security.
+         *
+         * Full retirement benefit = $3,000/month.
+         * Claiming age = 67.
+         * No COLA for this test.
+         */
+        primary.addIncomeSource(
+                new SocialSecurityIncome(
+                        "Primary Social Security",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        67,
+                        BigDecimal.ZERO));
+
+        /*
+         * Spouse Social Security.
+         *
+         * Full retirement benefit = $2,000/month.
+         * Claiming age = 67.
+         * No COLA for this test.
+         */
+        spouse.addIncomeSource(
+                new SocialSecurityIncome(
+                        "Spouse Social Security",
+                        AccountOwnership.SPOUSE,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("2000"),
+                        67,
+                        BigDecimal.ZERO));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        /*
+         * Provide enough assets that the projection
+         * does not run out of money.
+         */
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.PRIMARY_DIES,
+                                2035),
+
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear year2034 =
+                projection.getYearAt(0);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        /*
+         * 2035:
+         *
+         * Primary Social Security stops.
+         *
+         * Lisa's own Social Security continues:
+         *
+         * $2,000 × 12 = $24,000
+         *
+         * Lisa is also eligible for a survivor benefit
+         * based on David's $3,000/month benefit:
+         *
+         * $3,000 × 12 = $36,000
+         *
+         * Lisa receives the greater of her own benefit
+         * or the survivor benefit, rather than both.
+         *
+         * Therefore household Social Security is:
+         *
+         * $36,000
+         */
+        assertEquals(
+                new BigDecimal("36000.00"),
+                year2035
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+
+        /*
+         * Calculate the expected annual benefits.
+         *
+         * No COLA and both benefits are already active,
+         * so:
+         *
+         * Primary = $3,000 × 12 = $36,000
+         * Spouse  = $2,000 × 12 = $24,000
+         */
+        assertEquals(
+                new BigDecimal("60000.00"),
+                year2034
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+    }
+
+    @Test
+    void projectionStopsSpouseSocialSecurityWhenSpouseDies() {
+
+        /*
+         * Spouse dies in 2035.
+         *
+         * 2034 -> both spouses are alive
+         * 2035 -> spouse is deceased
+         *
+         * Spouse Social Security should therefore
+         * disappear in 2035.
+         *
+         * Primary Social Security continues.
+         */
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        primary.addIncomeSource(
+                new SocialSecurityIncome(
+                        "Primary Social Security",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        67,
+                        BigDecimal.ZERO));
+
+        spouse.addIncomeSource(
+                new SocialSecurityIncome(
+                        "Spouse Social Security",
+                        AccountOwnership.SPOUSE,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("2000"),
+                        67,
+                        BigDecimal.ZERO));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.SPOUSE_DIES,
+                                2035),
+
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear year2034 =
+                projection.getYearAt(0);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        /*
+         * 2034:
+         *
+         * Primary = $36,000
+         * Spouse  = $24,000
+         * Total   = $60,000
+         */
+        assertEquals(
+                new BigDecimal("60000.00"),
+                year2034
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+
+        /*
+         * 2035:
+         *
+         * Spouse Social Security stops.
+         *
+         * Primary continues:
+         *
+         * $3,000 × 12 = $36,000
+         */
+        assertEquals(
+                new BigDecimal("36000.00"),
+                year2035
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+    }
+
+    @Test
+    void projectionUsesReducedSurvivorBenefitWhenClaimingAt62() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        primary.addIncomeSource(
+                new SocialSecurityIncome(
+                        "Primary Social Security",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        67,
+                        BigDecimal.ZERO));
+
+        spouse.addIncomeSource(
+                new SocialSecurityIncome(
+                        "Spouse Social Security",
+                        AccountOwnership.SPOUSE,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("2000"),
+                        67,
+                        BigDecimal.ZERO));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.PRIMARY_DIES,
+                                2035,
+                                62),
+
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        Projection projection =
+                new ProjectionEngine()
+                        .project(plan);
+
+        ProjectionYear year2034 =
+                projection.getYearAt(0);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        /*
+         * 2034:
+         *
+         * David = $36,000
+         * Lisa  = $24,000
+         * Total = $60,000
+         */
+        assertEquals(
+                new BigDecimal("60000.00"),
+                year2034
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+
+        /*
+         * 2035:
+         *
+         * David dies.
+         *
+         * Lisa's own benefit = $24,000.
+         *
+         * David's applicable benefit = $36,000.
+         *
+         * Survivor benefit at age 62:
+         *
+         * $36,000 × 79.642857%
+         * ≈ $28,671.43
+         *
+         * Lisa receives the higher of:
+         *
+         * $24,000
+         * $28,671.43
+         *
+         * Therefore total guaranteed income:
+         *
+         * $28,671.43
+         */
+        assertEquals(
+                new BigDecimal("28671.48"),
+                year2035
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+    }
+
+
+    @Test
+    void projectionUsesFullSurvivorBenefitWhenClaimingAt67() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        primary.addIncomeSource(
+                new SocialSecurityIncome(
+                        "Primary Social Security",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        67,
+                        BigDecimal.ZERO));
+
+        spouse.addIncomeSource(
+                new SocialSecurityIncome(
+                        "Spouse Social Security",
+                        AccountOwnership.SPOUSE,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("2000"),
+                        67,
+                        BigDecimal.ZERO));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000")));
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+
+                        new DeathScenarioAssumptions(
+                                DeathScenario.PRIMARY_DIES,
+                                2035,
+                                67),
+
+                        2,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        Projection projection =
+                new ProjectionEngine()
+                        .project(plan);
+
+        ProjectionYear year2035 =
+                projection.getYearAt(1);
+
+        /*
+         * David's $36,000 benefit is the survivor
+         * benefit at Lisa's survivor FRA.
+         *
+         * Lisa's own $24,000 benefit is replaced
+         * by the higher $36,000 survivor benefit.
+         */
+        assertEquals(
+                new BigDecimal("36000.00"),
+                year2035
+                        .getGuaranteedIncome()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP));
+    }
+
 
 }

@@ -1,5 +1,8 @@
 package com.daviddunn.retirementplanner.domain.model;
 
+
+import com.daviddunn.retirementplanner.domain.model.DeathScenario;
+import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.withdrawal.RothConversionStrategy;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -13,10 +16,10 @@ public final class PlanningAssumptions {
     private final EconomicAssumptions economicAssumptions;
     private final TaxAssumptions taxAssumptions;
     private final WithdrawalAssumptions withdrawalAssumptions;
+    private final DeathScenarioAssumptions deathScenarioAssumptions;
 
     private final int projectionLengthYears;
     private final LocalDate projectionStartDate;
-
 
 
     /*
@@ -25,7 +28,8 @@ public final class PlanningAssumptions {
      * Supports:
      *
      * 1. Current JSON format using EconomicAssumptions,
-     *    TaxAssumptions, and WithdrawalAssumptions.
+     *    TaxAssumptions, WithdrawalAssumptions, and
+     *    DeathScenarioAssumptions.
      *
      * 2. Legacy JSON format using the original flat
      *    investment-return and inflation properties.
@@ -34,7 +38,8 @@ public final class PlanningAssumptions {
      *    EconomicAssumptions migration.
      *
      * 4. Older files that do not contain
-     *    WithdrawalAssumptions.
+     *    WithdrawalAssumptions or
+     *    DeathScenarioAssumptions.
      */
     @JsonCreator
     public PlanningAssumptions(
@@ -47,6 +52,9 @@ public final class PlanningAssumptions {
 
             @JsonProperty("withdrawalAssumptions")
             WithdrawalAssumptions withdrawalAssumptions,
+
+            @JsonProperty("deathScenarioAssumptions")
+            DeathScenarioAssumptions deathScenarioAssumptions,
 
             @JsonProperty("expectedAnnualInvestmentReturn")
             BigDecimal legacyInvestmentReturn,
@@ -111,6 +119,18 @@ public final class PlanningAssumptions {
                         ? withdrawalAssumptions
                         : createDefaultWithdrawalAssumptions();
 
+        /*
+         * Death scenario assumptions.
+         *
+         * Older plans do not contain
+         * DeathScenarioAssumptions, so use defaults
+         * when they are absent.
+         */
+        this.deathScenarioAssumptions =
+                deathScenarioAssumptions != null
+                        ? deathScenarioAssumptions
+                        : createDefaultDeathScenarioAssumptions();
+
         if (projectionLengthYears <= 0) {
 
             throw new IllegalArgumentException(
@@ -130,11 +150,41 @@ public final class PlanningAssumptions {
                         : LocalDate.now();
     }
 
+
     /*
      * Primary constructor for current application code.
      *
      * Allows all current assumption groups to be
      * supplied explicitly.
+     */
+    public PlanningAssumptions(
+            EconomicAssumptions economicAssumptions,
+            TaxAssumptions taxAssumptions,
+            WithdrawalAssumptions withdrawalAssumptions,
+            DeathScenarioAssumptions deathScenarioAssumptions,
+            int projectionLengthYears,
+            LocalDate projectionStartDate) {
+
+        this(
+                economicAssumptions,
+                taxAssumptions,
+                withdrawalAssumptions,
+                deathScenarioAssumptions,
+                null,
+                null,
+                projectionLengthYears,
+                projectionStartDate);
+    }
+
+
+    /*
+     * Compatibility constructor.
+     *
+     * Existing application code that supplies
+     * EconomicAssumptions, TaxAssumptions, and
+     * WithdrawalAssumptions can continue to work.
+     *
+     * DeathScenarioAssumptions will use the default.
      */
     public PlanningAssumptions(
             EconomicAssumptions economicAssumptions,
@@ -149,9 +199,11 @@ public final class PlanningAssumptions {
                 withdrawalAssumptions,
                 null,
                 null,
+                null,
                 projectionLengthYears,
                 projectionStartDate);
     }
+
 
     /*
      * Compatibility constructor.
@@ -161,7 +213,8 @@ public final class PlanningAssumptions {
      * does not yet supply WithdrawalAssumptions
      * can continue to work.
      *
-     * WithdrawalAssumptions will use the default.
+     * WithdrawalAssumptions and
+     * DeathScenarioAssumptions will use defaults.
      */
     public PlanningAssumptions(
             EconomicAssumptions economicAssumptions,
@@ -175,9 +228,11 @@ public final class PlanningAssumptions {
                 null,
                 null,
                 null,
+                null,
                 projectionLengthYears,
                 projectionStartDate);
     }
+
 
     /*
      * Legacy compatibility constructor.
@@ -200,24 +255,35 @@ public final class PlanningAssumptions {
                 null,
                 null,
                 null,
+                null,
                 projectionLengthYears,
                 projectionStartDate);
     }
+
 
     @JsonProperty("economicAssumptions")
     public EconomicAssumptions getEconomicAssumptions() {
         return economicAssumptions;
     }
 
+
     @JsonProperty("taxAssumptions")
     public TaxAssumptions getTaxAssumptions() {
         return taxAssumptions;
     }
 
+
     @JsonProperty("withdrawalAssumptions")
     public WithdrawalAssumptions getWithdrawalAssumptions() {
         return withdrawalAssumptions;
     }
+
+
+    @JsonProperty("deathScenarioAssumptions")
+    public DeathScenarioAssumptions getDeathScenarioAssumptions() {
+        return deathScenarioAssumptions;
+    }
+
 
     /*
      * Compatibility getters.
@@ -235,6 +301,7 @@ public final class PlanningAssumptions {
                 .getExpectedAnnualInvestmentReturn();
     }
 
+
     @JsonIgnore
     public BigDecimal getExpectedAnnualInflationRate() {
 
@@ -242,13 +309,16 @@ public final class PlanningAssumptions {
                 .getExpectedAnnualInflationRate();
     }
 
+
     public int getProjectionLengthYears() {
         return projectionLengthYears;
     }
 
+
     public LocalDate getProjectionStartDate() {
         return projectionStartDate;
     }
+
 
     private static EconomicAssumptions
     createDefaultEconomicAssumptions() {
@@ -257,6 +327,7 @@ public final class PlanningAssumptions {
                 new BigDecimal("0.070"),
                 new BigDecimal("0.025"));
     }
+
 
     private static TaxAssumptions
     createDefaultTaxAssumptions() {
@@ -268,6 +339,7 @@ public final class PlanningAssumptions {
                 BigDecimal.ZERO);
     }
 
+
     private static WithdrawalAssumptions
     createDefaultWithdrawalAssumptions() {
 
@@ -275,17 +347,29 @@ public final class PlanningAssumptions {
                 WithdrawalStrategyType.TAXABLE_FIRST);
     }
 
+
+    private static DeathScenarioAssumptions
+    createDefaultDeathScenarioAssumptions() {
+
+        return new DeathScenarioAssumptions(
+                DeathScenario.BOTH_SURVIVE,
+                null);
+    }
+
+
     @JsonIgnore
     public BigDecimal getInflationRate() {
 
         return getExpectedAnnualInflationRate();
     }
 
+
     @JsonIgnore
     public BigDecimal getInvestmentReturnRate() {
 
         return getExpectedAnnualInvestmentReturn();
     }
+
 
     @JsonIgnore
     public BigDecimal getGeneralInflationRate() {
@@ -294,12 +378,14 @@ public final class PlanningAssumptions {
                 .getGeneralInflationRate();
     }
 
+
     @JsonIgnore
     public BigDecimal getHealthcareInflationRate() {
 
         return economicAssumptions
                 .getHealthcareInflationRate();
     }
+
 
     @JsonIgnore
     public BigDecimal getSocialSecurityColaRate() {
@@ -308,12 +394,14 @@ public final class PlanningAssumptions {
                 .getSocialSecurityColaRate();
     }
 
+
     @JsonIgnore
     public RothConversionStrategy getRothConversionStrategy() {
 
         return withdrawalAssumptions
                 .getRothConversionStrategy();
     }
+
 
     @Override
     public String toString() {
@@ -325,6 +413,8 @@ public final class PlanningAssumptions {
                 taxAssumptions +
                 ", withdrawalAssumptions=" +
                 withdrawalAssumptions +
+                ", deathScenarioAssumptions=" +
+                deathScenarioAssumptions +
                 ", projectionLengthYears=" +
                 projectionLengthYears +
                 ", projectionStartDate=" +

@@ -108,4 +108,102 @@ class SocialSecurityIncomeTest {
                 claimingAge,
                 new BigDecimal("0.025"));
     }
+
+    @Test
+    void projectedMonthlyBenefitUsesRetirementBenefitAndCola() {
+
+        Person person =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        SocialSecurityIncome socialSecurity =
+                new SocialSecurityIncome(
+                        "Social Security",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        67,
+                        BigDecimal.ZERO);
+
+        BigDecimal monthlyBenefit =
+                socialSecurity.getProjectedMonthlyBenefit(
+                        person,
+                        LocalDate.of(2035, 1, 1));
+
+        BigDecimal expected =
+                SocialSecurityBenefitCalculator
+                        .calculateMonthlyBenefit(
+                                new BigDecimal("3000"),
+                                person.getBirthDate(),
+                                67);
+
+        assertEquals(
+                0,
+                expected.compareTo(monthlyBenefit));
+    }
+
+    @Test
+    void monthlyBenefitAtDeathUsesActualClaimedBenefit() {
+
+        Person person =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        SocialSecurityIncome income =
+                new SocialSecurityIncome(
+                        "Social Security",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2030, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        67,
+                        BigDecimal.ZERO);
+
+        BigDecimal result =
+                income.getMonthlyBenefitAtDeath(
+                        person,
+                        LocalDate.of(2035, 1, 1));
+
+        assertEquals(
+                new BigDecimal("3000.00"),
+                result);
+    }
+
+
+    @Test
+    void monthlyBenefitAtDeathUsesFullRetirementBenefitWhenNotYetClaimed() {
+
+        Person person =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        SocialSecurityIncome income =
+                new SocialSecurityIncome(
+                        "Social Security",
+                        AccountOwnership.PRIMARY,
+                        LocalDate.of(2038, 1, 1),
+                        null,
+                        new BigDecimal("3000"),
+                        70,
+                        new BigDecimal("0.025"));
+
+        BigDecimal result =
+                income.getMonthlyBenefitAtDeath(
+                        person,
+                        LocalDate.of(2035, 1, 1));
+
+
+        assertEquals(
+                new BigDecimal("3000.00"),
+                result);
+    }
+
+
 }
