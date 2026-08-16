@@ -4108,4 +4108,65 @@ ProjectionYear
                                 2,
                                 RoundingMode.HALF_UP));
     }
+
+    @Test
+    void projectionUsesSingleRothBracketAfterDeath() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        RothIRA rothIra =
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        portfolio.addAccount(
+                rothIra);
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+                        new WithdrawalAssumptions(
+                                WithdrawalStrategyType.TAXABLE_FIRST),
+                        new DeathScenarioAssumptions(
+                                DeathScenario.PRIMARY_DIES,
+                                2026,
+                                67),
+                        2,
+                        LocalDate.of(2026, 1, 1));
+    }
 }

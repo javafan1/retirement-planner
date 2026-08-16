@@ -1,9 +1,6 @@
 package com.daviddunn.retirementplanner.persistence;
 
-import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
-import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.rules.RmdLifeExpectancyFactor;
-import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.*;
 
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class GovernmentRulesRepositoryTest {
 
+    //IrmaaRules irmaaRules = mew IrmaaRules();
+    @Test
     void loads2026GovernmentRules() throws Exception {
 
         GovernmentRulesRepository repository =
@@ -193,4 +192,93 @@ class GovernmentRulesRepositoryTest {
                         .getRmdStartingAge(1960));
     }
 
+    @Test
+    void singleFilingStatusSelectsCorrectIrmaaBracket()
+            throws Exception {
+
+        GovernmentRulesRepository repository =
+                new GovernmentRulesRepository();
+
+        GovernmentRules rules =
+                repository.load(
+                        "/rules/government-rules-2026.json");
+
+        IrmaaBracket bracket =
+                rules.getIrmaaRules()
+                        .getBracket(
+                                FilingStatus.SINGLE,
+                                new BigDecimal("150000"));
+
+        assertEquals(
+                FilingStatus.SINGLE,
+                bracket.getFilingStatus());
+
+        assertEquals(
+                new BigDecimal("405.80"),
+                bracket.getMonthlyPartBPremium());
+
+        assertEquals(
+                new BigDecimal("37.50"),
+                bracket.getMonthlyPartDPremium());
+    }
+
+    @Test
+    void singleFilingStatusSelectsTopIrmaaBracket()
+            throws Exception {
+
+        GovernmentRulesRepository repository =
+                new GovernmentRulesRepository();
+
+        GovernmentRules rules =
+                repository.load(
+                        "/rules/government-rules-2026.json");
+
+        IrmaaBracket bracket =
+                rules.getIrmaaRules()
+                        .getBracket(
+                                FilingStatus.SINGLE,
+                                new BigDecimal("600000"));
+
+        assertEquals(
+                FilingStatus.SINGLE,
+                bracket.getFilingStatus());
+
+        assertEquals(
+                new BigDecimal("689.90"),
+                bracket.getMonthlyPartBPremium());
+
+        assertEquals(
+                new BigDecimal("91.00"),
+                bracket.getMonthlyPartDPremium());
+    }
+
+    @Test
+    void marriedFilingJointlyStillSelectsCorrectIrmaaBracket()
+            throws Exception {
+
+        GovernmentRulesRepository repository =
+                new GovernmentRulesRepository();
+
+        GovernmentRules rules =
+                repository.load(
+                        "/rules/government-rules-2026.json");
+
+        IrmaaBracket bracket =
+                rules.getIrmaaRules()
+                        .getBracket(
+                                FilingStatus.MARRIED_FILING_JOINTLY,
+                                new BigDecimal("300000"));
+
+        assertEquals(
+                FilingStatus.MARRIED_FILING_JOINTLY,
+                bracket.getFilingStatus());
+
+        assertEquals(
+                new BigDecimal("405.80"),
+                bracket.getMonthlyPartBPremium());
+
+        assertEquals(
+                new BigDecimal("37.50"),
+                bracket.getMonthlyPartDPremium());
+    }
 }

@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.projection;
 
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.estate.AfterTaxEstateCalculator;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.income.Pension;
@@ -64,8 +65,7 @@ public class ProjectionEngine {
     private final RothConversionBracketFillCalculator
             rothConversionBracketFillCalculator;
 
-    //private final RothConversionBracketFillStrategy
-    //        rothConversionBracketFillStrategy;
+
 
     private final RothConversionTargetBracketResolver
             rothConversionTargetBracketResolver;
@@ -405,11 +405,15 @@ public class ProjectionEngine {
                  * Get the federal tax rules for the
                  * household's filing status.
                  */
+                FilingStatus projectionFilingStatus =
+                        getProjectionFilingStatus(
+                                assumptions,
+                                projectionDate);
+
                 FederalTaxRules federalTaxRules =
                         projectedGovernmentRules
                                 .getFederalTaxRules(
-                                        getFilingStatus(
-                                                assumptions));
+                                        projectionFilingStatus);
 
                 /*
                  * Resolve the target bracket from
@@ -440,8 +444,9 @@ public class ProjectionEngine {
                                         portfolioAfterAdditionalWithdrawal,
                                         totalWithdrawalBreakdown,
                                         withdrawalStrategy,
-                                        getFilingStatus(
-                                                assumptions),
+                                        getProjectionFilingStatus(
+                                                assumptions,
+                                                projectionDate),
                                         projectedGovernmentRules,
                                         targetBracket);
             }
@@ -463,7 +468,9 @@ public class ProjectionEngine {
                         portfolioAfterAdditionalWithdrawal,
                         totalWithdrawalBreakdown,
                         withdrawalStrategy,
-                        getFilingStatus(assumptions),
+                        getProjectionFilingStatus(
+                                assumptions,
+                                projectionDate),
                         projectedGovernmentRules,
                         rothConversion);
 
@@ -486,11 +493,15 @@ public class ProjectionEngine {
                         projectionDate);
 
 
+        FilingStatus projectionFilingStatus =
+                getProjectionFilingStatus(
+                        assumptions,
+                        projectionDate);
 
         MedicarePremiumCalculation medicarePremiumCalculation =
                 medicarePremiumCalculator.calculate(
                         federalTaxCalculation,
-                        getFilingStatus(assumptions),
+                        projectionFilingStatus,
                         projectedGovernmentRules,
                         coveredIndividuals);
 
@@ -1138,6 +1149,41 @@ public class ProjectionEngine {
         return participants;
     }
 
+
+    private static FilingStatus getProjectionFilingStatus(
+            PlanningAssumptions assumptions,
+            LocalDate projectionDate) {
+
+        DeathScenarioAssumptions deathScenario =
+                assumptions
+                        .getDeathScenarioAssumptions();
+
+        /*
+         * Before the death scenario becomes active,
+         * use the filing status configured by the user.
+         */
+        if (!deathScenario.isDeathScenarioActive(
+                projectionDate.getYear())) {
+
+            return getFilingStatus(assumptions);
+        }
+
+        /*
+         * The death year retains the configured
+         * filing status.
+         */
+        if (projectionDate.getYear()
+                == deathScenario.getDeathYear()) {
+
+            return getFilingStatus(assumptions);
+        }
+
+        /*
+         * Beginning the year after death, the
+         * surviving spouse files as Single.
+         */
+        return FilingStatus.SINGLE;
+    }
 
 
 }

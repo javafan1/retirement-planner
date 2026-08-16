@@ -219,71 +219,6 @@ public class AssumptionsView extends VBox {
                 1,
                 row++);
 
-        /*
-         * =================================================
-         * Death Scenario
-         * =================================================
-         */
-
-        Label deathScenarioHeading =
-                new Label("Death Scenario");
-
-        deathScenarioHeading.setStyle(
-                "-fx-font-weight: bold;");
-
-        grid.add(
-                deathScenarioHeading,
-                0,
-                row++,
-                3,
-                1);
-
-        grid.add(
-                new Separator(),
-                0,
-                row++,
-                3,
-                1);
-
-        grid.add(
-                new Label("Death Scenario:"),
-                0,
-                row);
-
-        grid.add(
-                deathScenarioComboBox,
-                1,
-                row++);
-
-        grid.add(
-                new Label("Death Year:"),
-                0,
-                row);
-
-        grid.add(
-                deathYearField,
-                1,
-                row++);
-
-        grid.add(
-                new Label("Survivor SSC Claiming Age:"),
-                0,
-                row);
-
-        grid.add(
-                survivorClaimingAgeComboBox,
-                1,
-                row++);
-
-        grid.add(
-                new Label("Post-Death Expense Factor (%):"),
-                0,
-                row);
-
-        grid.add(
-                postDeathExpenseFactorField,
-                1,
-                row++);
 
         /*
          * =================================================
@@ -459,6 +394,73 @@ public class AssumptionsView extends VBox {
                 estimatedHeirTaxRateField,
                 1,
                 row++);
+
+        /*
+         * =================================================
+         * Death Scenario
+         * =================================================
+         */
+
+        Label deathScenarioHeading =
+                new Label("Death Scenario");
+
+        deathScenarioHeading.setStyle(
+                "-fx-font-weight: bold;");
+
+        grid.add(
+                deathScenarioHeading,
+                0,
+                row++,
+                3,
+                1);
+
+        grid.add(
+                new Separator(),
+                0,
+                row++,
+                3,
+                1);
+
+        grid.add(
+                new Label("Death Scenario:"),
+                0,
+                row);
+
+        grid.add(
+                deathScenarioComboBox,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Death Year:"),
+                0,
+                row);
+
+        grid.add(
+                deathYearField,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Survivor SSC Claiming Age:"),
+                0,
+                row);
+
+        grid.add(
+                survivorClaimingAgeComboBox,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Post-Death Expense Factor (%):"),
+                0,
+                row);
+
+        grid.add(
+                postDeathExpenseFactorField,
+                1,
+                row++);
+
 
         grid.add(
                 applyButton,
