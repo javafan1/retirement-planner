@@ -45,6 +45,8 @@ public class AssumptionsView extends VBox {
     private final ComboBox<Integer>
             survivorClaimingAgeComboBox;
 
+    private final TextField postDeathExpenseFactorField;
+
     /*
      * Economic assumptions.
      */
@@ -117,6 +119,9 @@ public class AssumptionsView extends VBox {
                          oldValue,
                          newValue) ->
                                 updateDeathScenarioFields());
+
+        postDeathExpenseFactorField =
+                new TextField("100");
 
         /*
          * Economic fields.
@@ -261,12 +266,22 @@ public class AssumptionsView extends VBox {
                 row++);
 
         grid.add(
-                new Label("Survivor Claiming Age:"),
+                new Label("Survivor SSC Claiming Age:"),
                 0,
                 row);
 
         grid.add(
                 survivorClaimingAgeComboBox,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Post-Death Expense Factor (%):"),
+                0,
+                row);
+
+        grid.add(
+                postDeathExpenseFactorField,
                 1,
                 row++);
 
@@ -513,6 +528,16 @@ public class AssumptionsView extends VBox {
                 deathScenarioAssumptions
                         .getSurvivorClaimingAge());
 
+        BigDecimal postDeathExpenseFactor =
+                deathScenarioAssumptions
+                        .getPostDeathExpenseFactor();
+
+        postDeathExpenseFactorField.setText(
+                postDeathExpenseFactor
+                        .multiply(BigDecimal.valueOf(100))
+                        .stripTrailingZeros()
+                        .toPlainString());
+
         updateDeathScenarioFields();
 
         /*
@@ -620,6 +645,11 @@ public class AssumptionsView extends VBox {
             Integer deathYear = null;
             Integer survivorClaimingAge = null;
 
+            BigDecimal postDeathExpenseFactor =
+                    parsePercent(
+                            postDeathExpenseFactorField
+                                    .getText());
+
             if (deathScenario != DeathScenario.BOTH_SURVIVE) {
 
                 String deathYearText =
@@ -653,7 +683,8 @@ public class AssumptionsView extends VBox {
                     new DeathScenarioAssumptions(
                             deathScenario,
                             deathYear,
-                            survivorClaimingAge);
+                            survivorClaimingAge,
+                            postDeathExpenseFactor);
 
             /*
              * Economic assumptions.
@@ -789,6 +820,9 @@ public class AssumptionsView extends VBox {
                 !deathScenarioActive);
 
         survivorClaimingAgeComboBox.setDisable(
+                !deathScenarioActive);
+
+        postDeathExpenseFactorField.setDisable(
                 !deathScenarioActive);
     }
 

@@ -3,13 +3,18 @@ package com.daviddunn.retirementplanner.domain.model;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.math.BigDecimal;
 import java.util.Objects;
 
 public final class DeathScenarioAssumptions {
 
+    private static final BigDecimal DEFAULT_POST_DEATH_EXPENSE_FACTOR =
+            BigDecimal.ONE;
+
     private final DeathScenario deathScenario;
     private final Integer deathYear;
     private final Integer survivorClaimingAge;
+    private final BigDecimal postDeathExpenseFactor;
 
     @JsonCreator
     public DeathScenarioAssumptions(
@@ -21,17 +26,33 @@ public final class DeathScenarioAssumptions {
             Integer deathYear,
 
             @JsonProperty("survivorClaimingAge")
-            Integer survivorClaimingAge) {
+            Integer survivorClaimingAge,
+
+            @JsonProperty("postDeathExpenseFactor")
+            BigDecimal postDeathExpenseFactor) {
 
         this.deathScenario =
                 Objects.requireNonNull(
                         deathScenario,
                         "Death scenario is required.");
 
-        this.deathYear = deathYear;
+        this.deathYear =
+                deathYear;
 
         this.survivorClaimingAge =
                 survivorClaimingAge;
+
+        /*
+         * Older saved plans will not contain
+         * postDeathExpenseFactor.
+         *
+         * Default to 100% so existing plans
+         * retain their current behavior.
+         */
+        this.postDeathExpenseFactor =
+                postDeathExpenseFactor != null
+                        ? postDeathExpenseFactor
+                        : DEFAULT_POST_DEATH_EXPENSE_FACTOR;
 
         if (deathScenario != DeathScenario.BOTH_SURVIVE
                 && deathYear == null) {
@@ -40,7 +61,8 @@ public final class DeathScenarioAssumptions {
                     "Death year is required for a death scenario.");
         }
 
-        if (deathYear != null && deathYear <= 0) {
+        if (deathYear != null
+                && deathYear <= 0) {
 
             throw new IllegalArgumentException(
                     "Death year must be greater than zero.");
@@ -62,13 +84,25 @@ public final class DeathScenarioAssumptions {
                     "Survivor claiming age must be "
                             + "between 62 and 70.");
         }
+
+        if (this.postDeathExpenseFactor.compareTo(
+                BigDecimal.ZERO) < 0
+                || this.postDeathExpenseFactor.compareTo(
+                BigDecimal.ONE) > 0) {
+
+            throw new IllegalArgumentException(
+                    "Post-death expense factor must "
+                            + "be between 0 and 1.");
+        }
     }
 
     /*
      * Compatibility constructor for existing code/tests
-     * that do not yet specify a survivor claiming age.
+     * that do not specify survivor claiming age or
+     * post-death expense factor.
      *
-     * The default is age 67.
+     * Default survivor claiming age = 67.
+     * Default post-death expense factor = 100%.
      */
     public DeathScenarioAssumptions(
             DeathScenario deathScenario,
@@ -79,7 +113,25 @@ public final class DeathScenarioAssumptions {
                 deathYear,
                 deathScenario == DeathScenario.BOTH_SURVIVE
                         ? null
-                        : 67);
+                        : 67,
+                DEFAULT_POST_DEATH_EXPENSE_FACTOR);
+    }
+
+    /*
+     * Compatibility constructor for existing code/tests
+     * that specify survivor claiming age but not the
+     * post-death expense factor.
+     */
+    public DeathScenarioAssumptions(
+            DeathScenario deathScenario,
+            Integer deathYear,
+            Integer survivorClaimingAge) {
+
+        this(
+                deathScenario,
+                deathYear,
+                survivorClaimingAge,
+                DEFAULT_POST_DEATH_EXPENSE_FACTOR);
     }
 
     public DeathScenario getDeathScenario() {
@@ -92,6 +144,10 @@ public final class DeathScenarioAssumptions {
 
     public Integer getSurvivorClaimingAge() {
         return survivorClaimingAge;
+    }
+
+    public BigDecimal getPostDeathExpenseFactor() {
+        return postDeathExpenseFactor;
     }
 
     public boolean isDeathScenarioActive(
@@ -139,6 +195,8 @@ public final class DeathScenarioAssumptions {
                 deathYear +
                 ", survivorClaimingAge=" +
                 survivorClaimingAge +
+                ", postDeathExpenseFactor=" +
+                postDeathExpenseFactor +
                 '}';
     }
 }

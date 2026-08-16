@@ -944,7 +944,6 @@ public class ProjectionEngine {
 
         return total;
     }
-
     private BigDecimal calculateProjectedExpenses(
             Household household,
             PlanningAssumptions assumptions,
@@ -954,13 +953,8 @@ public class ProjectionEngine {
         BigDecimal totalExpenses =
                 BigDecimal.ZERO;
 
-        //CompoundGrowthService compoundGrowthService = new CompoundGrowthService();
-
-        for (Expense expense : household.getExpenses()) {
-
-//            if (!expense.isActive(projectionDate)) {
-//                continue;
-//            }
+        for (Expense expense :
+                household.getExpenses()) {
 
             if (!expense.isActiveDuringYear(
                     projectionDate.getYear(),
@@ -968,7 +962,6 @@ public class ProjectionEngine {
 
                 continue;
             }
-
 
             BigDecimal projectedExpense =
                     calculateProjectedExpense(
@@ -980,13 +973,12 @@ public class ProjectionEngine {
              * Only the first projection year may
              * represent a partial calendar year.
              *
-             * For Version 1, all active expenses are
-             * prorated equally. A future enhancement
-             * will prorate each expense individually
-             * based on its own start and end dates.
+             * For Version 1, all active recurring
+             * expenses are prorated equally.
              */
-            if (yearOffset == 0 &&
-                    expense.getExpenseType() == ExpenseType.RECURRING) {
+            if (yearOffset == 0
+                    && expense.getExpenseType()
+                    == ExpenseType.RECURRING) {
 
                 int activeMonths =
                         13 -
@@ -1004,6 +996,27 @@ public class ProjectionEngine {
                                         RoundingMode.HALF_UP);
             }
 
+            /*
+             * Apply the post-death expense adjustment
+             * only to recurring expenses.
+             *
+             * One-time expenses are intentionally
+             * excluded from this adjustment.
+             */
+            if (expense.getExpenseType()
+                    == ExpenseType.RECURRING
+                    && assumptions
+                    .getDeathScenarioAssumptions()
+                    .isDeathScenarioActive(
+                            projectionDate.getYear())) {
+
+                projectedExpense =
+                        projectedExpense.multiply(
+                                assumptions
+                                        .getDeathScenarioAssumptions()
+                                        .getPostDeathExpenseFactor());
+            }
+
             totalExpenses =
                     totalExpenses.add(
                             projectedExpense);
@@ -1013,6 +1026,8 @@ public class ProjectionEngine {
                 2,
                 RoundingMode.HALF_UP);
     }
+
+
 
     private BigDecimal getExpenseGrowthRate(
             Expense expense,
