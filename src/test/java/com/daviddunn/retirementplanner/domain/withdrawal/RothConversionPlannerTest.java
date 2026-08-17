@@ -39,7 +39,7 @@ class RothConversionPlannerTest {
                 new TaxIncome(
                         new BigDecimal("150000"),
                         BigDecimal.ZERO,
-                        new BigDecimal("30000"),BigDecimal.ZERO);
+                        new BigDecimal("30000"),BigDecimal.ZERO,BigDecimal.ZERO);
 
         RothConversionPlan result =
                 planner.plan(
@@ -64,7 +64,7 @@ class RothConversionPlannerTest {
                 new TaxIncome(
                         new BigDecimal("150000"),
                         BigDecimal.ZERO,
-                        new BigDecimal("30000"),BigDecimal.ZERO);
+                        new BigDecimal("30000"),BigDecimal.ZERO,BigDecimal.ZERO);
 
         RothConversionPlan result =
                 planner.plan(
@@ -104,7 +104,7 @@ class RothConversionPlannerTest {
                 new TaxIncome(
                         new BigDecimal("150000"),
                         BigDecimal.ZERO,
-                        new BigDecimal("30000"),BigDecimal.ZERO);
+                        new BigDecimal("30000"),BigDecimal.ZERO,BigDecimal.ZERO);
 
         RothConversionPlan result =
                 planner.plan(
@@ -129,7 +129,7 @@ class RothConversionPlannerTest {
                 new TaxIncome(
                         new BigDecimal("250000"),
                         BigDecimal.ZERO,
-                        BigDecimal.ZERO,BigDecimal.ZERO);
+                        BigDecimal.ZERO,BigDecimal.ZERO,BigDecimal.ZERO);
 
         RothConversionPlan result =
                 planner.plan(
@@ -154,7 +154,7 @@ class RothConversionPlannerTest {
                 new TaxIncome(
                         new BigDecimal("150000"),
                         BigDecimal.ZERO,
-                        new BigDecimal("30000"),BigDecimal.ZERO);
+                        new BigDecimal("30000"),BigDecimal.ZERO,BigDecimal.ZERO);
 
         RothConversionPlan result =
                 planner.plan(

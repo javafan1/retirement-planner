@@ -9,12 +9,14 @@ public final class TaxIncome {
     private final BigDecimal socialSecurityIncome;
     private final BigDecimal taxDeferredWithdrawals;
     private final BigDecimal rothConversion;
+    private final BigDecimal taxableInterestIncome;
 
     public TaxIncome(
             BigDecimal pensionIncome,
             BigDecimal socialSecurityIncome,
             BigDecimal taxDeferredWithdrawals,
-            BigDecimal rothConversion) {
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome) {
 
         this.pensionIncome =
                 requireNonNegative(
@@ -35,6 +37,11 @@ public final class TaxIncome {
                 requireNonNegative(
                         rothConversion,
                         "Roth conversion");
+
+        this.taxableInterestIncome =
+                requireNonNegative(
+                        taxableInterestIncome,
+                        "Taxable interest income");
     }
 
     public BigDecimal getPensionIncome() {
@@ -49,7 +56,23 @@ public final class TaxIncome {
         return taxDeferredWithdrawals;
     }
 
+    public BigDecimal getRothConversion() {
+        return rothConversion;
+    }
+
+    public BigDecimal getTaxableInterestIncome() {
+        return taxableInterestIncome;
+    }
+
     public BigDecimal getOrdinaryIncomeBeforeSocialSecurity() {
+
+        return pensionIncome
+                .add(taxDeferredWithdrawals)
+                .add(rothConversion)
+                .add(taxableInterestIncome);
+    }
+
+    public BigDecimal getMichiganRetirementIncome() {
 
         return pensionIncome
                 .add(taxDeferredWithdrawals)
@@ -71,16 +94,4 @@ public final class TaxIncome {
 
         return amount;
     }
-
-    public BigDecimal getMichiganRetirementIncome() {
-
-        return pensionIncome
-                .add(taxDeferredWithdrawals)
-                .add(rothConversion);
-    }
-
-    public BigDecimal getRothConversion() {
-        return rothConversion;
-    }
-
 }

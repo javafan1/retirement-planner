@@ -1485,6 +1485,137 @@ class ProjectionEngineTest {
     }
 
     @Test
+    void unallocatedRmdCashEarnsInvestmentGrowth() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(
+                                1960,
+                                6,
+                                15));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(
+                                1965,
+                                2,
+                                28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        /*
+         * Annual expenses = $30,000.
+         */
+        household.addExpense(
+                new Expense(
+                        "Living Expenses",
+                        new BigDecimal("30000")));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        /*
+         * 2034 establishes the prior-year balance.
+         *
+         * 2035 is the first RMD year.
+         *
+         * 2036 allows the excess RMD accumulated
+         * in 2035 to earn investment growth.
+         */
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        new BigDecimal("0.05"),
+                        BigDecimal.ZERO,
+                        3,
+                        LocalDate.of(
+                                2034,
+                                1,
+                                1));
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        household,
+                        portfolio,
+                        assumptions);
+
+        ProjectionEngine engine =
+                new ProjectionEngine();
+
+        Projection projection =
+                engine.project(plan);
+
+        ProjectionYear secondYear =
+                projection.getYearAt(1);
+
+        ProjectionYear thirdYear =
+                projection.getYearAt(2);
+
+        /*
+         * 2035 must produce excess RMD cash.
+         */
+        BigDecimal excessRmd2035 =
+                secondYear.getExcessRmd();
+
+        assertTrue(
+                excessRmd2035.signum() > 0);
+
+        /*
+         * The 2035 excess RMD becomes the starting
+         * unallocated cash for 2036.
+         *
+         * That cash earns 5% during 2036.
+         */
+        BigDecimal expectedInterest =
+                excessRmd2035
+                        .multiply(
+                                new BigDecimal("0.05"))
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+        /*
+         * The 2036 ending TTL RMD Cash should contain:
+         *
+         * 2035 excess RMD
+         * + 2036 interest
+         * + 2036 excess RMD
+         */
+        BigDecimal expectedEndingCash =
+                excessRmd2035
+                        .add(expectedInterest)
+                        .add(
+                                thirdYear
+                                        .getExcessRmd())
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedEndingCash.compareTo(
+                        thirdYear
+                                .getUnallocatedCash()
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
+    }
+    @Test
     void projectionUsesSelectedWithdrawalStrategy() {
 
         /*
@@ -1652,8 +1783,9 @@ class ProjectionEngineTest {
 
 
         assertEquals(
-                BigDecimal.ZERO,
-                taxableFirstYear.getAdjustedGrossIncome());
+                0,
+                BigDecimal.ZERO.compareTo(
+                        taxableFirstYear.getAdjustedGrossIncome()));
 
         assertEquals(
                 new BigDecimal("30000.00"),
@@ -4169,4 +4301,5 @@ ProjectionYear
                         2,
                         LocalDate.of(2026, 1, 1));
     }
+
 }

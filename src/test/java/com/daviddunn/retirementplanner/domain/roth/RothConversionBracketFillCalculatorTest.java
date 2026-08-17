@@ -113,7 +113,8 @@ class RothConversionBracketFillCalculatorTest {
                         new TaxableFirstWithdrawalStrategy(),
                         FilingStatus.MARRIED_FILING_JOINTLY,
                         rules,
-                        targetBracket);
+                        targetBracket,
+                        BigDecimal.ZERO);
 
         /*
          * Existing taxable income:
@@ -193,7 +194,8 @@ class RothConversionBracketFillCalculatorTest {
                         new TaxDeferredFirstWithdrawalStrategy(),
                         FilingStatus.MARRIED_FILING_JOINTLY,
                         rules,
-                        targetBracket);
+                        targetBracket,
+                BigDecimal.ZERO);
 
         /*
          * The conversion must be less than the
@@ -222,7 +224,7 @@ class RothConversionBracketFillCalculatorTest {
                         new TaxDeferredFirstWithdrawalStrategy(),
                         FilingStatus.MARRIED_FILING_JOINTLY,
                         rules,
-                        conversion);
+                        conversion,BigDecimal.ZERO);
 
         BigDecimal difference =
                 targetBracket

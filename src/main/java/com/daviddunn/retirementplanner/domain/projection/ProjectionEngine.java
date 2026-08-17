@@ -267,6 +267,16 @@ public class ProjectionEngine {
                         yearOffset,
                         projectionStartDate);
 
+        BigDecimal beginningUnallocatedCash =
+                projectedPortfolio.getUnallocatedCash();
+
+        BigDecimal unallocatedCashInterest =
+                calculateInvestmentGrowth(
+                        beginningUnallocatedCash,
+                        assumptions,
+                        yearOffset,
+                        projectionStartDate);
+
         LocalDate projectionDate =
                 yearOffset == 0
                         ? projectionStartDate
@@ -326,11 +336,11 @@ public class ProjectionEngine {
                                 RoundingMode.HALF_UP);
 
 
-        BigDecimal availableTraditionalBalance =
-                plan
-                        .getAccountPortfolio()
-                        .getEligibleTraditionalBalance(
-                                AccountOwnership.PRIMARY);
+//        BigDecimal availableTraditionalBalance =
+//                plan
+//                        .getAccountPortfolio()
+//                        .getEligibleTraditionalBalance(
+//                                AccountOwnership.PRIMARY);
 
         ProjectedPortfolio portfolioAfterGrowth =
                 projectedPortfolio.withGrowth(
@@ -448,7 +458,8 @@ public class ProjectionEngine {
                                                 assumptions,
                                                 projectionDate),
                                         projectedGovernmentRules,
-                                        targetBracket);
+                                        targetBracket,
+                                        unallocatedCashInterest);
             }
         }
 
@@ -458,7 +469,7 @@ public class ProjectionEngine {
                         projectionDate,
                         totalWithdrawalBreakdown
                                 .getTaxDeferredWithdrawal(),
-                        rothConversion);
+                        rothConversion,BigDecimal.ZERO);
 
 
         TaxFundingResult taxFundingResult =
@@ -472,7 +483,8 @@ public class ProjectionEngine {
                                 assumptions,
                                 projectionDate),
                         projectedGovernmentRules,
-                        rothConversion);
+                        rothConversion,
+                        unallocatedCashInterest);
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();
@@ -516,12 +528,18 @@ public class ProjectionEngine {
          * spending need, the excess remains an
          * investable household asset.
          */
+//        ProjectedPortfolio endingPortfolio =
+//                portfolioAfterTaxWithdrawal
+//                        .withAdditionalCash(
+//                                withdrawalResult.getExcessRmd());
+
         ProjectedPortfolio endingPortfolio =
                 portfolioAfterTaxWithdrawal
                         .withAdditionalCash(
-                                withdrawalResult.getExcessRmd());
-
-
+                                unallocatedCashInterest
+                                        .add(
+                                                withdrawalResult
+                                                        .getExcessRmd()));
 
         if (rothConversion.signum() > 0) {
 
@@ -556,10 +574,11 @@ public class ProjectionEngine {
                         .add(
                                 withdrawalResult
                                         .getExcessRmd())
+                        .add(
+                                unallocatedCashInterest)
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
-
         Person primaryPerson =
                 household.getPrimaryPerson();
 

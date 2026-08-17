@@ -112,7 +112,7 @@ class TaxIncomeCalculatorTest {
                 calculator.calculate(
                         household,
                         LocalDate.of(2026, 1, 1),
-                        new BigDecimal("25000"),BigDecimal.ZERO);
+                        new BigDecimal("25000"),BigDecimal.ZERO,BigDecimal.ZERO);
 
         assertEquals(
                 0,

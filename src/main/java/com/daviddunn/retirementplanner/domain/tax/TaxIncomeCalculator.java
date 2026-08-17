@@ -16,7 +16,8 @@ public final class TaxIncomeCalculator {
             Household household,
             LocalDate projectionDate,
             BigDecimal taxDeferredWithdrawals,
-            BigDecimal rothConversion) {
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome) {
 
         Objects.requireNonNull(
                 household,
@@ -42,6 +43,15 @@ public final class TaxIncomeCalculator {
         if (rothConversion.signum() < 0) {
             throw new IllegalArgumentException(
                     "Roth conversion cannot be negative.");
+        }
+
+        Objects.requireNonNull(
+                taxableInterestIncome,
+                "Taxable interest income is required.");
+
+        if (taxableInterestIncome.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Taxable interest income cannot be negative.");
         }
 
         BigDecimal pensionIncome =
@@ -80,7 +90,8 @@ public final class TaxIncomeCalculator {
                 pensionIncome,
                 socialSecurityIncome,
                 taxDeferredWithdrawals,
-                rothConversion);
+                rothConversion,
+                taxableInterestIncome);
     }
 
     private IncomeTotals calculateIncome(

@@ -46,7 +46,8 @@ public final class RothConversionBracketFillCalculator {
             WithdrawalStrategy withdrawalStrategy,
             FilingStatus filingStatus,
             GovernmentRules projectedGovernmentRules,
-            FederalTaxBracket targetBracket) {
+            FederalTaxBracket targetBracket,
+            BigDecimal taxableInterestIncome) {
 
         Objects.requireNonNull(
                 household,
@@ -86,6 +87,15 @@ public final class RothConversionBracketFillCalculator {
                     "Target federal tax bracket has no upper bound.");
         }
 
+        Objects.requireNonNull(
+                taxableInterestIncome,
+                "Taxable interest income is required.");
+
+        if (taxableInterestIncome.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Taxable interest income cannot be negative.");
+        }
+
         /*
          * First determine taxable income with
          * no Roth conversion.
@@ -99,7 +109,8 @@ public final class RothConversionBracketFillCalculator {
                         withdrawalStrategy,
                         filingStatus,
                         projectedGovernmentRules,
-                        BigDecimal.ZERO);
+                        BigDecimal.ZERO,
+                        taxableInterestIncome);
 
         FederalTaxCalculation
                 preConversionFederalTax =
@@ -145,7 +156,7 @@ public final class RothConversionBracketFillCalculator {
                             withdrawalStrategy,
                             filingStatus,
                             projectedGovernmentRules,
-                            rothConversion);
+                            rothConversion,taxableInterestIncome);
 
             BigDecimal finalTaxableIncome =
                     taxFundingResult

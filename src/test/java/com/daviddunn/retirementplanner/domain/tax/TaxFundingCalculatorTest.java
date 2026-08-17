@@ -124,6 +124,7 @@ class TaxFundingCalculatorTest {
                         withdrawalStrategy,
                         FilingStatus.MARRIED_FILING_JOINTLY,
                         rules,
+                        BigDecimal.ZERO,
                         BigDecimal.ZERO);
 
         /*
@@ -221,7 +222,7 @@ class TaxFundingCalculatorTest {
                         existingWithdrawals,
                         withdrawalStrategy,
                         FilingStatus.MARRIED_FILING_JOINTLY,
-                        rules,BigDecimal.ZERO);
+                        rules,BigDecimal.ZERO,BigDecimal.ZERO);
 
         /*
          * Pension                       $18,000
@@ -332,7 +333,7 @@ class TaxFundingCalculatorTest {
                         withdrawalStrategy,
                         FilingStatus.MARRIED_FILING_JOINTLY,
                         rules,
-                        BigDecimal.ZERO);
+                        BigDecimal.ZERO,BigDecimal.ZERO);
 
         /*
          * Now calculate taxes with a $50,000
@@ -354,7 +355,7 @@ class TaxFundingCalculatorTest {
                         withdrawalStrategy,
                         FilingStatus.MARRIED_FILING_JOINTLY,
                         rules,
-                        new BigDecimal("50000"));
+                        new BigDecimal("50000"),BigDecimal.ZERO);
 
         assertEquals(
                 0,

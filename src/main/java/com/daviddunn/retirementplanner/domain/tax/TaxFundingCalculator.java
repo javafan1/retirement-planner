@@ -57,7 +57,8 @@ public final class TaxFundingCalculator {
             WithdrawalStrategy withdrawalStrategy,
             FilingStatus filingStatus,
             GovernmentRules projectedGovernmentRules,
-            BigDecimal rothConversion) {
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome) {
 
         Objects.requireNonNull(
                 household,
@@ -96,6 +97,15 @@ public final class TaxFundingCalculator {
                     "Roth conversion cannot be negative.");
         }
 
+        Objects.requireNonNull(
+                taxableInterestIncome,
+                "Taxable interest income is required.");
+
+        if (taxableInterestIncome.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Taxable interest income cannot be negative.");
+        }
+
         BigDecimal additionalWithdrawal =
                 BigDecimal.ZERO;
 
@@ -130,7 +140,7 @@ public final class TaxFundingCalculator {
                             projectionDate,
                             totalWithdrawals
                                     .getTaxDeferredWithdrawal(),
-                            rothConversion);
+                            rothConversion,taxableInterestIncome);
 
             FederalTaxCalculation federalTaxCalculation =
                     federalTaxCalculator.calculate(
@@ -181,7 +191,7 @@ public final class TaxFundingCalculator {
                                 projectionDate,
                                 finalTotalWithdrawals
                                         .getTaxDeferredWithdrawal(),
-                                rothConversion);
+                                rothConversion,taxableInterestIncome);
 
                 FederalTaxCalculation finalFederalTaxCalculation =
                         federalTaxCalculator.calculate(
