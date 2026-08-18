@@ -4,6 +4,7 @@ import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionSummary;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.ui.charts.PortfolioChartView;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 import com.daviddunn.retirementplanner.ui.views.RothConversionView;
@@ -26,6 +27,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
+import java.util.function.Consumer;
 
 public class MainWindow {
 
@@ -43,6 +45,7 @@ public class MainWindow {
     private final DashboardView dashboardView;
     private final PortfolioChartView portfolioChartView;
     private final RothConversionView rothConversionView;
+    private final ResultsSummaryView resultsSummaryView;
     private Stage stage;
     private final Label statusLabel;
 
@@ -57,6 +60,8 @@ public class MainWindow {
         expensesView = new ExpensesView();
         assumptionsView = new AssumptionsView();
         resultsView = new ResultsView();
+        resultsSummaryView =
+                new ResultsSummaryView();
         dashboardView = new DashboardView();
         portfolioChartView = new PortfolioChartView();
         rothConversionView =
@@ -97,6 +102,55 @@ public class MainWindow {
 
         rothConversionView.setOnPlanChanged(
                 this::refreshProjectionViews);
+
+        resultsSummaryView.setOnYearDoubleClick(
+                this::showProjectionYearSummary);
+
+        resultsSummaryView.setOnEconomicAssumptionsApply(
+                updatedAssumptions -> {
+
+                    controller
+                            .getCurrentPlan()
+                            .setPlanningAssumptions(
+                                    updatedAssumptions);
+
+                    controller.markModified();
+
+                    refreshProjectionViews();
+
+                    updateWindowTitle();
+                });
+
+        resultsSummaryView.setOnDeathScenarioApply(
+                updatedAssumptions -> {
+
+                    controller
+                            .getCurrentPlan()
+                            .setPlanningAssumptions(
+                                    updatedAssumptions);
+
+                    controller.markModified();
+
+                    refreshProjectionViews();
+
+                    updateWindowTitle();
+                });
+
+        resultsSummaryView.setOnRothConversionApply(
+                request -> {
+
+                    controller
+                            .getCurrentPlan()
+                            .setRothConversionRequest(
+                                    request);
+
+                    controller.markModified();
+
+                    refreshProjectionViews();
+
+                    updateWindowTitle();
+                });
+
     }
 
     public Scene createScene() {
@@ -140,6 +194,13 @@ public class MainWindow {
     private TabPane createTabPane() {
 
         TabPane tabPane = new TabPane();
+
+
+        tabPane.getTabs().add(
+                createTab(
+                        "Results (Summary)",
+                        resultsSummaryView));
+
 
         tabPane.getTabs().add(
                 createTab("Results", resultsView));
@@ -207,12 +268,14 @@ public class MainWindow {
 
         RetirementPlan plan = controller.getCurrentPlan();
 
+
         householdView.load(plan);
         accountsView.load(plan);
         incomeSourcesView.load(plan);
         expensesView.load(plan);
         assumptionsView.load(plan);
         rothConversionView.load(plan);
+
         updateWindowTitle();
 
         refreshProjectionViews();
@@ -339,6 +402,7 @@ public class MainWindow {
         dialog.show();
     }
 
+
     private void refreshProjectionViews() {
 
         controller.invalidateProjection();
@@ -354,6 +418,10 @@ public class MainWindow {
             portfolioChartView.load(projection);
             projectionYearView.load(projection);
             resultsView.load(projection);
+
+            resultsSummaryView.load(
+                    controller.getCurrentPlan(),
+                    projection);
 
             statusLabel.setText("Projection updated.");
         }

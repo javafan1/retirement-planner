@@ -1,0 +1,323 @@
+/* =========================================================
+   Results Summary
+   ========================================================= */
+
+.results-summary {
+    -fx-background-color: #F7F9FC;
+    -fx-font-family: "Segoe UI";
+}
+
+
+/* ---------- Main title ---------- */
+
+.results-title {
+    -fx-text-fill: #111B3A;
+    -fx-font-size: 28px;
+    -fx-font-weight: 700;
+}
+
+.results-subtitle {
+    -fx-text-fill: #526079;
+    -fx-font-size: 14px;
+}
+
+
+/* ---------- Top action buttons ---------- */
+
+.results-action-button {
+    -fx-background-color: white;
+    -fx-border-color: #D7DFEB;
+    -fx-border-radius: 7px;
+    -fx-background-radius: 7px;
+    -fx-text-fill: #17213D;
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-padding: 9px 16px;
+}
+
+.results-action-button:hover {
+    -fx-background-color: #F3F7FF;
+    -fx-border-color: #2B6DE0;
+}
+
+
+/* ---------- Metric cards ---------- */
+
+.metric-card {
+    -fx-background-color: white;
+    -fx-border-color: #DCE3ED;
+    -fx-border-radius: 9px;
+    -fx-background-radius: 9px;
+    -fx-padding: 15px;
+}
+
+.metric-title {
+    -fx-text-fill: #17213D;
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+}
+
+.metric-value {
+    -fx-font-size: 25px;
+    -fx-font-weight: 700;
+}
+
+.metric-detail {
+    -fx-text-fill: #536079;
+    -fx-font-size: 13px;
+}
+
+.metric-blue {
+    -fx-text-fill: #1565D8;
+}
+
+.metric-green {
+    -fx-text-fill: #168B50;
+}
+
+.metric-purple {
+    -fx-text-fill: #5B3FD0;
+}
+
+.metric-orange {
+    -fx-text-fill: #E45B17;
+}
+
+
+/* ---------- Metric icons ---------- */
+
+.metric-icon {
+    -fx-min-width: 52px;
+    -fx-min-height: 52px;
+    -fx-max-width: 52px;
+    -fx-max-height: 52px;
+
+    -fx-alignment: center;
+
+    -fx-background-radius: 50%;
+    -fx-font-size: 25px;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+.metric-icon-blue {
+    -fx-background-color: #2169DC;
+}
+
+.metric-icon-green {
+    -fx-background-color: #178B51;
+}
+
+.metric-icon-purple {
+    -fx-background-color: #6544D4;
+}
+
+.metric-icon-orange {
+    -fx-background-color: #E45B17;
+}
+
+
+/* ---------- Section cards ---------- */
+
+.summary-section {
+    -fx-background-color: white;
+    -fx-border-color: #DCE3ED;
+    -fx-border-radius: 9px;
+    -fx-background-radius: 9px;
+}
+
+.section-title {
+    -fx-text-fill: #111B3A;
+    -fx-font-size: 17px;
+    -fx-font-weight: 700;
+}
+
+.section-subtitle {
+    -fx-text-fill: #59657B;
+    -fx-font-size: 12px;
+}
+
+
+/* ---------- Projection table ---------- */
+
+.projection-table {
+    -fx-background-color: white;
+    -fx-border-color: #DCE3ED;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+}
+
+.projection-table .column-header-background {
+    -fx-background-color: #F3F6FA;
+}
+
+.projection-table .column-header {
+    -fx-background-color: #F3F6FA;
+    -fx-border-color: #DCE3ED;
+}
+
+.projection-table .column-header .label {
+    -fx-text-fill: #17213D;
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+}
+
+.projection-table .table-row-cell {
+    -fx-background-color: white;
+    -fx-border-color: transparent transparent #EDF1F6 transparent;
+}
+
+.projection-table .table-row-cell:hover {
+    -fx-background-color: #F5F8FE;
+}
+
+.projection-table .table-row-cell:selected {
+    -fx-background-color: #E8F0FF;
+}
+
+.projection-table .table-cell {
+    -fx-text-fill: #17213D;
+    -fx-font-size: 12px;
+    -fx-padding: 7px 8px;
+}
+
+
+/* ---------- Assumption sidebar ---------- */
+
+.assumptions-title {
+    -fx-text-fill: #111B3A;
+    -fx-font-size: 17px;
+    -fx-font-weight: 700;
+}
+
+.assumption-card {
+    -fx-background-color: white;
+    -fx-border-color: #DCE3ED;
+    -fx-border-radius: 9px;
+    -fx-background-radius: 9px;
+    -fx-padding: 15px;
+}
+
+.assumption-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: 700;
+}
+
+.assumption-title-blue {
+    -fx-text-fill: #1565D8;
+}
+
+.assumption-title-green {
+    -fx-text-fill: #168B50;
+}
+
+.assumption-title-purple {
+    -fx-text-fill: #5B3FD0;
+}
+
+
+/* ---------- Assumption controls ---------- */
+
+.assumption-label {
+    -fx-text-fill: #17213D;
+    -fx-font-size: 13px;
+}
+
+.assumption-field {
+    -fx-background-color: white;
+    -fx-border-color: #CCD6E4;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 7px 9px;
+    -fx-font-size: 13px;
+}
+
+.assumption-field:focused {
+    -fx-border-color: #286CE0;
+    -fx-border-width: 1.5px;
+}
+
+
+/* ---------- Apply buttons ---------- */
+
+.apply-button {
+    -fx-background-radius: 6px;
+    -fx-border-radius: 6px;
+    -fx-text-fill: white;
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
+    -fx-padding: 9px 12px;
+}
+
+.apply-economic {
+    -fx-background-color: #2169DC;
+}
+
+.apply-economic:hover {
+    -fx-background-color: #185BC4;
+}
+
+.apply-roth {
+    -fx-background-color: #168B50;
+}
+
+.apply-roth:hover {
+    -fx-background-color: #117340;
+}
+
+.apply-death {
+    -fx-background-color: #6041D2;
+}
+
+.apply-death:hover {
+    -fx-background-color: #5034B9;
+}
+
+
+/* ---------- Charts ---------- */
+
+.chart-card {
+    -fx-background-color: white;
+    -fx-border-color: #DCE3ED;
+    -fx-border-radius: 9px;
+    -fx-background-radius: 9px;
+    -fx-padding: 10px;
+}
+
+.chart-title {
+    -fx-text-fill: #111B3A;
+    -fx-font-size: 16px;
+    -fx-font-weight: 700;
+}
+
+.chart {
+    -fx-background-color: white;
+}
+
+.chart-plot-background {
+    -fx-background-color: white;
+}
+
+.axis {
+    -fx-tick-label-fill: #526079;
+}
+
+.axis-label {
+    -fx-text-fill: #526079;
+}
+
+.metric-icon {
+    -fx-min-width: 52px;
+    -fx-min-height: 52px;
+    -fx-max-width: 52px;
+    -fx-max-height: 52px;
+
+    -fx-background-radius: 50%;
+
+    -fx-alignment: center;
+}
+
+.metric-icon .ikonli-font-icon {
+    -fx-icon-size: 25px;
+    -fx-icon-color: white;
+}
