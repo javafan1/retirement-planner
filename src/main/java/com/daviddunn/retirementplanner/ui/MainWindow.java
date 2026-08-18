@@ -86,22 +86,22 @@ public class MainWindow {
     private void wireEvents() {
 
         expensesView.setOnPlanChanged(
-                this::refreshProjectionViews);
+                this::onPlanChanged);
 
         incomeSourcesView.setOnPlanChanged(
-                this::refreshProjectionViews);
+                this::onPlanChanged);
 
         accountsView.setOnPlanChanged(
-                this::refreshProjectionViews);
+                this::onPlanChanged);
 
         assumptionsView.setOnPlanChanged(
-                this::refreshProjectionViews);
+                this::onPlanChanged);
 
         resultsView.setOnYearDoubleClick(
                 this::showProjectionYearSummary);
 
         rothConversionView.setOnPlanChanged(
-                this::refreshProjectionViews);
+                this::onPlanChanged);
 
         resultsSummaryView.setOnYearDoubleClick(
                 this::showProjectionYearSummary);
@@ -116,9 +116,10 @@ public class MainWindow {
 
                     controller.markModified();
 
-                    refreshProjectionViews();
+                    //refreshAllViews();
+                    onPlanChanged();
 
-                    updateWindowTitle();
+                    //updateWindowTitle();
                 });
 
         resultsSummaryView.setOnDeathScenarioApply(
@@ -131,9 +132,10 @@ public class MainWindow {
 
                     controller.markModified();
 
-                    refreshProjectionViews();
 
-                    updateWindowTitle();
+                    refreshAllViews();
+
+                    //updateWindowTitle();
                 });
 
         resultsSummaryView.setOnRothConversionApply(
@@ -146,9 +148,9 @@ public class MainWindow {
 
                     controller.markModified();
 
-                    refreshProjectionViews();
+                    refreshAllViews();
 
-                    updateWindowTitle();
+                    //updateWindowTitle();
                 });
 
     }
@@ -278,7 +280,7 @@ public class MainWindow {
 
         updateWindowTitle();
 
-        refreshProjectionViews();
+        refreshAllViews();
 
         statusLabel.setText("Ready");
     }
@@ -298,7 +300,6 @@ public class MainWindow {
 
     private void onSave() {
 
-
         if (!controller.hasCurrentFile()) {
             onSaveAs();
             return;
@@ -307,10 +308,19 @@ public class MainWindow {
         saveCurrentPlan();
 
         try {
+
             controller.save();
-            statusLabel.setText("Plan saved.");
+
+            updateWindowTitle();
+
+            statusLabel.setText(
+                    "Plan saved.");
+
         } catch (Exception ex) {
-            statusLabel.setText("Save failed.");
+
+            statusLabel.setText(
+                    "Save failed.");
+
             ex.printStackTrace();
         }
     }
@@ -418,6 +428,8 @@ public class MainWindow {
             portfolioChartView.load(projection);
             projectionYearView.load(projection);
             resultsView.load(projection);
+            assumptionsView.load(
+                    controller.getCurrentPlan());
 
             resultsSummaryView.load(
                     controller.getCurrentPlan(),
@@ -494,5 +506,30 @@ public class MainWindow {
         statusLabel.setText("New plan.");
     }
 
+    private void refreshAllViews() {
+
+        RetirementPlan plan =
+                controller.getCurrentPlan();
+
+        householdView.load(plan);
+        accountsView.load(plan);
+        incomeSourcesView.load(plan);
+        expensesView.load(plan);
+        assumptionsView.load(plan);
+        rothConversionView.load(plan);
+
+        refreshProjectionViews();
+
+        updateWindowTitle();
+    }
+
+    private void onPlanChanged() {
+
+        controller.markModified();
+
+        refreshProjectionViews();
+
+        updateWindowTitle();
+    }
 
 }

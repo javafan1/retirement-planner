@@ -321,3 +321,19 @@
     -fx-icon-size: 25px;
     -fx-icon-color: white;
 }
+.sidebar-section-icon {
+    -fx-icon-size: 18px;
+}
+
+.sidebar-section-icon.assumption-title-blue {
+    -fx-icon-color: #1565D8;
+}
+
+.sidebar-section-icon.assumption-title-green {
+    -fx-icon-color: #168B50;
+}
+
+.sidebar-section-icon.assumption-title-purple {
+    -fx-icon-color: #5B3FD0;
+}
+

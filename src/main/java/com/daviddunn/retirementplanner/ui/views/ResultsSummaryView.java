@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.views;
 
+import com.daviddunn.retirementplanner.app.export.ProjectionPdfExporter;
 import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
@@ -13,6 +14,7 @@ import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
+import com.daviddunn.retirementplanner.app.export.ProjectionCsvExporter;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -34,11 +36,19 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.util.StringConverter;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
 
 public class ResultsSummaryView extends BorderPane {
 
@@ -135,6 +145,14 @@ public class ResultsSummaryView extends BorderPane {
 
     private Consumer<ProjectionYear>
             yearDoubleClickHandler;
+
+    private final ProjectionCsvExporter projectionCsvExporter =
+            new ProjectionCsvExporter();
+
+    private final ProjectionPdfExporter projectionPdfExporter =
+            new ProjectionPdfExporter();
+
+    private Projection currentProjection;
 
     public ResultsSummaryView() {
 
@@ -650,17 +668,15 @@ public class ResultsSummaryView extends BorderPane {
                 });
 
         Button exportButton =
-                new Button(
-                        "Export");
+                new Button("Export");
 
         exportButton.getStyleClass().add(
                 "results-action-button");
 
-        /*
-         * Export remains disabled until the
-         * export functionality is implemented.
-         */
-        exportButton.setDisable(true);
+        exportButton.setDisable(false);
+
+        exportButton.setOnAction(
+                event -> showExportDialog());
 
         HBox actions =
                 new HBox(
@@ -936,6 +952,7 @@ public class ResultsSummaryView extends BorderPane {
         Label heading =
                 createPanelHeading(
                         "ECONOMIC ASSUMPTIONS",
+                        FontAwesomeSolid.CHART_LINE,
                         "assumption-title-blue");
 
         GridPane grid =
@@ -994,6 +1011,7 @@ public class ResultsSummaryView extends BorderPane {
         Label heading =
                 createPanelHeading(
                         "ROTH CONVERSION",
+                        FontAwesomeSolid.PERCENT,
                         "assumption-title-green");
 
         GridPane grid =
@@ -1135,7 +1153,9 @@ public class ResultsSummaryView extends BorderPane {
         Label heading =
                 createPanelHeading(
                         "DEATH SCENARIO",
+                        FontAwesomeSolid.USERS,
                         "assumption-title-purple");
+
 
         GridPane grid =
                 createTwoColumnGrid();
@@ -1259,18 +1279,30 @@ public class ResultsSummaryView extends BorderPane {
 
     private Label createPanelHeading(
             String text,
+            FontAwesomeSolid iconCode,
             String colorClass) {
+
+        FontIcon icon =
+                new FontIcon(iconCode);
+
+        icon.getStyleClass().add(
+                "sidebar-section-icon");
+
+        icon.getStyleClass().add(
+                colorClass);
 
         Label label =
                 new Label(text);
 
-        label.getStyleClass().addAll(
-                "assumption-title",
-                colorClass);
+        label.setGraphic(icon);
+
+        label.setGraphicTextGap(8);
+
+        label.getStyleClass().add(
+                "assumption-title");
 
         return label;
     }
-
 
     private VBox createChartCard(
             javafx.scene.Node chart) {
@@ -1419,8 +1451,13 @@ public class ResultsSummaryView extends BorderPane {
             Projection projection) {
 
         currentPlan = plan;
+        currentProjection = projection;
 
         loadAssumptions(plan);
+
+        loadRothConversion(plan);
+
+
 
         if (projection == null
                 || projection.getYears().isEmpty()) {
@@ -1999,5 +2036,294 @@ public class ResultsSummaryView extends BorderPane {
 
         this.yearDoubleClickHandler =
                 handler;
+    }
+
+    private void exportProjectionCsv() {
+
+        if (currentProjection == null
+                || currentProjection.isEmpty()) {
+
+            showError(
+                    "There is no projection available to export.");
+
+            return;
+        }
+
+        FileChooser fileChooser =
+                new FileChooser();
+
+        fileChooser.setTitle(
+                "Export Retirement Projection");
+
+        fileChooser.setInitialFileName(
+                "RetirementProjection.csv");
+
+        FileChooser.ExtensionFilter csvFilter =
+                new FileChooser.ExtensionFilter(
+                        "CSV Files (*.csv)",
+                        "*.csv");
+
+        fileChooser.getExtensionFilters().add(
+                csvFilter);
+
+        Window window =
+                getScene() == null
+                        ? null
+                        : getScene().getWindow();
+
+        File selectedFile =
+                fileChooser.showSaveDialog(window);
+
+        if (selectedFile == null) {
+            return;
+        }
+
+        Path file =
+                selectedFile.toPath();
+
+        /*
+         * Make sure the user gets the expected
+         * .csv extension.
+         */
+        if (!file
+                .getFileName()
+                .toString()
+                .toLowerCase()
+                .endsWith(".csv")) {
+
+            file =
+                    file.resolveSibling(
+                            file.getFileName()
+                                    .toString()
+                                    + ".csv");
+        }
+
+        try {
+
+            projectionCsvExporter.export(
+                    currentProjection,
+                    file);
+
+            showInformation(
+                    "Projection exported successfully.",
+                    file.toString());
+
+        } catch (IOException ex) {
+
+            ex.printStackTrace();
+
+            showError(
+                    "The projection could not be exported.");
+        }
+    }
+
+    private void showInformation(
+            String message,
+            String details) {
+
+        Alert alert =
+                new Alert(
+                        Alert.AlertType.INFORMATION);
+
+        alert.setTitle(
+                "Export Complete");
+
+        alert.setHeaderText(
+                message);
+
+        alert.setContentText(
+                details);
+
+        alert.showAndWait();
+    }
+
+    private void showExportDialog() {
+
+        Alert alert =
+                new Alert(Alert.AlertType.NONE);
+
+        alert.setTitle(
+                "Export Projection");
+
+        alert.setHeaderText(
+                "Choose Export Format");
+
+        alert.setContentText(
+                "Select the format for your retirement projection.");
+
+        ButtonType csvButton =
+                new ButtonType("CSV");
+
+        ButtonType pdfButton =
+                new ButtonType("PDF");
+
+        ButtonType cancelButton =
+                new ButtonType(
+                        "Cancel",
+                        ButtonBar.ButtonData.CANCEL_CLOSE);
+
+        alert.getButtonTypes().setAll(
+                csvButton,
+                pdfButton,
+                cancelButton);
+
+        Optional<ButtonType> result =
+                alert.showAndWait();
+
+        if (result.isEmpty()) {
+            return;
+        }
+
+        if (result.get() == csvButton) {
+
+            exportProjectionCsv();
+
+        } else if (result.get() == pdfButton) {
+
+            exportProjectionPdf();
+        }
+    }
+
+    private void exportProjectionPdf() {
+
+        if (currentProjection == null
+                || currentProjection.isEmpty()) {
+
+            showError(
+                    "There is no projection available to export.");
+
+            return;
+        }
+
+        FileChooser fileChooser =
+                new FileChooser();
+
+        fileChooser.setTitle(
+                "Export Retirement Projection");
+
+        fileChooser.setInitialFileName(
+                "RetirementProjection.pdf");
+
+        fileChooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter(
+                        "PDF Files (*.pdf)",
+                        "*.pdf"));
+
+        Window window =
+                getScene() == null
+                        ? null
+                        : getScene().getWindow();
+
+        File selectedFile =
+                fileChooser.showSaveDialog(window);
+
+        if (selectedFile == null) {
+            return;
+        }
+
+        Path file =
+                selectedFile.toPath();
+
+        if (!file
+                .getFileName()
+                .toString()
+                .toLowerCase()
+                .endsWith(".pdf")) {
+
+            file =
+                    file.resolveSibling(
+                            file.getFileName()
+                                    .toString()
+                                    + ".pdf");
+        }
+
+        try {
+
+            projectionPdfExporter.export(
+                    currentPlan,
+                    currentProjection,
+                    file);
+
+            showInformation(
+                    "Projection exported successfully.",
+                    file.toString());
+
+        } catch (IOException ex) {
+
+            ex.printStackTrace();
+
+            showError(
+                    "The projection could not be exported.");
+        }
+    }
+
+    private void loadRothConversion(
+            RetirementPlan plan) {
+
+        RothConversionRequest request =
+                plan.getRothConversionRequest();
+
+        if (request == null) {
+
+            rothEnabledCheckBox.setSelected(false);
+
+            rothStrategyComboBox
+                    .getSelectionModel()
+                    .select(
+                            RothConversionStrategy.FIXED_AMOUNT);
+
+            rothStartYearField.clear();
+            rothAmountField.clear();
+
+            rothFrequencyComboBox
+                    .getSelectionModel()
+                    .select(
+                            RothConversionFrequency.ONE_TIME);
+
+            rothStopRuleComboBox
+                    .getSelectionModel()
+                    .select(
+                            RothConversionStopRule.FIRST_HOUSEHOLD_RMD);
+
+            updateRothControls();
+
+            return;
+        }
+
+        rothEnabledCheckBox.setSelected(
+                request.isEnabled());
+
+        rothStrategyComboBox
+                .getSelectionModel()
+                .select(
+                        request.getStrategy());
+
+        rothStartYearField.setText(
+                Integer.toString(
+                        request.getStartYear()));
+
+        rothAmountField.setText(
+                request.getAnnualAmount()
+                        .toPlainString());
+
+        rothFrequencyComboBox
+                .getSelectionModel()
+                .select(
+                        request.getFrequency());
+
+        if (request.getStopRule() != null) {
+
+            rothStopRuleComboBox
+                    .getSelectionModel()
+                    .select(
+                            request.getStopRule());
+        } else {
+
+            rothStopRuleComboBox
+                    .getSelectionModel()
+                    .clearSelection();
+        }
+
+        updateRothControls();
     }
 }
