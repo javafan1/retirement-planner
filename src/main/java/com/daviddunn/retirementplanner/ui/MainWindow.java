@@ -197,6 +197,8 @@ public class MainWindow {
 
                     controller.markModified();
 
+                    refreshProjectionViews();
+
                     updateWindowTitle();
 
                     statusLabel.setText(
@@ -498,7 +500,8 @@ public class MainWindow {
 
             resultsSummaryView.load(
                     controller.getCurrentPlan(),
-                    projection);
+                    projection,
+                    controller.getCurrentNonInvestableAssetProjections());
 
             statusLabel.setText("Projection updated.");
         }

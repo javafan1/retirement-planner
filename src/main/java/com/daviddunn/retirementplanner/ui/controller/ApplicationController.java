@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.projection.statistics.ProjectionStatisticsService;
 import com.daviddunn.retirementplanner.domain.projection.summary.IncomeSummaryService;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionSummary;
@@ -15,7 +16,10 @@ import com.daviddunn.retirementplanner.persistence.RetirementPlanRepository;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 
+import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjection;
+import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjectionService;
 public class ApplicationController {
 
     private RetirementPlan currentPlan;
@@ -33,6 +37,9 @@ public class ApplicationController {
     private final ApplicationSettings
             applicationSettings;
 
+    private final NonInvestableAssetProjectionService
+            nonInvestableAssetProjectionService;
+
     public ApplicationController() {
 
         projectionEngine =
@@ -42,6 +49,9 @@ public class ApplicationController {
                 new ProjectionSummaryService(
                         new ProjectionStatisticsService(),
                         new IncomeSummaryService());
+
+        nonInvestableAssetProjectionService =
+                new NonInvestableAssetProjectionService();
 
         repository =
                 new JsonRetirementPlanRepository();
@@ -53,6 +63,43 @@ public class ApplicationController {
                 applicationSettingsRepository.load();
 
         newPlan();
+    }
+
+    public List<NonInvestableAssetProjection>
+    getCurrentNonInvestableAssetProjections() {
+
+        RetirementPlan plan =
+                getCurrentPlan();
+
+        Projection projection =
+                getCurrentProjection();
+
+        if (plan == null
+                || projection == null) {
+
+            return List.of();
+        }
+
+        List<ProjectionYear> years =
+                projection.getYears();
+
+        if (years.isEmpty()) {
+            return List.of();
+        }
+
+        int firstYear =
+                years.get(0)
+                        .getCalendarYear();
+
+        int lastYear =
+                years.get(years.size() - 1)
+                        .getCalendarYear();
+
+        return nonInvestableAssetProjectionService
+                .project(
+                        plan.getNonInvestableAssets(),
+                        firstYear,
+                        lastYear);
     }
 
     public RetirementPlan getCurrentPlan() {
