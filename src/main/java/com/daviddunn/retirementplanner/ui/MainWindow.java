@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.ui;
 
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
+import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
@@ -29,6 +31,7 @@ import javafx.stage.Stage;
 import java.io.File;
 import java.util.function.Consumer;
 
+
 public class MainWindow {
 
     private final ApplicationController controller;
@@ -46,6 +49,8 @@ public class MainWindow {
     private final PortfolioChartView portfolioChartView;
     private final RothConversionView rothConversionView;
     private final ResultsSummaryView resultsSummaryView;
+    private final NonInvestableAssetsView nonInvestableAssetsView;
+
     private Stage stage;
     private final Label statusLabel;
 
@@ -66,6 +71,8 @@ public class MainWindow {
         portfolioChartView = new PortfolioChartView();
         rothConversionView =
                 new RothConversionView();
+        nonInvestableAssetsView =
+                new NonInvestableAssetsView();
 
         statusLabel = new Label("Ready");
 
@@ -153,6 +160,49 @@ public class MainWindow {
                     //updateWindowTitle();
                 });
 
+        resultsSummaryView.setOnSocialSecurityApply(
+                updates -> {
+
+                    for (ResultsSummaryView.SocialSecurityUpdate update :
+                            updates) {
+
+                        Person person =
+                                update.getPerson();
+
+                        SocialSecurityIncome oldSource =
+                                person.getIncomeSources()
+                                        .stream()
+                                        .filter(
+                                                SocialSecurityIncome.class::isInstance)
+                                        .map(
+                                                SocialSecurityIncome.class::cast)
+                                        .findFirst()
+                                        .orElse(null);
+
+                        if (oldSource != null) {
+
+                            person.replaceIncomeSource(
+                                    oldSource,
+                                    update.getSource());
+                        }
+                    }
+
+                    controller.markModified();
+
+                    refreshAllViews();
+                });
+
+        nonInvestableAssetsView.setOnAssetsChanged(
+                () -> {
+
+                    controller.markModified();
+
+                    updateWindowTitle();
+
+                    statusLabel.setText(
+                            "Non-investable assets updated.");
+                });
+
     }
 
     public Scene createScene() {
@@ -200,23 +250,34 @@ public class MainWindow {
 
         tabPane.getTabs().add(
                 createTab(
-                        "Results (Summary)",
+                        "Summary",
                         resultsSummaryView));
 
 
         tabPane.getTabs().add(
-                createTab("Results", resultsView));
+                createTab("Yearly Detail", resultsView));
+
+       // tabPane.getTabs().add(
+       //         createTab("Dashboard", dashboardView));
+
+
 
         tabPane.getTabs().add(
-                createTab("Dashboard", dashboardView));
-
-
-        tabPane.getTabs().add(
-                createTab("Portfolio Chart",
+                createTab("Charts",
                         portfolioChartView));
 
+
         tabPane.getTabs().add(
-                createTab("Household", householdView));
+                createTab("Assumptions", assumptionsView));
+
+
+        tabPane.getTabs().add(
+                createTab(
+                        "Roth Conversion",
+                        rothConversionView));
+
+
+
 
         tabPane.getTabs().add(
                 createTab("Accounts", accountsView));
@@ -224,19 +285,22 @@ public class MainWindow {
         tabPane.getTabs().add(
                 createTab("Income", incomeSourcesView));
 
+
         tabPane.getTabs().add(
                 createTab("Expenses", expensesView));
 
-        tabPane.getTabs().add(
-                createTab("Assumptions", assumptionsView));
 
-        //tabPane.getTabs().add(
-        //        createTab("Projection", projectionYearView));
+        tabPane.getTabs().add(
+                createTab("Household", householdView));
 
         tabPane.getTabs().add(
                 createTab(
-                        "Roth Conversion",
-                        rothConversionView));
+                        "Non-Investable Assets",
+                        nonInvestableAssetsView));
+
+
+        //tabPane.getTabs().add(
+        //        createTab("Projection", projectionYearView));
 
 
 
@@ -277,6 +341,7 @@ public class MainWindow {
         expensesView.load(plan);
         assumptionsView.load(plan);
         rothConversionView.load(plan);
+        nonInvestableAssetsView.load(plan);
 
         updateWindowTitle();
 
@@ -453,16 +518,6 @@ public class MainWindow {
         updateWindowTitle();
     }
 
-//    private void updateWindowTitle() {
-//
-//        if (stage == null) {
-//            return;
-//        }
-//
-//        stage.setTitle(
-//                "Retirement Planner - "
-//                        + controller.getCurrentPlanDisplayName());
-//    }
 
     private void updateWindowTitle() {
 

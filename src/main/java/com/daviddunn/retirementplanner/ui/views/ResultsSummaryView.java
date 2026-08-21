@@ -15,8 +15,13 @@ import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
 import com.daviddunn.retirementplanner.app.export.ProjectionCsvExporter;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitCalculator;
+import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 
+import javafx.geometry.Side;
+import javafx.util.converter.NumberStringConverter;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 
@@ -39,6 +44,8 @@ import javafx.util.StringConverter;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -67,6 +74,9 @@ public class ResultsSummaryView extends BorderPane {
     private final Button applyDeathButton =
             new Button("Apply Death Scenario");
 
+    private final Button applySocialSecurityButton =
+            new Button("Apply Social Security");
+
     private final CheckBox rothEnabledCheckBox =
             new CheckBox();
 
@@ -87,6 +97,13 @@ public class ResultsSummaryView extends BorderPane {
     private final ComboBox<RothConversionStrategy>
             rothStrategyComboBox =
             new ComboBox<>();
+
+    private final VBox socialSecurityContainer =
+            new VBox(8);
+
+    private final List<SocialSecurityRow>
+            socialSecurityRows =
+            new ArrayList<>();
 
     private final ComboBox<String> deathScenarioComboBox =
             new ComboBox<>();
@@ -142,6 +159,9 @@ public class ResultsSummaryView extends BorderPane {
 
     private Consumer<RothConversionRequest>
             rothConversionHandler;
+
+    private Consumer<List<SocialSecurityUpdate>>
+            socialSecurityHandler;
 
     private Consumer<ProjectionYear>
             yearDoubleClickHandler;
@@ -235,6 +255,13 @@ public class ResultsSummaryView extends BorderPane {
         compositionChart.getStyleClass().add(
                 "results-chart");
 
+        compositionChart.setLegendVisible(true);
+        compositionChart.setLegendSide(Side.RIGHT);
+        //compositionChart.setLegend(legend);
+
+        compositionChart.setPrefHeight(190);
+        compositionChart.setMinHeight(170);
+
         projectionTable.setPlaceholder(
                 new Label(
                         "No projection available."));
@@ -242,9 +269,9 @@ public class ResultsSummaryView extends BorderPane {
         projectionTable.getStyleClass().add(
                 "projection-table");
 
-        projectionTable.setPrefHeight(280);
-        projectionTable.setMinHeight(240);
-        projectionTable.setMaxHeight(320);
+        projectionTable.setPrefHeight(430);
+        projectionTable.setMinHeight(350);
+        projectionTable.setMaxHeight(500);
 
         /*
          * Preserve the existing double-click behavior.
@@ -279,6 +306,9 @@ public class ResultsSummaryView extends BorderPane {
         applyDeathButton.setOnAction(
                 event -> applyDeathScenario());
 
+        applySocialSecurityButton.setOnAction(
+                event -> applySocialSecurity());
+
         /*
          * Apply button styling.
          *
@@ -296,22 +326,32 @@ public class ResultsSummaryView extends BorderPane {
                 "apply-button",
                 "apply-death");
 
+        applySocialSecurityButton.getStyleClass().add(
+                "apply-button");
+
         setTop(
                 createHeader());
 
         setCenter(
                 createMainContent());
 
+        VBox assumptionsPanel =
+                createAssumptionPanel();
+
         setRight(
-                createAssumptionPanel());
+                assumptionsPanel);
 
         BorderPane.setMargin(
-                getRight(),
+                assumptionsPanel,
                 new Insets(
                         0,
                         0,
                         0,
                         12));
+
+        BorderPane.setAlignment(
+                assumptionsPanel,
+                Pos.TOP_LEFT);
     }
 
 
@@ -627,8 +667,8 @@ public class ResultsSummaryView extends BorderPane {
         rothAmountField.setDisable(
                 !enabled || !fixedAmount);
 
-        applyRothButton.setDisable(
-                !enabled);
+        //applyRothButton.setDisable(
+       //         !enabled);
     }
 
 
@@ -709,11 +749,10 @@ public class ResultsSummaryView extends BorderPane {
         return header;
     }
 
-
     private VBox createMainContent() {
 
         VBox content =
-                new VBox(12);
+                new VBox(10);
 
         content.getChildren().add(
                 createMetricCards());
@@ -726,7 +765,7 @@ public class ResultsSummaryView extends BorderPane {
 
         HBox charts =
                 new HBox(
-                        12,
+                        10,
                         createChartCard(assetChart),
                         createChartCard(compositionChart));
 
@@ -741,12 +780,9 @@ public class ResultsSummaryView extends BorderPane {
         content.getChildren().add(
                 charts);
 
-        VBox.setVgrow(
-                projectionSection,
-                Priority.NEVER);
-
         return content;
     }
+
 
     private HBox createMetricCards() {
 
@@ -857,7 +893,6 @@ public class ResultsSummaryView extends BorderPane {
         return box;
     }
 
-
     private VBox createProjectionSection() {
 
         Label title =
@@ -883,9 +918,6 @@ public class ResultsSummaryView extends BorderPane {
         heading.setAlignment(
                 Pos.CENTER_LEFT);
 
-        /*
-         * The TableView owns the vertical scrollbar.
-         */
         VBox section =
                 new VBox(
                         8,
@@ -898,12 +930,21 @@ public class ResultsSummaryView extends BorderPane {
         section.setPadding(
                 new Insets(12));
 
+        VBox.setVgrow(
+                projectionTable,
+                Priority.ALWAYS);
+
         return section;
     }
 
-
     private VBox createAssumptionPanel() {
 
+        /*
+         * Fixed outer panel.
+         *
+         * The KEY ASSUMPTIONS heading remains visible while
+         * the assumption cards below it scroll vertically.
+         */
         VBox panel =
                 new VBox(12);
 
@@ -917,16 +958,16 @@ public class ResultsSummaryView extends BorderPane {
         heading.getStyleClass().add(
                 "assumptions-title");
 
-        panel.getChildren().add(
-                heading);
+        /*
+         * Container holding everything that should scroll.
+         */
+        VBox assumptionContent =
+                new VBox(12);
 
-        panel.getChildren().add(
-                createEconomicPanel());
-
-        panel.getChildren().add(
-                createRothPanel());
-
-        panel.getChildren().add(
+        assumptionContent.getChildren().addAll(
+                createEconomicPanel(),
+                createRothPanel(),
+                createSocialSecurityPanel(),
                 createDeathPanel());
 
         Label note =
@@ -940,12 +981,45 @@ public class ResultsSummaryView extends BorderPane {
         note.getStyleClass().add(
                 "assumption-note");
 
-        panel.getChildren().add(
+        assumptionContent.getChildren().add(
                 note);
+
+        /*
+         * Scrollable assumptions area.
+         */
+        ScrollPane scrollPane =
+                new ScrollPane(
+                        assumptionContent);
+
+        scrollPane.setFitToWidth(true);
+
+        scrollPane.setHbarPolicy(
+                ScrollPane.ScrollBarPolicy.NEVER);
+
+        scrollPane.setVbarPolicy(
+                ScrollPane.ScrollBarPolicy.AS_NEEDED);
+
+        scrollPane.setPannable(true);
+
+        /*
+         * Don't let the ScrollPane impose its own preferred
+         * height. The right-hand panel should consume the
+         * available height supplied by the BorderPane.
+         */
+        VBox.setVgrow(
+                scrollPane,
+                Priority.ALWAYS);
+
+        panel.getChildren().addAll(
+                heading,
+                scrollPane);
+
+        VBox.setVgrow(
+                scrollPane,
+                Priority.ALWAYS);
 
         return panel;
     }
-
 
     private VBox createEconomicPanel() {
 
@@ -1103,21 +1177,21 @@ public class ResultsSummaryView extends BorderPane {
                 1,
                 4);
 
-        Label stopRuleLabel =
-                new Label("Stop Rule");
+//        Label stopRuleLabel =
+//                new Label("Stop Rule");
+//
+//        stopRuleLabel.getStyleClass().add(
+//                "assumption-label");
 
-        stopRuleLabel.getStyleClass().add(
-                "assumption-label");
-
-        grid.add(
-                stopRuleLabel,
-                0,
-                5);
-
-        grid.add(
-                rothStopRuleComboBox,
-                1,
-                5);
+//        grid.add(
+//                stopRuleLabel,
+//                0,
+//                5);
+//
+//        grid.add(
+//                rothStopRuleComboBox,
+//                1,
+//                5);
 
         rothStrategyComboBox.setMaxWidth(
                 Double.MAX_VALUE);
@@ -1146,6 +1220,7 @@ public class ResultsSummaryView extends BorderPane {
                 applyRothButton,
                 "assumption-card");
     }
+
 
 
     private VBox createDeathPanel() {
@@ -1303,7 +1378,6 @@ public class ResultsSummaryView extends BorderPane {
 
         return label;
     }
-
     private VBox createChartCard(
             javafx.scene.Node chart) {
 
@@ -1314,7 +1388,11 @@ public class ResultsSummaryView extends BorderPane {
                 "chart-card");
 
         box.setPadding(
-                new Insets(10));
+                new Insets(8));
+
+        box.setPrefHeight(210);
+        box.setMinHeight(180);
+        box.setMaxHeight(240);
 
         VBox.setVgrow(
                 chart,
@@ -1338,7 +1416,7 @@ public class ResultsSummaryView extends BorderPane {
 
         TableColumn<ProjectionYear, Integer>
                 ageColumn =
-                new TableColumn<>("Age");
+                new TableColumn<>("Primary Age");
 
         ageColumn.setCellValueFactory(
                 data ->
@@ -1363,9 +1441,22 @@ public class ResultsSummaryView extends BorderPane {
         TableColumn<ProjectionYear, BigDecimal>
                 netCashFlowColumn =
                 moneyColumn(
-                        "Net Cash Flow",
-                        ProjectionYear::
-                                getNetCashFlow);
+                        "Income",
+                        ProjectionYear::getGuaranteedIncome);
+
+
+        TableColumn<ProjectionYear, BigDecimal>
+                rothConvColumn =
+                moneyColumn(
+                        "Roth Conv",
+                        ProjectionYear::getRothConversion);
+
+        TableColumn<ProjectionYear, BigDecimal>
+                RMDColumn =
+                moneyColumn(
+                        "RMD",
+                        ProjectionYear::getRequiredMinimumDistribution);
+
 
         TableColumn<ProjectionYear, BigDecimal>
                 endingAssetsColumn =
@@ -1375,11 +1466,18 @@ public class ResultsSummaryView extends BorderPane {
                                 getEndingInvestableAssets);
 
         TableColumn<ProjectionYear, BigDecimal>
-                federalTaxColumn =
+                combinedTaxColumn =
                 moneyColumn(
-                        "Federal Tax",
+                        "Taxes",
                         ProjectionYear::
-                                getFederalIncomeTax);
+                                getTotalIncomeTax);
+
+        TableColumn<ProjectionYear, BigDecimal>
+                effectiveTaxRateColumn =
+                moneyColumn(
+                        "Eff. Tax Rate",
+                        ProjectionYear::
+                                getCombinedEffectiveTaxRate);
 
         TableColumn<ProjectionYear, BigDecimal>
                 estateColumn =
@@ -1394,8 +1492,11 @@ public class ResultsSummaryView extends BorderPane {
                 beginningAssetsColumn,
                 netCashFlowColumn,
                 growthColumn,
+                combinedTaxColumn,
+                effectiveTaxRateColumn,
+                rothConvColumn,
+                RMDColumn,
                 endingAssetsColumn,
-                federalTaxColumn,
                 estateColumn);
 
         projectionTable.setColumnResizePolicy(
@@ -1457,6 +1558,7 @@ public class ResultsSummaryView extends BorderPane {
 
         loadRothConversion(plan);
 
+        loadSocialSecurity(plan);
 
 
         if (projection == null
@@ -1657,11 +1759,15 @@ public class ResultsSummaryView extends BorderPane {
         assetXAxis.setLowerBound(firstYear);
         assetXAxis.setUpperBound(lastYear);
         assetXAxis.setTickUnit(5);
+        assetXAxis.setTickLabelFormatter(
+                createYearAxisFormatter());
 
         compositionXAxis.setAutoRanging(false);
         compositionXAxis.setLowerBound(firstYear);
         compositionXAxis.setUpperBound(lastYear);
         compositionXAxis.setTickUnit(5);
+        compositionXAxis.setTickLabelFormatter(
+                createYearAxisFormatter());
 
         XYChart.Series<Number, Number>
                 assetSeries =
@@ -1743,6 +1849,30 @@ public class ResultsSummaryView extends BorderPane {
                 taxableSeries,
                 rothSeries,
                 taxDeferredSeries);
+    }
+
+    private StringConverter<Number> createYearAxisFormatter() {
+
+        return new StringConverter<Number>() {
+
+            @Override
+            public String toString(Number value) {
+
+                if (value == null) {
+                    return "";
+                }
+
+                return String.valueOf(
+                        value.intValue());
+            }
+
+            @Override
+            public Number fromString(String string) {
+
+                return Integer.parseInt(
+                        string);
+            }
+        };
     }
 
 
@@ -2030,6 +2160,13 @@ public class ResultsSummaryView extends BorderPane {
                         .trim());
     }
 
+
+    public void setOnSocialSecurityApply(
+            Consumer<List<SocialSecurityUpdate>> handler) {
+
+        this.socialSecurityHandler =
+                handler;
+    }
 
     public void setOnYearDoubleClick(
             Consumer<ProjectionYear> handler) {
@@ -2326,4 +2463,312 @@ public class ResultsSummaryView extends BorderPane {
 
         updateRothControls();
     }
+
+    private VBox createSocialSecurityPanel() {
+
+        Label heading =
+                createPanelHeading(
+                        "SOCIAL SECURITY",
+                        FontAwesomeSolid.USER_CLOCK,
+                        "assumption-title-blue");
+
+        socialSecurityContainer
+                .getStyleClass()
+                .add("social-security-content");
+
+        VBox box =
+                new VBox(
+                        10,
+                        heading,
+                        socialSecurityContainer,
+                        applySocialSecurityButton);
+
+        box.getStyleClass().add(
+                "assumption-card");
+
+        applySocialSecurityButton.setMaxWidth(
+                Double.MAX_VALUE);
+
+        applySocialSecurityButton.getStyleClass().add(
+                "social-security-apply-button");
+
+        return box;
+    }
+
+    private void loadSocialSecurity(
+            RetirementPlan plan) {
+
+        socialSecurityContainer
+                .getChildren()
+                .clear();
+
+        socialSecurityRows.clear();
+
+        if (plan == null) {
+            return;
+        }
+
+        addSocialSecuritySource(
+                plan.getHousehold()
+                        .getPrimaryPerson());
+
+        if (plan.getHousehold().getSpouse() != null) {
+
+            addSocialSecuritySource(
+                    plan.getHousehold()
+                            .getSpouse());
+        }
+    }
+
+    private void addSocialSecuritySource(
+            Person person) {
+
+        if (person == null) {
+            return;
+        }
+
+        person.getIncomeSources()
+                .stream()
+                .filter(SocialSecurityIncome.class::isInstance)
+                .map(SocialSecurityIncome.class::cast)
+                .findFirst()
+                .ifPresent(
+                        socialSecurity ->
+                                createSocialSecurityRow(
+                                        person,
+                                        socialSecurity));
+    }
+
+    private static final class SocialSecurityRow {
+
+        private final Person person;
+        private final SocialSecurityIncome source;
+        private final ComboBox<Integer> claimingAgeCombo;
+        private final Label benefitLabel;
+
+        private SocialSecurityRow(
+                Person person,
+                SocialSecurityIncome source,
+                ComboBox<Integer> claimingAgeCombo,
+                Label benefitLabel) {
+
+            this.person = person;
+            this.source = source;
+            this.claimingAgeCombo = claimingAgeCombo;
+            this.benefitLabel = benefitLabel;
+        }
+    }
+
+    public static final class SocialSecurityUpdate {
+
+        private final Person person;
+        private final SocialSecurityIncome source;
+
+        public SocialSecurityUpdate(
+                Person person,
+                SocialSecurityIncome source) {
+
+            this.person = person;
+            this.source = source;
+        }
+
+        public Person getPerson() {
+            return person;
+        }
+
+        public SocialSecurityIncome getSource() {
+            return source;
+        }
+    }
+
+    private void createSocialSecurityRow(
+            Person person,
+            SocialSecurityIncome socialSecurity) {
+        Label personLabel =
+                new Label(
+                        person.getFirstName()
+                                + " — Claiming Age");
+
+        personLabel.getStyleClass().add(
+                "assumption-person-label");
+
+        ComboBox<Integer> ageCombo =
+                new ComboBox<>();
+
+        ageCombo.getItems().addAll(
+                62,
+                63,
+                64,
+                65,
+                66,
+                67,
+                68,
+                69,
+                70);
+
+
+
+
+
+        ageCombo.setPrefWidth(70);
+        ageCombo.setMaxWidth(70);
+
+        ageCombo.setValue(
+                socialSecurity.getClaimingAge());
+
+        Label benefitLabel =
+                new Label();
+
+        benefitLabel.getStyleClass().add(
+                "assumption-value");
+
+        updateSocialSecurityPreview(
+                person,
+                socialSecurity,
+                ageCombo,
+                benefitLabel);
+
+        ageCombo.valueProperty()
+                .addListener(
+                        (observable,
+                         oldValue,
+                         newValue) -> {
+
+                            if (newValue == null) {
+                                return;
+                            }
+
+                            updateSocialSecurityPreview(
+                                    person,
+                                    socialSecurity,
+                                    ageCombo,
+                                    benefitLabel);
+                        });
+
+        GridPane grid =
+                createTwoColumnGrid();
+
+        grid.add(
+                personLabel,
+                0,
+                0);
+
+        grid.add(
+                ageCombo,
+                1,
+                0);
+
+        Label benefitLabelTitle =
+                new Label("Monthly Benefit");
+
+        benefitLabelTitle.getStyleClass().add(
+                "assumption-label");
+
+        grid.add(
+                benefitLabelTitle,
+                0,
+                1);
+
+        grid.add(
+                benefitLabel,
+                1,
+                1);
+
+        socialSecurityContainer
+                .getChildren()
+                .add(grid);
+
+        socialSecurityRows.add(
+                new SocialSecurityRow(
+                        person,
+                        socialSecurity,
+                        ageCombo,
+                        benefitLabel));
+
+    }
+
+    private void updateSocialSecurityPreview(
+            Person person,
+            SocialSecurityIncome socialSecurity,
+            ComboBox<Integer> ageCombo,
+            Label benefitLabel) {
+
+        Integer claimingAge =
+                ageCombo.getValue();
+
+        if (claimingAge == null) {
+            benefitLabel.setText("-");
+            return;
+        }
+
+        BigDecimal monthlyBenefit =
+                SocialSecurityBenefitCalculator
+                        .calculateMonthlyBenefit(
+                                socialSecurity
+                                        .getFullRetirementMonthlyBenefit(),
+                                person.getBirthDate(),
+                                claimingAge);
+
+        benefitLabel.setText(
+                UIFormatters.money(monthlyBenefit));
+    }
+
+    private void applySocialSecurity() {
+
+        if (currentPlan == null ||
+                socialSecurityHandler == null) {
+
+            return;
+        }
+
+        try {
+
+            List<SocialSecurityUpdate> updatedSources =
+                    new ArrayList<>();
+
+            for (SocialSecurityRow row :
+                    socialSecurityRows) {
+
+                Integer claimingAge =
+                        row.claimingAgeCombo.getValue();
+
+                if (claimingAge == null) {
+                    continue;
+                }
+
+                SocialSecurityIncome current =
+                        row.source;
+
+                LocalDate newStartDate =
+                        row.person.getBirthDate()
+                                .plusYears(claimingAge);
+
+                SocialSecurityIncome updated =
+                        new SocialSecurityIncome(
+                                current.getName(),
+                                current.getOwnership(),
+                                newStartDate,
+                                current.getEndDate(),
+                                current.getFullRetirementMonthlyBenefit(),
+                                claimingAge,
+                                current.getAnnualColaRate());
+
+                updatedSources.add(
+                        new SocialSecurityUpdate(
+                                row.person,
+                                updated));
+            }
+
+            socialSecurityHandler.accept(
+                    updatedSources);
+
+        } catch (Exception ex) {
+
+            ex.printStackTrace();
+
+            showError(
+                    "Unable to apply Social Security changes.");
+        }
+    }
+
 }

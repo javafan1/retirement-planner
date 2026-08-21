@@ -5,13 +5,16 @@ import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountSnapsho
 import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
+
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
@@ -23,99 +26,75 @@ public class ProjectionYearDetailsPane extends BorderPane {
             ProjectionYear year) {
 
         VBox content =
-                new VBox();
+                new VBox(15);
 
-        content.setSpacing(15);
         content.setPadding(
                 new Insets(15));
 
         content.getChildren().add(
                 createTitle(year));
 
-        GridPane grid =
-                createGrid();
+        /*
+         * Two-column layout.
+         *
+         * Left:
+         *   Portfolio
+         *   Federal Income Tax
+         *   Michigan Income Tax
+         *   Estimated Estate Value
+         *
+         * Right:
+         *   Income & Withdrawals
+         *   Expenses
+         *   Medicare
+         *   Totals
+         */
+        HBox columns =
+                new HBox(
+                        30);
 
-        int row = 0;
+        VBox leftColumn =
+                new VBox(
+                        15,
+                        createPortfolioSection(year),
+                        createFederalTaxSection(year),
+                        createMichiganTaxSection(year),
+                        createEstateSection(year));
 
-        // ----------------------------------------------------
-        // Portfolio
-        // ----------------------------------------------------
+        VBox rightColumn =
+                new VBox(
+                        15,
+                        createIncomeSection(year),
+                        createExpenseSection(year),
+                        createMedicareSection(year),
+                        createTotalsSection(year));
 
-        row = addPortfolioSection(
-                grid,
-                row,
-                year);
+        HBox.setHgrow(
+                leftColumn,
+                Priority.ALWAYS);
 
-        // ----------------------------------------------------
-        // Income & Withdrawals
-        // ----------------------------------------------------
+        HBox.setHgrow(
+                rightColumn,
+                Priority.ALWAYS);
 
-        row = addIncomeSection(
-                grid,
-                row,
-                year);
+        leftColumn.setMaxWidth(
+                Double.MAX_VALUE);
 
-        // ----------------------------------------------------
-        // Expenses
-        // ----------------------------------------------------
+        rightColumn.setMaxWidth(
+                Double.MAX_VALUE);
 
-        row = addExpenseSection(
-                grid,
-                row,
-                year);
+        columns.getChildren().addAll(
+                leftColumn,
+                rightColumn);
 
-        // ----------------------------------------------------
-        // Federal Taxes
-        // ----------------------------------------------------
-
-        row = addFederalTaxSection(
-                grid,
-                row,
-                year);
-
-        // ----------------------------------------------------
-        // Michigan Taxes
-        // ----------------------------------------------------
-
-        row = addMichiganTaxSection(
-                grid,
-                row,
-                year);
-
-        // ----------------------------------------------------
-        // Medicare
-        // ----------------------------------------------------
-
-        row = addMedicareSection(
-                grid,
-                row,
-                year);
-
-        // ----------------------------------------------------
-        // Totals
-        // ----------------------------------------------------
-
-        row = addTotalsSection(
-                grid,
-                row,
-                year);
-
-        // ----------------------------------------------------
-        // Estimated Estate Value
-        // ----------------------------------------------------
-
-        addEstateSection(
-                grid,
-                row,
-                year);
-
-        content.getChildren().add(grid);
+        content.getChildren().add(
+                columns);
 
         ScrollPane scrollPane =
                 new ScrollPane(content);
 
         scrollPane.setFitToWidth(true);
-        scrollPane.setFitToHeight(false);
+        scrollPane.setFitToHeight(true);
 
         scrollPane.setHbarPolicy(
                 ScrollPane.ScrollBarPolicy.NEVER);
@@ -126,15 +105,18 @@ public class ProjectionYearDetailsPane extends BorderPane {
         setCenter(scrollPane);
     }
 
-    private int addPortfolioSection(
-            GridPane grid,
-            int row,
+
+    // ============================================================
+    // Portfolio
+    // ============================================================
+
+    private VBox createPortfolioSection(
             ProjectionYear year) {
 
-        row = addSectionHeading(
-                grid,
-                row,
-                "Portfolio");
+        GridPane grid =
+                createSectionGrid();
+
+        int row = 0;
 
         row = addMoneyRow(
                 grid,
@@ -186,24 +168,29 @@ public class ProjectionYearDetailsPane extends BorderPane {
                         year,
                         TaxTreatment.CASH));
 
-        row = addMoneyRow(
+        addMoneyRow(
                 grid,
                 row,
                 "Ending Assets",
                 year.getEndingInvestableAssets());
 
-        return addBlankRow(row);
+        return createSection(
+                "Portfolio",
+                grid);
     }
 
-    private int addIncomeSection(
-            GridPane grid,
-            int row,
+
+    // ============================================================
+    // Income & Withdrawals
+    // ============================================================
+
+    private VBox createIncomeSection(
             ProjectionYear year) {
 
-        row = addSectionHeading(
-                grid,
-                row,
-                "Income & Withdrawals");
+        GridPane grid =
+                createSectionGrid();
+
+        int row = 0;
 
         row = addMoneyRow(
                 grid,
@@ -235,24 +222,29 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 "Required Minimum Distribution",
                 year.getRequiredMinimumDistribution());
 
-        row = addMoneyRow(
+        addMoneyRow(
                 grid,
                 row,
                 "Excess RMD",
                 year.getExcessRmd());
 
-        return addBlankRow(row);
+        return createSection(
+                "Income & Withdrawals",
+                grid);
     }
 
-    private int addExpenseSection(
-            GridPane grid,
-            int row,
+
+    // ============================================================
+    // Expenses
+    // ============================================================
+
+    private VBox createExpenseSection(
             ProjectionYear year) {
 
-        row = addSectionHeading(
-                grid,
-                row,
-                "Expenses");
+        GridPane grid =
+                createSectionGrid();
+
+        int row = 0;
 
         row = addMoneyRow(
                 grid,
@@ -260,24 +252,29 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 "Annual Expenses",
                 year.getAnnualExpenses());
 
-        row = addMoneyRow(
+        addMoneyRow(
                 grid,
                 row,
                 "Cash Flow Need",
                 year.getCashFlowNeed());
 
-        return addBlankRow(row);
+        return createSection(
+                "Expenses",
+                grid);
     }
 
-    private int addFederalTaxSection(
-            GridPane grid,
-            int row,
+
+    // ============================================================
+    // Federal Tax
+    // ============================================================
+
+    private VBox createFederalTaxSection(
             ProjectionYear year) {
 
-        row = addSectionHeading(
-                grid,
-                row,
-                "Federal Income Tax");
+        GridPane grid =
+                createSectionGrid();
+
+        int row = 0;
 
         row = addMoneyRow(
                 grid,
@@ -303,24 +300,29 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 "Standard Deduction",
                 year.getFederalStandardDeduction());
 
-        row = addMoneyRow(
+        addMoneyRow(
                 grid,
                 row,
                 "Federal Income Tax",
                 year.getFederalIncomeTax());
 
-        return addBlankRow(row);
+        return createSection(
+                "Federal Income Tax",
+                grid);
     }
 
-    private int addMichiganTaxSection(
-            GridPane grid,
-            int row,
+
+    // ============================================================
+    // Michigan Tax
+    // ============================================================
+
+    private VBox createMichiganTaxSection(
             ProjectionYear year) {
 
-        row = addSectionHeading(
-                grid,
-                row,
-                "Michigan Income Tax");
+        GridPane grid =
+                createSectionGrid();
+
+        int row = 0;
 
         row = addMoneyRow(
                 grid,
@@ -340,24 +342,29 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 "Michigan Taxable Income",
                 year.getMichiganTaxableIncome());
 
-        row = addMoneyRow(
+        addMoneyRow(
                 grid,
                 row,
                 "Michigan Income Tax",
                 year.getMichiganIncomeTax());
 
-        return addBlankRow(row);
+        return createSection(
+                "Michigan Income Tax",
+                grid);
     }
 
-    private int addMedicareSection(
-            GridPane grid,
-            int row,
+
+    // ============================================================
+    // Medicare
+    // ============================================================
+
+    private VBox createMedicareSection(
             ProjectionYear year) {
 
-        row = addSectionHeading(
-                grid,
-                row,
-                "Medicare");
+        GridPane grid =
+                createSectionGrid();
+
+        int row = 0;
 
         row = addMoneyRow(
                 grid,
@@ -395,24 +402,29 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 "Annual Part D Premium",
                 year.getAnnualPartDPremium());
 
-        row = addMoneyRow(
+        addMoneyRow(
                 grid,
                 row,
                 "Total Annual Medicare Premium",
                 year.getAnnualMedicarePremium());
 
-        return addBlankRow(row);
+        return createSection(
+                "Medicare",
+                grid);
     }
 
-    private int addTotalsSection(
-            GridPane grid,
-            int row,
+
+    // ============================================================
+    // Totals
+    // ============================================================
+
+    private VBox createTotalsSection(
             ProjectionYear year) {
 
-        row = addSectionHeading(
-                grid,
-                row,
-                "Totals");
+        GridPane grid =
+                createSectionGrid();
+
+        int row = 0;
 
         row = addMoneyRow(
                 grid,
@@ -420,24 +432,29 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 "Total Income Tax",
                 year.getTotalIncomeTax());
 
-        row = addPercentageRow(
+        addPercentageRow(
                 grid,
                 row,
                 "Combined Effective Tax Rate",
                 year.getCombinedEffectiveTaxRate());
 
-        return addBlankRow(row);
+        return createSection(
+                "Totals",
+                grid);
     }
 
-    private int addEstateSection(
-            GridPane grid,
-            int row,
+
+    // ============================================================
+    // Estate
+    // ============================================================
+
+    private VBox createEstateSection(
             ProjectionYear year) {
 
-        row = addSectionHeading(
-                grid,
-                row,
-                "Estimated Estate Value");
+        GridPane grid =
+                createSectionGrid();
+
+        int row = 0;
 
         row = addMoneyRow(
                 grid,
@@ -451,45 +468,53 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 "Estimated Heir Tax",
                 year.getEstimatedHeirTax());
 
-        row = addMoneyRow(
+        addMoneyRow(
                 grid,
                 row,
                 "Projected After-Tax Estate",
                 year.getAfterTaxEstateValue());
 
-        return addBlankRow(row);
+        return createSection(
+                "Estimated Estate Value",
+                grid);
     }
 
-    private int addBlankRow(
-            int row) {
 
-        return row + 1;
+    // ============================================================
+    // Section / Grid Helpers
+    // ============================================================
+
+    private VBox createSection(
+            String heading,
+            GridPane grid) {
+
+        Label headingLabel =
+                new Label(heading);
+
+        headingLabel.setStyle(
+                "-fx-font-size:14px; " +
+                        "-fx-font-weight:bold;");
+
+        VBox section =
+                new VBox(
+                        6,
+                        headingLabel,
+                        grid);
+
+        section.setMaxWidth(
+                Double.MAX_VALUE);
+
+        return section;
     }
 
-    private Label createTitle(
-            ProjectionYear year) {
 
-        Label label =
-                new Label(
-                        "Projection Summary - "
-                                + year.getCalendarYear()
-                                + " (Age "
-                                + year.getPrimaryPersonAge()
-                                + ")");
-
-        label.setStyle(
-                "-fx-font-size:18px; -fx-font-weight:bold;");
-
-        return label;
-    }
-
-    private GridPane createGrid() {
+    private GridPane createSectionGrid() {
 
         GridPane grid =
                 new GridPane();
 
-        grid.setHgap(20);
-        grid.setVgap(8);
+        grid.setHgap(15);
+        grid.setVgap(6);
 
         ColumnConstraints labelColumn =
                 new ColumnConstraints();
@@ -497,7 +522,7 @@ public class ProjectionYearDetailsPane extends BorderPane {
         ColumnConstraints valueColumn =
                 new ColumnConstraints();
 
-        valueColumn.setHgrow(
+        labelColumn.setHgrow(
                 Priority.ALWAYS);
 
         valueColumn.setHalignment(
@@ -510,26 +535,10 @@ public class ProjectionYearDetailsPane extends BorderPane {
         return grid;
     }
 
-    private int addSectionHeading(
-            GridPane grid,
-            int row,
-            String heading) {
 
-        Label label =
-                new Label(heading);
-
-        label.setStyle(
-                "-fx-font-size:14px; -fx-font-weight:bold;");
-
-        grid.add(
-                label,
-                0,
-                row,
-                2,
-                1);
-
-        return row + 1;
-    }
+    // ============================================================
+    // Row Helpers
+    // ============================================================
 
     private int addMoneyRow(
             GridPane grid,
@@ -558,6 +567,7 @@ public class ProjectionYearDetailsPane extends BorderPane {
         return row + 1;
     }
 
+
     private int addPercentageRow(
             GridPane grid,
             int row,
@@ -585,6 +595,7 @@ public class ProjectionYearDetailsPane extends BorderPane {
         return row + 1;
     }
 
+
     private int addTextRow(
             GridPane grid,
             int row,
@@ -611,6 +622,34 @@ public class ProjectionYearDetailsPane extends BorderPane {
         return row + 1;
     }
 
+
+    // ============================================================
+    // Title
+    // ============================================================
+
+    private Label createTitle(
+            ProjectionYear year) {
+
+        Label label =
+                new Label(
+                        "Projection Summary - "
+                                + year.getCalendarYear()
+                                + " (Age "
+                                + year.getPrimaryPersonAge()
+                                + ")");
+
+        label.setStyle(
+                "-fx-font-size:18px; " +
+                        "-fx-font-weight:bold;");
+
+        return label;
+    }
+
+
+    // ============================================================
+    // Account Balance Helpers
+    // ============================================================
+
     private BigDecimal getEndingBalanceByAssetType(
             ProjectionYear year,
             ProjectionAssetType assetType) {
@@ -622,11 +661,14 @@ public class ProjectionYearDetailsPane extends BorderPane {
                         snapshot.getAccount()
                                 .getProjectionAssetType()
                                 == assetType)
-                .map(ProjectedAccountSnapshot::getEndingBalance)
+                .map(
+                        ProjectedAccountSnapshot
+                                ::getEndingBalance)
                 .reduce(
                         BigDecimal.ZERO,
                         BigDecimal::add);
     }
+
 
     private BigDecimal getEndingBalanceByTaxTreatment(
             ProjectionYear year,
@@ -640,7 +682,9 @@ public class ProjectionYearDetailsPane extends BorderPane {
                                 .getAccount()
                                 .getTaxTreatment()
                                 == taxTreatment)
-                .map(ProjectedAccountSnapshot::getEndingBalance)
+                .map(
+                        ProjectedAccountSnapshot
+                                ::getEndingBalance)
                 .reduce(
                         BigDecimal.ZERO,
                         BigDecimal::add);

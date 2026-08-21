@@ -12,6 +12,7 @@ import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAsset;
 
 class JsonRetirementPlanRepositoryTest {
 
@@ -127,7 +128,90 @@ class JsonRetirementPlanRepositoryTest {
                         .getWithdrawalStrategyType());
     }
 
+    @Test
+    void preservesNonInvestableAssetsWhenPlanIsSavedAndLoaded()
+            throws Exception {
 
+        RetirementPlan plan =
+                RetirementPlanFactory.createEmptyPlan();
+
+        plan.addNonInvestableAsset(
+                new NonInvestableAsset(
+                        "Primary Residence",
+                        new BigDecimal("800000"),
+                        new BigDecimal("0.03")));
+
+        plan.addNonInvestableAsset(
+                new NonInvestableAsset(
+                        "Comic Collection",
+                        new BigDecimal("100000"),
+                        new BigDecimal("0.04")));
+
+        JsonRetirementPlanRepository repository =
+                new JsonRetirementPlanRepository();
+
+        Path file =
+                tempDirectory.resolve(
+                        "non-investable-assets.json");
+
+        /*
+         * Save the plan.
+         */
+        repository.save(
+                plan,
+                file);
+
+        /*
+         * Load a completely new plan object
+         * from the JSON file.
+         */
+        RetirementPlan loadedPlan =
+                repository.load(
+                        file);
+
+        assertNotNull(
+                loadedPlan.getNonInvestableAssets());
+
+        assertEquals(
+                2,
+                loadedPlan
+                        .getNonInvestableAssets()
+                        .size());
+
+        var home =
+                loadedPlan
+                        .getNonInvestableAssets()
+                        .get(0);
+
+        assertEquals(
+                "Primary Residence",
+                home.getName());
+
+        assertEquals(
+                new BigDecimal("800000"),
+                home.getCurrentValue());
+
+        assertEquals(
+                new BigDecimal("0.03"),
+                home.getAnnualGrowthRate());
+
+        var comics =
+                loadedPlan
+                        .getNonInvestableAssets()
+                        .get(1);
+
+        assertEquals(
+                "Comic Collection",
+                comics.getName());
+
+        assertEquals(
+                new BigDecimal("100000"),
+                comics.getCurrentValue());
+
+        assertEquals(
+                new BigDecimal("0.04"),
+                comics.getAnnualGrowthRate());
+    }
 
 
 }

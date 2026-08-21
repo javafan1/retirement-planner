@@ -4,7 +4,11 @@ import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAsset;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 public class RetirementPlan {
@@ -16,6 +20,9 @@ public class RetirementPlan {
 
     private RothConversionRequest rothConversionRequest;
 
+    private final List<NonInvestableAsset>
+            nonInvestableAssets =
+            new ArrayList<>();
     @JsonCreator
     public RetirementPlan(
             @JsonProperty("household")
@@ -28,7 +35,10 @@ public class RetirementPlan {
             PlanningAssumptions planningAssumptions,
 
             @JsonProperty("rothConversionRequest")
-            RothConversionRequest rothConversionRequest) {
+            RothConversionRequest rothConversionRequest,
+
+            @JsonProperty("nonInvestableAssets")
+            List<NonInvestableAsset> nonInvestableAssets) {
 
         this.household =
                 Objects.requireNonNull(
@@ -45,6 +55,11 @@ public class RetirementPlan {
 
         this.rothConversionRequest =
                 rothConversionRequest;
+
+        if (nonInvestableAssets != null) {
+            this.nonInvestableAssets.addAll(
+                    nonInvestableAssets);
+        }
     }
 
     /*
@@ -62,6 +77,21 @@ public class RetirementPlan {
                 household,
                 accountPortfolio,
                 planningAssumptions,
+                null,
+                null);
+    }
+
+    public RetirementPlan(
+            Household household,
+            AccountPortfolio accountPortfolio,
+            PlanningAssumptions planningAssumptions,
+            RothConversionRequest rothConversionRequest) {
+
+        this(
+                household,
+                accountPortfolio,
+                planningAssumptions,
+                rothConversionRequest,
                 null);
     }
 
@@ -95,4 +125,54 @@ public class RetirementPlan {
         this.rothConversionRequest =
                 rothConversionRequest;
     }
+    public List<NonInvestableAsset>
+    getNonInvestableAssets() {
+
+        return Collections.unmodifiableList(
+                nonInvestableAssets);
+    }
+
+    public void addNonInvestableAsset(
+            NonInvestableAsset asset) {
+
+        nonInvestableAssets.add(
+                Objects.requireNonNull(asset));
+    }
+
+    public void removeNonInvestableAsset(
+            NonInvestableAsset asset) {
+
+        nonInvestableAssets.remove(
+                Objects.requireNonNull(asset));
+    }
+
+    public void replaceNonInvestableAsset(
+            NonInvestableAsset oldAsset,
+            NonInvestableAsset newAsset) {
+
+        Objects.requireNonNull(oldAsset);
+        Objects.requireNonNull(newAsset);
+
+        int index =
+                nonInvestableAssets.indexOf(
+                        oldAsset);
+
+        if (index >= 0) {
+            nonInvestableAssets.set(
+                    index,
+                    newAsset);
+        }
+    }
+
+    public void setNonInvestableAssets(
+            List<NonInvestableAsset> assets) {
+
+        nonInvestableAssets.clear();
+
+        if (assets != null) {
+            nonInvestableAssets.addAll(
+                    assets);
+        }
+    }
+
 }
