@@ -15,6 +15,7 @@ import com.daviddunn.retirementplanner.persistence.JsonRetirementPlanRepository;
 import com.daviddunn.retirementplanner.persistence.RetirementPlanRepository;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -137,6 +138,21 @@ public class ApplicationController {
         return currentProjectionSummary;
     }
 
+
+    public BigDecimal getNonInvestableAssetValue(
+            int calendarYear) {
+
+        List<NonInvestableAssetProjection> projections =
+                getCurrentNonInvestableAssetProjections();
+
+        return projections.stream()
+                .filter(projection ->
+                        projection.getCalendarYear()
+                                == calendarYear)
+                .findFirst()
+                .map(NonInvestableAssetProjection::getTotalValue)
+                .orElse(BigDecimal.ZERO);
+    }
 
 
     public void invalidateProjection() {

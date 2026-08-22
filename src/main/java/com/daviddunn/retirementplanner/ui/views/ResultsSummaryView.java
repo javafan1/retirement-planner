@@ -20,6 +20,7 @@ import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitCalculator;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
+import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 
 import javafx.geometry.Side;
 import javafx.util.converter.NumberStringConverter;
@@ -115,8 +116,10 @@ public class ResultsSummaryView extends BorderPane {
     private final ComboBox<Integer> survivorAgeComboBox =
             new ComboBox<>();
 
-    private final TableView<ProjectionYear> projectionTable =
+    private TableView<ProjectionYear> projectionTable =
             new TableView<>();
+
+
 
     private final Label projectionRangeLabel =
             new Label();
@@ -193,6 +196,15 @@ public class ResultsSummaryView extends BorderPane {
 
     public ResultsSummaryView() {
 
+        projectionTable =
+                new TableView<>();
+
+        projectionTable.setFixedCellSize(30);
+
+        projectionTable.setColumnResizePolicy(
+                TableView
+                        .CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+
         /*
          * Root styling is now handled by
          * results-summary.css.
@@ -267,7 +279,7 @@ public class ResultsSummaryView extends BorderPane {
         compositionChart.setAnimated(false);
         compositionChart.setCreateSymbols(false);
         compositionChart.setTitle(
-                "Asset Composition");
+                "Investable Asset Composition");
 
         compositionChart.getStyleClass().add(
                 "results-chart");
@@ -819,7 +831,7 @@ public class ResultsSummaryView extends BorderPane {
 //                        peakAssetsDetail),
 
                 createMetricCard(
-                        "Effective Tax Rate",
+                        "Average Effective Tax Rate",
                         FontAwesomeSolid.PERCENT,
                         "metric-orange",
                         "metric-icon-orange",
@@ -828,7 +840,7 @@ public class ResultsSummaryView extends BorderPane {
 
 
                 createMetricCard(
-                        "Ending Non-Investable Assets",
+                         "Ending Non-Investable Assets",
                         FontAwesomeSolid.HOME,
                         "metric-orange",
                         "metric-icon-orange",
@@ -844,7 +856,7 @@ public class ResultsSummaryView extends BorderPane {
                         endingAssetsDetail),
 
                 createMetricCard(
-                        "After-Tax Estate",
+                        "Ending After-Tax Estate",
                         FontAwesomeSolid.USERS,
                         "metric-purple",
                         "metric-icon-purple",
@@ -855,7 +867,7 @@ public class ResultsSummaryView extends BorderPane {
 
 
                 createMetricCard(
-                        "Total Net Worth",
+                        "Ending Total Net Worth",
                         FontAwesomeSolid.DOLLAR_SIGN,
                         "metric-blue",
                         "metric-icon-blue",
@@ -1443,6 +1455,8 @@ public class ResultsSummaryView extends BorderPane {
 
     private void createProjectionColumns() {
 
+        ApplicationController controller = new ApplicationController();
+
         TableColumn<ProjectionYear, Integer>
                 yearColumn =
                 new TableColumn<>("Year");
@@ -1467,6 +1481,8 @@ public class ResultsSummaryView extends BorderPane {
                 beginningAssetsColumn =
                 moneyColumn(
                         "Beginning Assets",
+
+
                         ProjectionYear::
                                 getBeginningInvestableAssets);
 
@@ -1477,7 +1493,7 @@ public class ResultsSummaryView extends BorderPane {
                         ProjectionYear::
                                 getInvestmentGrowth);
 
-        TableColumn<ProjectionYear, BigDecimal>
+                TableColumn<ProjectionYear, BigDecimal>
                 netCashFlowColumn =
                 moneyColumn(
                         "Income",
@@ -1497,8 +1513,6 @@ public class ResultsSummaryView extends BorderPane {
                         ProjectionYear::getRequiredMinimumDistribution);
 
 
-
-
         TableColumn<ProjectionYear, BigDecimal>
                 combinedTaxColumn =
                 moneyColumn(
@@ -1513,32 +1527,48 @@ public class ResultsSummaryView extends BorderPane {
                         ProjectionYear::
                                 getCombinedEffectiveTaxRate);
 
+
         TableColumn<ProjectionYear, BigDecimal>
-                estateColumn =
+                nonInvestableAssetsColumn =
                 moneyColumn(
-                        "Estate Value",
-                        ProjectionYear::
-                                getAfterTaxEstateValue);
+                        "Non-Investable Assets",
+                        year ->
+                                getNonInvestableAssetValue(
+                                        year.getCalendarYear()));
+
+        TableColumn<ProjectionYear, BigDecimal>
+                totalEstateColumn =
+                moneyColumn(
+                        "Total Estate",
+                        this::getTotalEstateValue);
 
         TableColumn<ProjectionYear, BigDecimal>
                 endingAssetsColumn =
                 moneyColumn(
-                        "Ending Assets",
+                        "Investable Assets",
                         ProjectionYear::
                                 getEndingInvestableAssets);
+
+        TableColumn<ProjectionYear, BigDecimal>
+                netWorthColumn =
+                moneyColumn(
+                        "Net Worth",
+                        this::getNetWorth);
 
         projectionTable.getColumns().addAll(
                 yearColumn,
                 ageColumn,
                 beginningAssetsColumn,
-                netCashFlowColumn,
+               // netCashFlowColumn,
                 growthColumn,
                 combinedTaxColumn,
                 effectiveTaxRateColumn,
                 rothConvColumn,
                 RMDColumn,
+                nonInvestableAssetsColumn,
                 endingAssetsColumn,
-                estateColumn);
+                totalEstateColumn,
+                netWorthColumn);
 
         projectionTable.setColumnResizePolicy(
                 TableView
@@ -1579,8 +1609,7 @@ public class ResultsSummaryView extends BorderPane {
                                 setText(
                                         empty || value == null
                                                 ? null
-                                                : UIFormatters
-                                                .money(value));
+                                                : compactMoney(value));
                             }
                         });
 
@@ -1773,7 +1802,7 @@ public class ResultsSummaryView extends BorderPane {
                         .orElse(last);
 
         endingAssetsValue.setText(
-                UIFormatters.money(
+                compactMoney(
                         last.getEndingInvestableAssets()));
 
         endingAssetsDetail.setText(
@@ -1793,8 +1822,8 @@ public class ResultsSummaryView extends BorderPane {
                         + peak.getPrimaryPersonAge());
 
         estateValue.setText(
-                UIFormatters.money(
-                        last.getAfterTaxEstateValue()));
+                compactMoney(
+                        getTotalEstateValue(last)));
 
         estateDetail.setText(
                 "Year "
@@ -1843,7 +1872,7 @@ public class ResultsSummaryView extends BorderPane {
                         .add(endingNonInvestableAssets);
 
         nonInvestableAssetsValue.setText(
-                UIFormatters.money(
+              compactMoney(
                         endingNonInvestableAssets));
 
         nonInvestableAssetsDetail.setText(
@@ -1851,11 +1880,13 @@ public class ResultsSummaryView extends BorderPane {
                         + last.getCalendarYear());
 
         netWorthValue.setText(
-                UIFormatters.money(
+                compactMoney(
                         totalNetWorth));
 
         netWorthDetail.setText(
-                "Investable + Non-Investable");
+                "Year "
+                        + last.getCalendarYear() +
+                " • Investable + Non-Investable");
     }
 
 
@@ -2900,6 +2931,89 @@ public class ResultsSummaryView extends BorderPane {
             showError(
                     "Unable to apply Social Security changes.");
         }
+    }
+
+    private BigDecimal getNonInvestableAssetValue(
+            int calendarYear) {
+
+        return nonInvestableAssetProjections
+                .stream()
+                .filter(projection ->
+                        projection.getCalendarYear()
+                                == calendarYear)
+                .findFirst()
+                .map(NonInvestableAssetProjection::
+                        getTotalValue)
+                .orElse(BigDecimal.ZERO);
+    }
+
+    private BigDecimal getTotalEstateValue(
+            ProjectionYear projectionYear) {
+
+        BigDecimal afterTaxEstateValue =
+                projectionYear.getAfterTaxEstateValue();
+
+        BigDecimal nonInvestableValue =
+                getNonInvestableAssetValue(
+                        projectionYear.getCalendarYear());
+
+        return afterTaxEstateValue
+                .add(nonInvestableValue);
+    }
+
+    private BigDecimal getNetWorth(
+            ProjectionYear projectionYear) {
+
+        BigDecimal investableAssets =
+                projectionYear.getEndingInvestableAssets();
+
+        BigDecimal nonInvestableAssets =
+                getNonInvestableAssetValue(
+                        projectionYear.getCalendarYear());
+
+        return investableAssets
+                .add(nonInvestableAssets);
+    }
+
+    private String compactMoney(
+            BigDecimal value) {
+
+        if (value == null) {
+            return null;
+        }
+
+        BigDecimal absolute =
+                value.abs();
+
+        if (absolute.compareTo(
+                new BigDecimal("1000000")) >= 0) {
+
+            return value
+                    .divide(
+                            new BigDecimal("1000000"),
+                            1,
+                            RoundingMode.HALF_UP)
+                    .toPlainString()
+                    + "M";
+        }
+
+        if (absolute.compareTo(
+                new BigDecimal("1000")) >= 0) {
+
+            return value
+                    .divide(
+                            new BigDecimal("1000"),
+                            0,
+                            RoundingMode.HALF_UP)
+                    .toPlainString()
+                    + "K";
+        }
+
+        return value
+                .setScale(
+                        0,
+                        RoundingMode.HALF_UP)
+                .toPlainString();
     }
 
 }

@@ -4,6 +4,7 @@ import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountSnapshot;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
+import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjection;
 
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import javafx.beans.property.ReadOnlyObjectWrapper;
@@ -18,6 +19,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.layout.BorderPane;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -26,6 +28,10 @@ public class ResultsView extends BorderPane {
     private final TableView<ProjectionYear> table;
 
     private final Label summaryLabel;
+
+    private List<NonInvestableAssetProjection>
+            nonInvestableAssetProjections =
+            List.of();
 
     /**
      * Invoked when the user double-clicks a projection year.
@@ -115,6 +121,11 @@ public class ResultsView extends BorderPane {
                         "Total Tax",
                         ProjectionYear::getTotalIncomeTax);
 
+        TableColumn<ProjectionYear, BigDecimal> cashFlowColumn =
+                createMoneyColumn(
+                        "Cash Needed",
+                        ProjectionYear::getCashFlowNeed);
+
         TableColumn<ProjectionYear, BigDecimal> rmdColumn =
                 createMoneyColumn(
                         "RMD",
@@ -124,6 +135,7 @@ public class ResultsView extends BorderPane {
                 createMoneyColumn(
                         "Withdrawal",
                         ProjectionYear::getPortfolioWithdrawal);
+
 
         TableColumn<ProjectionYear, String> medicareColumn =
                 new TableColumn<>("Medicare");
@@ -142,6 +154,20 @@ public class ResultsView extends BorderPane {
                                 getEndingBalanceByAssetType(
                                         year,
                                         ProjectionAssetType.TAX_DEFERRED));
+
+        TableColumn<ProjectionYear, BigDecimal>
+                nonInvestableAssetsColumn =
+                createMoneyColumn(
+                        "Non-Investable Assets",
+                        year ->
+                                getNonInvestableAssetValue(
+                                        year.getCalendarYear()));
+
+        TableColumn<ProjectionYear, BigDecimal>
+                netWorthColumn =
+                createMoneyColumn(
+                        "Net Worth",
+                        this::getNetWorth);
 
 
         /*
@@ -188,6 +214,7 @@ public class ResultsView extends BorderPane {
                 incomeColumn,
                 expensesColumn,
                 rmdColumn,
+                cashFlowColumn,
                 withdrawalColumn,
                 rothConversionColumn,
                 federalTaxColumn,
@@ -198,8 +225,10 @@ public class ResultsView extends BorderPane {
                 taxDeferredColumn,
                 rothColumn,
                 accumulatedRmdCashColumn,
+                nonInvestableAssetsColumn,
                 endingAssetsColumn,
-                afterTaxEstateValueColumn);
+                afterTaxEstateValueColumn,
+                netWorthColumn);
 
         table.setColumnResizePolicy(
                 TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
@@ -263,7 +292,15 @@ public class ResultsView extends BorderPane {
         return column;
     }
 
-    public void load(Projection projection) {
+    public void load(
+            Projection projection,
+            List<NonInvestableAssetProjection>
+                    nonInvestableAssetProjections) {
+
+        this.nonInvestableAssetProjections =
+                nonInvestableAssetProjections != null
+                        ? nonInvestableAssetProjections
+                        : List.of();
 
         if (projection == null) {
 
@@ -402,6 +439,29 @@ public class ResultsView extends BorderPane {
                 });
 
         return column;
+    }
+
+    private BigDecimal getNonInvestableAssetValue(
+            int calendarYear) {
+
+        return nonInvestableAssetProjections
+                .stream()
+                .filter(projection ->
+                        projection.getCalendarYear()
+                                == calendarYear)
+                .findFirst()
+                .map(NonInvestableAssetProjection::
+                        getTotalValue)
+                .orElse(BigDecimal.ZERO);
+    }
+
+    private BigDecimal getNetWorth(
+            ProjectionYear year) {
+
+        return year.getEndingInvestableAssets()
+                .add(
+                        getNonInvestableAssetValue(
+                                year.getCalendarYear()));
     }
 
 }

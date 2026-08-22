@@ -7,12 +7,15 @@ import javafx.scene.Scene;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
+import java.math.BigDecimal;
+
 public class ProjectionYearDetailsDialog {
 
     private final Stage stage;
 
     public ProjectionYearDetailsDialog(
-            ProjectionYear projectionYear) {
+            ProjectionYear projectionYear,
+            BigDecimal nonInvestableAssetValue) {
 
         stage = new Stage();
 
@@ -28,7 +31,8 @@ public class ProjectionYearDetailsDialog {
 
         ProjectionYearDetailsPane pane =
                 new ProjectionYearDetailsPane(
-                        projectionYear);
+                        projectionYear,
+                        nonInvestableAssetValue);
 
         Scene scene =
                 new Scene(pane);

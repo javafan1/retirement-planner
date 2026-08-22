@@ -29,6 +29,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
+import java.math.BigDecimal;
 import java.util.function.Consumer;
 
 
@@ -472,13 +473,17 @@ public class MainWindow {
     private void showProjectionYearSummary(
             ProjectionYear projectionYear) {
 
+        BigDecimal nonInvestableAssetValue =
+                controller.getNonInvestableAssetValue(
+                        projectionYear.getCalendarYear());
+
         ProjectionYearDetailsDialog dialog =
                 new ProjectionYearDetailsDialog(
-                        projectionYear);
+                        projectionYear,
+                        nonInvestableAssetValue);
 
         dialog.show();
     }
-
 
     private void refreshProjectionViews() {
 
@@ -494,7 +499,9 @@ public class MainWindow {
             dashboardView.load(summary);
             portfolioChartView.load(projection);
             projectionYearView.load(projection);
-            resultsView.load(projection);
+            resultsView.load(
+                    projection,
+                    controller.getCurrentNonInvestableAssetProjections());
             assumptionsView.load(
                     controller.getCurrentPlan());
 

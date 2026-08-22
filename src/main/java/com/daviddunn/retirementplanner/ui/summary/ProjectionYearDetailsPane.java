@@ -23,7 +23,8 @@ import java.math.BigDecimal;
 public class ProjectionYearDetailsPane extends BorderPane {
 
     public ProjectionYearDetailsPane(
-            ProjectionYear year) {
+            ProjectionYear year,
+            BigDecimal nonInvestableAssetValue) {
 
         VBox content =
                 new VBox(15);
@@ -59,7 +60,9 @@ public class ProjectionYearDetailsPane extends BorderPane {
                         createPortfolioSection(year),
                         createFederalTaxSection(year),
                         createMichiganTaxSection(year),
-                        createEstateSection(year));
+                        createEstateSection(
+                                year,
+                                nonInvestableAssetValue));
 
         VBox rightColumn =
                 new VBox(
@@ -447,9 +450,9 @@ public class ProjectionYearDetailsPane extends BorderPane {
     // ============================================================
     // Estate
     // ============================================================
-
     private VBox createEstateSection(
-            ProjectionYear year) {
+            ProjectionYear year,
+            BigDecimal nonInvestableAssetValue) {
 
         GridPane grid =
                 createSectionGrid();
@@ -459,8 +462,24 @@ public class ProjectionYearDetailsPane extends BorderPane {
         row = addMoneyRow(
                 grid,
                 row,
-                "Gross Estate Value",
+                "Gross Investable Estate",
                 year.getEndingInvestableAssets());
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Non-Investable Assets",
+                nonInvestableAssetValue);
+
+        BigDecimal totalGrossEstate =
+                year.getEndingInvestableAssets()
+                        .add(nonInvestableAssetValue);
+
+        row = addMoneyRow(
+                grid,
+                row,
+                "Total Gross Estate",
+                totalGrossEstate);
 
         row = addMoneyRow(
                 grid,
@@ -468,11 +487,17 @@ public class ProjectionYearDetailsPane extends BorderPane {
                 "Estimated Heir Tax",
                 year.getEstimatedHeirTax());
 
-        addMoneyRow(
+        row = addMoneyRow(
                 grid,
                 row,
                 "Projected After-Tax Estate",
                 year.getAfterTaxEstateValue());
+
+        addMoneyRow(
+                grid,
+                row,
+                "Total Net Worth",
+                totalGrossEstate);
 
         return createSection(
                 "Estimated Estate Value",
