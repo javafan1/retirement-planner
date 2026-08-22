@@ -2401,6 +2401,7 @@ public class ResultsSummaryView extends BorderPane {
 
             projectionCsvExporter.export(
                     currentProjection,
+                    this.nonInvestableAssetProjections,
                     file);
 
             showInformation(
@@ -2541,6 +2542,7 @@ public class ResultsSummaryView extends BorderPane {
             projectionPdfExporter.export(
                     currentPlan,
                     currentProjection,
+                    nonInvestableAssetProjections,
                     file);
 
             showInformation(

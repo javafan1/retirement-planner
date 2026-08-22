@@ -1,10 +1,12 @@
 package com.daviddunn.retirementplanner.app.export;
 
+import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjection;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -13,6 +15,8 @@ public class ProjectionCsvExporter {
 
     public void export(
             Projection projection,
+            List<NonInvestableAssetProjection>
+                    nonInvestableProjections,
             Path file)
             throws IOException {
 
@@ -21,6 +25,11 @@ public class ProjectionCsvExporter {
 
             throw new IllegalArgumentException(
                     "Projection cannot be empty.");
+        }
+
+        if (nonInvestableProjections == null) {
+            nonInvestableProjections =
+                    List.of();
         }
 
         try (BufferedWriter writer =
@@ -33,7 +42,8 @@ public class ProjectionCsvExporter {
 
                 writeYear(
                         writer,
-                        year);
+                        year,
+                        nonInvestableProjections);
             }
         }
     }
@@ -59,6 +69,8 @@ public class ProjectionCsvExporter {
                         + "Roth Conversion,"
                         + "Unallocated Cash,"
                         + "Ending Investable Assets,"
+                        + "Non-Investable Assets,"
+                        + "Net Worth,"
                         + "Adjusted Gross Income,"
                         + "Taxable Social Security,"
                         + "Federal Taxable Income,"
@@ -83,8 +95,19 @@ public class ProjectionCsvExporter {
 
     private void writeYear(
             BufferedWriter writer,
-            ProjectionYear year)
+            ProjectionYear year,
+            List<NonInvestableAssetProjection>
+                    nonInvestableProjections)
             throws IOException {
+
+        BigDecimal nonInvestableValue =
+                getNonInvestableAssetValue(
+                        year.getCalendarYear(),
+                        nonInvestableProjections);
+
+        BigDecimal netWorth =
+                year.getEndingInvestableAssets()
+                        .add(nonInvestableValue);
 
         writeRow(
                 writer,
@@ -106,6 +129,9 @@ public class ProjectionCsvExporter {
                 year.getUnallocatedCash(),
                 year.getEndingInvestableAssets(),
 
+                nonInvestableValue,
+                netWorth,
+
                 year.getAdjustedGrossIncome(),
                 year.getTaxableSocialSecurity(),
                 year.getFederalTaxableIncome(),
@@ -126,6 +152,22 @@ public class ProjectionCsvExporter {
 
                 year.getEstimatedHeirTax(),
                 year.getAfterTaxEstateValue());
+    }
+
+
+    private BigDecimal getNonInvestableAssetValue(
+            int calendarYear,
+            List<NonInvestableAssetProjection>
+                    projections) {
+
+        return projections.stream()
+                .filter(projection ->
+                        projection.getCalendarYear()
+                                == calendarYear)
+                .findFirst()
+                .map(NonInvestableAssetProjection::
+                        getTotalValue)
+                .orElse(BigDecimal.ZERO);
     }
 
 
@@ -161,11 +203,6 @@ public class ProjectionCsvExporter {
         String text =
                 value.toString();
 
-        /*
-         * CSV fields containing commas,
-         * quotes, or newlines must be
-         * surrounded by quotes.
-         */
         if (text.contains(",")
                 || text.contains("\"")
                 || text.contains("\n")
