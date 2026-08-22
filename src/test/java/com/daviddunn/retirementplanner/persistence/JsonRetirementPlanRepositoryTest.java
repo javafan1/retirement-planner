@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.persistence;
 
+import com.daviddunn.retirementplanner.domain.baseline.ProjectionBaseline;
+import com.daviddunn.retirementplanner.domain.baseline.RetirementPlanSnapshot;
 import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
 import com.daviddunn.retirementplanner.domain.model.*;
 
@@ -9,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -213,5 +216,91 @@ class JsonRetirementPlanRepositoryTest {
                 comics.getAnnualGrowthRate());
     }
 
+    @Test
+    void preservesProjectionBaselineWhenPlanIsSavedAndLoaded()
+            throws Exception {
+
+        RetirementPlan plan =
+                RetirementPlanFactory.createEmptyPlan();
+
+        RetirementPlanSnapshot snapshot =
+                new RetirementPlanSnapshot(
+                        plan.getHousehold(),
+                        plan.getAccountPortfolio(),
+                        plan.getPlanningAssumptions(),
+                        plan.getRothConversionRequest(),
+                        plan.getNonInvestableAssets());
+
+        ProjectionBaseline baseline =
+                new ProjectionBaseline(
+                        snapshot,
+                        LocalDateTime.of(
+                                2026,
+                                8,
+                                22,
+                                16,
+                                0),
+                        "Original Retirement Plan");
+
+        plan.setBaseline(
+                baseline);
+
+        JsonRetirementPlanRepository repository =
+                new JsonRetirementPlanRepository();
+
+        Path file =
+                tempDirectory.resolve(
+                        "baseline-plan.json");
+
+        repository.save(
+                plan,
+                file);
+
+        RetirementPlan loadedPlan =
+                repository.load(
+                        file);
+
+        assertNotNull(
+                loadedPlan.getBaseline());
+
+        assertEquals(
+                "Original Retirement Plan",
+                loadedPlan.getBaseline()
+                        .getDescription());
+
+        assertEquals(
+                LocalDateTime.of(
+                        2026,
+                        8,
+                        22,
+                        16,
+                        0),
+                loadedPlan.getBaseline()
+                        .getSavedAt());
+
+        assertNotNull(
+                loadedPlan.getBaseline()
+                        .getSnapshot());
+
+        assertNotNull(
+                loadedPlan.getBaseline()
+                        .getSnapshot()
+                        .getHousehold());
+
+        assertNotNull(
+                loadedPlan.getBaseline()
+                        .getSnapshot()
+                        .getAccountPortfolio());
+
+        assertNotNull(
+                loadedPlan.getBaseline()
+                        .getSnapshot()
+                        .getPlanningAssumptions());
+
+        assertNotNull(
+                loadedPlan.getBaseline()
+                        .getSnapshot()
+                        .getNonInvestableAssets());
+    }
 
 }

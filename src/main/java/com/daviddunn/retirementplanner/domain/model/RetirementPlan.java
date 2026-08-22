@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.model;
 
+import com.daviddunn.retirementplanner.domain.baseline.ProjectionBaseline;
 import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -19,6 +20,8 @@ public class RetirementPlan {
     private PlanningAssumptions planningAssumptions;
 
     private RothConversionRequest rothConversionRequest;
+
+    private ProjectionBaseline baseline;
 
     private final List<NonInvestableAsset>
             nonInvestableAssets =
@@ -173,6 +176,16 @@ public class RetirementPlan {
             nonInvestableAssets.addAll(
                     assets);
         }
+    }
+
+    public ProjectionBaseline getBaseline() {
+        return baseline;
+    }
+
+    public void setBaseline(
+            ProjectionBaseline baseline) {
+
+        this.baseline = baseline;
     }
 
 }
