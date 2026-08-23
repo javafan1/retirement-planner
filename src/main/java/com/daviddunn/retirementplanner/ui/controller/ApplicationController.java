@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.controller;
 
 import com.daviddunn.retirementplanner.application.settings.ApplicationSettings;
+import com.daviddunn.retirementplanner.domain.baseline.*;
 import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
@@ -13,20 +14,32 @@ import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionSumma
 import com.daviddunn.retirementplanner.persistence.JsonApplicationSettingsRepository;
 import com.daviddunn.retirementplanner.persistence.JsonRetirementPlanRepository;
 import com.daviddunn.retirementplanner.persistence.RetirementPlanRepository;
+import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjection;
+import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjectionService;
 
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.util.List;
 
-import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjection;
-import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjectionService;
+
 public class ApplicationController {
 
     private RetirementPlan currentPlan;
     private ProjectionSummary currentProjectionSummary;
     private Path currentFile;
     private Projection currentProjection;
+    private Projection baselineProjection;
+
+    private List<NonInvestableAssetProjection>
+            baselineNonInvestableAssetProjections;
+
+    private final BaselineProjectionService
+            baselineProjectionService;
+
+    private final ProjectionComparisonService
+            projectionComparisonService;
+
     private final ProjectionEngine projectionEngine;
     private final ProjectionSummaryService projectionSummaryService;
     private final RetirementPlanRepository repository;
@@ -53,6 +66,13 @@ public class ApplicationController {
 
         nonInvestableAssetProjectionService =
                 new NonInvestableAssetProjectionService();
+
+        baselineProjectionService =
+                new BaselineProjectionService(
+                        projectionEngine);
+
+        projectionComparisonService =
+                new ProjectionComparisonService();
 
         repository =
                 new JsonRetirementPlanRepository();
@@ -120,6 +140,112 @@ public class ApplicationController {
         }
 
         return currentProjection;
+    }
+
+    public Projection getBaselineProjection() {
+
+        if (baselineProjection == null
+                && currentPlan != null
+                && currentPlan.getBaseline() != null) {
+
+            baselineProjection =
+                    baselineProjectionService
+                            .projectBaseline(
+                                    currentPlan.getBaseline());
+        }
+
+        return baselineProjection;
+    }
+
+    public List<NonInvestableAssetProjection>
+    getBaselineNonInvestableAssetProjections() {
+
+        if (baselineNonInvestableAssetProjections != null) {
+            return baselineNonInvestableAssetProjections;
+        }
+
+        Projection projection =
+                getBaselineProjection();
+
+        if (projection == null) {
+            return List.of();
+        }
+
+        List<ProjectionYear> years =
+                projection.getYears();
+
+        if (years.isEmpty()) {
+            return List.of();
+        }
+
+        int firstYear =
+                years.get(0)
+                        .getCalendarYear();
+
+        int lastYear =
+                years.get(years.size() - 1)
+                        .getCalendarYear();
+
+        baselineNonInvestableAssetProjections =
+                nonInvestableAssetProjectionService
+                        .project(
+                                currentPlan
+                                        .getBaseline()
+                                        .getSnapshot()
+                                        .getNonInvestableAssets(),
+                                firstYear,
+                                lastYear);
+
+        return baselineNonInvestableAssetProjections;
+    }
+
+    public ProjectionComparison compareAtYear(
+            int calendarYear) {
+
+        if (currentPlan == null) {
+            throw new IllegalStateException(
+                    "No current plan.");
+        }
+
+        if (currentPlan.getBaseline() == null) {
+            throw new IllegalStateException(
+                    "No baseline projection exists.");
+        }
+
+        Projection baseline =
+                getBaselineProjection();
+
+        Projection current =
+                getCurrentProjection();
+
+        return projectionComparisonService.compare(
+                baseline,
+                getBaselineNonInvestableAssetProjections(),
+                current,
+                getCurrentNonInvestableAssetProjections(),
+                calendarYear);
+    }
+
+    public void saveCurrentAsBaseline(
+            String description) {
+
+        if (currentPlan == null) {
+            throw new IllegalStateException(
+                    "No current plan.");
+        }
+
+        ProjectionBaseline baseline =
+                ProjectionBaselineFactory.create(
+                        currentPlan,
+                        description);
+
+        currentPlan.setBaseline(
+                baseline);
+
+        baselineProjection = null;
+        baselineNonInvestableAssetProjections = null;
+
+        modified = true;
     }
 
     /**
@@ -332,6 +458,9 @@ public class ApplicationController {
         return currentFile.getFileName().toString();
     }
 
+
+
+
     public void markModified() {
 
         modified = true;
@@ -341,5 +470,7 @@ public class ApplicationController {
 
         return modified;
     }
+
+
 
 }

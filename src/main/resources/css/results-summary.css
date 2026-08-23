@@ -352,3 +352,70 @@
 .social-security-apply-button:pressed {
     -fx-background-color: #b45309;
 }
+
+.baseline-comparison {
+    -fx-background-color: #f8fafc;
+    -fx-background-radius: 10;
+    -fx-border-color: #e2e8f0;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-padding: 12;
+}
+
+
+
+
+
+.baseline-comparison {
+    -fx-padding: 4 0 4 0;
+}
+
+.comparison-metric-card {
+    -fx-background-color: white;
+    -fx-background-radius: 10;
+    -fx-border-color: #e2e8f0;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-padding: 12;
+    -fx-min-height: 125px;
+}
+
+.comparison-card-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #475569;
+}
+
+.comparison-value-label {
+    -fx-font-size: 11px;
+    -fx-text-fill: #64748b;
+}
+
+.comparison-card-value {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #334155;
+}
+
+.comparison-change-title {
+    -fx-font-size: 10px;
+    -fx-text-fill: #64748b;
+    -fx-padding: 5 0 0 0;
+}
+
+.comparison-card-change {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+}
+
+.comparison-positive {
+    -fx-text-fill: #16a34a;
+}
+
+.comparison-negative {
+    -fx-text-fill: #dc2626;
+}
+
+.comparison-neutral {
+    -fx-text-fill: #64748b;
+}

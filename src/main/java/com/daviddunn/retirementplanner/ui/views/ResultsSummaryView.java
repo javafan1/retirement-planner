@@ -21,8 +21,12 @@ import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitCalcul
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
+import com.daviddunn.retirementplanner.domain.baseline.ProjectionComparison;
 
+import javafx.geometry.HPos;
 import javafx.geometry.Side;
+import javafx.scene.Node;
+import javafx.scene.layout.*;
 import javafx.util.converter.NumberStringConverter;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
@@ -35,12 +39,6 @@ import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.StackedAreaChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.ColumnConstraints;
-import javafx.scene.layout.GridPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.VBox;
 import javafx.util.StringConverter;
 
 import java.io.IOException;
@@ -60,6 +58,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 public class ResultsSummaryView extends BorderPane {
+
+    private final ApplicationController controller;
 
     private final TextField investmentReturnField =
             new TextField();
@@ -119,7 +119,7 @@ public class ResultsSummaryView extends BorderPane {
     private TableView<ProjectionYear> projectionTable =
             new TableView<>();
 
-
+    private ProjectionComparison currentBaselineComparison;
 
     private final Label projectionRangeLabel =
             new Label();
@@ -194,7 +194,76 @@ public class ResultsSummaryView extends BorderPane {
 
     private Projection currentProjection;
 
-    public ResultsSummaryView() {
+    private VBox baselineComparisonBox;
+
+    private final Label baselineComparisonYear =
+            new Label();
+
+    private final Label investableBaselineLabel =
+            new Label("—");
+
+    private final Label investableCurrentLabel =
+            new Label("—");
+
+    private final Label investableChangeLabel =
+            new Label("—");
+
+    private final Label nonInvestableBaselineLabel =
+            new Label("—");
+
+    private final Label nonInvestableCurrentLabel =
+            new Label("—");
+
+    private final Label nonInvestableChangeLabel =
+            new Label("—");
+
+    private final Label netWorthBaselineLabel =
+            new Label("—");
+
+    private final Label netWorthCurrentLabel =
+            new Label("—");
+
+    private final Label netWorthChangeLabel =
+            new Label("—");
+
+    private final Label estateBaselineLabel =
+            new Label("—");
+
+    private final Label estateCurrentLabel =
+            new Label("—");
+
+    private final Label estateChangeLabel =
+            new Label("—");
+
+    private final Label taxBaselineLabel =
+            new Label("—");
+
+    private final Label taxCurrentLabel =
+            new Label("—");
+
+    private final Label taxChangeLabel =
+            new Label("—");
+
+    private final Label investablePercentLabel =
+            new Label();
+
+    private final Label nonInvestablePercentLabel =
+            new Label();
+
+    private final Label netWorthPercentLabel =
+            new Label();
+
+    private final Label estatePercentLabel =
+            new Label();
+
+    public ResultsSummaryView(
+            ApplicationController controller) {
+
+        this.controller =
+                Objects.requireNonNull(
+                        controller);
+
+
 
         projectionTable =
                 new TableView<>();
@@ -291,6 +360,12 @@ public class ResultsSummaryView extends BorderPane {
         compositionChart.setPrefHeight(190);
         compositionChart.setMinHeight(170);
 
+        baselineComparisonBox =
+                createBaselineComparisonSection();
+
+        baselineComparisonBox.setVisible(false);
+        baselineComparisonBox.setManaged(false);
+
         projectionTable.setPlaceholder(
                 new Label(
                         "No projection available."));
@@ -325,6 +400,15 @@ public class ResultsSummaryView extends BorderPane {
         });
 
         createProjectionColumns();
+        setupProjectionSelection();
+        if (!projectionTable
+                .getItems()
+                .isEmpty()) {
+
+            projectionTable
+                    .getSelectionModel()
+                    .select(0);
+        }
 
         applyEconomicButton.setOnAction(
                 event -> applyEconomicAssumptions());
@@ -383,6 +467,15 @@ public class ResultsSummaryView extends BorderPane {
                 Pos.TOP_LEFT);
     }
 
+
+//    public void setBaselineComparison(
+//            ProjectionComparison comparison) {
+//
+//        this.currentBaselineComparison =
+//                comparison;
+//
+//        updateBaselineComparisonView();
+//    }
 
     private void applyDeathScenario() {
 
@@ -786,6 +879,9 @@ public class ResultsSummaryView extends BorderPane {
         content.getChildren().add(
                 createMetricCards());
 
+        content.getChildren().add(
+                baselineComparisonBox);
+
         VBox projectionSection =
                 createProjectionSection();
 
@@ -811,7 +907,161 @@ public class ResultsSummaryView extends BorderPane {
 
         return content;
     }
+    private VBox createBaselineComparisonSection() {
 
+        VBox section =
+                new VBox(8);
+
+        section.getStyleClass().add(
+                "baseline-comparison");
+
+        baselineComparisonYear.setText(
+                "Baseline Comparison");
+
+        baselineComparisonYear.getStyleClass().add(
+                "section-title");
+
+        HBox cards =
+                new HBox(10);
+        cards.getChildren().addAll(
+
+                createComparisonMetricCard(
+                        "Investable Assets",
+                        "metric-blue",
+                        investableBaselineLabel,
+                        investableCurrentLabel,
+                        investableChangeLabel,
+                        true),
+
+                createComparisonMetricCard(
+                        "Non-Investable Assets",
+                        "metric-orange",
+                        nonInvestableBaselineLabel,
+                        nonInvestableCurrentLabel,
+                        nonInvestableChangeLabel,
+                        true),
+
+                createComparisonMetricCard(
+                        "Net Worth",
+                        "metric-blue",
+                        netWorthBaselineLabel,
+                        netWorthCurrentLabel,
+                        netWorthChangeLabel,
+                        true),
+
+                createComparisonMetricCard(
+                        "After-Tax Estate",
+                        "metric-purple",
+                        estateBaselineLabel,
+                        estateCurrentLabel,
+                        estateChangeLabel,
+                        true),
+
+                createComparisonMetricCard(
+                        "Effective Tax Rate",
+                        "metric-orange",
+                        taxBaselineLabel,
+                        taxCurrentLabel,
+                        taxChangeLabel,
+                        false));
+
+        for (Node card :
+                cards.getChildren()) {
+
+            HBox.setHgrow(
+                    card,
+                    Priority.ALWAYS);
+        }
+
+        section.getChildren().addAll(
+                baselineComparisonYear,
+                cards);
+
+        return section;
+    }
+
+    private VBox createComparisonMetricCard(
+            String title,
+            String styleClass,
+            Label baselineLabel,
+            Label currentLabel,
+            Label changeLabel,
+            boolean showPercentChange) {
+
+        VBox card =
+                new VBox(5);
+
+        card.getStyleClass().add(
+                "comparison-metric-card");
+
+        Label titleLabel =
+                new Label(title);
+
+        titleLabel.getStyleClass().add(
+                "comparison-card-title");
+
+        HBox baselineRow =
+                createComparisonValueRow(
+                        "Baseline",
+                        baselineLabel);
+
+        HBox currentRow =
+                createComparisonValueRow(
+                        "Current",
+                        currentLabel);
+
+        Label changeTitle =
+                new Label("Change");
+
+        changeTitle.getStyleClass().add(
+                "comparison-change-title");
+
+        changeLabel.getStyleClass().add(
+                "comparison-card-change");
+
+        card.getChildren().addAll(
+                titleLabel,
+                baselineRow,
+                currentRow,
+                changeTitle,
+                changeLabel);
+
+        return card;
+    }
+
+    private HBox createComparisonValueRow(
+            String label,
+            Label value) {
+
+        Label description =
+                new Label(label);
+
+        description.getStyleClass().add(
+                "comparison-value-label");
+
+        HBox row =
+                new HBox(5);
+
+        row.setAlignment(
+                Pos.CENTER_LEFT);
+
+        Region spacer =
+                new Region();
+
+        HBox.setHgrow(
+                spacer,
+                Priority.ALWAYS);
+
+        value.getStyleClass().add(
+                "comparison-card-value");
+
+        row.getChildren().addAll(
+                description,
+                spacer,
+                value);
+
+        return row;
+    }
 
     private HBox createMetricCards() {
 
@@ -1455,7 +1705,7 @@ public class ResultsSummaryView extends BorderPane {
 
     private void createProjectionColumns() {
 
-        ApplicationController controller = new ApplicationController();
+
 
         TableColumn<ProjectionYear, Integer>
                 yearColumn =
@@ -1658,6 +1908,282 @@ public class ResultsSummaryView extends BorderPane {
         return column;
     }
 
+    private void setupProjectionSelection() {
+
+        projectionTable
+                .getSelectionModel()
+                .selectedItemProperty()
+                .addListener(
+                        (observable,
+                         oldYear,
+                         selectedYear) -> {
+
+                            if (selectedYear != null) {
+                                updateBaselineComparison(
+                                        selectedYear
+                                                .getCalendarYear());
+                            }
+                        });
+    }
+    private void updateBaselineComparison(
+            int calendarYear) {
+
+        if (currentPlan == null
+                || currentProjection == null
+                || currentPlan.getBaseline() == null) {
+
+            baselineComparisonBox.setVisible(false);
+            baselineComparisonBox.setManaged(false);
+
+            return;
+        }
+
+        ProjectionComparison comparison =
+                controller.compareAtYear(
+                        calendarYear);
+
+        baselineComparisonBox.setVisible(true);
+        baselineComparisonBox.setManaged(true);
+
+        updateBaselineComparisonValues(
+                comparison);
+    }
+
+    private void updateBaselineComparisonValues(
+            ProjectionComparison comparison) {
+
+        baselineComparisonYear.setText(
+                "Baseline Comparison — "
+                        + comparison.getCalendarYear());
+
+        investableBaselineLabel.setText(
+                compactMoney(
+                        comparison
+                                .getBaselineEndingInvestableAssets()));
+
+        investableCurrentLabel.setText(
+                compactMoney(
+                        comparison
+                                .getCurrentEndingInvestableAssets()));
+
+        setChangeLabel(
+                investableChangeLabel,
+                comparison
+                        .getBaselineEndingInvestableAssets(),
+                comparison
+                        .getEndingInvestableAssetsChange(),
+                false);
+
+        investablePercentLabel.setText(
+                "("
+                        + formatPercentChange(
+                        comparison
+                                .getBaselineEndingInvestableAssets(),
+                        comparison
+                                .getEndingInvestableAssetsChange())
+                        + ")");
+
+        nonInvestableBaselineLabel.setText(
+                compactMoney(
+                        comparison
+                                .getBaselineNonInvestableAssets()));
+
+        nonInvestableCurrentLabel.setText(
+                compactMoney(
+                        comparison
+                                .getCurrentNonInvestableAssets()));
+
+
+
+        setChangeLabel(
+                nonInvestableChangeLabel,
+                comparison
+                        .getBaselineNonInvestableAssets(),
+                comparison
+                        .getNonInvestableAssetsChange(),
+                false);
+
+        nonInvestablePercentLabel.setText(
+                "("
+                        + formatPercentChange(
+                        comparison.getBaselineNonInvestableAssets(),
+                        comparison.getNonInvestableAssetsChange())
+                        + ")");
+
+        netWorthBaselineLabel.setText(
+                compactMoney(
+                        comparison.getBaselineNetWorth()));
+
+        netWorthCurrentLabel.setText(
+                compactMoney(
+                        comparison.getCurrentNetWorth()));
+
+        setChangeLabel(
+                netWorthChangeLabel,
+                comparison
+                        .getBaselineNetWorth(),
+                comparison
+                        .getNetWorthChange(),
+                false);
+
+        netWorthPercentLabel.setText(
+                "("
+                        + formatPercentChange(
+                        comparison.getBaselineNetWorth(),
+                        comparison.getNetWorthChange())
+                        + ")");
+
+        estateBaselineLabel.setText(
+                compactMoney(
+                        comparison.getBaselineAfterTaxEstate()));
+
+        estateCurrentLabel.setText(
+                compactMoney(
+                        comparison.getCurrentAfterTaxEstate()));
+
+        setChangeLabel(
+                estateChangeLabel,
+                comparison
+                        .getBaselineAfterTaxEstate(),
+                comparison
+                        .getAfterTaxEstateChange(),
+                false);
+
+        taxBaselineLabel.setText(
+                UIFormatters.percent(
+                        comparison
+                                .getBaselineEffectiveTaxRate()));
+
+        taxCurrentLabel.setText(
+                UIFormatters.percent(
+                        comparison
+                                .getCurrentEffectiveTaxRate()));
+
+        setTaxChangeLabel(
+                taxChangeLabel,
+                comparison.getEffectiveTaxRateChange());
+
+    }
+
+    private void setTaxChangeLabel(
+            Label label,
+            BigDecimal change) {
+
+        label.setText(
+                formatChange(
+                        change,
+                        true));
+
+        label.getStyleClass().removeAll(
+                "comparison-positive",
+                "comparison-negative",
+                "comparison-neutral");
+
+        int result =
+                change.compareTo(
+                        BigDecimal.ZERO);
+
+        if (result == 0) {
+
+            label.getStyleClass().add(
+                    "comparison-neutral");
+
+        } else {
+
+            label.getStyleClass().add(
+                    result < 0
+                            ? "comparison-positive"
+                            : "comparison-negative");
+        }
+    }
+
+    private void setChangeLabel(
+            Label label,
+            BigDecimal baseline,
+            BigDecimal change,
+            boolean lowerIsBetter) {
+
+        String changeText =
+                formatChange(
+                        change,
+                        false);
+
+        String percentText =
+                formatPercentChange(
+                        baseline,
+                        change);
+
+        if (baseline.compareTo(BigDecimal.ZERO) != 0) {
+
+            changeText +=
+                    " ("
+                            + percentText
+                            + ")";
+        }
+
+        label.setText(changeText);
+
+        label.getStyleClass().removeAll(
+                "comparison-positive",
+                "comparison-negative",
+                "comparison-neutral");
+
+        int result =
+                change.compareTo(
+                        BigDecimal.ZERO);
+
+        if (result == 0) {
+
+            label.getStyleClass().add(
+                    "comparison-neutral");
+
+        } else {
+
+            boolean favorable =
+                    lowerIsBetter
+                            ? result < 0
+                            : result > 0;
+
+            label.getStyleClass().add(
+                    favorable
+                            ? "comparison-positive"
+                            : "comparison-negative");
+        }
+    }
+
+
+
+    private String formatChange(
+            BigDecimal change,
+            boolean percentage) {
+
+        if (change.compareTo(
+                BigDecimal.ZERO) > 0) {
+
+            return "+"
+                    + (percentage
+                    ? UIFormatters.percent(change)
+                    : compactMoney(change));
+        }
+
+        if (change.compareTo(
+                BigDecimal.ZERO) < 0) {
+
+            return "-"
+                    + (percentage
+                    ? UIFormatters.percent(
+                    change.abs())
+                    : compactMoney(
+                    change.abs()));
+        }
+
+        return percentage
+                ? UIFormatters.percent(
+                BigDecimal.ZERO)
+                : compactMoney(
+                BigDecimal.ZERO);
+    }
+
     public void load(
             RetirementPlan plan,
             Projection projection,
@@ -1721,6 +2247,10 @@ public class ResultsSummaryView extends BorderPane {
 
         updateMetrics(years);
         updateCharts(years);
+
+        projectionTable
+                .getSelectionModel()
+                .selectLast();
     }
 
 
@@ -3016,6 +3546,40 @@ public class ResultsSummaryView extends BorderPane {
                         0,
                         RoundingMode.HALF_UP)
                 .toPlainString();
+    }
+
+    private String formatPercentChange(
+            BigDecimal baseline,
+            BigDecimal change) {
+
+        if (baseline.compareTo(
+                BigDecimal.ZERO) == 0) {
+
+            return "N/A";
+        }
+
+        BigDecimal percentChange =
+                change
+                        .divide(
+                                baseline,
+                                6,
+                                RoundingMode.HALF_UP)
+                        .multiply(
+                                BigDecimal.valueOf(100));
+
+        String sign =
+                percentChange.compareTo(
+                        BigDecimal.ZERO) > 0
+                        ? "+"
+                        : "";
+
+        return sign
+                + percentChange
+                .setScale(
+                        1,
+                        RoundingMode.HALF_UP)
+                .toPlainString()
+                + "%";
     }
 
 }

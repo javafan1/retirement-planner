@@ -32,6 +32,9 @@ import java.io.File;
 import java.math.BigDecimal;
 import java.util.function.Consumer;
 
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
+
 
 public class MainWindow {
 
@@ -67,7 +70,7 @@ public class MainWindow {
         assumptionsView = new AssumptionsView();
         resultsView = new ResultsView();
         resultsSummaryView =
-                new ResultsSummaryView();
+                new ResultsSummaryView(controller);
         dashboardView = new DashboardView();
         portfolioChartView = new PortfolioChartView();
         rothConversionView =
@@ -220,6 +223,8 @@ public class MainWindow {
         MenuItem openItem = new MenuItem("Open...");
         MenuItem saveItem = new MenuItem("Save");
         MenuItem saveAsItem = new MenuItem("Save As...");
+        MenuItem saveBaselineItem =
+                new MenuItem("Save Current as Baseline");
         MenuItem exitItem = new MenuItem("Exit");
 
         saveItem.setOnAction(e -> onSave());
@@ -228,12 +233,16 @@ public class MainWindow {
         exitItem.setOnAction(e -> onExit());
 
         newItem.setOnAction(e -> onNew());
+        saveBaselineItem.setOnAction(
+                e -> onSaveCurrentAsBaseline());
 
         fileMenu.getItems().addAll(
                 newItem,
                 openItem,
                 saveItem,
                 saveAsItem,
+                new SeparatorMenuItem(),
+                saveBaselineItem,
                 new SeparatorMenuItem(),
                 exitItem);
 
@@ -596,5 +605,54 @@ public class MainWindow {
 
         updateWindowTitle();
     }
+    private void onSaveCurrentAsBaseline() {
 
+        RetirementPlan plan =
+                controller.getCurrentPlan();
+
+        if (plan.getBaseline() != null) {
+
+            Alert alert =
+                    new Alert(
+                            Alert.AlertType.CONFIRMATION);
+
+            alert.setTitle(
+                    "Replace Existing Baseline");
+
+            alert.setHeaderText(
+                    "Replace Existing Baseline?");
+
+            alert.setContentText(
+                    "An existing baseline is already "
+                            + "saved for this plan.\n\n"
+                            + "Saving the current projection "
+                            + "will replace it. "
+                            + "The existing baseline cannot "
+                            + "be recovered.");
+
+            ButtonType replaceButton =
+                    new ButtonType(
+                            "Replace Baseline");
+
+            alert.getButtonTypes().setAll(
+                    ButtonType.CANCEL,
+                    replaceButton);
+
+            alert.showAndWait();
+
+            if (alert.getResult()
+                    != replaceButton) {
+
+                return;
+            }
+        }
+
+        controller.saveCurrentAsBaseline(
+                "Baseline");
+
+        updateWindowTitle();
+
+        statusLabel.setText(
+                "Current projection saved as baseline.");
+    }
 }
