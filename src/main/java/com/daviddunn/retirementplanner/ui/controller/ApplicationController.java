@@ -459,6 +459,28 @@ public class ApplicationController {
     }
 
 
+    public BigDecimal getBaselineNonInvestableAssetValue(
+            int calendarYear) {
+
+        if (currentPlan == null
+                || currentPlan.getBaseline() == null) {
+
+            return null;
+        }
+
+        List<NonInvestableAssetProjection> projections =
+                getBaselineNonInvestableAssetProjections();
+
+        return projections.stream()
+                .filter(projection ->
+                        projection.getCalendarYear()
+                                == calendarYear)
+                .findFirst()
+                .map(
+                        NonInvestableAssetProjection::
+                                getTotalValue)
+                .orElse(null);
+    }
 
 
     public void markModified() {

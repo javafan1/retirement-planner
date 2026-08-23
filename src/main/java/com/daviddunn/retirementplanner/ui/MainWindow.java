@@ -478,18 +478,54 @@ public class MainWindow {
 
         root.getScene().getWindow().hide();
     }
-
     private void showProjectionYearSummary(
-            ProjectionYear projectionYear) {
+            ProjectionYear currentYear) {
 
-        BigDecimal nonInvestableAssetValue =
+        ProjectionYear baselineYear =
+                null;
+
+        BigDecimal baselineNonInvestableValue =
+                null;
+
+        if (controller.getCurrentPlan()
+                .getBaseline() != null) {
+
+            Projection baselineProjection =
+                    controller.getBaselineProjection();
+
+            if (baselineProjection != null) {
+
+                baselineYear =
+                        baselineProjection.getYears()
+                                .stream()
+                                .filter(year ->
+                                        year.getCalendarYear()
+                                                == currentYear
+                                                .getCalendarYear())
+                                .findFirst()
+                                .orElse(null);
+
+                if (baselineYear != null) {
+
+                    baselineNonInvestableValue =
+                            controller
+                                    .getBaselineNonInvestableAssetValue(
+                                            currentYear
+                                                    .getCalendarYear());
+                }
+            }
+        }
+
+        BigDecimal currentNonInvestableValue =
                 controller.getNonInvestableAssetValue(
-                        projectionYear.getCalendarYear());
+                        currentYear.getCalendarYear());
 
         ProjectionYearDetailsDialog dialog =
                 new ProjectionYearDetailsDialog(
-                        projectionYear,
-                        nonInvestableAssetValue);
+                        currentYear,
+                        baselineYear,
+                        currentNonInvestableValue,
+                        baselineNonInvestableValue);
 
         dialog.show();
     }
@@ -649,6 +685,8 @@ public class MainWindow {
 
         controller.saveCurrentAsBaseline(
                 "Baseline");
+
+        refreshAllViews();
 
         updateWindowTitle();
 

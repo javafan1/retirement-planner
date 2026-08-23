@@ -14,8 +14,10 @@ public class ProjectionYearDetailsDialog {
     private final Stage stage;
 
     public ProjectionYearDetailsDialog(
-            ProjectionYear projectionYear,
-            BigDecimal nonInvestableAssetValue) {
+            ProjectionYear currentYear,
+            ProjectionYear baselineYear,
+            BigDecimal nonInvestableAssetValue,
+            BigDecimal baselineNonInvestableAssetValue) {
 
         stage = new Stage();
 
@@ -24,32 +26,27 @@ public class ProjectionYearDetailsDialog {
 
         stage.setTitle(
                 "Projection Year "
-                        + projectionYear.getCalendarYear()
+                        + currentYear.getCalendarYear()
                         + " (Age "
-                        + projectionYear.getPrimaryPersonAge()
+                        + currentYear.getPrimaryPersonAge()
                         + ")");
 
         ProjectionYearDetailsPane pane =
                 new ProjectionYearDetailsPane(
-                        projectionYear,
-                        nonInvestableAssetValue);
+                        currentYear,
+                        baselineYear,
+                        nonInvestableAssetValue,
+                        baselineNonInvestableAssetValue);
 
         Scene scene =
                 new Scene(pane);
 
         stage.setScene(scene);
 
-        /*
-         * Allow JavaFX to calculate the initial
-         * window size from the two-column content.
-         */
-        stage.sizeToScene();
+        stage.setWidth(1400);
+        stage.setHeight(800);
 
-        /*
-         * Prevent the dialog from becoming excessively
-         * large on very large displays.
-         */
-        stage.setMaxWidth(1100);
+        stage.setMaxWidth(1400);
         stage.setMaxHeight(850);
     }
 
