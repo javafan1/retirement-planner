@@ -15,6 +15,7 @@ import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
+import javafx.util.StringConverter;
 
 import java.math.BigDecimal;
 
@@ -27,6 +28,10 @@ public class RothConversionView extends VBox {
     private final Label conversionAmountLabel;
 
     private final TextField conversionAmountField;
+
+    private final Label targetTaxableIncomeLabel;
+
+    private final TextField targetTaxableIncomeField;
 
     private final Label frequencyLabel;
 
@@ -129,6 +134,39 @@ public class RothConversionView extends VBox {
                 .addAll(
                         RothConversionStrategy.values());
 
+        strategyComboBox.setConverter(
+                new StringConverter<>() {
+
+                    @Override
+                    public String toString(
+                            RothConversionStrategy strategy) {
+
+                        if (strategy == null) {
+                            return "";
+                        }
+
+                        return strategy ==
+                                RothConversionStrategy
+                                        .CUSTOM_TAXABLE_INCOME_TARGET
+                                ? "Custom Taxable Income Target"
+                                : strategy.name();
+                    }
+
+                    @Override
+                    public RothConversionStrategy fromString(
+                            String value) {
+
+                        if ("Custom Taxable Income Target"
+                                .equals(value)) {
+
+                            return RothConversionStrategy
+                                    .CUSTOM_TAXABLE_INCOME_TARGET;
+                        }
+
+                        return RothConversionStrategy.valueOf(value);
+                    }
+                });
+
         strategyComboBox
                 .getSelectionModel()
                 .select(
@@ -185,6 +223,26 @@ public class RothConversionView extends VBox {
 
         grid.add(
                 conversionAmountField,
+                1,
+                row++);
+
+        targetTaxableIncomeLabel =
+                new Label(
+                        "Target Taxable Income:");
+
+        grid.add(
+                targetTaxableIncomeLabel,
+                0,
+                row);
+
+        targetTaxableIncomeField =
+                new TextField();
+
+        targetTaxableIncomeField.setPromptText(
+                "Target Taxable Income");
+
+        grid.add(
+                targetTaxableIncomeField,
                 1,
                 row++);
 
@@ -294,6 +352,11 @@ public class RothConversionView extends VBox {
                 strategyComboBox.getValue()
                         == RothConversionStrategy.FIXED_AMOUNT;
 
+        boolean customTarget =
+                strategyComboBox.getValue()
+                        == RothConversionStrategy
+                        .CUSTOM_TAXABLE_INCOME_TARGET;
+
 
         /*
          * Fixed-dollar conversions require
@@ -312,33 +375,17 @@ public class RothConversionView extends VBox {
         conversionAmountField.setManaged(
                 fixedAmount);
 
-        frequencyLabel.setVisible(
-                fixedAmount);
+        targetTaxableIncomeLabel.setVisible(
+                customTarget);
 
-        frequencyLabel.setManaged(
-                fixedAmount);
+        targetTaxableIncomeLabel.setManaged(
+                customTarget);
 
-        frequencyComboBox.setVisible(
-                fixedAmount);
+        targetTaxableIncomeField.setVisible(
+                customTarget);
 
-        frequencyComboBox.setManaged(
-                fixedAmount);
-
-
-        /*
-         * A bracket-fill conversion is calculated
-         * by the projection engine and therefore
-         * does not require an amount or frequency
-         * from the user.
-         */
-
-        if (!fixedAmount) {
-
-            frequencyComboBox
-                    .getSelectionModel()
-                    .select(
-                            RothConversionFrequency.ANNUAL);
-        }
+        targetTaxableIncomeField.setManaged(
+                customTarget);
     }
 
 
@@ -360,6 +407,8 @@ public class RothConversionView extends VBox {
             conversionYearField.setText("");
 
             conversionAmountField.setText("");
+
+            targetTaxableIncomeField.setText("");
 
             strategyComboBox
                     .getSelectionModel()
@@ -414,6 +463,21 @@ public class RothConversionView extends VBox {
         } else {
 
             conversionAmountField.setText("");
+        }
+
+        if (request.getStrategy()
+                == RothConversionStrategy
+                .CUSTOM_TAXABLE_INCOME_TARGET) {
+
+            targetTaxableIncomeField.setText(
+                    request
+                            .getCustomTargetTaxableIncome()
+                            .stripTrailingZeros()
+                            .toPlainString());
+
+        } else {
+
+            targetTaxableIncomeField.setText("");
         }
 
 
@@ -563,34 +627,40 @@ public class RothConversionView extends VBox {
             }
 
 
-            /*
-             * Conversion frequency.
-             *
-             * Bracket-fill is inherently annual.
-             */
+            RothConversionFrequency frequency =
+                    frequencyComboBox.getValue();
 
-            RothConversionFrequency frequency;
+            if (frequency == null) {
 
+                throw new IllegalArgumentException(
+                        "Conversion frequency is required.");
+            }
 
-            if (strategy !=
-                    RothConversionStrategy.FIXED_AMOUNT) {
+            BigDecimal customTargetTaxableIncome =
+                    null;
 
-                /*
-                 * All bracket-fill strategies are
-                 * inherently annual.
-                 */
-                frequency =
-                        RothConversionFrequency.ANNUAL;
+            if (strategy ==
+                    RothConversionStrategy
+                            .CUSTOM_TAXABLE_INCOME_TARGET) {
 
-            } else {
+                String targetText =
+                        targetTaxableIncomeField
+                                .getText()
+                                .trim();
 
-                frequency =
-                        frequencyComboBox.getValue();
-
-                if (frequency == null) {
+                if (targetText.isEmpty()) {
 
                     throw new IllegalArgumentException(
-                            "Conversion frequency is required.");
+                            "Target taxable income is required.");
+                }
+
+                customTargetTaxableIncome =
+                        new BigDecimal(targetText);
+
+                if (customTargetTaxableIncome.signum() < 0) {
+
+                    throw new IllegalArgumentException(
+                            "Target taxable income cannot be negative.");
                 }
             }
 
@@ -621,7 +691,8 @@ public class RothConversionView extends VBox {
                             conversionAmount,
                             stopRule,
                             strategy,
-                            frequency);
+                            frequency,
+                            customTargetTaxableIncome);
 
 
             currentPlan.setRothConversionRequest(
@@ -635,7 +706,7 @@ public class RothConversionView extends VBox {
         catch (NumberFormatException ex) {
 
             statusLabel.setText(
-                    "Conversion year and amount must be valid.");
+                    "Conversion year, amount, and target taxable income must be valid.");
 
         }
         catch (IllegalArgumentException ex) {

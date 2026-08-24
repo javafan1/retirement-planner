@@ -88,6 +88,15 @@ public class ResultsSummaryView extends BorderPane {
     private final TextField rothAmountField =
             new TextField();
 
+    private final Label rothAmountLabel =
+            new Label("Amount");
+
+    private final TextField rothTargetTaxableIncomeField =
+            new TextField();
+
+    private final Label rothTargetTaxableIncomeLabel =
+            new Label("Target Taxable Income");
+
     private final ComboBox<RothConversionFrequency>
             rothFrequencyComboBox =
             new ComboBox<>();
@@ -626,7 +635,9 @@ public class ResultsSummaryView extends BorderPane {
                         RothConversionStrategy.FIXED_AMOUNT,
                         RothConversionStrategy.FILL_12_PERCENT_BRACKET,
                         RothConversionStrategy.FILL_22_PERCENT_BRACKET,
-                        RothConversionStrategy.FILL_24_PERCENT_BRACKET);
+                        RothConversionStrategy.FILL_24_PERCENT_BRACKET,
+                        RothConversionStrategy
+                                .CUSTOM_TAXABLE_INCOME_TARGET);
 
         /*
          * User-friendly strategy labels.
@@ -724,6 +735,9 @@ public class ResultsSummaryView extends BorderPane {
         rothAmountField.setPromptText(
                 "Amount");
 
+        rothTargetTaxableIncomeField.setPromptText(
+                "Target Taxable Income");
+
         applyRothButton.setOnAction(
                 event -> applyRothConversion());
 
@@ -781,6 +795,11 @@ public class ResultsSummaryView extends BorderPane {
                 strategy ==
                         RothConversionStrategy.FIXED_AMOUNT;
 
+        boolean customTarget =
+                strategy ==
+                        RothConversionStrategy
+                                .CUSTOM_TAXABLE_INCOME_TARGET;
+
         rothStrategyComboBox.setDisable(
                 !enabled);
 
@@ -796,8 +815,32 @@ public class ResultsSummaryView extends BorderPane {
         rothAmountField.setDisable(
                 !enabled || !fixedAmount);
 
-        //applyRothButton.setDisable(
-       //         !enabled);
+        rothAmountLabel.setVisible(
+                fixedAmount);
+
+        rothAmountLabel.setManaged(
+                fixedAmount);
+
+        rothAmountField.setVisible(
+                fixedAmount);
+
+        rothAmountField.setManaged(
+                fixedAmount);
+
+        rothTargetTaxableIncomeField.setDisable(
+                !enabled || !customTarget);
+
+        rothTargetTaxableIncomeLabel.setVisible(
+                customTarget);
+
+        rothTargetTaxableIncomeLabel.setManaged(
+                customTarget);
+
+        rothTargetTaxableIncomeField.setVisible(
+                customTarget);
+
+        rothTargetTaxableIncomeField.setManaged(
+                customTarget);
     }
 
 
@@ -1450,14 +1493,11 @@ public class ResultsSummaryView extends BorderPane {
                 1,
                 2);
 
-        Label amountLabel =
-                new Label("Amount");
-
-        amountLabel.getStyleClass().add(
+        rothAmountLabel.getStyleClass().add(
                 "assumption-label");
 
         grid.add(
-                amountLabel,
+                rothAmountLabel,
                 0,
                 3);
 
@@ -1469,6 +1509,22 @@ public class ResultsSummaryView extends BorderPane {
                 1,
                 3);
 
+        rothTargetTaxableIncomeLabel.getStyleClass().add(
+                "assumption-label");
+
+        grid.add(
+                rothTargetTaxableIncomeLabel,
+                0,
+                4);
+
+        rothTargetTaxableIncomeField.getStyleClass().add(
+                "assumption-field");
+
+        grid.add(
+                rothTargetTaxableIncomeField,
+                1,
+                4);
+
         Label frequencyLabel =
                 new Label("Frequency");
 
@@ -1478,12 +1534,12 @@ public class ResultsSummaryView extends BorderPane {
         grid.add(
                 frequencyLabel,
                 0,
-                4);
+                5);
 
         grid.add(
                 rothFrequencyComboBox,
                 1,
-                4);
+                5);
 
 //        Label stopRuleLabel =
 //                new Label("Stop Rule");
@@ -1505,6 +1561,9 @@ public class ResultsSummaryView extends BorderPane {
                 Double.MAX_VALUE);
 
         rothFrequencyComboBox.setMaxWidth(
+                Double.MAX_VALUE);
+
+        rothTargetTaxableIncomeField.setMaxWidth(
                 Double.MAX_VALUE);
 
         rothStopRuleComboBox.setMaxWidth(
@@ -2794,6 +2853,9 @@ public class ResultsSummaryView extends BorderPane {
             BigDecimal annualAmount =
                     BigDecimal.ZERO;
 
+            BigDecimal customTargetTaxableIncome =
+                    null;
+
             /*
              * Only fixed-dollar conversions require
              * an annual amount from the user.
@@ -2805,6 +2867,31 @@ public class ResultsSummaryView extends BorderPane {
                         parseMoney(
                                 rothAmountField
                                         .getText());
+            }
+
+            if (strategy ==
+                    RothConversionStrategy
+                            .CUSTOM_TAXABLE_INCOME_TARGET) {
+
+                String targetText =
+                        rothTargetTaxableIncomeField
+                                .getText()
+                                .trim();
+
+                if (targetText.isEmpty()) {
+
+                    throw new IllegalArgumentException(
+                            "Target taxable income is required.");
+                }
+
+                customTargetTaxableIncome =
+                        parseMoney(targetText);
+
+                if (customTargetTaxableIncome.signum() < 0) {
+
+                    throw new IllegalArgumentException(
+                            "Target taxable income cannot be negative.");
+                }
             }
 
             RothConversionFrequency frequency =
@@ -2826,7 +2913,8 @@ public class ResultsSummaryView extends BorderPane {
                             annualAmount,
                             stopRule,
                             strategy,
-                            frequency);
+                            frequency,
+                            customTargetTaxableIncome);
 
             rothConversionHandler.accept(
                     request);
@@ -3112,6 +3200,7 @@ public class ResultsSummaryView extends BorderPane {
 
             rothStartYearField.clear();
             rothAmountField.clear();
+            rothTargetTaxableIncomeField.clear();
 
             rothFrequencyComboBox
                     .getSelectionModel()
@@ -3140,9 +3229,31 @@ public class ResultsSummaryView extends BorderPane {
                 Integer.toString(
                         request.getStartYear()));
 
-        rothAmountField.setText(
-                request.getAnnualAmount()
-                        .toPlainString());
+        if (request.getStrategy()
+                == RothConversionStrategy.FIXED_AMOUNT) {
+
+            rothAmountField.setText(
+                    request.getAnnualAmount()
+                            .toPlainString());
+
+        } else {
+
+            rothAmountField.clear();
+        }
+
+        if (request.getStrategy()
+                == RothConversionStrategy
+                .CUSTOM_TAXABLE_INCOME_TARGET) {
+
+            rothTargetTaxableIncomeField.setText(
+                    request
+                            .getCustomTargetTaxableIncome()
+                            .toPlainString());
+
+        } else {
+
+            rothTargetTaxableIncomeField.clear();
+        }
 
         rothFrequencyComboBox
                 .getSelectionModel()
