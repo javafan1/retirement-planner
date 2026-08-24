@@ -16,6 +16,8 @@ public final class RothConversionRequest {
     private final RothConversionFrequency frequency;
     private final RothConversionStrategy strategy;
 
+    private final BigDecimal customTargetTaxableIncome;
+
     @JsonCreator
     public RothConversionRequest(
             @JsonProperty("enabled")
@@ -34,7 +36,10 @@ public final class RothConversionRequest {
             RothConversionStrategy strategy,
 
             @JsonProperty("frequency")
-            RothConversionFrequency frequency) {
+            RothConversionFrequency frequency,
+
+            @JsonProperty("customTargetTaxableIncome")
+            BigDecimal customTargetTaxableIncome) {
 
         if (startYear < 1900) {
             throw new IllegalArgumentException(
@@ -72,6 +77,31 @@ public final class RothConversionRequest {
                         ? RothConversionStrategy.FIXED_AMOUNT
                         : strategy;
 
+        validateCustomTargetTaxableIncome(
+                this.strategy,
+                customTargetTaxableIncome);
+
+        this.customTargetTaxableIncome =
+                customTargetTaxableIncome;
+
+    }
+
+    public RothConversionRequest(
+            boolean enabled,
+            int startYear,
+            BigDecimal annualAmount,
+            RothConversionStopRule stopRule,
+            RothConversionStrategy strategy,
+            RothConversionFrequency frequency) {
+
+        this(
+                enabled,
+                startYear,
+                annualAmount,
+                stopRule,
+                strategy,
+                frequency,
+                null);
     }
 
     public RothConversionStrategy getStrategy() {
@@ -96,5 +126,36 @@ public final class RothConversionRequest {
 
     public RothConversionFrequency getFrequency() {
         return frequency;
+    }
+
+    public BigDecimal getCustomTargetTaxableIncome() {
+        return customTargetTaxableIncome;
+    }
+
+    private static void validateCustomTargetTaxableIncome(
+            RothConversionStrategy strategy,
+            BigDecimal customTargetTaxableIncome) {
+
+        if (strategy ==
+                RothConversionStrategy
+                        .CUSTOM_TAXABLE_INCOME_TARGET) {
+
+            Objects.requireNonNull(
+                    customTargetTaxableIncome,
+                    "Custom target taxable income is required.");
+
+            if (customTargetTaxableIncome.signum() < 0) {
+                throw new IllegalArgumentException(
+                        "Custom target taxable income cannot be negative.");
+            }
+
+            return;
+        }
+
+        if (customTargetTaxableIncome != null) {
+            throw new IllegalArgumentException(
+                    "Custom target taxable income is only valid "
+                            + "for the custom taxable-income strategy.");
+        }
     }
 }

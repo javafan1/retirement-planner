@@ -299,4 +299,65 @@ class RothConversionPersistenceTest {
             Files.deleteIfExists(file);
         }
     }
+
+    @Test
+    void persistsCustomTargetTaxableIncomeRothConversionRequest()
+            throws Exception {
+
+        RetirementPlan originalPlan =
+                RothConversionDemoFactory
+                        .createRetirementPlan();
+
+        BigDecimal target =
+                new BigDecimal("180000.00");
+
+        originalPlan.setRothConversionRequest(
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        BigDecimal.ZERO,
+                        RothConversionStopRule
+                                .FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy
+                                .CUSTOM_TAXABLE_INCOME_TARGET,
+                        RothConversionFrequency.ANNUAL,
+                        target));
+
+        Path file =
+                Files.createTempFile(
+                        "roth-conversion-test",
+                        ".json");
+
+        try {
+
+            RetirementPlanRepository repository =
+                    new JsonRetirementPlanRepository();
+
+            repository.save(
+                    originalPlan,
+                    file);
+
+            RetirementPlan loadedPlan =
+                    repository.load(file);
+
+            RothConversionRequest loadedRequest =
+                    loadedPlan.getRothConversionRequest();
+
+            assertNotNull(loadedRequest);
+
+            assertEquals(
+                    RothConversionStrategy
+                            .CUSTOM_TAXABLE_INCOME_TARGET,
+                    loadedRequest.getStrategy());
+
+            assertEquals(
+                    target,
+                    loadedRequest
+                            .getCustomTargetTaxableIncome());
+
+        } finally {
+
+            Files.deleteIfExists(file);
+        }
+    }
 }

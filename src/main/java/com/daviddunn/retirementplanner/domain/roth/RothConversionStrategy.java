@@ -8,5 +8,7 @@ public enum RothConversionStrategy {
 
     FILL_22_PERCENT_BRACKET,
 
-    FILL_24_PERCENT_BRACKET
+    FILL_24_PERCENT_BRACKET,
+
+    CUSTOM_TAXABLE_INCOME_TARGET
 }

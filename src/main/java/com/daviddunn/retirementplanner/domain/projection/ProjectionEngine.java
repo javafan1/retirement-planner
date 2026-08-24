@@ -411,39 +411,41 @@ public class ProjectionEngine {
 
             } else {
 
-                /*
-                 * Get the federal tax rules for the
-                 * household's filing status.
-                 */
                 FilingStatus projectionFilingStatus =
                         getProjectionFilingStatus(
                                 assumptions,
                                 projectionDate);
 
-                FederalTaxRules federalTaxRules =
-                        projectedGovernmentRules
-                                .getFederalTaxRules(
-                                        projectionFilingStatus);
+                BigDecimal targetTaxableIncome;
 
-                /*
-                 * Resolve the target bracket from
-                 * the selected Roth conversion strategy.
-                 *
-                 * This supports:
-                 *
-                 *   FILL_12_PERCENT_BRACKET
-                 *   FILL_22_PERCENT_BRACKET
-                 *   FILL_24_PERCENT_BRACKET
-                 */
-                FederalTaxBracket targetBracket =
-                        this.rothConversionTargetBracketResolver
-                                .resolve(
-                                        strategy,
-                                        federalTaxRules);
+                if (strategy ==
+                        RothConversionStrategy
+                                .CUSTOM_TAXABLE_INCOME_TARGET) {
+
+                    targetTaxableIncome =
+                            rothConversionRequest
+                                    .getCustomTargetTaxableIncome();
+
+                } else {
+
+                    FederalTaxRules federalTaxRules =
+                            projectedGovernmentRules
+                                    .getFederalTaxRules(
+                                            projectionFilingStatus);
+
+                    FederalTaxBracket targetBracket =
+                            this.rothConversionTargetBracketResolver
+                                    .resolve(
+                                            strategy,
+                                            federalTaxRules);
+
+                    targetTaxableIncome =
+                            targetBracket.getUpperBound();
+                }
 
                 /*
                  * Calculate the Roth conversion required
-                 * to fill the selected bracket after
+                 * to reach the selected taxable-income target after
                  * accounting for the tax-funding withdrawal.
                  */
                 rothConversion =
@@ -454,11 +456,9 @@ public class ProjectionEngine {
                                         portfolioAfterAdditionalWithdrawal,
                                         totalWithdrawalBreakdown,
                                         withdrawalStrategy,
-                                        getProjectionFilingStatus(
-                                                assumptions,
-                                                projectionDate),
+                                        projectionFilingStatus,
                                         projectedGovernmentRules,
-                                        targetBracket,
+                                        targetTaxableIncome,
                                         unallocatedCashInterest);
             }
         }

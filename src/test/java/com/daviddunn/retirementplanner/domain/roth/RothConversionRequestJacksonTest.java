@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RothConversionRequestJacksonTest {
@@ -126,5 +127,77 @@ class RothConversionRequestJacksonTest {
                 RothConversionFrequency
                         .ANNUAL,
                 restored.getFrequency());
+    }
+
+    @Test
+    void customTargetTaxableIncomeRoundTripsThroughJackson()
+            throws Exception {
+
+        BigDecimal target =
+                new BigDecimal("180000.00");
+
+        RothConversionRequest original =
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        BigDecimal.ZERO,
+                        RothConversionStopRule
+                                .FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy
+                                .CUSTOM_TAXABLE_INCOME_TARGET,
+                        RothConversionFrequency
+                                .ANNUAL,
+                        target);
+
+        RothConversionRequest restored =
+                objectMapper.readValue(
+                        objectMapper.writeValueAsString(original),
+                        RothConversionRequest.class);
+
+        assertEquals(
+                RothConversionStrategy
+                        .CUSTOM_TAXABLE_INCOME_TARGET,
+                restored.getStrategy());
+
+        assertEquals(
+                target,
+                restored.getCustomTargetTaxableIncome());
+    }
+
+    @Test
+    void legacyJsonWithoutCustomTargetTaxableIncomeLoadsExistingStrategies()
+            throws Exception {
+
+        for (RothConversionStrategy strategy :
+                new RothConversionStrategy[] {
+                        RothConversionStrategy.FIXED_AMOUNT,
+                        RothConversionStrategy.FILL_12_PERCENT_BRACKET,
+                        RothConversionStrategy.FILL_22_PERCENT_BRACKET,
+                        RothConversionStrategy.FILL_24_PERCENT_BRACKET }) {
+
+            String legacyJson =
+                    """
+                    {
+                      "enabled": true,
+                      "startYear": 2026,
+                      "annualAmount": 50000,
+                      "stopRule": "FIRST_HOUSEHOLD_RMD",
+                      "strategy": "%s",
+                      "frequency": "ANNUAL"
+                    }
+                    """.formatted(strategy.name());
+
+            RothConversionRequest restored =
+                    objectMapper.readValue(
+                            legacyJson,
+                            RothConversionRequest.class);
+
+            assertEquals(
+                    strategy,
+                    restored.getStrategy());
+
+            assertNull(
+                    restored.getCustomTargetTaxableIncome());
+        }
     }
 }

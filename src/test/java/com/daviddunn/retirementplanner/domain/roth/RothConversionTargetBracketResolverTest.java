@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class RothConversionTargetBracketResolverTest {
 
@@ -71,6 +72,28 @@ class RothConversionTargetBracketResolverTest {
                 new BigDecimal("0.24")
                         .compareTo(
                                 bracket.getTaxRate()));
+    }
+
+    @Test
+    void rejectsStrategiesWithoutStatutoryTargetBrackets() {
+
+        FederalTaxRules rules =
+                createRules();
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        resolver.resolve(
+                                RothConversionStrategy.FIXED_AMOUNT,
+                                rules));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        resolver.resolve(
+                                RothConversionStrategy
+                                        .CUSTOM_TAXABLE_INCOME_TARGET,
+                                rules));
     }
 
 

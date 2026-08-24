@@ -45,6 +45,10 @@ public final class RothConversionTargetBracketResolver {
                     case FIXED_AMOUNT ->
                             throw new IllegalArgumentException(
                                     "Fixed amount strategy does not have a target tax bracket.");
+
+                    case CUSTOM_TAXABLE_INCOME_TARGET ->
+                            throw new IllegalArgumentException(
+                                    "Custom taxable-income target strategy does not have a target tax bracket.");
                 };
 
         return federalTaxBracketCalculator.findBracket(

@@ -239,4 +239,145 @@ class RothConversionBracketFillCalculatorTest {
                 difference.compareTo(
                         new BigDecimal("0.01")) <= 0);
     }
+
+    @Test
+    void reachesCustomTargetTaxableIncomeWhenTaxFundingUsesTraditionalIra() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        traditionalIra,
+                                        new BigDecimal("1000000"))));
+
+        WithdrawalBreakdown existingWithdrawals =
+                new WithdrawalBreakdown(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        new BigDecimal("30000"),
+                        BigDecimal.ZERO);
+
+        BigDecimal targetTaxableIncome =
+                new BigDecimal("180000");
+
+        BigDecimal conversion =
+                calculator.calculateConversion(
+                        household,
+                        LocalDate.of(2026, 1, 1),
+                        portfolio,
+                        existingWithdrawals,
+                        new TaxDeferredFirstWithdrawalStrategy(),
+                        FilingStatus.MARRIED_FILING_JOINTLY,
+                        rules,
+                        targetTaxableIncome,
+                        BigDecimal.ZERO);
+
+        TaxFundingResult result =
+                new TaxFundingCalculator()
+                        .calculate(
+                                household,
+                                LocalDate.of(2026, 1, 1),
+                                portfolio,
+                                existingWithdrawals,
+                                new TaxDeferredFirstWithdrawalStrategy(),
+                                FilingStatus.MARRIED_FILING_JOINTLY,
+                                rules,
+                                conversion,
+                                BigDecimal.ZERO);
+
+        BigDecimal difference =
+                targetTaxableIncome.subtract(
+                        result
+                                .getFederalTaxCalculation()
+                                .getTaxableIncome())
+                        .abs();
+
+        assertTrue(
+                difference.compareTo(
+                        new BigDecimal("0.01")) <= 0);
+
+        assertTrue(
+                result.getAdditionalWithdrawal()
+                        .compareTo(BigDecimal.ZERO) > 0);
+    }
+
+    @Test
+    void returnsZeroWhenTaxableIncomeAlreadyMeetsCustomTarget() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        traditionalIra,
+                                        new BigDecimal("1000000"))));
+
+        WithdrawalBreakdown existingWithdrawals =
+                new WithdrawalBreakdown(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        new BigDecimal("100000"),
+                        BigDecimal.ZERO);
+
+        BigDecimal conversion =
+                calculator.calculateConversion(
+                        household,
+                        LocalDate.of(2026, 1, 1),
+                        portfolio,
+                        existingWithdrawals,
+                        new TaxDeferredFirstWithdrawalStrategy(),
+                        FilingStatus.MARRIED_FILING_JOINTLY,
+                        rules,
+                        new BigDecimal("10000"),
+                        BigDecimal.ZERO);
+
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(conversion));
+    }
 }

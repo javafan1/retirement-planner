@@ -26,16 +26,10 @@ public final class RothConversionBracketFillCalculator {
     private final TaxFundingCalculator
             taxFundingCalculator;
 
-    private final RothConversionBracketFillStrategy
-            bracketFillStrategy;
-
     public RothConversionBracketFillCalculator() {
 
         this.taxFundingCalculator =
                 new TaxFundingCalculator();
-
-        this.bracketFillStrategy =
-                new RothConversionBracketFillStrategy();
     }
 
     public BigDecimal calculateConversion(
@@ -47,6 +41,39 @@ public final class RothConversionBracketFillCalculator {
             FilingStatus filingStatus,
             GovernmentRules projectedGovernmentRules,
             FederalTaxBracket targetBracket,
+            BigDecimal taxableInterestIncome) {
+
+        Objects.requireNonNull(
+                targetBracket,
+                "Target federal tax bracket is required.");
+
+        if (!targetBracket.hasUpperBound()) {
+
+            throw new IllegalArgumentException(
+                    "Target federal tax bracket has no upper bound.");
+        }
+
+        return calculateConversion(
+                household,
+                projectionDate,
+                portfolio,
+                existingWithdrawals,
+                withdrawalStrategy,
+                filingStatus,
+                projectedGovernmentRules,
+                targetBracket.getUpperBound(),
+                taxableInterestIncome);
+    }
+
+    public BigDecimal calculateConversion(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal targetTaxableIncome,
             BigDecimal taxableInterestIncome) {
 
         Objects.requireNonNull(
@@ -78,13 +105,12 @@ public final class RothConversionBracketFillCalculator {
                 "Projected government rules are required.");
 
         Objects.requireNonNull(
-                targetBracket,
-                "Target federal tax bracket is required.");
+                targetTaxableIncome,
+                "Target taxable income is required.");
 
-        if (!targetBracket.hasUpperBound()) {
-
+        if (targetTaxableIncome.signum() < 0) {
             throw new IllegalArgumentException(
-                    "Target federal tax bracket has no upper bound.");
+                    "Target taxable income cannot be negative.");
         }
 
         Objects.requireNonNull(
@@ -118,14 +144,14 @@ public final class RothConversionBracketFillCalculator {
                         .getFederalTaxCalculation();
 
         /*
-         * Use the existing bracket-fill strategy
-         * to calculate the first conversion
-         * proposal.
+         * The initial conversion proposal is the
+         * remaining room below the target taxable
+         * income.
          */
         BigDecimal rothConversion =
-                bracketFillStrategy.calculateConversion(
-                        preConversionFederalTax,
-                        targetBracket);
+                targetTaxableIncome.subtract(
+                        preConversionFederalTax
+                                .getTaxableIncome());
 
         /*
          * If there is no room in the bracket,
@@ -164,10 +190,8 @@ public final class RothConversionBracketFillCalculator {
                             .getTaxableIncome();
 
             BigDecimal difference =
-                    targetBracket
-                            .getUpperBound()
-                            .subtract(
-                                    finalTaxableIncome);
+                    targetTaxableIncome.subtract(
+                            finalTaxableIncome);
 
             if (difference.abs()
                     .compareTo(TOLERANCE) <= 0) {

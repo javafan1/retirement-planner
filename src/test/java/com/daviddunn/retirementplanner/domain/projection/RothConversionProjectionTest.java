@@ -319,4 +319,185 @@ class RothConversionProjectionTest {
                                 secondYear.getEndingBalance(
                                         rothIra)));
     }
+
+    @Test
+    void projectionAppliesOneTimeCustomTaxableIncomeTarget() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        RothIRA rothIra =
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(traditionalIra);
+        portfolio.addAccount(rothIra);
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        new Household(primary, spouse),
+                        portfolio,
+                        new PlanningAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                2,
+                                LocalDate.of(2026, 1, 1)));
+
+        BigDecimal targetTaxableIncome =
+                new BigDecimal("180000");
+
+        plan.setRothConversionRequest(
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        BigDecimal.ZERO,
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy
+                                .CUSTOM_TAXABLE_INCOME_TARGET,
+                        RothConversionFrequency.ONE_TIME,
+                        targetTaxableIncome));
+
+        Projection projection =
+                new ProjectionEngine().project(plan);
+
+        ProjectionYear firstYear =
+                projection.getYearAt(0);
+
+        ProjectionYear secondYear =
+                projection.getYearAt(1);
+
+        assertTrue(
+                firstYear.getRothConversion()
+                        .signum() > 0);
+
+        assertTrue(
+                targetTaxableIncome.subtract(
+                        firstYear.getFederalTaxableIncome())
+                        .abs()
+                        .compareTo(new BigDecimal("0.01")) <= 0);
+
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(
+                        secondYear.getRothConversion()));
+
+        assertEquals(
+                0,
+                new BigDecimal("1000000")
+                        .compareTo(
+                                traditionalIra.getCurrentBalance()));
+
+        assertEquals(
+                0,
+                new BigDecimal("100000")
+                        .compareTo(
+                                rothIra.getCurrentBalance()));
+    }
+
+    @Test
+    void projectionAppliesAnnualCustomTaxableIncomeTarget() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1963, 6, 4));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000"));
+
+        RothIRA rothIra =
+                new RothIRA(
+                        "Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000"));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(traditionalIra);
+        portfolio.addAccount(rothIra);
+
+        RetirementPlan plan =
+                new RetirementPlan(
+                        new Household(primary, spouse),
+                        portfolio,
+                        new PlanningAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                2,
+                                LocalDate.of(2026, 1, 1)));
+
+        BigDecimal targetTaxableIncome =
+                new BigDecimal("180000");
+
+        plan.setRothConversionRequest(
+                new RothConversionRequest(
+                        true,
+                        2026,
+                        BigDecimal.ZERO,
+                        RothConversionStopRule.FIRST_HOUSEHOLD_RMD,
+                        RothConversionStrategy
+                                .CUSTOM_TAXABLE_INCOME_TARGET,
+                        RothConversionFrequency.ANNUAL,
+                        targetTaxableIncome));
+
+        Projection projection =
+                new ProjectionEngine().project(plan);
+
+        ProjectionYear firstYear =
+                projection.getYearAt(0);
+
+        ProjectionYear secondYear =
+                projection.getYearAt(1);
+
+        assertTrue(
+                firstYear.getRothConversion()
+                        .signum() > 0);
+
+        assertTrue(
+                secondYear.getRothConversion()
+                        .signum() > 0);
+
+        assertTrue(
+                targetTaxableIncome.subtract(
+                        firstYear.getFederalTaxableIncome())
+                        .abs()
+                        .compareTo(new BigDecimal("0.01")) <= 0);
+
+        assertTrue(
+                targetTaxableIncome.subtract(
+                        secondYear.getFederalTaxableIncome())
+                        .abs()
+                        .compareTo(new BigDecimal("0.01")) <= 0);
+    }
 }

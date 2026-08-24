@@ -655,6 +655,9 @@ public class ResultsSummaryView extends BorderPane {
 
                             case FILL_24_PERCENT_BRACKET ->
                                     "Fill 24% Bracket";
+
+                            case CUSTOM_TAXABLE_INCOME_TARGET ->
+                                    "Custom Taxable Income Target";
                         };
                     }
 
@@ -679,6 +682,10 @@ public class ResultsSummaryView extends BorderPane {
                             case "Fill 24% Bracket" ->
                                     RothConversionStrategy
                                             .FILL_24_PERCENT_BRACKET;
+
+                            case "Custom Taxable Income Target" ->
+                                    RothConversionStrategy
+                                            .CUSTOM_TAXABLE_INCOME_TARGET;
 
                             default ->
                                     null;
