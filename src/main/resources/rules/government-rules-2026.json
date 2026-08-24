@@ -1,0 +1,269 @@
+{
+  "rulesVersion": "2026.1",
+  "taxYear": 2026,
+  "effectiveDate": "2026-01-01",
+
+  "federalTaxRules": [
+
+    {
+      "filingStatus": "SINGLE",
+      "standardDeduction": 16100,
+      "taxBrackets": [
+        { "lowerBound": 0,      "upperBound": 12400,  "taxRate": 0.10 },
+        { "lowerBound": 12400,  "upperBound": 50400,  "taxRate": 0.12 },
+        { "lowerBound": 50400,  "upperBound": 105700, "taxRate": 0.22 },
+        { "lowerBound": 105700, "upperBound": 201775, "taxRate": 0.24 },
+        { "lowerBound": 201775, "upperBound": 256225, "taxRate": 0.32 },
+        { "lowerBound": 256225, "upperBound": 640600, "taxRate": 0.35 },
+        { "lowerBound": 640600, "upperBound": null,   "taxRate": 0.37 }
+      ]
+    },
+
+    {
+      "filingStatus": "MARRIED_FILING_JOINTLY",
+      "standardDeduction": 32200,
+      "taxBrackets": [
+        { "lowerBound": 0,      "upperBound": 24800,  "taxRate": 0.10 },
+        { "lowerBound": 24800,  "upperBound": 100800, "taxRate": 0.12 },
+        { "lowerBound": 100800, "upperBound": 211400, "taxRate": 0.22 },
+        { "lowerBound": 211400, "upperBound": 403550, "taxRate": 0.24 },
+        { "lowerBound": 403550, "upperBound": 512450, "taxRate": 0.32 },
+        { "lowerBound": 512450, "upperBound": 768700, "taxRate": 0.35 },
+        { "lowerBound": 768700, "upperBound": null,   "taxRate": 0.37 }
+      ]
+    },
+
+    {
+      "filingStatus": "MARRIED_FILING_SEPARATELY",
+      "standardDeduction": 16100,
+      "taxBrackets": [
+        { "lowerBound": 0,      "upperBound": 12400,  "taxRate": 0.10 },
+        { "lowerBound": 12400,  "upperBound": 50400,  "taxRate": 0.12 },
+        { "lowerBound": 50400,  "upperBound": 105700, "taxRate": 0.22 },
+        { "lowerBound": 105700, "upperBound": 201775, "taxRate": 0.24 },
+        { "lowerBound": 201775, "upperBound": 256225, "taxRate": 0.32 },
+        { "lowerBound": 256225, "upperBound": 384350, "taxRate": 0.35 },
+        { "lowerBound": 384350, "upperBound": null,   "taxRate": 0.37 }
+      ]
+    },
+
+    {
+      "filingStatus": "HEAD_OF_HOUSEHOLD",
+      "standardDeduction": 24150,
+      "taxBrackets": [
+        { "lowerBound": 0,      "upperBound": 17700,  "taxRate": 0.10 },
+        { "lowerBound": 17700,  "upperBound": 67450,  "taxRate": 0.12 },
+        { "lowerBound": 67450,  "upperBound": 105700, "taxRate": 0.22 },
+        { "lowerBound": 105700, "upperBound": 201750, "taxRate": 0.24 },
+        { "lowerBound": 201750, "upperBound": 256200, "taxRate": 0.32 },
+        { "lowerBound": 256200, "upperBound": 640600, "taxRate": 0.35 },
+        { "lowerBound": 640600, "upperBound": null,   "taxRate": 0.37 }
+      ]
+    },
+
+    {
+      "filingStatus": "QUALIFYING_SURVIVING_SPOUSE",
+      "standardDeduction": 32200,
+      "taxBrackets": [
+        { "lowerBound": 0,      "upperBound": 24800,  "taxRate": 0.10 },
+        { "lowerBound": 24800,  "upperBound": 100800, "taxRate": 0.12 },
+        { "lowerBound": 100800, "upperBound": 211400, "taxRate": 0.22 },
+        { "lowerBound": 211400, "upperBound": 403550, "taxRate": 0.24 },
+        { "lowerBound": 403550, "upperBound": 512450, "taxRate": 0.32 },
+        { "lowerBound": 512450, "upperBound": 768700, "taxRate": 0.35 },
+        { "lowerBound": 768700, "upperBound": null,   "taxRate": 0.37 }
+      ]
+    }
+  ],
+
+  "michiganTaxRules": {
+
+    "incomeTaxRate": 0.0425,
+
+    "retirementDeductionSingle": 40762,
+
+    "retirementDeductionMarried": 81524
+  },
+
+  "irmaaRules": {
+    "brackets": [
+
+      {
+        "filingStatus": "SINGLE",
+        "minimumModifiedAdjustedGrossIncome": 0,
+        "maximumModifiedAdjustedGrossIncome": 109000,
+        "monthlyPartBPremium": 202.90,
+        "monthlyPartDPremium": 0.00
+      },
+      {
+        "filingStatus": "SINGLE",
+        "minimumModifiedAdjustedGrossIncome": 109001,
+        "maximumModifiedAdjustedGrossIncome": 137000,
+        "monthlyPartBPremium": 284.10,
+        "monthlyPartDPremium": 14.50
+      },
+      {
+        "filingStatus": "SINGLE",
+        "minimumModifiedAdjustedGrossIncome": 137001,
+        "maximumModifiedAdjustedGrossIncome": 171000,
+        "monthlyPartBPremium": 405.80,
+        "monthlyPartDPremium": 37.50
+      },
+      {
+        "filingStatus": "SINGLE",
+        "minimumModifiedAdjustedGrossIncome": 171001,
+        "maximumModifiedAdjustedGrossIncome": 205000,
+        "monthlyPartBPremium": 527.50,
+        "monthlyPartDPremium": 60.40
+      },
+      {
+        "filingStatus": "SINGLE",
+        "minimumModifiedAdjustedGrossIncome": 205001,
+        "maximumModifiedAdjustedGrossIncome": 500000,
+        "monthlyPartBPremium": 649.20,
+        "monthlyPartDPremium": 83.30
+      },
+      {
+        "filingStatus": "SINGLE",
+        "minimumModifiedAdjustedGrossIncome": 500001,
+        "maximumModifiedAdjustedGrossIncome": null,
+        "monthlyPartBPremium": 689.90,
+        "monthlyPartDPremium": 91.00
+      },
+
+      {
+        "filingStatus": "MARRIED_FILING_JOINTLY",
+        "minimumModifiedAdjustedGrossIncome": 0,
+        "maximumModifiedAdjustedGrossIncome": 218000,
+        "monthlyPartBPremium": 202.90,
+        "monthlyPartDPremium": 0.00
+      },
+      {
+        "filingStatus": "MARRIED_FILING_JOINTLY",
+        "minimumModifiedAdjustedGrossIncome": 218001,
+        "maximumModifiedAdjustedGrossIncome": 274000,
+        "monthlyPartBPremium": 284.10,
+        "monthlyPartDPremium": 14.50
+      },
+      {
+        "filingStatus": "MARRIED_FILING_JOINTLY",
+        "minimumModifiedAdjustedGrossIncome": 274001,
+        "maximumModifiedAdjustedGrossIncome": 342000,
+        "monthlyPartBPremium": 405.80,
+        "monthlyPartDPremium": 37.50
+      },
+      {
+        "filingStatus": "MARRIED_FILING_JOINTLY",
+        "minimumModifiedAdjustedGrossIncome": 342001,
+        "maximumModifiedAdjustedGrossIncome": 410000,
+        "monthlyPartBPremium": 527.50,
+        "monthlyPartDPremium": 60.40
+      },
+      {
+        "filingStatus": "MARRIED_FILING_JOINTLY",
+        "minimumModifiedAdjustedGrossIncome": 410001,
+        "maximumModifiedAdjustedGrossIncome": 750000,
+        "monthlyPartBPremium": 649.20,
+        "monthlyPartDPremium": 83.30
+      },
+      {
+        "filingStatus": "MARRIED_FILING_JOINTLY",
+        "minimumModifiedAdjustedGrossIncome": 750001,
+        "maximumModifiedAdjustedGrossIncome": null,
+        "monthlyPartBPremium": 689.90,
+        "monthlyPartDPremium": 91.00
+      }
+    ]
+  },
+
+"socialSecurityTaxRules": [
+  {
+    "filingStatus": "SINGLE",
+    "firstThreshold": 25000,
+    "secondThreshold": 34000
+  },
+  {
+    "filingStatus": "MARRIED_FILING_JOINTLY",
+    "firstThreshold": 32000,
+    "secondThreshold": 44000
+  },
+  {
+    "filingStatus": "HEAD_OF_HOUSEHOLD",
+    "firstThreshold": 25000,
+    "secondThreshold": 34000
+  },
+  {
+    "filingStatus": "QUALIFYING_SURVIVING_SPOUSE",
+    "firstThreshold": 25000,
+    "secondThreshold": 34000
+  }
+],
+
+"rmdRules": {
+
+  "startingAgeRules": [
+    {
+      "minimumBirthYear": 1951,
+      "maximumBirthYear": 1959,
+      "rmdStartingAge": 73
+    },
+    {
+      "minimumBirthYear": 1960,
+      "maximumBirthYear": null,
+      "rmdStartingAge": 75
+    }
+  ],
+
+  "uniformLifetimeTable": [
+    { "age": 72,  "distributionPeriod": 27.4 },
+    { "age": 73,  "distributionPeriod": 26.5 },
+    { "age": 74,  "distributionPeriod": 25.5 },
+    { "age": 75,  "distributionPeriod": 24.6 },
+    { "age": 76,  "distributionPeriod": 23.7 },
+    { "age": 77,  "distributionPeriod": 22.9 },
+    { "age": 78,  "distributionPeriod": 22.0 },
+    { "age": 79,  "distributionPeriod": 21.1 },
+    { "age": 80,  "distributionPeriod": 20.2 },
+    { "age": 81,  "distributionPeriod": 19.4 },
+    { "age": 82,  "distributionPeriod": 18.5 },
+    { "age": 83,  "distributionPeriod": 17.7 },
+    { "age": 84,  "distributionPeriod": 16.8 },
+    { "age": 85,  "distributionPeriod": 16.0 },
+    { "age": 86,  "distributionPeriod": 15.2 },
+    { "age": 87,  "distributionPeriod": 14.4 },
+    { "age": 88,  "distributionPeriod": 13.7 },
+    { "age": 89,  "distributionPeriod": 12.9 },
+    { "age": 90,  "distributionPeriod": 12.2 },
+    { "age": 91,  "distributionPeriod": 11.5 },
+    { "age": 92,  "distributionPeriod": 10.8 },
+    { "age": 93,  "distributionPeriod": 10.1 },
+    { "age": 94,  "distributionPeriod": 9.5 },
+    { "age": 95,  "distributionPeriod": 8.9 },
+    { "age": 96,  "distributionPeriod": 8.4 },
+    { "age": 97,  "distributionPeriod": 7.8 },
+    { "age": 98,  "distributionPeriod": 7.3 },
+    { "age": 99,  "distributionPeriod": 6.8 },
+    { "age": 100, "distributionPeriod": 6.4 },
+    { "age": 101, "distributionPeriod": 6.0 },
+    { "age": 102, "distributionPeriod": 5.6 },
+    { "age": 103, "distributionPeriod": 5.2 },
+    { "age": 104, "distributionPeriod": 4.9 },
+    { "age": 105, "distributionPeriod": 4.6 },
+    { "age": 106, "distributionPeriod": 4.3 },
+    { "age": 107, "distributionPeriod": 4.1 },
+    { "age": 108, "distributionPeriod": 3.9 },
+    { "age": 109, "distributionPeriod": 3.7 },
+    { "age": 110, "distributionPeriod": 3.5 },
+    { "age": 111, "distributionPeriod": 3.4 },
+    { "age": 112, "distributionPeriod": 3.3 },
+    { "age": 113, "distributionPeriod": 3.1 },
+    { "age": 114, "distributionPeriod": 3.0 },
+    { "age": 115, "distributionPeriod": 2.9 },
+    { "age": 116, "distributionPeriod": 2.8 },
+    { "age": 117, "distributionPeriod": 2.7 },
+    { "age": 118, "distributionPeriod": 2.5 },
+    { "age": 119, "distributionPeriod": 2.3 },
+    { "age": 120, "distributionPeriod": 2.0 }
+  ]
+}
+}
