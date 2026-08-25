@@ -433,10 +433,16 @@ public class ProjectionEngine {
                                     .getFederalTaxRules(
                                             projectionFilingStatus);
 
+                    FederalTaxRules publishedFederalTaxRules =
+                            governmentRules
+                                    .getFederalTaxRules(
+                                            projectionFilingStatus);
+
                     FederalTaxBracket targetBracket =
                             this.rothConversionTargetBracketResolver
                                     .resolve(
                                             strategy,
+                                            publishedFederalTaxRules,
                                             federalTaxRules);
 
                     targetTaxableIncome =

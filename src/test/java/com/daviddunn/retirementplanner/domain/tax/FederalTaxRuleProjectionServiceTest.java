@@ -146,10 +146,96 @@ class FederalTaxRuleProjectionServiceTest {
                 deductionGrowthRules.getStandardDeduction());
     }
 
+    @Test
+    void appliesFutureMarginalRateAdjustmentWithoutChangingParameters() {
+
+        PlanningAssumptions assumptions =
+                planningAssumptions(
+                        new BigDecimal("0.025"),
+                        new BigDecimal("0.030"),
+                        new BigDecimal("0.01"),
+                        new BigDecimal("0.03"),
+                        2031);
+
+        FederalTaxRules beforeEffectiveYear = service.project(
+                publishedRules, 2026, 2030, assumptions);
+
+        FederalTaxRules effectiveYearRules = service.project(
+                publishedRules, 2026, 2031, assumptions);
+
+        FederalTaxRules laterYearRules = service.project(
+                publishedRules, 2026, 2032, assumptions);
+
+        assertEquals(
+                new BigDecimal("0.22"),
+                beforeEffectiveYear.getTaxBrackets().get(2).getTaxRate());
+
+        assertEquals(
+                new BigDecimal("0.25"),
+                effectiveYearRules.getTaxBrackets().get(2).getTaxRate());
+
+        assertEquals(
+                new BigDecimal("0.25"),
+                laterYearRules.getTaxBrackets().get(2).getTaxRate());
+
+        FederalTaxRules noAdjustmentRules = service.project(
+                publishedRules,
+                2026,
+                2031,
+                planningAssumptions(
+                        new BigDecimal("0.025"),
+                        new BigDecimal("0.030"),
+                        new BigDecimal("0.20"),
+                        BigDecimal.ZERO,
+                        null));
+
+        assertEquals(
+                noAdjustmentRules.getTaxBrackets().get(2).getUpperBound(),
+                effectiveYearRules.getTaxBrackets().get(2).getUpperBound());
+
+        assertEquals(
+                noAdjustmentRules.getStandardDeduction(),
+                effectiveYearRules.getStandardDeduction());
+    }
+
+    @Test
+    void supportsNegativeFutureMarginalRateAdjustment() {
+
+        FederalTaxRules projectedRules = service.project(
+                publishedRules,
+                2026,
+                2031,
+                planningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        new BigDecimal("-0.02"),
+                        2031));
+
+        assertEquals(
+                new BigDecimal("0.20"),
+                projectedRules.getTaxBrackets().get(2).getTaxRate());
+    }
+
     private PlanningAssumptions planningAssumptions(
             BigDecimal bracketGrowthRate,
             BigDecimal deductionGrowthRate,
             BigDecimal generalInflationRate) {
+
+        return planningAssumptions(
+                bracketGrowthRate,
+                deductionGrowthRate,
+                generalInflationRate,
+                BigDecimal.ZERO,
+                null);
+    }
+
+    private PlanningAssumptions planningAssumptions(
+            BigDecimal bracketGrowthRate,
+            BigDecimal deductionGrowthRate,
+            BigDecimal generalInflationRate,
+            BigDecimal futureMarginalRateAdjustment,
+            Integer futureMarginalRateEffectiveYear) {
 
         return new PlanningAssumptions(
                 new EconomicAssumptions(
@@ -159,7 +245,11 @@ class FederalTaxRuleProjectionServiceTest {
                         bracketGrowthRate,
                         deductionGrowthRate,
                         BigDecimal.ZERO,
-                        BigDecimal.ZERO),
+                        BigDecimal.ZERO,
+                        FilingStatus.MARRIED_FILING_JOINTLY,
+                        new BigDecimal("0.25"),
+                        futureMarginalRateAdjustment,
+                        futureMarginalRateEffectiveYear),
                 30,
                 LocalDate.of(2026, 1, 1));
     }

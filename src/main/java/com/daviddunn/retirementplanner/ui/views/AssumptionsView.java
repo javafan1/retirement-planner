@@ -62,6 +62,8 @@ public class AssumptionsView extends VBox {
      */
     private final TextField federalBracketGrowthField;
     private final TextField standardDeductionGrowthField;
+    private final TextField futureFederalMarginalRateAdjustmentField;
+    private final TextField futureFederalMarginalRateEffectiveYearField;
     private final TextField stateIncomeTaxRateField;
     private final TextField localIncomeTaxRateField;
     private final TextField estimatedHeirTaxRateField;
@@ -147,6 +149,12 @@ public class AssumptionsView extends VBox {
                 new TextField();
 
         standardDeductionGrowthField =
+                new TextField();
+
+        futureFederalMarginalRateAdjustmentField =
+                new TextField();
+
+        futureFederalMarginalRateEffectiveYearField =
                 new TextField();
 
         stateIncomeTaxRateField =
@@ -366,6 +374,27 @@ public class AssumptionsView extends VBox {
 
         grid.add(
                 new Label(
+                        "Future Federal Tax Rate Change (% points):"),
+                0,
+                row);
+
+        grid.add(
+                futureFederalMarginalRateAdjustmentField,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Effective Year:"),
+                0,
+                row);
+
+        grid.add(
+                futureFederalMarginalRateEffectiveYearField,
+                1,
+                row++);
+
+        grid.add(
+                new Label(
                         "State Income Tax Rate (%):"),
                 0,
                 row);
@@ -580,6 +609,20 @@ public class AssumptionsView extends VBox {
                         taxAssumptions
                                 .getStandardDeductionGrowthRate()));
 
+        futureFederalMarginalRateAdjustmentField.setText(
+                toPercent(
+                        taxAssumptions
+                                .getFutureFederalMarginalRateAdjustment()));
+
+        Integer futureFederalMarginalRateEffectiveYear =
+                taxAssumptions
+                        .getFutureFederalMarginalRateEffectiveYear();
+
+        futureFederalMarginalRateEffectiveYearField.setText(
+                futureFederalMarginalRateEffectiveYear != null
+                        ? futureFederalMarginalRateEffectiveYear.toString()
+                        : "");
+
         stateIncomeTaxRateField.setText(
                 toPercent(
                         taxAssumptions
@@ -726,6 +769,29 @@ public class AssumptionsView extends VBox {
                             standardDeductionGrowthField
                                     .getText());
 
+            BigDecimal futureFederalMarginalRateAdjustment =
+                    parsePercent(
+                            futureFederalMarginalRateAdjustmentField
+                                    .getText());
+
+            String futureFederalMarginalRateEffectiveYearText =
+                    futureFederalMarginalRateEffectiveYearField
+                            .getText()
+                            .trim();
+
+            Integer futureFederalMarginalRateEffectiveYear =
+                    futureFederalMarginalRateEffectiveYearText.isEmpty()
+                            ? null
+                            : Integer.parseInt(
+                            futureFederalMarginalRateEffectiveYearText);
+
+            if (futureFederalMarginalRateAdjustment.signum() != 0
+                    && futureFederalMarginalRateEffectiveYear == null) {
+
+                throw new IllegalArgumentException(
+                        "Effective year is required for a future federal tax rate change.");
+            }
+
             BigDecimal stateIncomeTaxRate =
                     parsePercent(
                             stateIncomeTaxRateField
@@ -766,7 +832,9 @@ public class AssumptionsView extends VBox {
                             stateIncomeTaxRate,
                             localIncomeTaxRate,
                             filingStatus,
-                            estimatedHeirTaxRate);
+                            estimatedHeirTaxRate,
+                            futureFederalMarginalRateAdjustment,
+                            futureFederalMarginalRateEffectiveYear);
 
             /*
              * Preserve the existing withdrawal assumptions.
@@ -801,7 +869,9 @@ public class AssumptionsView extends VBox {
         catch (Exception ex) {
 
             statusLabel.setText(
-                    "Please enter valid assumption values.");
+                    ex.getMessage() != null
+                            ? ex.getMessage()
+                            : "Please enter valid assumption values.");
         }
     }
 

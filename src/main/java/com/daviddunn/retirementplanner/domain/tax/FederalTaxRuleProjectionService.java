@@ -107,6 +107,42 @@ public final class FederalTaxRuleProjectionService {
         return new FederalTaxBracket(
                 projectedLowerBound,
                 projectedUpperBound,
-                bracket.getTaxRate());
+                projectTaxRate(
+                        bracket.getTaxRate(),
+                        projectionTaxYear,
+                        planningAssumptions));
+    }
+
+    private BigDecimal projectTaxRate(
+            BigDecimal publishedTaxRate,
+            int projectionTaxYear,
+            PlanningAssumptions planningAssumptions) {
+
+        BigDecimal adjustment = planningAssumptions
+                .getTaxAssumptions()
+                .getFutureFederalMarginalRateAdjustment();
+
+        Integer effectiveYear = planningAssumptions
+                .getTaxAssumptions()
+                .getFutureFederalMarginalRateEffectiveYear();
+
+        if (adjustment.signum() == 0
+                || effectiveYear == null
+                || projectionTaxYear < effectiveYear) {
+
+            return publishedTaxRate;
+        }
+
+        BigDecimal adjustedTaxRate =
+                publishedTaxRate.add(adjustment);
+
+        if (adjustedTaxRate.signum() < 0
+                || adjustedTaxRate.compareTo(BigDecimal.ONE) > 0) {
+
+            throw new IllegalArgumentException(
+                    "Future federal marginal rate adjustment produces an invalid tax rate.");
+        }
+
+        return adjustedTaxRate;
     }
 }

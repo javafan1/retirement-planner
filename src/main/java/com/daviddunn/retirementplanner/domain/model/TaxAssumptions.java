@@ -20,6 +20,12 @@ public final class TaxAssumptions {
     private final BigDecimal
             estimatedHeirTaxRateOnTaxDeferredAssets;
 
+    private final BigDecimal
+            futureFederalMarginalRateAdjustment;
+
+    private final Integer
+            futureFederalMarginalRateEffectiveYear;
+
     public TaxAssumptions(
             BigDecimal federalTaxBracketGrowthRate,
             BigDecimal standardDeductionGrowthRate,
@@ -32,7 +38,28 @@ public final class TaxAssumptions {
                 stateIncomeTaxRate,
                 localIncomeTaxRate,
                 FilingStatus.MARRIED_FILING_JOINTLY,
-                new BigDecimal("0.25"));
+                new BigDecimal("0.25"),
+                BigDecimal.ZERO,
+                null);
+    }
+
+    public TaxAssumptions(
+            BigDecimal federalTaxBracketGrowthRate,
+            BigDecimal standardDeductionGrowthRate,
+            BigDecimal stateIncomeTaxRate,
+            BigDecimal localIncomeTaxRate,
+            FilingStatus filingStatus,
+            BigDecimal estimatedHeirTaxRateOnTaxDeferredAssets) {
+
+        this(
+                federalTaxBracketGrowthRate,
+                standardDeductionGrowthRate,
+                stateIncomeTaxRate,
+                localIncomeTaxRate,
+                filingStatus,
+                estimatedHeirTaxRateOnTaxDeferredAssets,
+                BigDecimal.ZERO,
+                null);
     }
 
     @JsonCreator
@@ -54,7 +81,13 @@ public final class TaxAssumptions {
             FilingStatus filingStatus,
 
             @JsonProperty("estimatedHeirTaxRateOnTaxDeferredAssets")
-            BigDecimal estimatedHeirTaxRateOnTaxDeferredAssets) {
+            BigDecimal estimatedHeirTaxRateOnTaxDeferredAssets,
+
+            @JsonProperty("futureFederalMarginalRateAdjustment")
+            BigDecimal futureFederalMarginalRateAdjustment,
+
+            @JsonProperty("futureFederalMarginalRateEffectiveYear")
+            Integer futureFederalMarginalRateEffectiveYear) {
 
         this.federalTaxBracketGrowthRate =
                 Objects.requireNonNull(
@@ -92,6 +125,28 @@ public final class TaxAssumptions {
                     "Estimated heir tax rate must be between 0 and 1.");
         }
 
+        this.futureFederalMarginalRateAdjustment =
+                futureFederalMarginalRateAdjustment != null
+                        ? futureFederalMarginalRateAdjustment
+                        : BigDecimal.ZERO;
+
+        this.futureFederalMarginalRateEffectiveYear =
+                futureFederalMarginalRateEffectiveYear;
+
+        if (this.futureFederalMarginalRateAdjustment.signum() != 0
+                && this.futureFederalMarginalRateEffectiveYear == null) {
+
+            throw new IllegalArgumentException(
+                    "An effective year is required for a future federal marginal rate adjustment.");
+        }
+
+        if (this.futureFederalMarginalRateEffectiveYear != null
+                && this.futureFederalMarginalRateEffectiveYear <= 0) {
+
+            throw new IllegalArgumentException(
+                    "Future federal marginal rate effective year must be positive.");
+        }
+
     }
 
 
@@ -119,6 +174,14 @@ public final class TaxAssumptions {
         return estimatedHeirTaxRateOnTaxDeferredAssets;
     }
 
+    public BigDecimal getFutureFederalMarginalRateAdjustment() {
+        return futureFederalMarginalRateAdjustment;
+    }
+
+    public Integer getFutureFederalMarginalRateEffectiveYear() {
+        return futureFederalMarginalRateEffectiveYear;
+    }
+
     @Override
     public String toString() {
 
@@ -135,6 +198,10 @@ public final class TaxAssumptions {
                 filingStatus +
                 ", estimatedHeirTaxRateOnTaxDeferredAssets=" +
                 estimatedHeirTaxRateOnTaxDeferredAssets +
+                ", futureFederalMarginalRateAdjustment=" +
+                futureFederalMarginalRateAdjustment +
+                ", futureFederalMarginalRateEffectiveYear=" +
+                futureFederalMarginalRateEffectiveYear +
                 '}';
     }
 }

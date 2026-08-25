@@ -65,6 +65,70 @@ class JsonRetirementPlanRepositoryTest {
     }
 
     @Test
+    void preservesFutureFederalMarginalRateChangeAndDefaultsLegacyJson()
+            throws Exception {
+
+        RetirementPlan plan = RetirementPlanFactory.createEmptyPlan();
+
+        TaxAssumptions tax = plan.getPlanningAssumptions()
+                .getTaxAssumptions();
+
+        plan.setPlanningAssumptions(new PlanningAssumptions(
+                plan.getPlanningAssumptions().getEconomicAssumptions(),
+                new TaxAssumptions(
+                        tax.getFederalTaxBracketGrowthRate(),
+                        tax.getStandardDeductionGrowthRate(),
+                        tax.getStateIncomeTaxRate(),
+                        tax.getLocalIncomeTaxRate(),
+                        tax.getFilingStatus(),
+                        tax.getEstimatedHeirTaxRateOnTaxDeferredAssets(),
+                        new BigDecimal("0.03"),
+                        2031),
+                plan.getPlanningAssumptions().getWithdrawalAssumptions(),
+                plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
+                plan.getPlanningAssumptions().getProjectionLengthYears(),
+                plan.getPlanningAssumptions().getProjectionStartDate()));
+
+        JsonRetirementPlanRepository repository =
+                new JsonRetirementPlanRepository();
+
+        Path currentFile = tempDirectory.resolve("current-plan.json");
+        repository.save(plan, currentFile);
+
+        RetirementPlan loaded = repository.load(currentFile);
+
+        assertEquals(
+                new BigDecimal("0.03"),
+                loaded.getPlanningAssumptions().getTaxAssumptions()
+                        .getFutureFederalMarginalRateAdjustment());
+
+        assertEquals(
+                2031,
+                loaded.getPlanningAssumptions().getTaxAssumptions()
+                        .getFutureFederalMarginalRateEffectiveYear());
+
+        String legacyJson = java.nio.file.Files.readString(currentFile)
+                .replaceAll(
+                        "(?s),\\s*\"futureFederalMarginalRateAdjustment\"\\s*:\\s*[^,\\n]+\\s*,\\s*\"futureFederalMarginalRateEffectiveYear\"\\s*:\\s*[^\\n}]+",
+                        "");
+
+        Path legacyFile = tempDirectory.resolve("legacy-plan.json");
+        java.nio.file.Files.writeString(legacyFile, legacyJson);
+
+        RetirementPlan legacyPlan = repository.load(legacyFile);
+
+        assertEquals(
+                BigDecimal.ZERO,
+                legacyPlan.getPlanningAssumptions().getTaxAssumptions()
+                        .getFutureFederalMarginalRateAdjustment());
+
+        assertEquals(
+                null,
+                legacyPlan.getPlanningAssumptions().getTaxAssumptions()
+                        .getFutureFederalMarginalRateEffectiveYear());
+    }
+
+    @Test
     void defaultsWithdrawalStrategyWhenLoadingOlderPlan()
             throws Exception {
 

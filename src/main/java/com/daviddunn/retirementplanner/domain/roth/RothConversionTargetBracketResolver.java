@@ -2,33 +2,28 @@ package com.daviddunn.retirementplanner.domain.roth;
 
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
-import com.daviddunn.retirementplanner.domain.tax.FederalTaxBracketCalculator;
 
 import java.math.BigDecimal;
 import java.util.Objects;
 
 public final class RothConversionTargetBracketResolver {
 
-    private final FederalTaxBracketCalculator
-            federalTaxBracketCalculator;
-
-    public RothConversionTargetBracketResolver() {
-
-        this.federalTaxBracketCalculator =
-                new FederalTaxBracketCalculator();
-    }
-
     public FederalTaxBracket resolve(
             RothConversionStrategy strategy,
-            FederalTaxRules federalTaxRules) {
+            FederalTaxRules publishedFederalTaxRules,
+            FederalTaxRules projectedFederalTaxRules) {
 
         Objects.requireNonNull(
                 strategy,
                 "Roth conversion strategy is required.");
 
         Objects.requireNonNull(
-                federalTaxRules,
-                "Federal tax rules are required.");
+                publishedFederalTaxRules,
+                "Published federal tax rules are required.");
+
+        Objects.requireNonNull(
+                projectedFederalTaxRules,
+                "Projected federal tax rules are required.");
 
         BigDecimal targetRate =
                 switch (strategy) {
@@ -51,8 +46,41 @@ public final class RothConversionTargetBracketResolver {
                                     "Custom taxable-income target strategy does not have a target tax bracket.");
                 };
 
-        return federalTaxBracketCalculator.findBracket(
-                federalTaxRules,
+        int bracketIndex = findBracketIndex(
+                publishedFederalTaxRules,
                 targetRate);
+
+        if (bracketIndex >= projectedFederalTaxRules
+                .getTaxBrackets()
+                .size()) {
+
+            throw new IllegalStateException(
+                    "Projected federal tax rules do not contain the target bracket.");
+        }
+
+        return projectedFederalTaxRules
+                .getTaxBrackets()
+                .get(bracketIndex);
+    }
+
+    private int findBracketIndex(
+            FederalTaxRules federalTaxRules,
+            BigDecimal targetRate) {
+
+        for (int index = 0;
+             index < federalTaxRules.getTaxBrackets().size();
+             index++) {
+
+            if (federalTaxRules.getTaxBrackets().get(index)
+                    .getTaxRate()
+                    .compareTo(targetRate) == 0) {
+
+                return index;
+            }
+        }
+
+        throw new IllegalStateException(
+                "No published federal tax bracket found for rate "
+                        + targetRate);
     }
 }

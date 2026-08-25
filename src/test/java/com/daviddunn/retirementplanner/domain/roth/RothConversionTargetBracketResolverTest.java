@@ -25,6 +25,7 @@ class RothConversionTargetBracketResolverTest {
                 resolver.resolve(
                         RothConversionStrategy
                                 .FILL_12_PERCENT_BRACKET,
+                        rules,
                         rules);
 
         assertEquals(
@@ -45,6 +46,7 @@ class RothConversionTargetBracketResolverTest {
                 resolver.resolve(
                         RothConversionStrategy
                                 .FILL_22_PERCENT_BRACKET,
+                        rules,
                         rules);
 
         assertEquals(
@@ -65,6 +67,7 @@ class RothConversionTargetBracketResolverTest {
                 resolver.resolve(
                         RothConversionStrategy
                                 .FILL_24_PERCENT_BRACKET,
+                        rules,
                         rules);
 
         assertEquals(
@@ -85,6 +88,7 @@ class RothConversionTargetBracketResolverTest {
                 () ->
                         resolver.resolve(
                                 RothConversionStrategy.FIXED_AMOUNT,
+                                rules,
                                 rules));
 
         assertThrows(
@@ -93,7 +97,25 @@ class RothConversionTargetBracketResolverTest {
                         resolver.resolve(
                                 RothConversionStrategy
                                         .CUSTOM_TAXABLE_INCOME_TARGET,
+                                rules,
                                 rules));
+    }
+
+    @Test
+    void resolvesOriginalBracketIdentityWhenProjectedRatesChange() {
+
+        FederalTaxBracket bracket = resolver.resolve(
+                RothConversionStrategy.FILL_22_PERCENT_BRACKET,
+                createRules(),
+                createAdjustedRules());
+
+        assertEquals(
+                new BigDecimal("211400"),
+                bracket.getUpperBound());
+
+        assertEquals(
+                new BigDecimal("0.25"),
+                bracket.getTaxRate());
     }
 
 
@@ -123,6 +145,32 @@ class RothConversionTargetBracketResolverTest {
                                 new BigDecimal("211400"),
                                 new BigDecimal("403550"),
                                 new BigDecimal("0.24"))
+                ));
+    }
+
+    private FederalTaxRules createAdjustedRules() {
+
+        return new FederalTaxRules(
+                com.daviddunn.retirementplanner.domain.rules.FilingStatus
+                        .MARRIED_FILING_JOINTLY,
+                new BigDecimal("32200"),
+                List.of(
+                        new FederalTaxBracket(
+                                BigDecimal.ZERO,
+                                new BigDecimal("24800"),
+                                new BigDecimal("0.13")),
+                        new FederalTaxBracket(
+                                new BigDecimal("24800"),
+                                new BigDecimal("100800"),
+                                new BigDecimal("0.15")),
+                        new FederalTaxBracket(
+                                new BigDecimal("100800"),
+                                new BigDecimal("211400"),
+                                new BigDecimal("0.25")),
+                        new FederalTaxBracket(
+                                new BigDecimal("211400"),
+                                new BigDecimal("403550"),
+                                new BigDecimal("0.27"))
                 ));
     }
 }

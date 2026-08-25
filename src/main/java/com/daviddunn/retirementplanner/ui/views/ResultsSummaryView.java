@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjection;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
@@ -65,6 +66,12 @@ public class ResultsSummaryView extends BorderPane {
             new TextField();
 
     private final TextField inflationField =
+            new TextField();
+
+    private final TextField futureFederalMarginalRateChangeField =
+            new TextField();
+
+    private final TextField futureFederalMarginalRateEffectiveYearField =
             new TextField();
 
     private final Button applyEconomicButton =
@@ -1423,6 +1430,60 @@ public class ResultsSummaryView extends BorderPane {
                 1,
                 1);
 
+        Label futureFederalMarginalRateChangeLabel =
+                new Label("Future Federal Tax Rate Change");
+
+        futureFederalMarginalRateChangeLabel.getStyleClass().add(
+                "assumption-label");
+
+        futureFederalMarginalRateChangeLabel.setWrapText(true);
+
+        grid.add(
+                futureFederalMarginalRateChangeLabel,
+                0,
+                2);
+
+        futureFederalMarginalRateChangeField.getStyleClass().add(
+                "assumption-field");
+
+        futureFederalMarginalRateChangeField.setPromptText(
+                "Percentage points");
+
+        futureFederalMarginalRateChangeField.setAlignment(
+                Pos.CENTER_RIGHT);
+
+        grid.add(
+                futureFederalMarginalRateChangeField,
+                1,
+                2);
+
+        Label futureFederalMarginalRateEffectiveYearLabel =
+                new Label("Effective Federal Tax Change Year");
+
+        futureFederalMarginalRateEffectiveYearLabel.getStyleClass().add(
+                "assumption-label");
+
+        futureFederalMarginalRateEffectiveYearLabel.setWrapText(true);
+
+        grid.add(
+                futureFederalMarginalRateEffectiveYearLabel,
+                0,
+                3);
+
+        futureFederalMarginalRateEffectiveYearField.getStyleClass().add(
+                "assumption-field");
+
+        futureFederalMarginalRateEffectiveYearField.setPromptText(
+                "YYYY");
+
+        futureFederalMarginalRateEffectiveYearField.setAlignment(
+                Pos.CENTER_RIGHT);
+
+        grid.add(
+                futureFederalMarginalRateEffectiveYearField,
+                1,
+                3);
+
         return createPanel(
                 heading,
                 grid,
@@ -1708,8 +1769,14 @@ public class ResultsSummaryView extends BorderPane {
         labelColumn.setHgrow(
                 Priority.SOMETIMES);
 
+        labelColumn.setMinWidth(160);
+
+        labelColumn.setPrefWidth(190);
+
         valueColumn.setHgrow(
                 Priority.ALWAYS);
+
+        valueColumn.setMinWidth(110);
 
         grid.getColumnConstraints().addAll(
                 labelColumn,
@@ -2349,6 +2416,22 @@ public class ResultsSummaryView extends BorderPane {
                         economic
                                 .getGeneralInflationRate()));
 
+        TaxAssumptions tax = assumptions.getTaxAssumptions();
+
+        BigDecimal futureFederalMarginalRateAdjustment =
+                tax.getFutureFederalMarginalRateAdjustment();
+
+        futureFederalMarginalRateChangeField.setText(
+                percentForField(futureFederalMarginalRateAdjustment));
+
+        Integer futureFederalMarginalRateEffectiveYear =
+                tax.getFutureFederalMarginalRateEffectiveYear();
+
+        futureFederalMarginalRateEffectiveYearField.setText(
+                futureFederalMarginalRateEffectiveYear != null
+                        ? futureFederalMarginalRateEffectiveYear.toString()
+                        : "");
+
         DeathScenarioAssumptions death =
                 assumptions
                         .getDeathScenarioAssumptions();
@@ -2704,6 +2787,29 @@ public class ResultsSummaryView extends BorderPane {
                             inflationField
                                     .getText());
 
+            BigDecimal futureFederalMarginalRateAdjustment =
+                    parsePercent(
+                            futureFederalMarginalRateChangeField
+                                    .getText());
+
+            String futureFederalMarginalRateEffectiveYearText =
+                    futureFederalMarginalRateEffectiveYearField
+                            .getText()
+                            .trim();
+
+            Integer futureFederalMarginalRateEffectiveYear =
+                    futureFederalMarginalRateEffectiveYearText.isEmpty()
+                            ? null
+                            : Integer.parseInt(
+                            futureFederalMarginalRateEffectiveYearText);
+
+            if (futureFederalMarginalRateAdjustment.signum() != 0
+                    && futureFederalMarginalRateEffectiveYear == null) {
+
+                throw new IllegalArgumentException(
+                        "Effective year is required for a future federal tax rate change.");
+            }
+
             PlanningAssumptions current =
                     currentPlan
                             .getPlanningAssumptions();
@@ -2721,11 +2827,25 @@ public class ResultsSummaryView extends BorderPane {
                             existingEconomic
                                     .getSocialSecurityColaRate());
 
+            TaxAssumptions existingTax =
+                    current.getTaxAssumptions();
+
+            TaxAssumptions updatedTax =
+                    new TaxAssumptions(
+                            existingTax.getFederalTaxBracketGrowthRate(),
+                            existingTax.getStandardDeductionGrowthRate(),
+                            existingTax.getStateIncomeTaxRate(),
+                            existingTax.getLocalIncomeTaxRate(),
+                            existingTax.getFilingStatus(),
+                            existingTax
+                                    .getEstimatedHeirTaxRateOnTaxDeferredAssets(),
+                            futureFederalMarginalRateAdjustment,
+                            futureFederalMarginalRateEffectiveYear);
+
             PlanningAssumptions updated =
                     new PlanningAssumptions(
                             updatedEconomic,
-                            current
-                                    .getTaxAssumptions(),
+                            updatedTax,
                             current
                                     .getWithdrawalAssumptions(),
                             current
@@ -2741,7 +2861,9 @@ public class ResultsSummaryView extends BorderPane {
         } catch (Exception ex) {
 
             showError(
-                    "Please enter valid economic assumption values.");
+                    ex.getMessage() != null
+                            ? ex.getMessage()
+                            : "Please enter valid assumption values.");
         }
     }
 
