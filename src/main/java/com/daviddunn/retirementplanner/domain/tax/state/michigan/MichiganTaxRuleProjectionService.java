@@ -37,14 +37,16 @@ public final class MichiganTaxRuleProjectionService {
                         publishedRules.getRetirementDeductionSingle(),
                         publishedTaxYear,
                         projectionYear,
-                        planningAssumptions);
+                        planningAssumptions
+                                .getExpectedAnnualInflationRate());
 
         BigDecimal projectedMarriedDeduction =
                 projectionService.project(
                         publishedRules.getRetirementDeductionMarried(),
                         publishedTaxYear,
                         projectionYear,
-                        planningAssumptions);
+                        planningAssumptions
+                                .getExpectedAnnualInflationRate());
 
         /*
          * Tax rate is not indexed.

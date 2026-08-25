@@ -1,11 +1,9 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
-import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -28,7 +26,7 @@ class TaxParameterProjectionServiceTest {
                         new BigDecimal("100000"),
                         2026,
                         2026,
-                        planningAssumptions());
+                        new BigDecimal("0.025"));
 
         assertEquals(
                 new BigDecimal("100000"),
@@ -43,7 +41,7 @@ class TaxParameterProjectionServiceTest {
                         new BigDecimal("100000"),
                         2026,
                         2025,
-                        planningAssumptions());
+                        new BigDecimal("0.025"));
 
         assertEquals(
                 new BigDecimal("100000"),
@@ -51,14 +49,14 @@ class TaxParameterProjectionServiceTest {
     }
 
     @Test
-    void oneYearProjectionUsesInflation() {
+    void oneYearProjectionUsesSuppliedGrowthRate() {
 
         BigDecimal projectedValue =
                 service.project(
                         new BigDecimal("100000"),
                         2026,
                         2027,
-                        planningAssumptions());
+                        new BigDecimal("0.025"));
 
         assertEquals(
                 new BigDecimal("102500"),
@@ -66,26 +64,18 @@ class TaxParameterProjectionServiceTest {
     }
 
     @Test
-    void tenYearProjectionCompoundsInflation() {
+    void tenYearProjectionCompoundsSuppliedGrowthRate() {
 
         BigDecimal projectedValue =
                 service.project(
                         new BigDecimal("100000"),
                         2026,
                         2036,
-                        planningAssumptions());
+                        new BigDecimal("0.025"));
 
         assertEquals(
                 new BigDecimal("128008"),
                 projectedValue);
     }
 
-    private PlanningAssumptions planningAssumptions() {
-
-        return new PlanningAssumptions(
-                new BigDecimal("0.070"),
-                new BigDecimal("0.025"),
-                30,
-                LocalDate.of(2026, 1, 1));
-    }
 }

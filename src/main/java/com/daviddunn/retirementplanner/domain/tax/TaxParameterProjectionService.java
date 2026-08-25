@@ -1,6 +1,5 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
-import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.projection.CompoundGrowthService;
 
 import java.math.BigDecimal;
@@ -22,15 +21,15 @@ public final class TaxParameterProjectionService {
             BigDecimal publishedValue,
             int publishedYear,
             int projectionYear,
-            PlanningAssumptions planningAssumptions) {
+            BigDecimal annualGrowthRate) {
 
         Objects.requireNonNull(
                 publishedValue,
                 "Published value is required.");
 
         Objects.requireNonNull(
-                planningAssumptions,
-                "Planning assumptions are required.");
+                annualGrowthRate,
+                "Annual growth rate is required.");
 
         if (projectionYear <= publishedYear) {
             return publishedValue;
@@ -42,8 +41,7 @@ public final class TaxParameterProjectionService {
         BigDecimal projectedValue =
                 compoundGrowthService.project(
                         publishedValue,
-                        planningAssumptions
-                                .getExpectedAnnualInflationRate(),
+                        annualGrowthRate,
                         years);
 
         return projectedValue.setScale(

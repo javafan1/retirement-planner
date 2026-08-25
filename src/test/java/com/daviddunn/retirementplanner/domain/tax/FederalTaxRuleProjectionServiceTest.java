@@ -1,6 +1,8 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
+import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
+import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
@@ -10,130 +12,197 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class FederalTaxRuleProjectionServiceTest {
 
     private FederalTaxRuleProjectionService service;
-    private PlanningAssumptions planningAssumptions;
-    private GovernmentRules governmentRules;
-    private TaxParameterProjectionService projectionService;
+    private FederalTaxRules publishedRules;
 
     @BeforeEach
     void setUp() throws Exception {
 
-        service =
-                new FederalTaxRuleProjectionService();
+        service = new FederalTaxRuleProjectionService();
 
-        projectionService =
-                new TaxParameterProjectionService();
-
-        governmentRules =
+        GovernmentRules governmentRules =
                 new GovernmentRulesRepository()
                         .load("/rules/government-rules-2026.json");
 
-        planningAssumptions =
-                new PlanningAssumptions(
-                        new BigDecimal("0.070"),
-                        new BigDecimal("0.025"),
-                        30,
-                        LocalDate.of(2026, 1, 1));
+        publishedRules = governmentRules.getFederalTaxRules(
+                FilingStatus.MARRIED_FILING_JOINTLY);
     }
 
     @Test
-    void projectsFederalTaxRules() {
+    void usesDedicatedGrowthRatesAndPreservesPublishedBaseYear() {
 
-        FederalTaxRules publishedRules =
-                governmentRules.getFederalTaxRules(
-                        FilingStatus.MARRIED_FILING_JOINTLY);
+        PlanningAssumptions assumptions = planningAssumptions(
+                new BigDecimal("0.025"),
+                new BigDecimal("0.030"),
+                new BigDecimal("0.99"));
 
-        FederalTaxRules projectedRules =
-                service.project(
-                        publishedRules,
-                        governmentRules.getTaxYear(),
-                        2027,
-                        planningAssumptions);
+        FederalTaxRules baseYearRules = service.project(
+                publishedRules,
+                2026,
+                2026,
+                assumptions);
 
-        /*
-         * Filing status should not change.
-         */
+        assertRulesEqual(publishedRules, baseYearRules);
+
+        FederalTaxRules projectedRules = service.project(
+                publishedRules,
+                2026,
+                2028,
+                assumptions);
+
         assertEquals(
-                publishedRules.getFilingStatus(),
-                projectedRules.getFilingStatus());
-
-        /*
-         * Standard deduction should be projected.
-         */
-        assertEquals(
-                projected(
-                        publishedRules.getStandardDeduction()),
+                projected(publishedRules.getStandardDeduction(),
+                        new BigDecimal("0.030"), 2),
                 projectedRules.getStandardDeduction());
 
-        List<FederalTaxBracket> publishedBrackets =
-                publishedRules.getTaxBrackets();
+        assertEquals(
+                projected(publishedRules.getTaxBrackets().get(1).getUpperBound(),
+                        new BigDecimal("0.025"), 2),
+                projectedRules.getTaxBrackets().get(1).getUpperBound());
+    }
 
-        List<FederalTaxBracket> projectedBrackets =
-                projectedRules.getTaxBrackets();
+    @Test
+    void zeroGrowthLeavesFutureFederalParametersAtPublishedAmounts() {
+
+        FederalTaxRules projectedRules = service.project(
+                publishedRules,
+                2026,
+                2031,
+                planningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        new BigDecimal("0.20")));
+
+        assertRulesEqual(publishedRules, projectedRules);
+    }
+
+    @Test
+    void generalInflationDoesNotChangeFederalTaxParameters() {
+
+        FederalTaxRules lowInflationRules = service.project(
+                publishedRules,
+                2026,
+                2031,
+                planningAssumptions(
+                        new BigDecimal("0.025"),
+                        new BigDecimal("0.030"),
+                        new BigDecimal("0.01")));
+
+        FederalTaxRules highInflationRules = service.project(
+                publishedRules,
+                2026,
+                2031,
+                planningAssumptions(
+                        new BigDecimal("0.025"),
+                        new BigDecimal("0.030"),
+                        new BigDecimal("0.20")));
+
+        assertRulesEqual(lowInflationRules, highInflationRules);
+    }
+
+    @Test
+    void bracketAndStandardDeductionGrowthOperateIndependently() {
+
+        FederalTaxRules bracketGrowthRules = service.project(
+                publishedRules,
+                2026,
+                2028,
+                planningAssumptions(
+                        new BigDecimal("0.05"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("0.025")));
+
+        FederalTaxRules deductionGrowthRules = service.project(
+                publishedRules,
+                2026,
+                2028,
+                planningAssumptions(
+                        BigDecimal.ZERO,
+                        new BigDecimal("0.05"),
+                        new BigDecimal("0.025")));
+
+        assertNotEquals(
+                bracketGrowthRules.getTaxBrackets().get(1).getUpperBound(),
+                deductionGrowthRules.getTaxBrackets().get(1).getUpperBound());
 
         assertEquals(
-                publishedBrackets.size(),
-                projectedBrackets.size());
+                publishedRules.getStandardDeduction(),
+                bracketGrowthRules.getStandardDeduction());
 
-        for (int i = 0;
-             i < publishedBrackets.size();
-             i++) {
+        assertEquals(
+                publishedRules.getTaxBrackets().get(1).getUpperBound(),
+                deductionGrowthRules.getTaxBrackets().get(1).getUpperBound());
 
-            FederalTaxBracket published =
-                    publishedBrackets.get(i);
+        assertNotEquals(
+                bracketGrowthRules.getStandardDeduction(),
+                deductionGrowthRules.getStandardDeduction());
+    }
 
-            FederalTaxBracket projected =
-                    projectedBrackets.get(i);
+    private PlanningAssumptions planningAssumptions(
+            BigDecimal bracketGrowthRate,
+            BigDecimal deductionGrowthRate,
+            BigDecimal generalInflationRate) {
 
-            /*
-             * Lower bound should be projected.
-             */
-            assertEquals(
-                    projected(
-                            published.getLowerBound()),
-                    projected.getLowerBound());
-
-            /*
-             * Upper bound should be projected
-             * unless this is the highest bracket.
-             */
-            if (published.hasUpperBound()) {
-
-                assertEquals(
-                        projected(
-                                published.getUpperBound()),
-                        projected.getUpperBound());
-
-            } else {
-
-                assertNull(
-                        projected.getUpperBound());
-            }
-
-            /*
-             * Tax rates never change due to inflation.
-             */
-            assertEquals(
-                    published.getTaxRate(),
-                    projected.getTaxRate());
-        }
+        return new PlanningAssumptions(
+                new EconomicAssumptions(
+                        new BigDecimal("0.070"),
+                        generalInflationRate),
+                new TaxAssumptions(
+                        bracketGrowthRate,
+                        deductionGrowthRate,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO),
+                30,
+                LocalDate.of(2026, 1, 1));
     }
 
     private BigDecimal projected(
-            BigDecimal value) {
+            BigDecimal publishedValue,
+            BigDecimal growthRate,
+            int years) {
 
-        return projectionService.project(
-                value,
-                governmentRules.getTaxYear(),
-                2027,
-                planningAssumptions);
+        return publishedValue
+                .multiply(BigDecimal.ONE.add(growthRate).pow(years))
+                .setScale(0, RoundingMode.HALF_UP);
+    }
+
+    private void assertRulesEqual(
+            FederalTaxRules expected,
+            FederalTaxRules actual) {
+
+        assertEquals(expected.getFilingStatus(), actual.getFilingStatus());
+        assertEquals(expected.getStandardDeduction(), actual.getStandardDeduction());
+        assertEquals(
+                expected.getTaxBrackets().size(),
+                actual.getTaxBrackets().size());
+
+        for (int i = 0; i < expected.getTaxBrackets().size(); i++) {
+
+            FederalTaxBracket expectedBracket =
+                    expected.getTaxBrackets().get(i);
+
+            FederalTaxBracket actualBracket =
+                    actual.getTaxBrackets().get(i);
+
+            assertEquals(
+                    expectedBracket.getLowerBound(),
+                    actualBracket.getLowerBound());
+
+            assertEquals(
+                    expectedBracket.getUpperBound(),
+                    actualBracket.getUpperBound());
+
+            assertEquals(
+                    expectedBracket.getTaxRate(),
+                    actualBracket.getTaxRate());
+        }
     }
 }

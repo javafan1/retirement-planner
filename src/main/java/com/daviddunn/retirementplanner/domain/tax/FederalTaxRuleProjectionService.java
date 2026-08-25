@@ -39,7 +39,9 @@ public final class FederalTaxRuleProjectionService {
                         publishedRules.getStandardDeduction(),
                         publishedTaxYear,
                         projectionTaxYear,
-                        planningAssumptions);
+                        planningAssumptions
+                                .getTaxAssumptions()
+                                .getStandardDeductionGrowthRate());
 
         List<FederalTaxBracket> projectedBrackets =
                 projectTaxBrackets(
@@ -87,7 +89,9 @@ public final class FederalTaxRuleProjectionService {
                         bracket.getLowerBound(),
                         publishedTaxYear,
                         projectionTaxYear,
-                        planningAssumptions);
+                        planningAssumptions
+                                .getTaxAssumptions()
+                                .getFederalTaxBracketGrowthRate());
 
         BigDecimal projectedUpperBound =
                 bracket.hasUpperBound()
@@ -95,7 +99,9 @@ public final class FederalTaxRuleProjectionService {
                         bracket.getUpperBound(),
                         publishedTaxYear,
                         projectionTaxYear,
-                        planningAssumptions)
+                        planningAssumptions
+                                .getTaxAssumptions()
+                                .getFederalTaxBracketGrowthRate())
                         : null;
 
         return new FederalTaxBracket(

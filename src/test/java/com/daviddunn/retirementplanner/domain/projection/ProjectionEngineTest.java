@@ -1324,8 +1324,14 @@ class ProjectionEngineTest {
          */
         PlanningAssumptions assumptions =
                 new PlanningAssumptions(
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO,
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
                         2,
                         LocalDate.of(
                                 2034,
@@ -2279,8 +2285,14 @@ ProjectionYear
 
         PlanningAssumptions assumptions =
                 new PlanningAssumptions(
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO,
+                        new EconomicAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
+                        new TaxAssumptions(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO),
                         3,
                         LocalDate.of(2026, 1, 1));
 
