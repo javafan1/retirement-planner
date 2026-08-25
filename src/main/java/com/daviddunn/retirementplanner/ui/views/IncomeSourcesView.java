@@ -174,7 +174,11 @@ public class IncomeSourcesView extends BorderPane {
 
             SocialSecurityDialog dialog =
                     new SocialSecurityDialog(
-                            socialSecurity);
+                            socialSecurity,
+                            currentPlan
+                                    .getPlanningAssumptions()
+                                    .getProjectionStartDate()
+                                    .getYear());
 
             Optional<SocialSecurityIncome> result =
                     dialog.showAndWait();
@@ -249,7 +253,12 @@ public class IncomeSourcesView extends BorderPane {
     private void addSocialSecurity() {
 
         SocialSecurityDialog dialog =
-                new SocialSecurityDialog(null);
+                new SocialSecurityDialog(
+                        null,
+                        currentPlan
+                                .getPlanningAssumptions()
+                                .getProjectionStartDate()
+                                .getYear());
 
         Optional<SocialSecurityIncome> result =
                 dialog.showAndWait();

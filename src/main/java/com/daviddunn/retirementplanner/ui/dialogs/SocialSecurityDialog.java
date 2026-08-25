@@ -17,10 +17,22 @@ public class SocialSecurityDialog
     private final DatePicker startDatePicker;
     private final TextField fraBenefitField;
     private final ComboBox<Integer> claimingAgeCombo;
-    private final TextField colaRateField;
+    private final int benefitValuationYear;
+    private final int planProjectionStartYear;
+    private final CheckBox useTodaysDollarConventionCheckBox;
 
     public SocialSecurityDialog(
-            SocialSecurityIncome socialSecurity) {
+            SocialSecurityIncome socialSecurity,
+            int benefitValuationYear) {
+
+        this.planProjectionStartYear = benefitValuationYear;
+        this.benefitValuationYear = socialSecurity != null
+                ? socialSecurity.getBenefitValuationYear()
+                : benefitValuationYear;
+
+        this.useTodaysDollarConventionCheckBox =
+                new CheckBox(
+                        "Use Today's-Dollar Convention");
 
         if (socialSecurity == null) {
             setTitle("Add Social Security");
@@ -47,8 +59,6 @@ public class SocialSecurityDialog
                 62, 63, 64, 65, 66, 67, 68, 69, 70);
         claimingAgeCombo.setValue(67);
 
-        colaRateField = new TextField("0.025");
-
         if (socialSecurity != null) {
 
             nameField.setText(
@@ -68,10 +78,6 @@ public class SocialSecurityDialog
             claimingAgeCombo.setValue(
                     socialSecurity.getClaimingAge());
 
-            colaRateField.setText(
-                    socialSecurity
-                            .getAnnualColaRate()
-                            .toPlainString());
         }
 
         GridPane grid = new GridPane();
@@ -91,14 +97,47 @@ public class SocialSecurityDialog
         grid.add(new Label("Benefit Start Date:"), 0, row);
         grid.add(startDatePicker, 1, row++);
 
-        grid.add(new Label("FRA Monthly Benefit:"), 0, row);
+        grid.add(new Label(
+                "FRA Monthly Benefit (Today's Dollars):"), 0, row);
         grid.add(fraBenefitField, 1, row++);
+
+        Label valuationYearLabel = new Label(
+                "Benefit valuation year: "
+                        + this.benefitValuationYear);
+        grid.add(valuationYearLabel, 0, row, 2, 1);
+        row++;
 
         grid.add(new Label("Claiming Age:"), 0, row);
         grid.add(claimingAgeCombo, 1, row++);
 
-        grid.add(new Label("Annual COLA Rate:"), 0, row);
-        grid.add(colaRateField, 1, row);
+        Label help = new Label(
+                "Enter the FRA benefit in today's dollars. "
+                        + "Future benefits are projected using the "
+                        + "Social Security COLA assumption.");
+        help.setWrapText(true);
+        grid.add(help, 0, row, 2, 1);
+        row++;
+
+        if (socialSecurity != null
+                && this.benefitValuationYear
+                != planProjectionStartYear) {
+
+            Label conventionNote = new Label(
+                    "This legacy source does not use the plan's "
+                            + "today's-dollar valuation year ("
+                            + planProjectionStartYear + ").");
+            conventionNote.setWrapText(true);
+
+            grid.add(conventionNote, 0, row, 2, 1);
+            row++;
+
+            grid.add(
+                    useTodaysDollarConventionCheckBox,
+                    0,
+                    row,
+                    2,
+                    1);
+        }
 
         getDialogPane().setContent(grid);
 
@@ -128,9 +167,10 @@ public class SocialSecurityDialog
             int claimingAge =
                     claimingAgeCombo.getValue();
 
-            BigDecimal colaRate =
-                    new BigDecimal(
-                            colaRateField.getText().trim());
+            int resolvedValuationYear =
+                    useTodaysDollarConventionCheckBox.isSelected()
+                            ? planProjectionStartYear
+                            : this.benefitValuationYear;
 
             return new SocialSecurityIncome(
                     name,
@@ -139,7 +179,10 @@ public class SocialSecurityDialog
                     null,
                     fraBenefit,
                     claimingAge,
-                    colaRate);
+                    socialSecurity != null
+                            ? socialSecurity.getAnnualColaRate()
+                            : BigDecimal.ZERO,
+                    resolvedValuationYear);
         });
     }
 }

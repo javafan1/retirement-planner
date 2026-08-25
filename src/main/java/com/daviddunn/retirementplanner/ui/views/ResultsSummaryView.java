@@ -3678,13 +3678,29 @@ public class ResultsSummaryView extends BorderPane {
             return;
         }
 
+        LocalDate claimDate =
+                person.getBirthDate()
+                        .plusYears(claimingAge);
+
+        SocialSecurityIncome preview =
+                new SocialSecurityIncome(
+                        socialSecurity.getName(),
+                        socialSecurity.getOwnership(),
+                        claimDate,
+                        socialSecurity.getEndDate(),
+                        socialSecurity
+                                .getFullRetirementMonthlyBenefit(),
+                        claimingAge,
+                        socialSecurity.getAnnualColaRate(),
+                        socialSecurity.getBenefitValuationYear());
+
         BigDecimal monthlyBenefit =
-                SocialSecurityBenefitCalculator
-                        .calculateMonthlyBenefit(
-                                socialSecurity
-                                        .getFullRetirementMonthlyBenefit(),
-                                person.getBirthDate(),
-                                claimingAge);
+                preview.getProjectedMonthlyBenefit(
+                        person,
+                        claimDate,
+                        currentPlan
+                                .getPlanningAssumptions()
+                                .getSocialSecurityColaRate());
 
         benefitLabel.setText(
                 UIFormatters.money(monthlyBenefit));
@@ -3728,7 +3744,8 @@ public class ResultsSummaryView extends BorderPane {
                                 current.getEndDate(),
                                 current.getFullRetirementMonthlyBenefit(),
                                 claimingAge,
-                                current.getAnnualColaRate());
+                                current.getAnnualColaRate(),
+                                current.getBenefitValuationYear());
 
                 updatedSources.add(
                         new SocialSecurityUpdate(

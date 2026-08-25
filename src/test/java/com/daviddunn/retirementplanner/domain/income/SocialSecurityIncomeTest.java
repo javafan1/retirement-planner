@@ -3,6 +3,10 @@ package com.daviddunn.retirementplanner.domain.income;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -203,6 +207,99 @@ class SocialSecurityIncomeTest {
         assertEquals(
                 new BigDecimal("3000.00"),
                 result);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {62, 63, 64, 65, 66, 67, 68, 69, 70})
+    void claimYearBenefitUsesValuationYearColaForEveryClaimingAge(
+            int claimingAge) {
+
+        Person david = new Person(
+                "David",
+                "Dunn",
+                LocalDate.of(1963, 6, 4));
+
+        LocalDate claimDate = david.getBirthDate()
+                .plusYears(claimingAge);
+
+        SocialSecurityIncome income = new SocialSecurityIncome(
+                "Social Security",
+                AccountOwnership.PRIMARY,
+                claimDate,
+                null,
+                new BigDecimal("3000"),
+                claimingAge,
+                BigDecimal.ZERO,
+                2026);
+
+        BigDecimal cola = new BigDecimal("0.025");
+        BigDecimal expected = SocialSecurityBenefitCalculator
+                .calculateMonthlyBenefit(
+                        new BigDecimal("3000"),
+                        david.getBirthDate(),
+                        claimingAge)
+                .multiply(BigDecimal.ONE.add(cola).pow(
+                        Math.max(claimDate.getYear() - 2026, 0)))
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+
+        assertEquals(expected, income.getProjectedMonthlyBenefit(
+                david, claimDate, cola));
+        assertEquals(2026, income.getBenefitValuationYear());
+    }
+
+    @Test
+    void positiveColaAppliesBeforeAndAfterClaiming() {
+
+        Person david = new Person("David", "Dunn",
+                LocalDate.of(1963, 6, 4));
+        SocialSecurityIncome income = new SocialSecurityIncome(
+                "Social Security", AccountOwnership.PRIMARY,
+                LocalDate.of(2033, 6, 4), null,
+                new BigDecimal("3000"), 70, BigDecimal.ZERO, 2026);
+
+        BigDecimal cola = new BigDecimal("0.025");
+        BigDecimal claimYear = income.getProjectedMonthlyBenefit(
+                david, LocalDate.of(2033, 12, 31), cola);
+        BigDecimal nextYear = income.getProjectedMonthlyBenefit(
+                david, LocalDate.of(2034, 12, 31), cola);
+
+        assertEquals(new BigDecimal("4421.91"), claimYear);
+        assertEquals(new BigDecimal("4532.46"), nextYear);
+        assertEquals(new BigDecimal("30953.37"), income.getAnnualIncome(
+                david, LocalDate.of(2033, 12, 31), cola));
+    }
+
+    @Test
+    void jacksonPersistsValuationYearAndLegacyJsonDefaultsToStartYear()
+            throws Exception {
+
+        ObjectMapper mapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule());
+
+        SocialSecurityIncome current = new SocialSecurityIncome(
+                "Social Security", AccountOwnership.PRIMARY,
+                LocalDate.of(2033, 6, 4), null,
+                new BigDecimal("3000"), 70, BigDecimal.ZERO, 2026);
+
+        SocialSecurityIncome roundTrip = (SocialSecurityIncome)
+                mapper.readValue(
+                        mapper.writerFor(IncomeSource.class)
+                                .writeValueAsString(current),
+                        IncomeSource.class);
+
+        assertEquals(2026, roundTrip.getBenefitValuationYear());
+
+        String legacyJson = """
+                {"incomeType":"socialSecurity","name":"Social Security","ownership":"PRIMARY",
+                "startDate":[2033,6,4],"endDate":null,
+                "fullRetirementMonthlyBenefit":3000,"claimingAge":70,
+                "annualColaRate":0.025}
+                """;
+
+        SocialSecurityIncome legacy = (SocialSecurityIncome)
+                mapper.readValue(legacyJson, IncomeSource.class);
+
+        assertEquals(2033, legacy.getBenefitValuationYear());
     }
 
 

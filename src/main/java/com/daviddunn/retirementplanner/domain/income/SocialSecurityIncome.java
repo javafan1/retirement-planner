@@ -18,6 +18,7 @@ public class SocialSecurityIncome extends IncomeSource {
     private final BigDecimal fullRetirementMonthlyBenefit;
     private final int claimingAge;
     private final BigDecimal annualColaRate;
+    private final int benefitValuationYear;
     private final CompoundGrowthService
             compoundGrowthService;
 
@@ -43,7 +44,10 @@ public class SocialSecurityIncome extends IncomeSource {
             int claimingAge,
 
             @JsonProperty("annualColaRate")
-            BigDecimal annualColaRate) {
+            BigDecimal annualColaRate,
+
+            @JsonProperty("benefitValuationYear")
+            Integer benefitValuationYear) {
 
         super(
                 name,
@@ -68,8 +72,33 @@ public class SocialSecurityIncome extends IncomeSource {
 
         this.claimingAge = claimingAge;
 
+        this.benefitValuationYear =
+                benefitValuationYear != null
+                        ? benefitValuationYear
+                        : startDate.getYear();
+
         this.compoundGrowthService =
                 new CompoundGrowthService();
+    }
+
+    public SocialSecurityIncome(
+            String name,
+            AccountOwnership ownership,
+            LocalDate startDate,
+            LocalDate endDate,
+            BigDecimal fullRetirementMonthlyBenefit,
+            int claimingAge,
+            BigDecimal annualColaRate) {
+
+        this(
+                name,
+                ownership,
+                startDate,
+                endDate,
+                fullRetirementMonthlyBenefit,
+                claimingAge,
+                annualColaRate,
+                startDate.getYear());
     }
 
 public BigDecimal getFullRetirementMonthlyBenefit() {
@@ -100,9 +129,44 @@ public BigDecimal getFullRetirementMonthlyBenefit() {
         return annualColaRate;
     }
 
+    public int getBenefitValuationYear() {
+        return benefitValuationYear;
+    }
+
+    public BigDecimal getAnnualIncome(
+            Person person,
+            LocalDate projectionDate,
+            BigDecimal socialSecurityColaRate) {
+
+        int activeMonths = getActiveMonths(
+                projectionDate.getYear());
+
+        if (activeMonths == 0) {
+            return BigDecimal.ZERO;
+        }
+
+        return getProjectedMonthlyBenefit(
+                person,
+                projectionDate,
+                socialSecurityColaRate)
+                .multiply(BigDecimal.valueOf(activeMonths))
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
     public BigDecimal getProjectedMonthlyBenefit(
             Person person,
             LocalDate projectionDate) {
+
+        return getProjectedMonthlyBenefit(
+                person,
+                projectionDate,
+                annualColaRate);
+    }
+
+    public BigDecimal getProjectedMonthlyBenefit(
+            Person person,
+            LocalDate projectionDate,
+            BigDecimal socialSecurityColaRate) {
 
         Objects.requireNonNull(
                 person,
@@ -118,16 +182,20 @@ public BigDecimal getFullRetirementMonthlyBenefit() {
                         person.getBirthDate(),
                         claimingAge);
 
-        int yearsReceivingBenefits =
+        Objects.requireNonNull(
+                socialSecurityColaRate,
+                "Social Security COLA rate is required.");
+
+        int colaYears =
                 Math.max(
                         projectionDate.getYear()
-                                - getStartDate().getYear(),
+                                - benefitValuationYear,
                         0);
 
         return compoundGrowthService.project(
                         monthlyBenefit,
-                        annualColaRate,
-                        yearsReceivingBenefits)
+                        socialSecurityColaRate,
+                        colaYears)
                 .setScale(
                         2,
                         RoundingMode.HALF_UP);
@@ -136,6 +204,17 @@ public BigDecimal getFullRetirementMonthlyBenefit() {
     public BigDecimal getMonthlyBenefitAtDeath(
             Person person,
             LocalDate deathDate) {
+
+        return getMonthlyBenefitAtDeath(
+                person,
+                deathDate,
+                annualColaRate);
+    }
+
+    public BigDecimal getMonthlyBenefitAtDeath(
+            Person person,
+            LocalDate deathDate,
+            BigDecimal socialSecurityColaRate) {
 
         Objects.requireNonNull(
                 person,
@@ -155,7 +234,14 @@ public BigDecimal getFullRetirementMonthlyBenefit() {
          */
         if (getStartDate().isAfter(deathDate)) {
 
-            return fullRetirementMonthlyBenefit
+            int colaYears = Math.max(
+                    deathDate.getYear() - benefitValuationYear,
+                    0);
+
+            return compoundGrowthService.project(
+                    fullRetirementMonthlyBenefit,
+                    socialSecurityColaRate,
+                    colaYears)
                     .setScale(
                             2,
                             RoundingMode.HALF_UP);
@@ -170,7 +256,8 @@ public BigDecimal getFullRetirementMonthlyBenefit() {
          */
         return getProjectedMonthlyBenefit(
                 person,
-                deathDate);
+                deathDate,
+                socialSecurityColaRate);
     }
 
 

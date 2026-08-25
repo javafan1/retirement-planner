@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.model.Household;
+import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedWithdrawalAllocator;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
@@ -59,6 +60,51 @@ public final class TaxFundingCalculator {
             GovernmentRules projectedGovernmentRules,
             BigDecimal rothConversion,
             BigDecimal taxableInterestIncome) {
+
+        return calculate(
+                household,
+                projectionDate,
+                portfolio,
+                existingWithdrawals,
+                withdrawalStrategy,
+                filingStatus,
+                projectedGovernmentRules,
+                rothConversion,
+                taxableInterestIncome,
+                null);
+    }
+
+    public TaxFundingResult calculate(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate) {
+
+        return calculate(
+                household, projectionDate, portfolio, existingWithdrawals,
+                withdrawalStrategy, filingStatus, projectedGovernmentRules,
+                rothConversion, taxableInterestIncome,
+                socialSecurityColaRate, null);
+    }
+
+    public TaxFundingResult calculate(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions) {
 
         Objects.requireNonNull(
                 household,
@@ -140,7 +186,10 @@ public final class TaxFundingCalculator {
                             projectionDate,
                             totalWithdrawals
                                     .getTaxDeferredWithdrawal(),
-                            rothConversion,taxableInterestIncome);
+                            rothConversion,
+                            taxableInterestIncome,
+                            socialSecurityColaRate,
+                            deathAssumptions);
 
             FederalTaxCalculation federalTaxCalculation =
                     federalTaxCalculator.calculate(
@@ -191,7 +240,10 @@ public final class TaxFundingCalculator {
                                 projectionDate,
                                 finalTotalWithdrawals
                                         .getTaxDeferredWithdrawal(),
-                                rothConversion,taxableInterestIncome);
+                                rothConversion,
+                                taxableInterestIncome,
+                                socialSecurityColaRate,
+                                deathAssumptions);
 
                 FederalTaxCalculation finalFederalTaxCalculation =
                         federalTaxCalculator.calculate(

@@ -3,6 +3,8 @@ package com.daviddunn.retirementplanner.domain.tax;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityIncomeCalculator;
+import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
 
@@ -12,12 +14,52 @@ import java.util.Objects;
 
 public final class TaxIncomeCalculator {
 
+    private final HouseholdSocialSecurityIncomeCalculator
+            householdSocialSecurityIncomeCalculator =
+            new HouseholdSocialSecurityIncomeCalculator();
+
     public TaxIncome calculate(
             Household household,
             LocalDate projectionDate,
             BigDecimal taxDeferredWithdrawals,
             BigDecimal rothConversion,
             BigDecimal taxableInterestIncome) {
+
+        return calculate(
+                household,
+                projectionDate,
+                taxDeferredWithdrawals,
+                rothConversion,
+                taxableInterestIncome,
+                null);
+    }
+
+    public TaxIncome calculate(
+            Household household,
+            LocalDate projectionDate,
+            BigDecimal taxDeferredWithdrawals,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate) {
+
+        return calculate(
+                household,
+                projectionDate,
+                taxDeferredWithdrawals,
+                rothConversion,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                null);
+    }
+
+    public TaxIncome calculate(
+            Household household,
+            LocalDate projectionDate,
+            BigDecimal taxDeferredWithdrawals,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions) {
 
         Objects.requireNonNull(
                 household,
@@ -63,7 +105,8 @@ public final class TaxIncomeCalculator {
         IncomeTotals primaryTotals =
                 calculateIncome(
                         household.getPrimaryPerson(),
-                        projectionDate);
+                        projectionDate,
+                        socialSecurityColaRate);
 
         pensionIncome =
                 pensionIncome.add(
@@ -76,7 +119,8 @@ public final class TaxIncomeCalculator {
         IncomeTotals spouseTotals =
                 calculateIncome(
                         household.getSpouse(),
-                        projectionDate);
+                        projectionDate,
+                        socialSecurityColaRate);
 
         pensionIncome =
                 pensionIncome.add(
@@ -85,6 +129,18 @@ public final class TaxIncomeCalculator {
         socialSecurityIncome =
                 socialSecurityIncome.add(
                         spouseTotals.socialSecurityIncome());
+
+        if (deathAssumptions != null
+                && socialSecurityColaRate != null) {
+
+            socialSecurityIncome =
+                    householdSocialSecurityIncomeCalculator
+                            .calculateAnnualIncome(
+                                    household,
+                                    projectionDate,
+                                    deathAssumptions,
+                                    socialSecurityColaRate);
+        }
 
         return new TaxIncome(
                 pensionIncome,
@@ -96,7 +152,8 @@ public final class TaxIncomeCalculator {
 
     private IncomeTotals calculateIncome(
             Person person,
-            LocalDate projectionDate) {
+            LocalDate projectionDate,
+            BigDecimal socialSecurityColaRate) {
 
         BigDecimal pensionIncome =
                 BigDecimal.ZERO;
@@ -107,10 +164,22 @@ public final class TaxIncomeCalculator {
         for (IncomeSource income :
                 person.getIncomeSources()) {
 
-            BigDecimal annualIncome =
-                    income.getAnnualIncome(
-                            person,
-                            projectionDate);
+            BigDecimal annualIncome;
+
+            if (income instanceof SocialSecurityIncome socialSecurity
+                    && socialSecurityColaRate != null) {
+
+                annualIncome = socialSecurity.getAnnualIncome(
+                        person,
+                        projectionDate,
+                        socialSecurityColaRate);
+
+            } else {
+
+                annualIncome = income.getAnnualIncome(
+                        person,
+                        projectionDate);
+            }
 
             if (income instanceof Pension) {
 

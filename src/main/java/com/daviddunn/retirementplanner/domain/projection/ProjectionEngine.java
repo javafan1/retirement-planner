@@ -11,6 +11,7 @@ import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityIncomeCalculator;
 import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 
 import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
@@ -52,6 +53,9 @@ public class ProjectionEngine {
 
     private final TaxIncomeCalculator
             taxIncomeCalculator;
+
+    private final HouseholdSocialSecurityIncomeCalculator
+            householdSocialSecurityIncomeCalculator;
 
 
     private final ScheduledRothConversionPolicy
@@ -98,6 +102,9 @@ public class ProjectionEngine {
 
 
         this.taxIncomeCalculator = new TaxIncomeCalculator();
+
+        this.householdSocialSecurityIncomeCalculator =
+                new HouseholdSocialSecurityIncomeCalculator();
 
 
 
@@ -465,7 +472,11 @@ public class ProjectionEngine {
                                         projectionFilingStatus,
                                         projectedGovernmentRules,
                                         targetTaxableIncome,
-                                        unallocatedCashInterest);
+                                        unallocatedCashInterest,
+                                        assumptions
+                                                .getSocialSecurityColaRate(),
+                                        assumptions
+                                                .getDeathScenarioAssumptions());
             }
         }
 
@@ -490,7 +501,9 @@ public class ProjectionEngine {
                                 projectionDate),
                         projectedGovernmentRules,
                         rothConversion,
-                        unallocatedCashInterest);
+                        unallocatedCashInterest,
+                        assumptions.getSocialSecurityColaRate(),
+                        assumptions.getDeathScenarioAssumptions());
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();
@@ -724,10 +737,14 @@ public class ProjectionEngine {
                         assumptions));
 
         total = total.add(
-                calculateSurvivorSocialSecurityIncome(
-                        household,
-                        projectionDate,
-                        assumptions));
+                householdSocialSecurityIncomeCalculator
+                        .calculateAnnualIncome(
+                                household,
+                                projectionDate,
+                                assumptions
+                                        .getDeathScenarioAssumptions(),
+                                assumptions
+                                        .getSocialSecurityColaRate()));
 
         total = total.add(
                 calculateSurvivorPensionIncome(
@@ -963,6 +980,10 @@ public class ProjectionEngine {
         for (IncomeSource income :
                 person.getIncomeSources()) {
 
+            if (income instanceof SocialSecurityIncome) {
+                continue;
+            }
+
             if (!assumptions
                     .getDeathScenarioAssumptions()
                     .isIncomeActive(
@@ -972,10 +993,22 @@ public class ProjectionEngine {
                 continue;
             }
 
-            total = total.add(
-                    income.getAnnualIncome(
-                            person,
-                            projectionDate));
+            if (income instanceof SocialSecurityIncome socialSecurity) {
+
+                total = total.add(
+                        socialSecurity.getAnnualIncome(
+                                person,
+                                projectionDate,
+                                assumptions
+                                        .getSocialSecurityColaRate()));
+
+            } else {
+
+                total = total.add(
+                        income.getAnnualIncome(
+                                person,
+                                projectionDate));
+            }
         }
 
         return total;
