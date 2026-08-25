@@ -1837,6 +1837,14 @@ public class ResultsSummaryView extends BorderPane {
                                 getTotalIncomeTax);
 
         TableColumn<ProjectionYear, BigDecimal>
+                taxableIncomeColumn =
+                moneyColumn(
+                        "Taxable Income",
+                        ProjectionYear::
+                                getFederalTaxableIncome);
+
+
+        TableColumn<ProjectionYear, BigDecimal>
                 effectiveTaxRateColumn =
                 percentColumn(
                         "Eff. Tax Rate",
@@ -1880,6 +1888,7 @@ public class ResultsSummaryView extends BorderPane {
                 combinedTaxColumn,
                 effectiveTaxRateColumn,
                 rothConvColumn,
+                taxableIncomeColumn,
                 RMDColumn,
                 nonInvestableAssetsColumn,
                 endingAssetsColumn,
