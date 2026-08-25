@@ -1501,7 +1501,7 @@ public class ResultsSummaryView extends BorderPane {
                         "assumption-title-green");
 
         GridPane grid =
-                createTwoColumnGrid();
+                createRothConversionGrid();
 
         Label enabledLabel =
                 new Label("Enabled");
@@ -1572,6 +1572,9 @@ public class ResultsSummaryView extends BorderPane {
 
         rothTargetTaxableIncomeLabel.getStyleClass().add(
                 "assumption-label");
+
+        rothTargetTaxableIncomeLabel.setWrapText(
+                true);
 
         grid.add(
                 rothTargetTaxableIncomeLabel,
@@ -1777,6 +1780,37 @@ public class ResultsSummaryView extends BorderPane {
                 Priority.ALWAYS);
 
         valueColumn.setMinWidth(110);
+
+        grid.getColumnConstraints().addAll(
+                labelColumn,
+                valueColumn);
+
+        return grid;
+    }
+
+
+    private GridPane createRothConversionGrid() {
+
+        GridPane grid =
+                new GridPane();
+
+        grid.setHgap(8);
+        grid.setVgap(8);
+
+        ColumnConstraints labelColumn =
+                new ColumnConstraints();
+
+        ColumnConstraints valueColumn =
+                new ColumnConstraints();
+
+        labelColumn.setMinWidth(80);
+        labelColumn.setPrefWidth(95);
+        labelColumn.setMaxWidth(105);
+
+        valueColumn.setHgrow(
+                Priority.ALWAYS);
+
+        valueColumn.setMinWidth(165);
 
         grid.getColumnConstraints().addAll(
                 labelColumn,
