@@ -117,6 +117,32 @@ Important caveat: the current `RetirementPlanSnapshot` stores references to exis
 - Run relevant targeted tests first, then the full Maven test suite: `mvn test`.
 - Do not consider a task complete if tests fail.
 
+# Autonomy boundaries
+
+For requests to inspect, diagnose, review, or plan:
+
+- Inspect all relevant project files and run read-only commands as needed.
+- Do not modify files unless implementation or fixing was explicitly requested.
+
+For requests to implement, change, or fix:
+
+- Make in-scope local project changes without requesting approval for each file.
+- Compile and run relevant non-destructive tests automatically.
+- Fix ordinary in-scope compilation errors caused by the requested change.
+- Inspect git diff and git status as needed.
+
+Stop and request approval before:
+
+- materially changing financial calculation semantics
+- performing a significant architectural refactor
+- changing dependencies, Java version, or build configuration
+- deleting significant files
+- committing, resetting, reverting, rebasing, or otherwise changing Git history
+- accessing or modifying files outside the project workspace
+- expanding the task beyond the requested scope
+
+Never change financial behavior solely to make a test pass.
+
 # Development workflow
 
 - Make one logical change at a time.
