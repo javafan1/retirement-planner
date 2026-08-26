@@ -68,6 +68,26 @@ class AccountTypeTest {
     }
 
     @Test
+    void individuallyOwnedRetirementAccountsRejectJointOwnership() {
+
+        for (AccountType accountType : AccountType.values()) {
+            if (accountType.requiresIndividualOwnership()) {
+                assertFalse(accountType.allowsOwnership(AccountOwnership.JOINT));
+                assertTrue(accountType.allowsOwnership(AccountOwnership.PRIMARY));
+                assertTrue(accountType.allowsOwnership(AccountOwnership.SPOUSE));
+            }
+        }
+    }
+
+    @Test
+    void nonRetirementAccountsContinueToAllowJointOwnership() {
+
+        assertTrue(AccountType.BROKERAGE.allowsOwnership(AccountOwnership.JOINT));
+        assertTrue(AccountType.CHECKING.allowsOwnership(AccountOwnership.JOINT));
+        assertTrue(AccountType.SAVINGS.allowsOwnership(AccountOwnership.JOINT));
+    }
+
+    @Test
     void accountTypesHaveCorrectTaxTreatment() {
 
         assertEquals(

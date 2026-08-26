@@ -8,70 +8,85 @@ public enum AccountType {
     TRADITIONAL_IRA(
             "Traditional IRA",
             TaxTreatment.TAX_DEFERRED,
+            true,
             true),
 
     ROLLOVER_IRA(
             "Rollover IRA",
             TaxTreatment.TAX_DEFERRED,
+            true,
             true),
 
     TRADITIONAL_401K(
             "Traditional 401(k)",
             TaxTreatment.TAX_DEFERRED,
+            true,
             true),
 
     TRADITIONAL_403B(
             "Traditional 403(b)",
             TaxTreatment.TAX_DEFERRED,
+            true,
             true),
 
     ROTH_IRA(
             "Roth IRA",
             TaxTreatment.ROTH,
-            false),
+            false,
+            true),
 
     ROTH_401K(
             "Roth 401(k)",
             TaxTreatment.ROTH,
-            false),
+            false,
+            true),
 
     INHERITED_TRADITIONAL_IRA(
             "Inherited Traditional IRA",
             TaxTreatment.TAX_DEFERRED,
-            false),
+            false,
+            true),
 
     INHERITED_ROTH_IRA(
             "Inherited Roth IRA",
             TaxTreatment.ROTH,
-            false),
+            false,
+            true),
 
     BROKERAGE(
             "Brokerage",
             TaxTreatment.TAXABLE,
+            false,
             false),
 
     CHECKING(
             "Checking",
             TaxTreatment.CASH,
+            false,
             false),
 
     SAVINGS(
             "Savings",
             TaxTreatment.CASH,
+            false,
             false);
 
     private final String displayName;
     private final TaxTreatment taxTreatment;
     private final boolean subjectToOwnerRmd;
+    private final boolean individuallyOwnedRetirementAccount;
 
     AccountType(
             String displayName,
             TaxTreatment taxTreatment,
-            boolean subjectToOwnerRmd) {
+            boolean subjectToOwnerRmd,
+            boolean individuallyOwnedRetirementAccount) {
 
         this.displayName = displayName;
         this.taxTreatment = taxTreatment;
         this.subjectToOwnerRmd = subjectToOwnerRmd;
+        this.individuallyOwnedRetirementAccount =
+                individuallyOwnedRetirementAccount;
     }
 
     public TaxTreatment getTaxTreatment() {
@@ -80,6 +95,17 @@ public enum AccountType {
 
     public boolean isSubjectToOwnerRmd() {
         return subjectToOwnerRmd;
+    }
+
+    public boolean requiresIndividualOwnership() {
+        return individuallyOwnedRetirementAccount;
+    }
+
+    public boolean allowsOwnership(
+            AccountOwnership ownership) {
+
+        return !requiresIndividualOwnership() ||
+                ownership != AccountOwnership.JOINT;
     }
 
 

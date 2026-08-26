@@ -16,7 +16,7 @@ public class Traditional401K extends Account {
             @JsonProperty("ownership") AccountOwnership ownership,
             @JsonProperty("currentBalance") BigDecimal currentBalance) {
 
-        super(name, ownership, currentBalance);
+        super(name, ownership, currentBalance, AccountType.TRADITIONAL_401K);
     }
 
     @Override

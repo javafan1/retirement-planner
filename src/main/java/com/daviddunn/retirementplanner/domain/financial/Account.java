@@ -5,9 +5,7 @@ import com.daviddunn.retirementplanner.domain.model.AccountType;
 
 import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
@@ -58,15 +56,20 @@ public abstract class Account {
     private final AccountOwnership ownership;
     private BigDecimal currentBalance;
 
-    @JsonCreator
     protected Account(
-            @JsonProperty("name") String name,
-            @JsonProperty("ownership") AccountOwnership ownership,
-            @JsonProperty("currentBalance") BigDecimal currentBalance) {
+            String name,
+            AccountOwnership ownership,
+            BigDecimal currentBalance,
+            AccountType accountType) {
 
         this.name = Objects.requireNonNull(name, "name");
         this.ownership = Objects.requireNonNullElse(ownership, AccountOwnership.PRIMARY);
         this.currentBalance = Objects.requireNonNull(currentBalance, "currentBalance");
+
+        if (!accountType.allowsOwnership(this.ownership)) {
+            throw new IllegalArgumentException(
+                    accountType + " must be owned by PRIMARY or SPOUSE; JOINT ownership is not permitted.");
+        }
     }
 
     public String getName() {

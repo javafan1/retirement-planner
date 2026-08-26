@@ -3,18 +3,22 @@ package com.daviddunn.retirementplanner.persistence;
 import com.daviddunn.retirementplanner.domain.baseline.ProjectionBaseline;
 import com.daviddunn.retirementplanner.domain.baseline.RetirementPlanSnapshot;
 import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
+import com.daviddunn.retirementplanner.domain.financial.AccountFactory;
 import com.daviddunn.retirementplanner.domain.model.*;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.math.BigDecimal;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAsset;
 
 class JsonRetirementPlanRepositoryTest {
@@ -62,6 +66,66 @@ class JsonRetirementPlanRepositoryTest {
                         .getPlanningAssumptions()
                         .getWithdrawalAssumptions()
                         .getWithdrawalStrategyType());
+    }
+
+    @Test
+    void preservesJointNonRetirementAccountOwnershipWhenPlanIsSavedAndLoaded()
+            throws Exception {
+
+        RetirementPlan plan = RetirementPlanFactory.createEmptyPlan();
+
+        plan.getAccountPortfolio().addAccount(
+                AccountFactory.create(
+                        AccountType.BROKERAGE,
+                        "Joint Brokerage",
+                        AccountOwnership.JOINT,
+                        new BigDecimal("100000")));
+
+        JsonRetirementPlanRepository repository =
+                new JsonRetirementPlanRepository();
+
+        Path file = tempDirectory.resolve("joint-brokerage-plan.json");
+        repository.save(plan, file);
+
+        RetirementPlan loadedPlan = repository.load(file);
+
+        assertEquals(
+                AccountOwnership.JOINT,
+                loadedPlan.getAccountPortfolio().getAccounts().getFirst()
+                        .getOwnership());
+    }
+
+    @Test
+    void rejectsLegacyJointRetirementAccountWithoutSilentlyChoosingAnOwner()
+            throws Exception {
+
+        RetirementPlan plan = RetirementPlanFactory.createEmptyPlan();
+
+        plan.getAccountPortfolio().addAccount(
+                AccountFactory.create(
+                        AccountType.TRADITIONAL_IRA,
+                        "Legacy Joint IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000")));
+
+        JsonRetirementPlanRepository repository =
+                new JsonRetirementPlanRepository();
+
+        Path file = tempDirectory.resolve("legacy-joint-ira-plan.json");
+        repository.save(plan, file);
+
+        String invalidLegacyJson = java.nio.file.Files.readString(file)
+                .replaceFirst(
+                        "\\\"ownership\\\"\\s*:\\s*\\\"PRIMARY\\\"",
+                        "\\\"ownership\\\" : \\\"JOINT\\\"");
+        java.nio.file.Files.writeString(file, invalidLegacyJson);
+
+        IOException exception = assertThrows(
+                IOException.class,
+                () -> repository.load(file));
+
+        assertTrue(exception.getMessage().contains(
+                "JOINT ownership is not permitted"));
     }
 
     @Test

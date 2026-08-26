@@ -14,6 +14,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
 
 import java.math.BigDecimal;
+import java.util.List;
 import javafx.application.Platform;
 
 public class AccountDialog extends Dialog<Account> {
@@ -51,9 +52,7 @@ public class AccountDialog extends Dialog<Account> {
         typeCombo.getSelectionModel().selectFirst();
 
         ownershipCombo = new ComboBox<>();
-        ownershipCombo.getItems().addAll(
-                AccountOwnership.values());
-        ownershipCombo.getSelectionModel().selectFirst();
+        updateOwnershipChoices();
 
         balanceField = new TextField();
 
@@ -209,9 +208,9 @@ public class AccountDialog extends Dialog<Account> {
 
         typeCombo.valueProperty().addListener(
                 (observable, oldValue, newValue) ->
-                        updateInheritedFieldsVisibility());
+                        updateForAccountTypeChange());
 
-        updateInheritedFieldsVisibility();
+        updateForAccountTypeChange();
 
         getDialogPane().setContent(grid);
 
@@ -233,6 +232,11 @@ public class AccountDialog extends Dialog<Account> {
 
             AccountOwnership ownership =
                     ownershipCombo.getValue();
+
+            if (ownership == null) {
+                throw new IllegalArgumentException(
+                        "Select PRIMARY or SPOUSE for an individually owned retirement account.");
+            }
 
             BigDecimal balance =
                     new BigDecimal(
@@ -324,6 +328,46 @@ public class AccountDialog extends Dialog<Account> {
                         .sizeToScene();
             }
         });
+    }
+
+    private void updateForAccountTypeChange() {
+
+        updateOwnershipChoices();
+        updateInheritedFieldsVisibility();
+    }
+
+    private void updateOwnershipChoices() {
+
+        AccountType type = typeCombo.getValue();
+
+        AccountOwnership currentOwnership =
+                ownershipCombo.getValue();
+
+        List<AccountOwnership> allowedOwnerships =
+                type != null &&
+                        type.requiresIndividualOwnership()
+                        ? List.of(
+                                AccountOwnership.PRIMARY,
+                                AccountOwnership.SPOUSE)
+                        : List.of(AccountOwnership.values());
+
+        ownershipCombo.getItems().setAll(
+                allowedOwnerships);
+
+        if (currentOwnership != null &&
+                allowedOwnerships.contains(currentOwnership)) {
+            ownershipCombo.setValue(currentOwnership);
+            return;
+        }
+
+        if (currentOwnership == AccountOwnership.JOINT &&
+                type != null &&
+                type.requiresIndividualOwnership()) {
+            ownershipCombo.setValue(null);
+            return;
+        }
+
+        ownershipCombo.getSelectionModel().selectFirst();
     }
 
     private InheritedAccountInformation getInheritedInformation(

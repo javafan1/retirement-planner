@@ -10,6 +10,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AccountFactoryTest {
@@ -135,6 +137,66 @@ public class AccountFactoryTest {
         assertEquals(
                 TaxTreatment.TAXABLE,
                 account.getTaxTreatment());
+    }
+
+    @Test
+    void individuallyOwnedRetirementAccountsRequirePrimaryOrSpouseOwnership() {
+
+        assertDoesNotThrow(
+                () -> AccountFactory.create(
+                        AccountType.TRADITIONAL_IRA,
+                        "Primary IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000")));
+
+        assertDoesNotThrow(
+                () -> AccountFactory.create(
+                        AccountType.TRADITIONAL_IRA,
+                        "Spouse IRA",
+                        AccountOwnership.SPOUSE,
+                        new BigDecimal("100000")));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> AccountFactory.create(
+                        AccountType.TRADITIONAL_IRA,
+                        "Joint IRA",
+                        AccountOwnership.JOINT,
+                        new BigDecimal("100000")));
+
+        assertDoesNotThrow(
+                () -> AccountFactory.create(
+                        AccountType.ROTH_IRA,
+                        "Primary Roth IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000")));
+
+        assertDoesNotThrow(
+                () -> AccountFactory.create(
+                        AccountType.ROTH_IRA,
+                        "Spouse Roth IRA",
+                        AccountOwnership.SPOUSE,
+                        new BigDecimal("100000")));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> AccountFactory.create(
+                        AccountType.ROTH_IRA,
+                        "Joint Roth IRA",
+                        AccountOwnership.JOINT,
+                        new BigDecimal("100000")));
+    }
+
+    @Test
+    void factoryAllowsJointOwnershipForBrokerageAccounts() {
+
+        Account account = AccountFactory.create(
+                AccountType.BROKERAGE,
+                "Joint Brokerage",
+                AccountOwnership.JOINT,
+                new BigDecimal("100000"));
+
+        assertEquals(AccountOwnership.JOINT, account.getOwnership());
     }
 
     @Test

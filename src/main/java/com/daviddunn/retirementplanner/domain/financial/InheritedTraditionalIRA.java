@@ -20,7 +20,7 @@ public class InheritedTraditionalIRA extends Account {
             @JsonProperty("inheritedAccountInformation")
             InheritedAccountInformation inheritedAccountInformation) {
 
-        super(name, ownership, currentBalance);
+        super(name, ownership, currentBalance, AccountType.INHERITED_TRADITIONAL_IRA);
 
         this.inheritedAccountInformation =
                 Objects.requireNonNull(

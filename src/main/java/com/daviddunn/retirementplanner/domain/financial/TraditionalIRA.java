@@ -17,7 +17,7 @@ public class TraditionalIRA extends Account {
             @JsonProperty("ownership") AccountOwnership ownership,
             @JsonProperty("currentBalance") BigDecimal currentBalance) {
 
-        super(name, ownership, currentBalance);
+        super(name, ownership, currentBalance, AccountType.TRADITIONAL_IRA);
     }
 
     @Override
