@@ -201,6 +201,8 @@ public class ProjectionYearBuilder {
                 portfolioWithdrawal,
                 requiredMinimumDistribution,
                 excessRmd,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
                 unallocatedCash,
                 endingInvestableAssets,
                 endingAccountSnapshots,

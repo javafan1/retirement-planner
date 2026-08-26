@@ -203,6 +203,15 @@
 
   "startingAgeRules": [
     {
+      "maximumBirthDate": "1949-06-30",
+      "rmdStartingAge": 70
+    },
+    {
+      "minimumBirthDate": "1949-07-01",
+      "maximumBirthDate": "1950-12-31",
+      "rmdStartingAge": 72
+    },
+    {
       "minimumBirthYear": 1951,
       "maximumBirthYear": 1959,
       "rmdStartingAge": 73

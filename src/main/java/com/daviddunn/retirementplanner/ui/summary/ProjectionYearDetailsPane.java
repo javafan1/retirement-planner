@@ -360,11 +360,40 @@ public class ProjectionYearDetailsPane
                 addMoneyComparisonRow(
                         grid,
                         row,
-                        "Accumulated RMD Cash",
-                        year.getUnallocatedCash(),
+                        "Beginning Retained RMD Assets",
+                        year.getBeginningRetainedRmdAssets(),
                         getBaselineValue(
                                 ProjectionYear::
-                                        getUnallocatedCash));
+                                        getBeginningRetainedRmdAssets));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Growth on Retained RMD Assets",
+                        year.getRetainedRmdAssetGrowth(),
+                        getBaselineValue(
+                                ProjectionYear::
+                                        getRetainedRmdAssetGrowth));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "New Excess RMD",
+                        year.getExcessRmd(),
+                        getBaselineValue(
+                                ProjectionYear::getExcessRmd));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Ending Retained RMD Assets",
+                        year.getEndingRetainedRmdAssets(),
+                        getBaselineValue(
+                                ProjectionYear::
+                                        getEndingRetainedRmdAssets));
 
 
         row =

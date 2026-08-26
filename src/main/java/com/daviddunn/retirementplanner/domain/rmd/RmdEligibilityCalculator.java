@@ -29,7 +29,7 @@ public final class RmdEligibilityCalculator {
                 governmentRules
                         .getRmdRules()
                         .getRmdStartingAge(
-                                dateOfBirth.getYear());
+                                dateOfBirth);
 
         int ageAtEndOfYear =
                 projectionYear -

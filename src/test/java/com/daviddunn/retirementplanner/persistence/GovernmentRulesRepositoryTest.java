@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.rules.*;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -146,6 +147,30 @@ class GovernmentRulesRepositoryTest {
         assertEquals(
                 75,
                 startingAge);
+    }
+
+    @Test
+    void birthDateRulesCoverThe1949StatutoryBoundary()
+            throws Exception {
+
+        GovernmentRulesRepository repository =
+                new GovernmentRulesRepository();
+
+        GovernmentRules rules =
+                repository.load(
+                        "/rules/government-rules-2026.json");
+
+        assertEquals(
+                70,
+                rules.getRmdRules()
+                        .getRmdStartingAge(
+                                LocalDate.of(1949, 6, 30)));
+
+        assertEquals(
+                72,
+                rules.getRmdRules()
+                        .getRmdStartingAge(
+                                LocalDate.of(1949, 7, 1)));
     }
 
     @Test

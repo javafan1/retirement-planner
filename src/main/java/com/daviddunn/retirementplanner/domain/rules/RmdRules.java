@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.domain.rules;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 
@@ -63,6 +64,25 @@ public final class RmdRules {
                         new IllegalArgumentException(
                                 "No RMD starting age rule found for birth year: "
                                         + birthYear))
+                .getRmdStartingAge();
+    }
+
+    public int getRmdStartingAge(
+            LocalDate birthDate) {
+
+        Objects.requireNonNull(
+                birthDate,
+                "Birth date is required.");
+
+        return startingAgeRules
+                .stream()
+                .filter(rule ->
+                        rule.appliesTo(birthDate))
+                .findFirst()
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "No RMD starting age rule found for birth date: "
+                                        + birthDate))
                 .getRmdStartingAge();
     }
 

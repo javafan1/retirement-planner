@@ -7,8 +7,12 @@ import com.daviddunn.retirementplanner.domain.financial.SavingsAccount;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.model.*;
+import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdCalculator;
+import com.daviddunn.retirementplanner.domain.rmd.RmdBalanceSnapshot;
 import com.daviddunn.retirementplanner.domain.financial.RothIRA;
 import com.daviddunn.retirementplanner.domain.financial.BrokerageAccount;
+import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
+import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
 
 import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
@@ -20,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Year;
 import java.math.RoundingMode;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1491,7 +1496,8 @@ class ProjectionEngineTest {
     }
 
     @Test
-    void unallocatedRmdCashEarnsInvestmentGrowth() {
+    void retainedExcessRmdEarnsGeneralInvestmentReturnExactlyOnce()
+            throws Exception {
 
         Person primary =
                 new Person(
@@ -1541,14 +1547,16 @@ class ProjectionEngineTest {
          *
          * 2035 is the first RMD year.
          *
-         * 2036 allows the excess RMD accumulated
-         * in 2035 to earn investment growth.
+         * 2036 verifies that the excess RMD accumulated
+         * in 2035 remains in the general investment-growth
+         * base and receives its proportional share of that
+         * one total growth calculation.
          */
         PlanningAssumptions assumptions =
                 new PlanningAssumptions(
                         new BigDecimal("0.05"),
                         BigDecimal.ZERO,
-                        3,
+                        4,
                         LocalDate.of(
                                 2034,
                                 1,
@@ -1572,6 +1580,9 @@ class ProjectionEngineTest {
         ProjectionYear thirdYear =
                 projection.getYearAt(2);
 
+        ProjectionYear fourthYear =
+                projection.getYearAt(3);
+
         /*
          * 2035 must produce excess RMD cash.
          */
@@ -1582,29 +1593,36 @@ class ProjectionEngineTest {
                 excessRmd2035.signum() > 0);
 
         /*
-         * The 2035 excess RMD becomes the starting
-         * unallocated cash for 2036.
-         *
-         * That cash earns 5% during 2036.
+         * The 2035 excess RMD becomes retained RMD
+         * assets for 2036. They are included in the
+         * 2036 general investment-growth base.
          */
-        BigDecimal expectedInterest =
-                excessRmd2035
+        BigDecimal expectedInvestmentGrowth =
+                thirdYear
+                        .getBeginningInvestableAssets()
                         .multiply(
                                 new BigDecimal("0.05"))
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
 
+        assertEquals(
+                0,
+                expectedInvestmentGrowth.compareTo(
+                        thirdYear.getInvestmentGrowth()));
+
         /*
-         * The 2036 ending TTL RMD Cash should contain:
+         * The 2036 ending retained RMD assets should contain:
          *
          * 2035 excess RMD
-         * + 2036 interest
+         * + growth on those retained assets
          * + 2036 excess RMD
          */
         BigDecimal expectedEndingCash =
                 excessRmd2035
-                        .add(expectedInterest)
+                        .add(
+                                thirdYear
+                                        .getRetainedRmdAssetGrowth())
                         .add(
                                 thirdYear
                                         .getExcessRmd())
@@ -1620,6 +1638,197 @@ class ProjectionEngineTest {
                                 .setScale(
                                         2,
                                         RoundingMode.HALF_UP)));
+
+        assertEquals(
+                0,
+                excessRmd2035.compareTo(
+                        thirdYear
+                                .getBeginningRetainedRmdAssets()));
+
+        BigDecimal accountGrowth =
+                thirdYear
+                        .getInvestmentGrowth()
+                        .subtract(
+                                thirdYear
+                                        .getRetainedRmdAssetGrowth());
+
+        assertEquals(
+                0,
+                thirdYear
+                        .getInvestmentGrowth()
+                        .compareTo(
+                                accountGrowth.add(
+                                        thirdYear
+                                                .getRetainedRmdAssetGrowth())));
+
+        BigDecimal expectedEndingAssets =
+                thirdYear
+                        .getBeginningInvestableAssets()
+                        .add(
+                                thirdYear
+                                        .getInvestmentGrowth())
+                        .subtract(
+                                thirdYear
+                                        .getPortfolioWithdrawal())
+                        .add(
+                                thirdYear
+                                        .getExcessRmd())
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedEndingAssets.compareTo(
+                        thirdYear
+                                .getEndingInvestableAssets()
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP)));
+
+        assertEquals(
+                0,
+                new BigDecimal("1000000").compareTo(
+                        traditionalIra.getCurrentBalance()));
+
+        /*
+         * The next year's RMD must use the prior December 31
+         * tax-deferred account balance only. Retained RMD asset
+         * growth must not be assigned to that IRA.
+         */
+        RmdBalanceSnapshot correctSnapshot =
+                new RmdBalanceSnapshot(
+                        LocalDate.of(2036, 12, 31),
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        traditionalIra,
+                                        thirdYear.getEndingBalance(
+                                                traditionalIra))));
+
+        GovernmentRules rules =
+                new GovernmentRulesRepository().load(
+                        "/rules/government-rules-2026.json");
+
+        BigDecimal expectedRmd2037 =
+                new HouseholdRmdCalculator()
+                        .calculate(
+                                plan,
+                                correctSnapshot,
+                                2037,
+                                rules)
+                        .getTotalRmd()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+        assertEquals(
+                0,
+                expectedRmd2037.compareTo(
+                        fourthYear
+                                .getRequiredMinimumDistribution()));
+
+        RmdBalanceSnapshot inflatedSnapshot =
+                new RmdBalanceSnapshot(
+                        LocalDate.of(2036, 12, 31),
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        traditionalIra,
+                                        thirdYear
+                                                .getEndingBalance(
+                                                        traditionalIra)
+                                                .add(
+                                                        thirdYear
+                                                                .getRetainedRmdAssetGrowth()))));
+
+        BigDecimal incorrectlyInflatedRmd2037 =
+                new HouseholdRmdCalculator()
+                        .calculate(
+                                plan,
+                                inflatedSnapshot,
+                                2037,
+                                rules)
+                        .getTotalRmd();
+
+        assertTrue(
+                incorrectlyInflatedRmd2037.compareTo(
+                        fourthYear
+                                .getRequiredMinimumDistribution()) > 0);
+    }
+
+    @Test
+    void projectsRmdForAnOlderBirthCohortUsingThePriorProjectedBalance() {
+
+        Person primary =
+                new Person(
+                        "David",
+                        "Dunn",
+                        LocalDate.of(1949, 6, 15));
+
+        Person spouse =
+                new Person(
+                        "Lisa",
+                        "Dunn",
+                        LocalDate.of(1965, 2, 28));
+
+        Household household =
+                new Household(
+                        primary,
+                        spouse);
+
+        TraditionalIRA traditionalIra =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("500000.00"));
+
+        AccountPortfolio portfolio =
+                new AccountPortfolio();
+
+        portfolio.addAccount(
+                traditionalIra);
+
+        PlanningAssumptions assumptions =
+                new PlanningAssumptions(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        2,
+                        LocalDate.of(2026, 1, 1));
+
+        Projection projection =
+                new ProjectionEngine().project(
+                        new RetirementPlan(
+                                household,
+                                portfolio,
+                                assumptions));
+
+        ProjectionYear firstYear =
+                projection.getYearAt(0);
+
+        ProjectionYear secondYear =
+                projection.getYearAt(1);
+
+        /*
+         * The first modeled year intentionally has no
+         * prior December 31 snapshot. In 2027, this
+         * 1949 cohort is age 78 and uses its 2026
+         * projected $500,000 balance and divisor 22.0.
+         */
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(
+                        firstYear
+                                .getRequiredMinimumDistribution()));
+
+        assertEquals(
+                0,
+                new BigDecimal("22727.27").compareTo(
+                        secondYear
+                                .getRequiredMinimumDistribution()));
+
+        assertEquals(
+                0,
+                new BigDecimal("500000.00").compareTo(
+                        traditionalIra.getCurrentBalance()));
     }
     @Test
     void projectionUsesSelectedWithdrawalStrategy() {
@@ -2293,7 +2502,7 @@ ProjectionYear
                                 BigDecimal.ZERO,
                                 BigDecimal.ZERO,
                                 BigDecimal.ZERO),
-                        3,
+                        4,
                         LocalDate.of(2026, 1, 1));
 
         RetirementPlan plan =

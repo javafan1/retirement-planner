@@ -86,16 +86,18 @@ public final class ProjectedPortfolio {
 
     public BigDecimal getTotalBalance() {
 
-        BigDecimal accountTotal =
-                accountBalances
-                        .stream()
-                        .map(ProjectedAccountBalance::getBalance)
-                        .reduce(
-                                BigDecimal.ZERO,
-                                BigDecimal::add);
-
-        return accountTotal.add(
+        return getAccountBalanceTotal().add(
                 unallocatedCash);
+    }
+
+    public BigDecimal getAccountBalanceTotal() {
+
+        return accountBalances
+                .stream()
+                .map(ProjectedAccountBalance::getBalance)
+                .reduce(
+                        BigDecimal.ZERO,
+                        BigDecimal::add);
     }
 
     public BigDecimal getBalance(
@@ -280,16 +282,48 @@ public final class ProjectedPortfolio {
                 growthAmount,
                 "Growth amount is required.");
 
-        BigDecimal accountTotal =
-                accountBalances
-                        .stream()
-                        .map(ProjectedAccountBalance::getBalance)
-                        .reduce(
-                                BigDecimal.ZERO,
-                                BigDecimal::add);
+        if (getAccountBalanceTotal().signum() == 0) {
+            return withGrowth(
+                    BigDecimal.ZERO,
+                    growthAmount);
+        }
+
+        return withGrowth(
+                growthAmount,
+                BigDecimal.ZERO);
+    }
+
+    /*
+     * Applies the already-calculated aggregate investment
+     * growth to its two projected asset components. Retained
+     * RMD assets earn the same general investment return as
+     * accounts, but must not have their growth attributed to
+     * an account (especially a tax-deferred account).
+     */
+    public ProjectedPortfolio withGrowth(
+            BigDecimal accountGrowth,
+            BigDecimal retainedRmdAssetGrowth) {
+
+        Objects.requireNonNull(
+                accountGrowth,
+                "Account growth is required.");
+
+        Objects.requireNonNull(
+                retainedRmdAssetGrowth,
+                "Retained RMD asset growth is required.");
+
+        BigDecimal accountTotal = getAccountBalanceTotal();
 
         if (accountTotal.signum() == 0) {
-            return this;
+            if (accountGrowth.signum() != 0) {
+                throw new IllegalArgumentException(
+                        "Account growth requires a positive account balance.");
+            }
+
+            return new ProjectedPortfolio(
+                    accountBalances,
+                    unallocatedCash.add(
+                            retainedRmdAssetGrowth));
         }
 
         List<ProjectedAccountBalance> updatedBalances =
@@ -305,14 +339,14 @@ public final class ProjectedPortfolio {
                                                     12,
                                                     RoundingMode.HALF_UP);
 
-                            BigDecimal accountGrowth =
-                                    growthAmount
+                            BigDecimal accountBalanceGrowth =
+                                    accountGrowth
                                             .multiply(share);
 
                             BigDecimal newBalance =
                                     projected
                                             .getBalance()
-                                            .add(accountGrowth);
+                                            .add(accountBalanceGrowth);
 
                             return new ProjectedAccountBalance(
                                     projected.getAccount(),
@@ -322,7 +356,8 @@ public final class ProjectedPortfolio {
 
         return new ProjectedPortfolio(
                 updatedBalances,
-                unallocatedCash);
+                unallocatedCash.add(
+                        retainedRmdAssetGrowth));
     }
 
 

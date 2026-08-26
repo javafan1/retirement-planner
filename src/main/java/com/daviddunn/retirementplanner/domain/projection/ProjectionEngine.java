@@ -274,15 +274,18 @@ public class ProjectionEngine {
                         yearOffset,
                         projectionStartDate);
 
-        BigDecimal beginningUnallocatedCash =
+        BigDecimal beginningRetainedRmdAssets =
                 projectedPortfolio.getUnallocatedCash();
 
-        BigDecimal unallocatedCashInterest =
-                calculateInvestmentGrowth(
-                        beginningUnallocatedCash,
-                        assumptions,
-                        yearOffset,
-                        projectionStartDate);
+        BigDecimal retainedRmdAssetGrowth =
+                calculateRetainedRmdAssetGrowth(
+                        investmentGrowth,
+                        beginningRetainedRmdAssets,
+                        beginningAssets);
+
+        BigDecimal accountAssetGrowth =
+                investmentGrowth.subtract(
+                        retainedRmdAssetGrowth);
 
         LocalDate projectionDate =
                 yearOffset == 0
@@ -351,7 +354,8 @@ public class ProjectionEngine {
 
         ProjectedPortfolio portfolioAfterGrowth =
                 projectedPortfolio.withGrowth(
-                        investmentGrowth);
+                        accountAssetGrowth,
+                        retainedRmdAssetGrowth);
 
         ProjectedWithdrawalAllocation rmdAllocation =
                 withdrawalAllocator.allocateHouseholdRmds(
@@ -472,7 +476,7 @@ public class ProjectionEngine {
                                         projectionFilingStatus,
                                         projectedGovernmentRules,
                                         targetTaxableIncome,
-                                        unallocatedCashInterest,
+                                        BigDecimal.ZERO,
                                         assumptions
                                                 .getSocialSecurityColaRate(),
                                         assumptions
@@ -501,7 +505,7 @@ public class ProjectionEngine {
                                 projectionDate),
                         projectedGovernmentRules,
                         rothConversion,
-                        unallocatedCashInterest,
+                        BigDecimal.ZERO,
                         assumptions.getSocialSecurityColaRate(),
                         assumptions.getDeathScenarioAssumptions());
 
@@ -555,10 +559,8 @@ public class ProjectionEngine {
         ProjectedPortfolio endingPortfolio =
                 portfolioAfterTaxWithdrawal
                         .withAdditionalCash(
-                                unallocatedCashInterest
-                                        .add(
-                                                withdrawalResult
-                                                        .getExcessRmd()));
+                                withdrawalResult
+                                        .getExcessRmd());
 
         if (rothConversion.signum() > 0) {
 
@@ -593,8 +595,6 @@ public class ProjectionEngine {
                         .add(
                                 withdrawalResult
                                         .getExcessRmd())
-                        .add(
-                                unallocatedCashInterest)
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
@@ -635,6 +635,8 @@ public class ProjectionEngine {
                         totalPortfolioWithdrawal,
                         requiredMinimumDistribution,
                         withdrawalResult.getExcessRmd(),
+                        beginningRetainedRmdAssets,
+                        retainedRmdAssetGrowth,
                         endingPortfolio.getUnallocatedCash(),
                         endingAssets,
                         endingAccountSnapshots,
@@ -714,6 +716,27 @@ public class ProjectionEngine {
         return investmentGrowth.setScale(
                 2,
                 RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal calculateRetainedRmdAssetGrowth(
+            BigDecimal totalInvestmentGrowth,
+            BigDecimal beginningRetainedRmdAssets,
+            BigDecimal beginningInvestableAssets) {
+
+        if (beginningRetainedRmdAssets.signum() == 0
+                || beginningInvestableAssets.signum() == 0) {
+            return BigDecimal.ZERO;
+        }
+
+        return totalInvestmentGrowth
+                .multiply(beginningRetainedRmdAssets)
+                .divide(
+                        beginningInvestableAssets,
+                        12,
+                        RoundingMode.HALF_UP)
+                .setScale(
+                        2,
+                        RoundingMode.HALF_UP);
     }
 
     private BigDecimal calculateTotalIncome(

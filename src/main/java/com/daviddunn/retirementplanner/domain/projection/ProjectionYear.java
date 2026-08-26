@@ -54,6 +54,10 @@ public class ProjectionYear {
 
     private final BigDecimal rothConversion;
 
+    private final BigDecimal beginningRetainedRmdAssets;
+    private final BigDecimal retainedRmdAssetGrowth;
+    private final BigDecimal endingRetainedRmdAssets;
+
     private final BigDecimal unallocatedCash;
 
     private final BigDecimal combinedEffectiveTaxRate;
@@ -140,6 +144,9 @@ public class ProjectionYear {
 
 
         this.unallocatedCash = BigDecimal.ZERO;
+        this.beginningRetainedRmdAssets = BigDecimal.ZERO;
+        this.retainedRmdAssetGrowth = BigDecimal.ZERO;
+        this.endingRetainedRmdAssets = BigDecimal.ZERO;
 //        this.unallocatedCash =
 //                Objects.requireNonNull(
 //                        unallocatedCash,
@@ -276,6 +283,9 @@ public class ProjectionYear {
                 "Ending account snapshots are required.");
 
         this.unallocatedCash = BigDecimal.ZERO;
+        this.beginningRetainedRmdAssets = BigDecimal.ZERO;
+        this.retainedRmdAssetGrowth = BigDecimal.ZERO;
+        this.endingRetainedRmdAssets = BigDecimal.ZERO;
 
         this.estimatedHeirTax =
                 BigDecimal.ZERO;
@@ -346,6 +356,8 @@ public class ProjectionYear {
             BigDecimal portfolioWithdrawal,
             BigDecimal requiredMinimumDistribution,
             BigDecimal excessRmd,
+            BigDecimal beginningRetainedRmdAssets,
+            BigDecimal retainedRmdAssetGrowth,
             BigDecimal unallocatedCash,
             BigDecimal endingInvestableAssets,
             List<ProjectedAccountSnapshot> endingAccountSnapshots,
@@ -503,6 +515,19 @@ public class ProjectionYear {
                 Objects.requireNonNull(
                         unallocatedCash,
                         "unallocatedCash");
+
+        this.beginningRetainedRmdAssets =
+                Objects.requireNonNull(
+                        beginningRetainedRmdAssets,
+                        "beginningRetainedRmdAssets");
+
+        this.retainedRmdAssetGrowth =
+                Objects.requireNonNull(
+                        retainedRmdAssetGrowth,
+                        "retainedRmdAssetGrowth");
+
+        this.endingRetainedRmdAssets =
+                this.unallocatedCash;
 
         this.rothConversion =
                 Objects.requireNonNull(
@@ -746,6 +771,18 @@ public class ProjectionYear {
 
     public BigDecimal getUnallocatedCash() {
         return unallocatedCash;
+    }
+
+    public BigDecimal getBeginningRetainedRmdAssets() {
+        return beginningRetainedRmdAssets;
+    }
+
+    public BigDecimal getRetainedRmdAssetGrowth() {
+        return retainedRmdAssetGrowth;
+    }
+
+    public BigDecimal getEndingRetainedRmdAssets() {
+        return endingRetainedRmdAssets;
     }
 
     public BigDecimal getEstimatedHeirTax() {

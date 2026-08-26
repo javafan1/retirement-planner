@@ -65,9 +65,11 @@ public class ProjectionCsvExporter {
                         + "Portfolio Withdrawal,"
                         + "Required Minimum Distribution,"
                         + "Excess RMD,"
+                        + "Beginning Retained RMD Assets,"
+                        + "Retained RMD Asset Growth,"
                         + "Tax Funding Withdrawal,"
                         + "Roth Conversion,"
-                        + "Unallocated Cash,"
+                        + "Ending Retained RMD Assets,"
                         + "Ending Investable Assets,"
                         + "Non-Investable Assets,"
                         + "Net Worth,"
@@ -124,9 +126,11 @@ public class ProjectionCsvExporter {
                 year.getPortfolioWithdrawal(),
                 year.getRequiredMinimumDistribution(),
                 year.getExcessRmd(),
+                year.getBeginningRetainedRmdAssets(),
+                year.getRetainedRmdAssetGrowth(),
                 year.getTaxFundingWithdrawal(),
                 year.getRothConversion(),
-                year.getUnallocatedCash(),
+                year.getEndingRetainedRmdAssets(),
                 year.getEndingInvestableAssets(),
 
                 nonInvestableValue,

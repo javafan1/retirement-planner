@@ -117,7 +117,25 @@ Important caveat: the current `RetirementPlanSnapshot` stores references to exis
 - Run relevant targeted tests first, then the full Maven test suite: `mvn test`.
 - Do not consider a task complete if tests fail.
 
-# Autonomy boundaries
+# Autonomy and command execution
+
+Codex is authorized to work autonomously within this repository for normal software-development tasks that are within the scope of the user's requested task.
+
+## Routine commands and actions
+
+Codex should execute routine read-only, inspection, build, and test commands without asking the user for confirmation whenever the execution environment permits it.
+
+This includes, but is not limited to:
+
+- `Get-Content`, `Get-ChildItem`, `Select-String`, `Test-Path`, and `Resolve-Path`
+- `rg` and `find`
+- `git status`, `git diff`, `git log`, `git show`, `git branch`, `git ls-files`, `git check-ignore`, and `git grep`
+- Java, JDK, and Maven version inspection
+- Maven compile commands, targeted JUnit tests, and the complete Maven test suite
+- IntelliJ bundled Maven commands
+- Other non-destructive commands used to inspect the repository, compile the application, or verify behavior
+
+Do not ask the user for permission merely to inspect source files, tests, resources, configuration files, Git status/diffs, or build output.
 
 For requests to inspect, diagnose, review, or plan:
 
@@ -131,6 +149,35 @@ For requests to implement, change, or fix:
 - Fix ordinary in-scope compilation errors caused by the requested change.
 - Inspect git diff and git status as needed.
 
+## Implementation autonomy
+
+Once the user has authorized a specific implementation task, Codex may autonomously:
+
+- Inspect all files relevant to that task.
+- Modify files necessary to implement that task.
+- Add or modify focused tests.
+- Run targeted tests and the full Maven test suite.
+- Fix compilation errors directly caused by the requested implementation.
+- Fix test failures directly caused by the requested implementation when the fix is clearly within the approved behavior.
+- Make small supporting changes necessary to complete the requested task.
+- Repeat the inspect/edit/compile/test cycle without requesting approval at each step.
+
+Do not interrupt the user for routine intermediate approvals when the work remains within the scope of the task they already approved.
+
+## IntelliJ bundled Maven
+
+The project may use IntelliJ IDEA's bundled Maven when `mvn` is not available on PATH.
+
+The known Maven executable is:
+
+```text
+C:\Program Files\JetBrains\IntelliJ IDEA Community Edition 2025.2.6.2\plugins\maven\lib\maven3\bin\mvn.cmd
+```
+
+Codex is authorized to use this executable for Maven inspection, compilation, targeted tests, and full test-suite execution without requesting additional user approval whenever the execution environment permits it.
+
+## Actions that still require explicit user authorization
+
 Stop and request approval before:
 
 - materially changing financial calculation semantics
@@ -141,7 +188,46 @@ Stop and request approval before:
 - accessing or modifying files outside the project workspace
 - expanding the task beyond the requested scope
 
+Do not perform the following unless the user explicitly authorizes them:
+
+- `git commit`
+- `git push`
+- `git reset --hard`
+- `git clean`
+- Force Git operations or rewriting Git history
+- Deleting project files unless deletion is explicitly part of the requested task
+- Modifying files outside this repository
+- Installing or uninstalling system software
+- Changing operating-system configuration
+- Transmitting or exposing personal financial information
+- Making broad architectural changes outside the requested task
+- Intentionally changing financial-model behavior outside the requested task
+
+## Financial-model safeguard
+
+Codex may autonomously inspect financial calculations, identify defects, add tests, and implement financial behavior that the user has explicitly approved.
+
+If fixing an approved task reveals that an additional financial rule must be changed outside the approved scope, stop before making that additional financial-model change and report:
+
+1. The issue discovered.
+2. Why the additional change appears necessary.
+3. The financial behavior that would change.
+4. The recommended implementation.
+
+Ordinary compilation fixes, plumbing changes, parameter propagation, and test updates that do not independently change financial semantics do not require additional approval.
+
 Never change financial behavior solely to make a test pass.
+
+## Completion behavior
+
+For an authorized implementation task, Codex should normally continue until:
+
+1. The requested implementation is complete.
+2. Relevant focused tests pass.
+3. The full Maven test suite passes, when practical.
+4. The results and files changed have been reported.
+
+Do not commit changes unless the user separately requests a commit.
 
 # Development workflow
 

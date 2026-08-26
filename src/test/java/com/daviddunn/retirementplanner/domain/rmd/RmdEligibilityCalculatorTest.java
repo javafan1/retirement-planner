@@ -96,6 +96,34 @@ class RmdEligibilityCalculatorTest {
     }
 
     @Test
+    void historicalBirthCohortsUseTheirStatutoryStartingYears() {
+
+        assertRmdEligibilityBeginsInYear(
+                LocalDate.of(1949, 6, 30),
+                2019);
+
+        assertRmdEligibilityBeginsInYear(
+                LocalDate.of(1949, 7, 1),
+                2021);
+
+        assertRmdEligibilityBeginsInYear(
+                LocalDate.of(1950, 12, 31),
+                2022);
+
+        assertRmdEligibilityBeginsInYear(
+                LocalDate.of(1951, 1, 1),
+                2024);
+
+        assertRmdEligibilityBeginsInYear(
+                LocalDate.of(1959, 12, 31),
+                2032);
+
+        assertRmdEligibilityBeginsInYear(
+                LocalDate.of(1960, 1, 1),
+                2035);
+    }
+
+    @Test
     void birthMonthDoesNotChangeRmdYear() {
 
         LocalDate januaryBirth =
@@ -139,5 +167,28 @@ class RmdEligibilityCalculatorTest {
                                 dateOfBirth,
                                 1959,
                                 rules));
+    }
+
+    private void assertRmdEligibilityBeginsInYear(
+            LocalDate dateOfBirth,
+            int firstRmdYear) {
+
+        assertFalse(
+                calculator.isRmdRequired(
+                        dateOfBirth,
+                        firstRmdYear - 1,
+                        rules));
+
+        assertTrue(
+                calculator.isRmdRequired(
+                        dateOfBirth,
+                        firstRmdYear,
+                        rules));
+
+        assertTrue(
+                calculator.isRmdRequired(
+                        dateOfBirth,
+                        firstRmdYear + 1,
+                        rules));
     }
 }

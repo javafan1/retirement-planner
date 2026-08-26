@@ -505,4 +505,81 @@ class ProjectedPortfolioTest {
                         .compareTo(
                                 updated.getTotalBalance()));
     }
+
+    @Test
+    void allocatesTotalInvestmentGrowthBetweenAccountsAndRetainedRmdAssets() {
+
+        TraditionalIRA ira =
+                new TraditionalIRA(
+                        "Traditional IRA",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("1000000.00"));
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        ira,
+                                        new BigDecimal("1000000.00"))),
+                        new BigDecimal("100000.00"));
+
+        /*
+         * $1,000,000 invested account balance
+         * +  100,000 retained excess-RMD assets
+         * --------------------------------------
+         * $1,100,000 total investable assets
+         *
+         * At 10%, ProjectionEngine supplies one total
+         * growth amount of $110,000, allocated as
+         * $100,000 to the account and $10,000 to the
+         * retained RMD assets.
+         */
+        ProjectedPortfolio updated =
+                portfolio.withGrowth(
+                        new BigDecimal("100000.00"),
+                        new BigDecimal("10000.00"));
+
+        assertEquals(
+                0,
+                new BigDecimal("1210000.00")
+                        .compareTo(
+                                updated.getTotalBalance()));
+
+        assertEquals(
+                0,
+                new BigDecimal("110000.00")
+                        .compareTo(
+                                updated.getUnallocatedCash()));
+
+        assertEquals(
+                0,
+                new BigDecimal("1100000.00")
+                        .compareTo(
+                                updated.getBalance(ira)));
+    }
+
+    @Test
+    void growsRetainedRmdAssetsWhenThereAreNoProjectedAccounts() {
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(),
+                        new BigDecimal("100000.00"));
+
+        ProjectedPortfolio updated =
+                portfolio.withGrowth(
+                        new BigDecimal("10000.00"));
+
+        assertEquals(
+                0,
+                new BigDecimal("110000.00")
+                        .compareTo(
+                                updated.getUnallocatedCash()));
+
+        assertEquals(
+                0,
+                new BigDecimal("110000.00")
+                        .compareTo(
+                                updated.getTotalBalance()));
+    }
 }
