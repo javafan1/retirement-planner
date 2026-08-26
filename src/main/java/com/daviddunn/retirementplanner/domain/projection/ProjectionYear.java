@@ -54,7 +54,10 @@ public class ProjectionYear {
     private final MedicarePremiumCalculation
             medicarePremiumCalculation;
 
+    private final BigDecimal requestedRothConversion;
     private final BigDecimal rothConversion;
+    private final BigDecimal primaryRothConversion;
+    private final BigDecimal spouseRothConversion;
 
     private final BigDecimal beginningRetainedRmdAssets;
     private final BigDecimal retainedRmdAssetGrowth;
@@ -204,8 +207,11 @@ public class ProjectionYear {
         this.endingAccountSnapshots =
                 List.of();
 
+        this.requestedRothConversion = BigDecimal.ZERO;
         this.rothConversion =
                 BigDecimal.ZERO;
+        this.primaryRothConversion = BigDecimal.ZERO;
+        this.spouseRothConversion = BigDecimal.ZERO;
     }
 
 
@@ -341,8 +347,11 @@ public class ProjectionYear {
         this.medicarePremiumCalculation =
                 null;
 
+        this.requestedRothConversion = BigDecimal.ZERO;
         this.rothConversion =
                 BigDecimal.ZERO;
+        this.primaryRothConversion = BigDecimal.ZERO;
+        this.spouseRothConversion = BigDecimal.ZERO;
     }
 
 
@@ -375,7 +384,10 @@ public class ProjectionYear {
             MichiganTaxCalculation michiganTaxCalculation,
             MedicarePremiumCalculation medicarePremiumCalculation,
             BigDecimal taxFundingWithdrawal,
+            BigDecimal requestedRothConversion,
             BigDecimal rothConversion,
+            BigDecimal primaryRothConversion,
+            BigDecimal spouseRothConversion,
             BigDecimal estimatedHeirTax,
             BigDecimal afterTaxEstateValue,
             int primaryPersonAge) {
@@ -549,6 +561,10 @@ public class ProjectionYear {
         this.endingRetainedRmdAssets =
                 this.unallocatedCash;
 
+        this.requestedRothConversion = requireNonNegative(
+                requestedRothConversion,
+                "requestedRothConversion");
+
         this.rothConversion =
                 Objects.requireNonNull(
                         rothConversion,
@@ -557,6 +573,25 @@ public class ProjectionYear {
         if (rothConversion.signum() < 0) {
             throw new IllegalArgumentException(
                     "Roth conversion cannot be negative.");
+        }
+
+        if (rothConversion.compareTo(this.requestedRothConversion) > 0) {
+            throw new IllegalArgumentException(
+                    "Executed Roth conversion cannot exceed requested conversion.");
+        }
+
+        this.primaryRothConversion = requireNonNegative(
+                primaryRothConversion,
+                "primaryRothConversion");
+
+        this.spouseRothConversion = requireNonNegative(
+                spouseRothConversion,
+                "spouseRothConversion");
+
+        if (rothConversion.compareTo(
+                this.primaryRothConversion.add(this.spouseRothConversion)) != 0) {
+            throw new IllegalArgumentException(
+                    "Household Roth conversion must equal owner conversions.");
         }
         this.estimatedHeirTax =
                 Objects.requireNonNull(
@@ -641,6 +676,23 @@ public class ProjectionYear {
 
     public BigDecimal getRothConversion() {
         return rothConversion;
+    }
+
+    public BigDecimal getRequestedRothConversion() {
+        return requestedRothConversion;
+    }
+
+    @JsonIgnore
+    public BigDecimal getRothConversionShortfall() {
+        return requestedRothConversion.subtract(rothConversion);
+    }
+
+    public BigDecimal getPrimaryRothConversion() {
+        return primaryRothConversion;
+    }
+
+    public BigDecimal getSpouseRothConversion() {
+        return spouseRothConversion;
     }
 
     @JsonIgnore

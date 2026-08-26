@@ -7,6 +7,8 @@ import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 public final class ProjectedPortfolioRothConverter {
@@ -44,7 +46,7 @@ public final class ProjectedPortfolioRothConverter {
                         amount);
 
         ProjectedAccountBalance destination =
-                findDestinationAccount(
+                findProjectedDestinationAccount(
                         portfolio,
                         ownership);
 
@@ -66,6 +68,118 @@ public final class ProjectedPortfolioRothConverter {
         return updatedPortfolio.withBalance(
                 destinationAccount,
                 destinationBalance.add(amount));
+    }
+
+    /**
+     * Executes a household target across eligible accounts in the existing
+     * portfolio order, primary accounts first and spouse accounts second.
+     * Each source is credited only to a Roth account with the same owner.
+     */
+    public ProjectedRothConversionResult convertHousehold(
+            ProjectedPortfolio portfolio,
+            BigDecimal amount) {
+
+        Objects.requireNonNull(
+                portfolio,
+                "Projected portfolio is required.");
+
+        Objects.requireNonNull(
+                amount,
+                "Conversion amount is required.");
+
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Conversion amount cannot be negative.");
+        }
+
+        if (amount.signum() == 0) {
+            return new ProjectedRothConversionResult(
+                    portfolio,
+                    List.of());
+        }
+
+        ProjectedPortfolio updatedPortfolio = portfolio;
+        BigDecimal remaining = amount;
+        List<RothConversionAllocation> allocations = new ArrayList<>();
+
+        for (AccountOwnership ownership : List.of(
+                AccountOwnership.PRIMARY,
+                AccountOwnership.SPOUSE)) {
+
+            Account destinationAccount = findDestinationAccount(
+                    updatedPortfolio,
+                    ownership);
+
+            if (destinationAccount == null) {
+                continue;
+            }
+
+            for (ProjectedAccountBalance projected :
+                    updatedPortfolio.getAccountBalances()) {
+
+                if (remaining.signum() == 0) {
+                    break;
+                }
+
+                Account sourceAccount = projected.getAccount();
+
+                if (sourceAccount.getOwnership() != ownership
+                        || !sourceAccount.isEligibleForRothConversion()) {
+                    continue;
+                }
+
+                BigDecimal available = updatedPortfolio.getBalance(
+                        sourceAccount);
+
+                if (available.signum() <= 0) {
+                    continue;
+                }
+
+                BigDecimal converted = available.min(remaining);
+
+                updatedPortfolio = updatedPortfolio.withWithdrawal(
+                        sourceAccount,
+                        converted);
+
+                updatedPortfolio = updatedPortfolio.withBalance(
+                        destinationAccount,
+                        updatedPortfolio.getBalance(destinationAccount)
+                                .add(converted));
+
+                allocations.add(new RothConversionAllocation(
+                        ownership,
+                        sourceAccount,
+                        destinationAccount,
+                        converted));
+
+                remaining = remaining.subtract(converted);
+            }
+        }
+
+        return new ProjectedRothConversionResult(
+                updatedPortfolio,
+                allocations);
+    }
+
+    public BigDecimal getMaximumConvertibleAmount(
+            ProjectedPortfolio portfolio) {
+
+        Objects.requireNonNull(
+                portfolio,
+                "Projected portfolio is required.");
+
+        return portfolio.getAccountBalances().stream()
+                .filter(projected -> {
+                    AccountOwnership ownership = projected.getAccount()
+                            .getOwnership();
+                    return ownership != AccountOwnership.JOINT
+                            && findDestinationAccount(portfolio, ownership)
+                            != null;
+                })
+                .filter(projected -> projected.getAccount()
+                        .isEligibleForRothConversion())
+                .map(ProjectedAccountBalance::getBalance)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
 //    private ProjectedAccountBalance findSourceAccount(
@@ -152,8 +266,7 @@ public final class ProjectedPortfolioRothConverter {
                                 == ownership)
                 .filter(projected ->
                         projected.getAccount()
-                                .getProjectionAssetType()
-                                == ProjectionAssetType.TAX_DEFERRED)
+                                .isEligibleForRothConversion())
                 .filter(projected ->
                         projected.getBalance()
                                 .compareTo(amount) >= 0)
@@ -163,7 +276,7 @@ public final class ProjectedPortfolioRothConverter {
                                 "No eligible tax-deferred account found."));
     }
 
-    private ProjectedAccountBalance findDestinationAccount(
+    private ProjectedAccountBalance findProjectedDestinationAccount(
             ProjectedPortfolio portfolio,
             AccountOwnership ownership) {
 
@@ -180,5 +293,19 @@ public final class ProjectedPortfolioRothConverter {
                 .orElseThrow(() ->
                         new IllegalStateException(
                                 "No eligible Roth account found."));
+    }
+
+    private Account findDestinationAccount(
+            ProjectedPortfolio portfolio,
+            AccountOwnership ownership) {
+
+        return portfolio.getAccountBalances()
+                .stream()
+                .map(ProjectedAccountBalance::getAccount)
+                .filter(account -> account.getOwnership() == ownership)
+                .filter(account -> account.getProjectionAssetType()
+                        == ProjectionAssetType.ROTH)
+                .findFirst()
+                .orElse(null);
     }
 }

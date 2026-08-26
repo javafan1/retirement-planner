@@ -511,6 +511,28 @@ public class ProjectionEngine {
             }
         }
 
+        /*
+         * Strategies determine a household target. Limit it to the amount
+         * that can actually move from an eligible source into a same-owner
+         * Roth destination before it enters household tax calculations.
+         */
+        BigDecimal requestedRothConversion = rothConversion;
+
+        rothConversion = rothConversion.min(
+                projectedPortfolioRothConverter
+                        .getMaximumConvertibleAmount(
+                                portfolioAfterAdditionalWithdrawal));
+
+        ProjectedRothConversionResult rothConversionResult =
+                projectedPortfolioRothConverter.convertHousehold(
+                        portfolioAfterAdditionalWithdrawal,
+                        rothConversion);
+
+        rothConversion = rothConversionResult.getTotalConversion();
+
+        ProjectedPortfolio portfolioAfterConversion =
+                rothConversionResult.getPortfolio();
+
         TaxIncome baseTaxIncome =
                 taxIncomeCalculator.calculate(
                         household,
@@ -525,7 +547,7 @@ public class ProjectionEngine {
                 taxFundingCalculator.calculate(
                         household,
                         projectionDate,
-                        portfolioAfterAdditionalWithdrawal,
+                        portfolioAfterConversion,
                         totalWithdrawalBreakdown,
                         withdrawalStrategy,
                         getProjectionFilingStatus(
@@ -571,7 +593,7 @@ public class ProjectionEngine {
 
         ProjectedPortfolio portfolioAfterTaxWithdrawal =
                 withdrawalAllocator.applyAdditionalWithdrawal(
-                        portfolioAfterAdditionalWithdrawal,
+                        portfolioAfterConversion,
                         taxFundingWithdrawal,
                         withdrawalStrategy);
 
@@ -590,16 +612,6 @@ public class ProjectionEngine {
                         .withAdditionalCash(
                                 withdrawalResult
                                         .getExcessRmd());
-
-        if (rothConversion.signum() > 0) {
-
-            endingPortfolio =
-                    projectedPortfolioRothConverter.convert(
-                            endingPortfolio,
-                            AccountOwnership.PRIMARY,
-                            rothConversion);
-        }
-
 
         List<ProjectedAccountSnapshot> endingAccountSnapshots =
                 endingPortfolio
@@ -675,7 +687,12 @@ public class ProjectionEngine {
                         michiganTaxCalculation,
                         medicarePremiumCalculation,
                         taxFundingWithdrawal,
+                        requestedRothConversion,
                         rothConversion,
+                        rothConversionResult.getConversion(
+                                AccountOwnership.PRIMARY),
+                        rothConversionResult.getConversion(
+                                AccountOwnership.SPOUSE),
                         estimatedHeirTax,
                         afterTaxEstateValue,
                         primaryPersonAge);

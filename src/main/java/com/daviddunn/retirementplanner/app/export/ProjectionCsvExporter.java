@@ -70,7 +70,11 @@ public class ProjectionCsvExporter {
                         + "Beginning Retained RMD Assets,"
                         + "Retained RMD Asset Growth,"
                         + "Tax Funding Withdrawal,"
+                        + "Requested Roth Conversion,"
+                        + "Primary Roth Conversion,"
+                        + "Spouse Roth Conversion,"
                         + "Roth Conversion,"
+                        + "Roth Conversion Shortfall,"
                         + "Ending Retained RMD Assets,"
                         + "Ending Investable Assets,"
                         + "Non-Investable Assets,"
@@ -133,7 +137,11 @@ public class ProjectionCsvExporter {
                 year.getBeginningRetainedRmdAssets(),
                 year.getRetainedRmdAssetGrowth(),
                 year.getTaxFundingWithdrawal(),
+                year.getRequestedRothConversion(),
+                year.getPrimaryRothConversion(),
+                year.getSpouseRothConversion(),
                 year.getRothConversion(),
+                year.getRothConversionShortfall(),
                 year.getEndingRetainedRmdAssets(),
                 year.getEndingInvestableAssets(),
 

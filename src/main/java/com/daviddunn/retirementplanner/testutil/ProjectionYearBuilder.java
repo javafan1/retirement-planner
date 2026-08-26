@@ -213,6 +213,9 @@ public class ProjectionYearBuilder {
                 medicarePremiumCalculation,
                 taxFundingWithdrawal,
                 BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
                 estimatedHeirTax,
                 afterTaxEstateValue,
                 primaryPersonAge

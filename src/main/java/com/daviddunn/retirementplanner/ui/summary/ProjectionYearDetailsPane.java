@@ -355,7 +355,6 @@ public class ProjectionYearDetailsPane
                         getBaselineAccountBalanceByAssetType(
                                 ProjectionAssetType.ROTH));
 
-
         row =
                 addMoneyComparisonRow(
                         grid,
@@ -460,11 +459,43 @@ public class ProjectionYearDetailsPane
                 addMoneyComparisonRow(
                         grid,
                         row,
+                        "Requested Roth Conversion",
+                        year.getRequestedRothConversion(),
+                        null);
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
                         "Roth Conversion",
                         year.getRothConversion(),
                         getBaselineValue(
                                 ProjectionYear::
                                         getRothConversion));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Roth Conversion Shortfall",
+                        year.getRothConversionShortfall(),
+                        null);
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Primary Roth Conversion",
+                        year.getPrimaryRothConversion(),
+                        null);
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Spouse Roth Conversion",
+                        year.getSpouseRothConversion(),
+                        null);
 
 
         row =
