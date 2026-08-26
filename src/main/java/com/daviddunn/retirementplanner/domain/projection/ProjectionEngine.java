@@ -21,6 +21,8 @@ import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculator
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdCalculator;
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.RmdBalanceSnapshot;
+import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdCalculation;
+import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdCalculator;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.tax.*;
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
@@ -38,6 +40,7 @@ public class ProjectionEngine {
 
     private final WithdrawalCalculator withdrawalCalculator;
     private final HouseholdRmdCalculator householdRmdCalculator;
+    private final OpeningRmdCalculator openingRmdCalculator;
     private final GovernmentRules governmentRules;
     private final ProjectedWithdrawalAllocator withdrawalAllocator;
 
@@ -85,6 +88,9 @@ public class ProjectionEngine {
 
         this.householdRmdCalculator =
                 new HouseholdRmdCalculator();
+
+        this.openingRmdCalculator =
+                new OpeningRmdCalculator();
 
         this.withdrawalAllocator =
                 new ProjectedWithdrawalAllocator();
@@ -318,14 +324,33 @@ public class ProjectionEngine {
          * result rather than immediately reducing
          * it to a single dollar amount.
          */
-        HouseholdRmdResult householdRmdResult =
-                calculateRequiredMinimumDistribution(
+        OpeningRmdCalculation openingRmdCalculation = yearOffset == 0
+                ? openingRmdCalculator.calculate(
                         plan,
                         calendarYear,
-                        priorYearEndSnapshot);
+                        governmentRules)
+                : null;
+
+        HouseholdRmdResult annualHouseholdRmdResult =
+                openingRmdCalculation != null
+                        ? openingRmdCalculation.getAnnualRequirement()
+                        : calculateRequiredMinimumDistribution(
+                                plan,
+                                calendarYear,
+                                priorYearEndSnapshot);
+
+        HouseholdRmdResult projectedPeriodRmdResult =
+                openingRmdCalculation != null
+                        ? openingRmdCalculation.getRemainingRequirement()
+                        : annualHouseholdRmdResult;
+
+        BigDecimal rmdDistributedBeforeProjection =
+                openingRmdCalculation != null
+                        ? openingRmdCalculation.getDistributedBeforeProjection()
+                        : BigDecimal.ZERO;
 
         BigDecimal requiredMinimumDistribution =
-                householdRmdResult
+                annualHouseholdRmdResult
                         .getTotalRmd()
                         .setScale(
                                 2,
@@ -336,7 +361,8 @@ public class ProjectionEngine {
                         .calculateWithdrawal(
                                 guaranteedIncome,
                                 annualExpenses,
-                                requiredMinimumDistribution);
+                                projectedPeriodRmdResult
+                                        .getTotalRmd());
 
         BigDecimal portfolioWithdrawal =
                 withdrawalResult
@@ -360,7 +386,7 @@ public class ProjectionEngine {
         ProjectedWithdrawalAllocation rmdAllocation =
                 withdrawalAllocator.allocateHouseholdRmds(
                         portfolioAfterGrowth,
-                        householdRmdResult);
+                        projectedPeriodRmdResult);
 
         ProjectedPortfolio portfolioAfterRmd =
                 rmdAllocation.getPortfolio();
@@ -396,7 +422,7 @@ public class ProjectionEngine {
                 plan.getRothConversionRequest();
 
         boolean householdSubjectToRmd =
-                householdRmdResult
+                annualHouseholdRmdResult
                         .getTotalRmd()
                         .signum() > 0;
 
@@ -480,7 +506,8 @@ public class ProjectionEngine {
                                         assumptions
                                                 .getSocialSecurityColaRate(),
                                         assumptions
-                                                .getDeathScenarioAssumptions());
+                                                .getDeathScenarioAssumptions(),
+                                        rmdDistributedBeforeProjection);
             }
         }
 
@@ -489,7 +516,8 @@ public class ProjectionEngine {
                         household,
                         projectionDate,
                         totalWithdrawalBreakdown
-                                .getTaxDeferredWithdrawal(),
+                                .getTaxDeferredWithdrawal()
+                                .add(rmdDistributedBeforeProjection),
                         rothConversion,BigDecimal.ZERO);
 
 
@@ -507,7 +535,8 @@ public class ProjectionEngine {
                         rothConversion,
                         BigDecimal.ZERO,
                         assumptions.getSocialSecurityColaRate(),
-                        assumptions.getDeathScenarioAssumptions());
+                        assumptions.getDeathScenarioAssumptions(),
+                        rmdDistributedBeforeProjection);
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();
@@ -634,6 +663,8 @@ public class ProjectionEngine {
                         withdrawalResult.getCashFlowNeed(),
                         totalPortfolioWithdrawal,
                         requiredMinimumDistribution,
+                        rmdDistributedBeforeProjection,
+                        projectedPeriodRmdResult.getTotalRmd(),
                         withdrawalResult.getExcessRmd(),
                         beginningRetainedRmdAssets,
                         retainedRmdAssetGrowth,

@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.rmd;
 
 import com.daviddunn.retirementplanner.domain.financial.Account;
+import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountBalance;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 
@@ -47,6 +48,43 @@ public final class RmdBalanceSnapshot {
         return new RmdBalanceSnapshot(
                 snapshotDate,
                 portfolio.getAccountBalances());
+    }
+
+    /**
+     * Creates the one opening snapshot from persisted historical account
+     * data. Subsequent projection years continue to use {@link #from}.
+     */
+    public static RmdBalanceSnapshot fromOpeningRmdData(
+            AccountPortfolio portfolio,
+            int distributionYear) {
+
+        Objects.requireNonNull(portfolio, "Account portfolio is required.");
+
+        List<ProjectedAccountBalance> balances = portfolio.getAccounts()
+                .stream()
+                .map(account -> new ProjectedAccountBalance(
+                        account,
+                        getOpeningBalance(account, distributionYear)))
+                .toList();
+
+        return new RmdBalanceSnapshot(
+                LocalDate.of(distributionYear - 1, 12, 31),
+                balances);
+    }
+
+    private static BigDecimal getOpeningBalance(
+            Account account,
+            int distributionYear) {
+
+        OpeningRmdAccountData data = account.getOpeningRmdAccountData();
+
+        if (account.getType().isSubjectToOwnerRmd()
+                && data != null
+                && data.getDistributionYear() == distributionYear) {
+            return data.getPriorDecember31Balance();
+        }
+
+        return account.getCurrentBalance();
     }
 
     public LocalDate getSnapshotDate() {

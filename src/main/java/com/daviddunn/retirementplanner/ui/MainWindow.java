@@ -108,6 +108,9 @@ public class MainWindow {
         assumptionsView.setOnPlanChanged(
                 this::onPlanChanged);
 
+        assumptionsView.setOnOpeningRmdRequested(
+                this::showOpeningRmdDialog);
+
         resultsView.setOnYearDoubleClick(
                 this::showProjectionYearSummary);
 
@@ -559,10 +562,7 @@ public class MainWindow {
         }
         catch (Exception ex) {
 
-            ex.printStackTrace();
-
-            statusLabel.setText(
-                    "Projection unavailable.");
+            handleProjectionFailure(ex);
         }
     }
 
@@ -640,6 +640,52 @@ public class MainWindow {
         refreshProjectionViews();
 
         updateWindowTitle();
+    }
+
+    private void showOpeningRmdDialog() {
+
+        OpeningRmdDialog dialog =
+                new OpeningRmdDialog(
+                        controller.getCurrentPlan());
+
+        dialog.showAndWait().ifPresent(saved -> {
+            controller.markModified();
+            refreshAllViews();
+            statusLabel.setText("Opening RMD information updated.");
+        });
+    }
+
+    private void handleProjectionFailure(
+            Exception exception) {
+
+        String message = exception.getMessage();
+
+        if (message != null
+                && message.startsWith("Opening RMD information")) {
+
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Opening RMD Information Required");
+            alert.setHeaderText("Opening RMD information is required.");
+            alert.setContentText(message);
+
+            ButtonType enterOpeningRmdInformation = new ButtonType(
+                    "Enter Opening RMD Information");
+            alert.getButtonTypes().setAll(
+                    ButtonType.CANCEL,
+                    enterOpeningRmdInformation);
+
+            alert.showAndWait();
+
+            if (alert.getResult() == enterOpeningRmdInformation) {
+                showOpeningRmdDialog();
+            }
+
+            statusLabel.setText("Opening RMD information is required.");
+            return;
+        }
+
+        exception.printStackTrace();
+        statusLabel.setText("Projection unavailable.");
     }
     private void onSaveCurrentAsBaseline() {
 

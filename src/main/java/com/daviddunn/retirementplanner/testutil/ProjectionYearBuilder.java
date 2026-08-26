@@ -200,6 +200,8 @@ public class ProjectionYearBuilder {
                 cashFlowNeed,
                 portfolioWithdrawal,
                 requiredMinimumDistribution,
+                BigDecimal.ZERO,
+                requiredMinimumDistribution,
                 excessRmd,
                 BigDecimal.ZERO,
                 BigDecimal.ZERO,

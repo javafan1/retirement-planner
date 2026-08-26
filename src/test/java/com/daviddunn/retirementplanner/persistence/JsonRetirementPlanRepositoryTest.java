@@ -4,6 +4,7 @@ import com.daviddunn.retirementplanner.domain.baseline.ProjectionBaseline;
 import com.daviddunn.retirementplanner.domain.baseline.RetirementPlanSnapshot;
 import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
 import com.daviddunn.retirementplanner.domain.financial.AccountFactory;
+import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdAccountData;
 import com.daviddunn.retirementplanner.domain.model.*;
 
 import org.junit.jupiter.api.Test;
@@ -93,6 +94,39 @@ class JsonRetirementPlanRepositoryTest {
                 AccountOwnership.JOINT,
                 loadedPlan.getAccountPortfolio().getAccounts().getFirst()
                         .getOwnership());
+    }
+
+    @Test
+    void preservesOpeningRmdAccountDataWhenPlanIsSavedAndLoaded()
+            throws Exception {
+
+        RetirementPlan plan = RetirementPlanFactory.createEmptyPlan();
+
+        var account = AccountFactory.create(
+                AccountType.TRADITIONAL_IRA,
+                "Traditional IRA",
+                AccountOwnership.PRIMARY,
+                new BigDecimal("900000"));
+        account.setOpeningRmdAccountData(new OpeningRmdAccountData(
+                2026,
+                new BigDecimal("1000000"),
+                new BigDecimal("15000")));
+        plan.getAccountPortfolio().addAccount(account);
+
+        JsonRetirementPlanRepository repository =
+                new JsonRetirementPlanRepository();
+        Path file = tempDirectory.resolve("opening-rmd-plan.json");
+        repository.save(plan, file);
+
+        var openingData = repository.load(file)
+                .getAccountPortfolio().getAccounts().getFirst()
+                .getOpeningRmdAccountData();
+
+        assertEquals(2026, openingData.getDistributionYear());
+        assertEquals(new BigDecimal("1000000"),
+                openingData.getPriorDecember31Balance());
+        assertEquals(new BigDecimal("15000"),
+                openingData.getRmdAlreadyDistributedBeforeProjection());
     }
 
     @Test

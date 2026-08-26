@@ -106,6 +106,40 @@ public final class TaxFundingCalculator {
             BigDecimal socialSecurityColaRate,
             DeathScenarioAssumptions deathAssumptions) {
 
+        return calculate(
+                household,
+                projectionDate,
+                portfolio,
+                existingWithdrawals,
+                withdrawalStrategy,
+                filingStatus,
+                projectedGovernmentRules,
+                rothConversion,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                deathAssumptions,
+                BigDecimal.ZERO);
+    }
+
+    /**
+     * The opening-year RMD amount has already left the account before the
+     * projection starts. It is taxable annual income, but not a projected
+     * withdrawal or cash-flow receipt.
+     */
+    public TaxFundingResult calculate(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution) {
+
         Objects.requireNonNull(
                 household,
                 "Household is required.");
@@ -152,6 +186,15 @@ public final class TaxFundingCalculator {
                     "Taxable interest income cannot be negative.");
         }
 
+        Objects.requireNonNull(
+                openingTaxDeferredDistribution,
+                "Opening tax-deferred distribution is required.");
+
+        if (openingTaxDeferredDistribution.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Opening tax-deferred distribution cannot be negative.");
+        }
+
         BigDecimal additionalWithdrawal =
                 BigDecimal.ZERO;
 
@@ -186,6 +229,7 @@ public final class TaxFundingCalculator {
                             projectionDate,
                             totalWithdrawals
                                     .getTaxDeferredWithdrawal(),
+                            openingTaxDeferredDistribution,
                             rothConversion,
                             taxableInterestIncome,
                             socialSecurityColaRate,
@@ -240,6 +284,7 @@ public final class TaxFundingCalculator {
                                 projectionDate,
                                 finalTotalWithdrawals
                                         .getTaxDeferredWithdrawal(),
+                                openingTaxDeferredDistribution,
                                 rothConversion,
                                 taxableInterestIncome,
                                 socialSecurityColaRate,

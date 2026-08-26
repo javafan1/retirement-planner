@@ -29,6 +29,8 @@ public class ProjectionYear {
     private final BigDecimal cashFlowNeed;
     private final BigDecimal portfolioWithdrawal;
     private final BigDecimal requiredMinimumDistribution;
+    private final BigDecimal rmdDistributedBeforeProjection;
+    private final BigDecimal rmdDistributedInProjection;
     private final BigDecimal excessRmd;
     private final BigDecimal taxFundingWithdrawal;
 
@@ -128,6 +130,9 @@ public class ProjectionYear {
                 Objects.requireNonNull(
                         requiredMinimumDistribution,
                         "requiredMinimumDistribution");
+
+        this.rmdDistributedBeforeProjection = BigDecimal.ZERO;
+        this.rmdDistributedInProjection = requiredMinimumDistribution;
 
         this.excessRmd =
                 Objects.requireNonNull(
@@ -268,6 +273,9 @@ public class ProjectionYear {
                         requiredMinimumDistribution,
                         "requiredMinimumDistribution");
 
+        this.rmdDistributedBeforeProjection = BigDecimal.ZERO;
+        this.rmdDistributedInProjection = requiredMinimumDistribution;
+
         this.excessRmd =
                 Objects.requireNonNull(
                         excessRmd,
@@ -355,6 +363,8 @@ public class ProjectionYear {
             BigDecimal cashFlowNeed,
             BigDecimal portfolioWithdrawal,
             BigDecimal requiredMinimumDistribution,
+            BigDecimal rmdDistributedBeforeProjection,
+            BigDecimal rmdDistributedInProjection,
             BigDecimal excessRmd,
             BigDecimal beginningRetainedRmdAssets,
             BigDecimal retainedRmdAssetGrowth,
@@ -413,6 +423,16 @@ public class ProjectionYear {
                 Objects.requireNonNull(
                         requiredMinimumDistribution,
                         "requiredMinimumDistribution");
+
+        this.rmdDistributedBeforeProjection =
+                requireNonNegative(
+                        rmdDistributedBeforeProjection,
+                        "rmdDistributedBeforeProjection");
+
+        this.rmdDistributedInProjection =
+                requireNonNegative(
+                        rmdDistributedInProjection,
+                        "rmdDistributedInProjection");
 
         this.excessRmd =
                 Objects.requireNonNull(
@@ -598,6 +618,14 @@ public class ProjectionYear {
         return requiredMinimumDistribution;
     }
 
+    public BigDecimal getRmdDistributedBeforeProjection() {
+        return rmdDistributedBeforeProjection;
+    }
+
+    public BigDecimal getRmdDistributedInProjection() {
+        return rmdDistributedInProjection;
+    }
+
     public BigDecimal getExcessRmd() {
         return excessRmd;
     }
@@ -771,6 +799,20 @@ public class ProjectionYear {
 
     public BigDecimal getUnallocatedCash() {
         return unallocatedCash;
+    }
+
+    private static BigDecimal requireNonNegative(
+            BigDecimal amount,
+            String fieldName) {
+
+        Objects.requireNonNull(amount, fieldName);
+
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException(
+                    fieldName + " cannot be negative.");
+        }
+
+        return amount;
     }
 
     public BigDecimal getBeginningRetainedRmdAssets() {

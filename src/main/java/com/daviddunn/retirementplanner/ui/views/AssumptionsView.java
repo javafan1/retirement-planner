@@ -14,6 +14,7 @@ import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
 import com.daviddunn.retirementplanner.ui.controls.HelpLabel;
 import com.daviddunn.retirementplanner.ui.help.HelpText;
+import com.daviddunn.retirementplanner.ui.rmd.OpeningRmdWorkflowService;
 
 
 import javafx.geometry.Insets;
@@ -69,6 +70,7 @@ public class AssumptionsView extends VBox {
     private final TextField estimatedHeirTaxRateField;
 
     private final Label statusLabel;
+    private final Button openingRmdButton;
 
     private RetirementPlan currentPlan;
 
@@ -78,6 +80,7 @@ public class AssumptionsView extends VBox {
      * assumptions change.
      */
     private Runnable onPlanChanged;
+    private Runnable onOpeningRmdRequested;
 
     public AssumptionsView() {
 
@@ -175,6 +178,12 @@ public class AssumptionsView extends VBox {
         applyButton.setOnAction(
                 e -> applyChanges());
 
+        openingRmdButton =
+                new Button("Opening RMD Information...");
+
+        openingRmdButton.setOnAction(
+                e -> requestOpeningRmdInformation());
+
         GridPane grid =
                 new GridPane();
 
@@ -226,6 +235,11 @@ public class AssumptionsView extends VBox {
 
         grid.add(
                 projectionLengthField,
+                1,
+                row++);
+
+        grid.add(
+                openingRmdButton,
                 1,
                 row++);
 
@@ -639,6 +653,8 @@ public class AssumptionsView extends VBox {
                                 .getEstimatedHeirTaxRateOnTaxDeferredAssets()));
 
         statusLabel.setText("");
+
+        updateOpeningRmdButtonVisibility();
     }
 
     public void save(
@@ -862,6 +878,8 @@ public class AssumptionsView extends VBox {
             currentPlan.setPlanningAssumptions(
                     updated);
 
+            updateOpeningRmdButtonVisibility();
+
             statusLabel.setText(
                     "Assumptions applied.");
 
@@ -924,6 +942,28 @@ public class AssumptionsView extends VBox {
 
         this.onPlanChanged =
                 onPlanChanged;
+    }
+
+    public void setOnOpeningRmdRequested(
+            Runnable onOpeningRmdRequested) {
+
+        this.onOpeningRmdRequested = onOpeningRmdRequested;
+    }
+
+    private void requestOpeningRmdInformation() {
+
+        if (onOpeningRmdRequested != null) {
+            onOpeningRmdRequested.run();
+        }
+    }
+
+    private void updateOpeningRmdButtonVisibility() {
+
+        boolean required = currentPlan != null
+                && new OpeningRmdWorkflowService().isRequired(currentPlan);
+
+        openingRmdButton.setVisible(required);
+        openingRmdButton.setManaged(required);
     }
 
     private void notifyPlanChanged() {

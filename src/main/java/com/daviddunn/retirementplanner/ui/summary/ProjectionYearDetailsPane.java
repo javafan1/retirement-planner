@@ -485,8 +485,28 @@ public class ProjectionYearDetailsPane
                         "Required Minimum Distribution",
                         year.getRequiredMinimumDistribution(),
                         getBaselineValue(
+                        ProjectionYear::
+                                getRequiredMinimumDistribution));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "RMD Distributed Before Projection",
+                        year.getRmdDistributedBeforeProjection(),
+                        getBaselineValue(
                                 ProjectionYear::
-                                        getRequiredMinimumDistribution));
+                                        getRmdDistributedBeforeProjection));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "RMD Distributed in Projection",
+                        year.getRmdDistributedInProjection(),
+                        getBaselineValue(
+                                ProjectionYear::
+                                        getRmdDistributedInProjection));
 
 
         return addMoneyComparisonRow(

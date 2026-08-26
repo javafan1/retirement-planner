@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.model.AccountType;
 
 import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
+import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdAccountData;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
@@ -55,6 +56,7 @@ public abstract class Account {
     private final String name;
     private final AccountOwnership ownership;
     private BigDecimal currentBalance;
+    private OpeningRmdAccountData openingRmdAccountData;
 
     protected Account(
             String name,
@@ -86,6 +88,22 @@ public abstract class Account {
 
     public void setCurrentBalance(BigDecimal currentBalance) {
         this.currentBalance = Objects.requireNonNull(currentBalance, "currentBalance");
+    }
+
+    public OpeningRmdAccountData getOpeningRmdAccountData() {
+        return openingRmdAccountData;
+    }
+
+    public void setOpeningRmdAccountData(
+            OpeningRmdAccountData openingRmdAccountData) {
+
+        if (openingRmdAccountData != null
+                && !getType().isSubjectToOwnerRmd()) {
+            throw new IllegalArgumentException(
+                    "Opening RMD information is only valid for owner-RMD-eligible retirement accounts.");
+        }
+
+        this.openingRmdAccountData = openingRmdAccountData;
     }
 
     public void deposit(BigDecimal amount) {

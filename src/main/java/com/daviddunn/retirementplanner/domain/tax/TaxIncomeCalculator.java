@@ -29,8 +29,10 @@ public final class TaxIncomeCalculator {
                 household,
                 projectionDate,
                 taxDeferredWithdrawals,
+                BigDecimal.ZERO,
                 rothConversion,
                 taxableInterestIncome,
+                null,
                 null);
     }
 
@@ -46,6 +48,7 @@ public final class TaxIncomeCalculator {
                 household,
                 projectionDate,
                 taxDeferredWithdrawals,
+                BigDecimal.ZERO,
                 rothConversion,
                 taxableInterestIncome,
                 socialSecurityColaRate,
@@ -56,6 +59,7 @@ public final class TaxIncomeCalculator {
             Household household,
             LocalDate projectionDate,
             BigDecimal taxDeferredWithdrawals,
+            BigDecimal openingTaxDeferredDistribution,
             BigDecimal rothConversion,
             BigDecimal taxableInterestIncome,
             BigDecimal socialSecurityColaRate,
@@ -142,12 +146,42 @@ public final class TaxIncomeCalculator {
                                     socialSecurityColaRate);
         }
 
+        Objects.requireNonNull(
+                openingTaxDeferredDistribution,
+                "Opening tax-deferred distribution is required.");
+
+        if (openingTaxDeferredDistribution.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Opening tax-deferred distribution cannot be negative.");
+        }
+
         return new TaxIncome(
                 pensionIncome,
                 socialSecurityIncome,
-                taxDeferredWithdrawals,
+                taxDeferredWithdrawals.add(
+                        openingTaxDeferredDistribution),
                 rothConversion,
                 taxableInterestIncome);
+    }
+
+    public TaxIncome calculate(
+            Household household,
+            LocalDate projectionDate,
+            BigDecimal taxDeferredWithdrawals,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions) {
+
+        return calculate(
+                household,
+                projectionDate,
+                taxDeferredWithdrawals,
+                BigDecimal.ZERO,
+                rothConversion,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                deathAssumptions);
     }
 
     private IncomeTotals calculateIncome(

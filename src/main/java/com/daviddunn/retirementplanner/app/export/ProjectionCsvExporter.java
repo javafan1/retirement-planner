@@ -64,6 +64,8 @@ public class ProjectionCsvExporter {
                         + "Cash Flow Need,"
                         + "Portfolio Withdrawal,"
                         + "Required Minimum Distribution,"
+                        + "RMD Distributed Before Projection,"
+                        + "RMD Distributed In Projection,"
                         + "Excess RMD,"
                         + "Beginning Retained RMD Assets,"
                         + "Retained RMD Asset Growth,"
@@ -125,6 +127,8 @@ public class ProjectionCsvExporter {
                 year.getCashFlowNeed(),
                 year.getPortfolioWithdrawal(),
                 year.getRequiredMinimumDistribution(),
+                year.getRmdDistributedBeforeProjection(),
+                year.getRmdDistributedInProjection(),
                 year.getExcessRmd(),
                 year.getBeginningRetainedRmdAssets(),
                 year.getRetainedRmdAssetGrowth(),

@@ -9,6 +9,7 @@ import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdCalculator;
 import com.daviddunn.retirementplanner.domain.rmd.RmdBalanceSnapshot;
+import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdAccountData;
 import com.daviddunn.retirementplanner.domain.financial.RothIRA;
 import com.daviddunn.retirementplanner.domain.financial.BrokerageAccount;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
@@ -1781,6 +1782,12 @@ class ProjectionEngineTest {
                         AccountOwnership.PRIMARY,
                         new BigDecimal("500000.00"));
 
+        traditionalIra.setOpeningRmdAccountData(
+                new OpeningRmdAccountData(
+                        2026,
+                        new BigDecimal("500000.00"),
+                        BigDecimal.ZERO));
+
         AccountPortfolio portfolio =
                 new AccountPortfolio();
 
@@ -1808,20 +1815,27 @@ class ProjectionEngineTest {
                 projection.getYearAt(1);
 
         /*
-         * The first modeled year intentionally has no
-         * prior December 31 snapshot. In 2027, this
-         * 1949 cohort is age 78 and uses its 2026
-         * projected $500,000 balance and divisor 22.0.
+         * Opening data supplies the actual December 31,
+         * 2025 balance for the first eligible year. In
+         * 2027, this 1949 cohort is age 78 and uses its
+         * modeled 2026 ending balance and divisor 22.0.
          */
         assertEquals(
                 0,
-                BigDecimal.ZERO.compareTo(
+                new BigDecimal("21834.06").compareTo(
                         firstYear
                                 .getRequiredMinimumDistribution()));
 
+        BigDecimal expectedSecondYearRmd =
+                firstYear.getEndingBalance(traditionalIra)
+                        .divide(
+                                new BigDecimal("22.0"),
+                                2,
+                                RoundingMode.HALF_UP);
+
         assertEquals(
                 0,
-                new BigDecimal("22727.27").compareTo(
+                expectedSecondYearRmd.compareTo(
                         secondYear
                                 .getRequiredMinimumDistribution()));
 

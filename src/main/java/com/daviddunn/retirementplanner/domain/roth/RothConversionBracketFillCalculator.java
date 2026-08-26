@@ -122,6 +122,35 @@ public final class RothConversionBracketFillCalculator {
             BigDecimal socialSecurityColaRate,
             DeathScenarioAssumptions deathAssumptions) {
 
+        return calculateConversion(
+                household,
+                projectionDate,
+                portfolio,
+                existingWithdrawals,
+                withdrawalStrategy,
+                filingStatus,
+                projectedGovernmentRules,
+                targetTaxableIncome,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                deathAssumptions,
+                BigDecimal.ZERO);
+    }
+
+    public BigDecimal calculateConversion(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal targetTaxableIncome,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution) {
+
         Objects.requireNonNull(
                 household,
                 "Household is required.");
@@ -168,6 +197,15 @@ public final class RothConversionBracketFillCalculator {
                     "Taxable interest income cannot be negative.");
         }
 
+        Objects.requireNonNull(
+                openingTaxDeferredDistribution,
+                "Opening tax-deferred distribution is required.");
+
+        if (openingTaxDeferredDistribution.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Opening tax-deferred distribution cannot be negative.");
+        }
+
         /*
          * First determine taxable income with
          * no Roth conversion.
@@ -184,7 +222,8 @@ public final class RothConversionBracketFillCalculator {
                         BigDecimal.ZERO,
                         taxableInterestIncome,
                         socialSecurityColaRate,
-                        deathAssumptions);
+                        deathAssumptions,
+                        openingTaxDeferredDistribution);
 
         FederalTaxCalculation
                 preConversionFederalTax =
@@ -233,7 +272,8 @@ public final class RothConversionBracketFillCalculator {
                             rothConversion,
                             taxableInterestIncome,
                             socialSecurityColaRate,
-                            deathAssumptions);
+                            deathAssumptions,
+                            openingTaxDeferredDistribution);
 
             BigDecimal finalTaxableIncome =
                     taxFundingResult
