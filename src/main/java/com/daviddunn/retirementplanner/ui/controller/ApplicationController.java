@@ -199,8 +199,7 @@ public class ApplicationController {
         return baselineNonInvestableAssetProjections;
     }
 
-    public ProjectionComparison compareAtYear(
-            int calendarYear) {
+    public ProjectionComparison compareProjections() {
 
         if (currentPlan == null) {
             throw new IllegalStateException(
@@ -222,8 +221,7 @@ public class ApplicationController {
                 baseline,
                 getBaselineNonInvestableAssetProjections(),
                 current,
-                getCurrentNonInvestableAssetProjections(),
-                calendarYear);
+                getCurrentNonInvestableAssetProjections());
     }
 
     public void saveCurrentAsBaseline(

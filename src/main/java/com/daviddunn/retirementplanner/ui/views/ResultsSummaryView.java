@@ -215,6 +215,42 @@ public class ResultsSummaryView extends BorderPane {
     private final Label baselineComparisonYear =
             new Label();
 
+    private final Label growthBaselineLabel =
+            new Label();
+
+    private final Label growthCurrentLabel =
+            new Label();
+
+    private final Label growthChangeLabel =
+            new Label();
+
+    private final Label incomeBaselineLabel =
+            new Label();
+
+    private final Label incomeCurrentLabel =
+            new Label();
+
+    private final Label incomeChangeLabel =
+            new Label();
+
+    private final Label totalTaxesBaselineLabel =
+            new Label();
+
+    private final Label totalTaxesCurrentLabel =
+            new Label();
+
+    private final Label totalTaxesChangeLabel =
+            new Label();
+
+    private final Label peakTaxBaselineLabel =
+            new Label();
+
+    private final Label peakTaxCurrentLabel =
+            new Label();
+
+    private final Label peakTaxChangeLabel =
+            new Label();
+
     private final Label investableBaselineLabel =
             new Label("—");
 
@@ -983,19 +1019,43 @@ public class ResultsSummaryView extends BorderPane {
         cards.getChildren().addAll(
 
                 createComparisonMetricCard(
+                        "Investment Growth",
+                        "metric-green",
+                        growthBaselineLabel,
+                        growthCurrentLabel,
+                        growthChangeLabel,
+                        true),
+
+                createComparisonMetricCard(
+                        "Total Income",
+                        "metric-blue",
+                        incomeBaselineLabel,
+                        incomeCurrentLabel,
+                        incomeChangeLabel,
+                        true),
+
+                createComparisonMetricCard(
+                        "Total Taxes",
+                        "metric-orange",
+                        totalTaxesBaselineLabel,
+                        totalTaxesCurrentLabel,
+                        totalTaxesChangeLabel,
+                        true),
+
+                createComparisonMetricCard(
+                        "Peak Annual Tax",
+                        "metric-orange",
+                        peakTaxBaselineLabel,
+                        peakTaxCurrentLabel,
+                        peakTaxChangeLabel,
+                        true),
+
+                createComparisonMetricCard(
                         "Investable Assets",
                         "metric-blue",
                         investableBaselineLabel,
                         investableCurrentLabel,
                         investableChangeLabel,
-                        true),
-
-                createComparisonMetricCard(
-                        "Non-Investable Assets",
-                        "metric-orange",
-                        nonInvestableBaselineLabel,
-                        nonInvestableCurrentLabel,
-                        nonInvestableChangeLabel,
                         true),
 
                 createComparisonMetricCard(
@@ -1012,15 +1072,7 @@ public class ResultsSummaryView extends BorderPane {
                         estateBaselineLabel,
                         estateCurrentLabel,
                         estateChangeLabel,
-                        true),
-
-                createComparisonMetricCard(
-                        "Effective Tax Rate",
-                        "metric-orange",
-                        taxBaselineLabel,
-                        taxCurrentLabel,
-                        taxChangeLabel,
-                        false));
+                        true));
 
         for (Node card :
                 cards.getChildren()) {
@@ -2095,14 +2147,11 @@ public class ResultsSummaryView extends BorderPane {
                          selectedYear) -> {
 
                             if (selectedYear != null) {
-                                updateBaselineComparison(
-                                        selectedYear
-                                                .getCalendarYear());
+                                updateBaselineComparison();
                             }
                         });
     }
-    private void updateBaselineComparison(
-            int calendarYear) {
+    private void updateBaselineComparison() {
 
         if (currentPlan == null
                 || currentProjection == null
@@ -2115,8 +2164,7 @@ public class ResultsSummaryView extends BorderPane {
         }
 
         ProjectionComparison comparison =
-                controller.compareAtYear(
-                        calendarYear);
+                controller.compareProjections();
 
         baselineComparisonBox.setVisible(true);
         baselineComparisonBox.setManaged(true);
@@ -2131,6 +2179,30 @@ public class ResultsSummaryView extends BorderPane {
         baselineComparisonYear.setText(
                 "Baseline Comparison — "
                         + comparison.getCalendarYear());
+
+        updateMoneyComparison(
+                growthBaselineLabel, growthCurrentLabel, growthChangeLabel,
+                comparison.getBaselineInvestmentGrowth(),
+                comparison.getCurrentInvestmentGrowth(),
+                comparison.getInvestmentGrowthChange(), false);
+
+        updateMoneyComparison(
+                incomeBaselineLabel, incomeCurrentLabel, incomeChangeLabel,
+                comparison.getBaselineTotalIncome(),
+                comparison.getCurrentTotalIncome(),
+                comparison.getTotalIncomeChange(), false);
+
+        updateMoneyComparison(
+                totalTaxesBaselineLabel, totalTaxesCurrentLabel, totalTaxesChangeLabel,
+                comparison.getBaselineTotalTaxes(),
+                comparison.getCurrentTotalTaxes(),
+                comparison.getTotalTaxesChange(), true);
+
+        updateMoneyComparison(
+                peakTaxBaselineLabel, peakTaxCurrentLabel, peakTaxChangeLabel,
+                comparison.getBaselinePeakAnnualTax(),
+                comparison.getCurrentPeakAnnualTax(),
+                comparison.getPeakAnnualTaxChange(), true);
 
         investableBaselineLabel.setText(
                 compactMoney(
@@ -2157,33 +2229,6 @@ public class ResultsSummaryView extends BorderPane {
                                 .getBaselineEndingInvestableAssets(),
                         comparison
                                 .getEndingInvestableAssetsChange())
-                        + ")");
-
-        nonInvestableBaselineLabel.setText(
-                compactMoney(
-                        comparison
-                                .getBaselineNonInvestableAssets()));
-
-        nonInvestableCurrentLabel.setText(
-                compactMoney(
-                        comparison
-                                .getCurrentNonInvestableAssets()));
-
-
-
-        setChangeLabel(
-                nonInvestableChangeLabel,
-                comparison
-                        .getBaselineNonInvestableAssets(),
-                comparison
-                        .getNonInvestableAssetsChange(),
-                false);
-
-        nonInvestablePercentLabel.setText(
-                "("
-                        + formatPercentChange(
-                        comparison.getBaselineNonInvestableAssets(),
-                        comparison.getNonInvestableAssetsChange())
                         + ")");
 
         netWorthBaselineLabel.setText(
@@ -2225,20 +2270,24 @@ public class ResultsSummaryView extends BorderPane {
                         .getAfterTaxEstateChange(),
                 false);
 
-        taxBaselineLabel.setText(
-                UIFormatters.percent(
-                        comparison
-                                .getBaselineEffectiveTaxRate()));
+    }
 
-        taxCurrentLabel.setText(
-                UIFormatters.percent(
-                        comparison
-                                .getCurrentEffectiveTaxRate()));
+    private void updateMoneyComparison(
+            Label baselineLabel,
+            Label currentLabel,
+            Label changeLabel,
+            BigDecimal baseline,
+            BigDecimal current,
+            BigDecimal change,
+            boolean lowerIsBetter) {
 
-        setTaxChangeLabel(
-                taxChangeLabel,
-                comparison.getEffectiveTaxRateChange());
-
+        baselineLabel.setText(compactMoney(baseline));
+        currentLabel.setText(compactMoney(current));
+        setChangeLabel(
+                changeLabel,
+                baseline,
+                change,
+                lowerIsBetter);
     }
 
     private void setTaxChangeLabel(

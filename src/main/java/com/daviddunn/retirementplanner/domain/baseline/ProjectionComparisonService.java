@@ -12,149 +12,79 @@ public class ProjectionComparisonService {
 
     public ProjectionComparison compare(
             Projection baselineProjection,
-            List<NonInvestableAssetProjection>
-                    baselineNonInvestableAssets,
+            List<NonInvestableAssetProjection> baselineNonInvestableAssets,
             Projection currentProjection,
-            List<NonInvestableAssetProjection>
-                    currentNonInvestableAssets,
-            int calendarYear) {
+            List<NonInvestableAssetProjection> currentNonInvestableAssets) {
 
-        Objects.requireNonNull(
-                baselineProjection,
-                "Baseline projection is required.");
+        Objects.requireNonNull(baselineProjection, "Baseline projection is required.");
+        Objects.requireNonNull(currentProjection, "Current projection is required.");
+        Objects.requireNonNull(baselineNonInvestableAssets, "Baseline non-investable assets are required.");
+        Objects.requireNonNull(currentNonInvestableAssets, "Current non-investable assets are required.");
 
-        Objects.requireNonNull(
-                currentProjection,
-                "Current projection is required.");
-
-        Objects.requireNonNull(
-                baselineNonInvestableAssets,
-                "Baseline non-investable assets are required.");
-
-        Objects.requireNonNull(
-                currentNonInvestableAssets,
-                "Current non-investable assets are required.");
-
-        ProjectionYear baselineYear =
-                findYear(
-                        baselineProjection,
-                        calendarYear);
-
-        ProjectionYear currentYear =
-                findYear(
-                        currentProjection,
-                        calendarYear);
-
-        BigDecimal baselineNonInvestable =
-                getNonInvestableValue(
-                        baselineNonInvestableAssets,
-                        calendarYear);
-
-        BigDecimal currentNonInvestable =
-                getNonInvestableValue(
-                        currentNonInvestableAssets,
-                        calendarYear);
-
-        BigDecimal baselineNetWorth =
-                baselineYear
-                        .getEndingInvestableAssets()
-                        .add(baselineNonInvestable);
-
-        BigDecimal currentNetWorth =
-                currentYear
-                        .getEndingInvestableAssets()
-                        .add(currentNonInvestable);
-
-        BigDecimal baselinePeakInvestable =
-                getPeakInvestableAssets(
-                        baselineProjection);
-
-        BigDecimal currentPeakInvestable =
-                getPeakInvestableAssets(
-                        currentProjection);
+        ProjectionMetrics baseline = calculate(baselineProjection, baselineNonInvestableAssets);
+        ProjectionMetrics current = calculate(currentProjection, currentNonInvestableAssets);
 
         return new ProjectionComparison(
-                calendarYear,
-
-                baselineYear
-                        .getEndingInvestableAssets(),
-
-                currentYear
-                        .getEndingInvestableAssets(),
-
-                baselineNonInvestable,
-
-                currentNonInvestable,
-
-                baselineNetWorth,
-
-                currentNetWorth,
-
-                baselineYear
-                        .getAfterTaxEstateValue(),
-
-                currentYear
-                        .getAfterTaxEstateValue(),
-
-                baselineYear
-                        .getCombinedEffectiveTaxRate(),
-
-                currentYear
-                        .getCombinedEffectiveTaxRate(),
-
-                baselinePeakInvestable,
-
-                currentPeakInvestable);
+                current.calendarYear(),
+                baseline.investmentGrowth(), current.investmentGrowth(),
+                baseline.totalIncome(), current.totalIncome(),
+                baseline.totalTaxes(), current.totalTaxes(),
+                baseline.peakAnnualTax(), current.peakAnnualTax(),
+                baseline.endingInvestableAssets(), current.endingInvestableAssets(),
+                baseline.netWorth(), current.netWorth(),
+                baseline.afterTaxEstate(), current.afterTaxEstate());
     }
 
-
-    private ProjectionYear findYear(
+    private ProjectionMetrics calculate(
             Projection projection,
-            int calendarYear) {
+            List<NonInvestableAssetProjection> nonInvestableAssets) {
 
-        return projection.getYears()
-                .stream()
-                .filter(year ->
-                        year.getCalendarYear()
-                                == calendarYear)
+        List<ProjectionYear> years = projection.getYears();
+        BigDecimal investmentGrowth = sum(years, ProjectionYear::getInvestmentGrowth);
+        BigDecimal totalIncome = sum(years, ProjectionYear::getGuaranteedIncome);
+        BigDecimal totalTaxes = sum(years, ProjectionYear::getTotalIncomeTax);
+        BigDecimal peakAnnualTax = years.stream()
+                .map(ProjectionYear::getTotalIncomeTax)
+                .max(BigDecimal::compareTo)
+                .orElse(BigDecimal.ZERO);
+
+        if (years.isEmpty()) {
+            return new ProjectionMetrics(
+                    0, investmentGrowth, totalIncome, totalTaxes,
+                    peakAnnualTax, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+
+        ProjectionYear finalYear = years.getLast();
+        BigDecimal nonInvestable = nonInvestableAssets.stream()
+                .filter(asset -> asset.getCalendarYear() == finalYear.getCalendarYear())
                 .findFirst()
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Projection does not contain "
-                                        + "calendar year "
-                                        + calendarYear));
+                .map(NonInvestableAssetProjection::getTotalValue)
+                .orElse(BigDecimal.ZERO);
+
+        return new ProjectionMetrics(
+                finalYear.getCalendarYear(), investmentGrowth, totalIncome, totalTaxes,
+                peakAnnualTax, finalYear.getEndingInvestableAssets(),
+                finalYear.getEndingInvestableAssets().add(nonInvestable),
+                finalYear.getAfterTaxEstateValue());
     }
 
+    private BigDecimal sum(
+            List<ProjectionYear> years,
+            java.util.function.Function<ProjectionYear, BigDecimal> value) {
 
-    private BigDecimal getNonInvestableValue(
-            List<NonInvestableAssetProjection>
-                    projections,
-            int calendarYear) {
-
-        return projections.stream()
-                .filter(projection ->
-                        projection.getCalendarYear()
-                                == calendarYear)
-                .findFirst()
-                .map(
-                        NonInvestableAssetProjection::
-                                getTotalValue)
-                .orElse(
-                        BigDecimal.ZERO);
+        return years.stream()
+                .map(value)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-
-    private BigDecimal getPeakInvestableAssets(
-            Projection projection) {
-
-        return projection.getYears()
-                .stream()
-                .map(
-                        ProjectionYear::
-                                getEndingInvestableAssets)
-                .max(
-                        BigDecimal::compareTo)
-                .orElse(
-                        BigDecimal.ZERO);
+    private record ProjectionMetrics(
+            int calendarYear,
+            BigDecimal investmentGrowth,
+            BigDecimal totalIncome,
+            BigDecimal totalTaxes,
+            BigDecimal peakAnnualTax,
+            BigDecimal endingInvestableAssets,
+            BigDecimal netWorth,
+            BigDecimal afterTaxEstate) {
     }
 }

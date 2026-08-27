@@ -175,8 +175,7 @@ class BaselineProjectionServiceTest {
                         baselineProjection,
                         baselineNonInvestableAssets,
                         currentProjection,
-                        currentNonInvestableAssets,
-                        2040);
+                        currentNonInvestableAssets);
 
 
         assertEquals(
@@ -187,11 +186,6 @@ class BaselineProjectionServiceTest {
                 new BigDecimal("300000"),
                 comparison
                         .getEndingInvestableAssetsChange());
-
-        assertEquals(
-                new BigDecimal("100000"),
-                comparison
-                        .getNonInvestableAssetsChange());
 
         assertEquals(
                 new BigDecimal("400000"),

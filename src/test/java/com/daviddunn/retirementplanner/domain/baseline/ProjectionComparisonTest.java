@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ProjectionComparisonTest {
+class ProjectionComparisonTest {
 
     @Test
     void calculatesChangesAsCurrentMinusBaseline() {
@@ -14,53 +14,24 @@ public class ProjectionComparisonTest {
         ProjectionComparison comparison =
                 new ProjectionComparison(
                         2040,
+                        amount(100), amount(130),
+                        amount(200), amount(250),
+                        amount(300), amount(275),
+                        amount(50), amount(40),
+                        amount(1_000), amount(1_200),
+                        amount(1_500), amount(1_800),
+                        amount(900), amount(1_100));
 
-                        new BigDecimal("5000000"),
-                        new BigDecimal("5300000"),
+        assertEquals(amount(30), comparison.getInvestmentGrowthChange());
+        assertEquals(amount(50), comparison.getTotalIncomeChange());
+        assertEquals(amount(-25), comparison.getTotalTaxesChange());
+        assertEquals(amount(-10), comparison.getPeakAnnualTaxChange());
+        assertEquals(amount(200), comparison.getEndingInvestableAssetsChange());
+        assertEquals(amount(300), comparison.getNetWorthChange());
+        assertEquals(amount(200), comparison.getAfterTaxEstateChange());
+    }
 
-                        new BigDecimal("1000000"),
-                        new BigDecimal("1100000"),
-
-                        new BigDecimal("6000000"),
-                        new BigDecimal("6400000"),
-
-                        new BigDecimal("5500000"),
-                        new BigDecimal("5800000"),
-
-                        new BigDecimal("0.18"),
-                        new BigDecimal("0.17"),
-
-                        new BigDecimal("6500000"),
-                        new BigDecimal("6800000"));
-
-        assertEquals(
-                new BigDecimal("300000"),
-                comparison
-                        .getEndingInvestableAssetsChange());
-
-        assertEquals(
-                new BigDecimal("100000"),
-                comparison
-                        .getNonInvestableAssetsChange());
-
-        assertEquals(
-                new BigDecimal("400000"),
-                comparison
-                        .getNetWorthChange());
-
-        assertEquals(
-                new BigDecimal("300000"),
-                comparison
-                        .getAfterTaxEstateChange());
-
-        assertEquals(
-                new BigDecimal("-0.01"),
-                comparison
-                        .getEffectiveTaxRateChange());
-
-        assertEquals(
-                new BigDecimal("300000"),
-                comparison
-                        .getPeakInvestableAssetsChange());
+    private BigDecimal amount(long value) {
+        return BigDecimal.valueOf(value);
     }
 }
