@@ -658,10 +658,9 @@ public class MainWindow {
     private void handleProjectionFailure(
             Exception exception) {
 
-        String message = exception.getMessage();
+        if (ProjectionFailureMessages.isOpeningRmdValidation(exception)) {
 
-        if (message != null
-                && message.startsWith("Opening RMD information")) {
+            String message = exception.getMessage();
 
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("Opening RMD Information Required");
@@ -684,8 +683,21 @@ public class MainWindow {
             return;
         }
 
+        /*
+         * There is no application logging facility yet. Preserve the
+         * existing developer-observable stack trace while keeping the
+         * user-facing failure concise and non-technical.
+         */
         exception.printStackTrace();
-        statusLabel.setText("Projection unavailable.");
+
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Projection Unavailable");
+        alert.setHeaderText("The projection could not be completed.");
+        alert.setContentText(
+                ProjectionFailureMessages.unexpectedProjectionFailureMessage());
+        alert.showAndWait();
+
+        statusLabel.setText("Projection could not be completed.");
     }
     private void onSaveCurrentAsBaseline() {
 

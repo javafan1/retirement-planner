@@ -97,8 +97,12 @@ Roth conversion behavior is implemented in `domain.roth` and invoked within the 
 - Bracket-fill strategies target the 12%, 22%, or 24% federal bracket through `RothConversionTargetBracketResolver`.
 - `RothConversionBracketFillCalculator` must account for tax-funding withdrawals because they can increase taxable income. Do not replace this with a one-pass bracket-room calculation.
 - Include the conversion in tax calculations before funding taxes.
-- `ProjectedPortfolioRothConverter` changes only the projected portfolio: it withdraws from an eligible primary-owned tax-deferred account and deposits into an eligible primary-owned Roth account.
-- A conversion must not exceed its selected source account balance, and must not mutate persisted account balances.
+- Roth strategies determine a household-level requested conversion amount. Execution is owner-specific: `PRIMARY` sources are considered first, then `SPOUSE`; within each owner, persisted portfolio/account-list order determines source and destination priority.
+- All otherwise-eligible primary- and spouse-owned sources may participate. Each conversion transfers only to a Roth account owned by the same owner as its source; cross-owner conversion is not allowed.
+- Source exhaustion continues through additional eligible accounts and then to the other owner. Actual conversion is limited by valid same-owner source/destination capacity; shortfall is `max(requested - actual, 0)`.
+- `ProjectionYear` records actual household, primary, and spouse conversions. Taxes use the actual executed household conversion, never an unexecuted requested amount.
+- RMD processing occurs before Roth conversion. Annual statutory RMD, RMD distributed before projection, and RMD distributed during projection remain distinct. RMD dollars are not converted; a fully pre-satisfied opening RMD does not prevent conversion of remaining eligible assets.
+- A conversion must not mutate persisted account balances.
 
 # Baselines
 
