@@ -178,7 +178,8 @@ public class IncomeSourcesView extends BorderPane {
                             currentPlan
                                     .getPlanningAssumptions()
                                     .getProjectionStartDate()
-                                    .getYear());
+                                    .getYear(),
+                            currentPlan.getHousehold());
 
             Optional<SocialSecurityIncome> result =
                     dialog.showAndWait();
@@ -258,7 +259,8 @@ public class IncomeSourcesView extends BorderPane {
                         currentPlan
                                 .getPlanningAssumptions()
                                 .getProjectionStartDate()
-                                .getYear());
+                                .getYear(),
+                        currentPlan.getHousehold());
 
         Optional<SocialSecurityIncome> result =
                 dialog.showAndWait();
@@ -448,24 +450,8 @@ public class IncomeSourcesView extends BorderPane {
             IncomeSource income =
                     cellData.getValue();
 
-            if (income instanceof Pension pension) {
-
-                return new ReadOnlyStringWrapper(
-                        formatPercent(
-                                pension
-                                        .getAnnualColaRate()));
-            }
-
-            if (income instanceof
-                    SocialSecurityIncome socialSecurity) {
-
-                return new ReadOnlyStringWrapper(
-                        formatPercent(
-                                socialSecurity
-                                        .getAnnualColaRate()));
-            }
-
-            return new ReadOnlyStringWrapper("");
+            return new ReadOnlyStringWrapper(
+                    formatColaForIncomeSource(income));
         });
 
         table.getColumns().addAll(
@@ -515,7 +501,22 @@ public class IncomeSourcesView extends BorderPane {
                 date);
     }
 
-    private String formatPercent(
+    static String formatColaForIncomeSource(
+            IncomeSource income) {
+
+        if (income instanceof Pension pension) {
+            return formatPercent(
+                    pension.getAnnualColaRate());
+        }
+
+        if (income instanceof SocialSecurityIncome) {
+            return "N/A";
+        }
+
+        return "";
+    }
+
+    private static String formatPercent(
             java.math.BigDecimal rate) {
 
         if (rate == null) {

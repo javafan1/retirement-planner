@@ -39,7 +39,7 @@ public final class TaxAssumptions {
                 localIncomeTaxRate,
                 FilingStatus.MARRIED_FILING_JOINTLY,
                 new BigDecimal("0.25"),
-                BigDecimal.ZERO,
+                null,
                 null);
     }
 
@@ -58,7 +58,7 @@ public final class TaxAssumptions {
                 localIncomeTaxRate,
                 filingStatus,
                 estimatedHeirTaxRateOnTaxDeferredAssets,
-                BigDecimal.ZERO,
+                null,
                 null);
     }
 
@@ -126,18 +126,16 @@ public final class TaxAssumptions {
         }
 
         this.futureFederalMarginalRateAdjustment =
-                futureFederalMarginalRateAdjustment != null
-                        ? futureFederalMarginalRateAdjustment
-                        : BigDecimal.ZERO;
+                futureFederalMarginalRateAdjustment;
 
         this.futureFederalMarginalRateEffectiveYear =
                 futureFederalMarginalRateEffectiveYear;
 
-        if (this.futureFederalMarginalRateAdjustment.signum() != 0
-                && this.futureFederalMarginalRateEffectiveYear == null) {
+        if ((this.futureFederalMarginalRateAdjustment == null)
+                != (this.futureFederalMarginalRateEffectiveYear == null)) {
 
             throw new IllegalArgumentException(
-                    "An effective year is required for a future federal marginal rate adjustment.");
+                    "Enter both the federal tax rate change percent and effective year, or clear both.");
         }
 
         if (this.futureFederalMarginalRateEffectiveYear != null

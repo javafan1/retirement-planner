@@ -205,6 +205,51 @@ class JsonRetirementPlanRepositoryTest {
                 loaded.getPlanningAssumptions().getTaxAssumptions()
                         .getFutureFederalMarginalRateEffectiveYear());
 
+        TaxAssumptions loadedTax =
+                loaded.getPlanningAssumptions()
+                        .getTaxAssumptions();
+
+        loaded.setPlanningAssumptions(
+                new PlanningAssumptions(
+                        loaded.getPlanningAssumptions()
+                                .getEconomicAssumptions(),
+                        new TaxAssumptions(
+                                loadedTax.getFederalTaxBracketGrowthRate(),
+                                loadedTax.getStandardDeductionGrowthRate(),
+                                loadedTax.getStateIncomeTaxRate(),
+                                loadedTax.getLocalIncomeTaxRate(),
+                                loadedTax.getFilingStatus(),
+                                loadedTax.getEstimatedHeirTaxRateOnTaxDeferredAssets(),
+                                null,
+                                null),
+                        loaded.getPlanningAssumptions()
+                                .getWithdrawalAssumptions(),
+                        loaded.getPlanningAssumptions()
+                                .getDeathScenarioAssumptions(),
+                        loaded.getPlanningAssumptions()
+                                .getProjectionLengthYears(),
+                        loaded.getPlanningAssumptions()
+                                .getProjectionStartDate()));
+
+        Path clearedFile =
+                tempDirectory.resolve(
+                        "cleared-plan.json");
+
+        repository.save(loaded, clearedFile);
+
+        RetirementPlan cleared =
+                repository.load(clearedFile);
+
+        assertEquals(
+                null,
+                cleared.getPlanningAssumptions().getTaxAssumptions()
+                        .getFutureFederalMarginalRateAdjustment());
+
+        assertEquals(
+                null,
+                cleared.getPlanningAssumptions().getTaxAssumptions()
+                        .getFutureFederalMarginalRateEffectiveYear());
+
         String legacyJson = java.nio.file.Files.readString(currentFile)
                 .replaceAll(
                         "(?s),\\s*\"futureFederalMarginalRateAdjustment\"\\s*:\\s*[^,\\n]+\\s*,\\s*\"futureFederalMarginalRateEffectiveYear\"\\s*:\\s*[^\\n}]+",
@@ -216,7 +261,7 @@ class JsonRetirementPlanRepositoryTest {
         RetirementPlan legacyPlan = repository.load(legacyFile);
 
         assertEquals(
-                BigDecimal.ZERO,
+                null,
                 legacyPlan.getPlanningAssumptions().getTaxAssumptions()
                         .getFutureFederalMarginalRateAdjustment());
 

@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.testutil;
 
 import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculation;
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountSnapshot;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
@@ -19,6 +20,8 @@ public class ProjectionYearBuilder {
     private BigDecimal beginningInvestableAssets = BigDecimal.ZERO;
     private BigDecimal investmentGrowth = BigDecimal.ZERO;
     private BigDecimal guaranteedIncome = BigDecimal.ZERO;
+    private HouseholdSocialSecurityResult socialSecurityResult =
+            HouseholdSocialSecurityResult.zero();
     private BigDecimal annualExpenses = BigDecimal.ZERO;
     private BigDecimal cashFlowNeed = BigDecimal.ZERO;
     private BigDecimal portfolioWithdrawal = BigDecimal.ZERO;
@@ -87,6 +90,15 @@ public class ProjectionYearBuilder {
 
     public ProjectionYearBuilder withGuaranteedIncome(long amount) {
         this.guaranteedIncome = BigDecimal.valueOf(amount);
+        return this;
+    }
+
+    public ProjectionYearBuilder withSocialSecurityResult(
+            HouseholdSocialSecurityResult result) {
+
+        this.socialSecurityResult =
+                Objects.requireNonNull(result);
+
         return this;
     }
 
@@ -196,6 +208,7 @@ public class ProjectionYearBuilder {
                 beginningInvestableAssets,
                 investmentGrowth,
                 guaranteedIncome,
+                socialSecurityResult,
                 annualExpenses,
                 cashFlowNeed,
                 portfolioWithdrawal,

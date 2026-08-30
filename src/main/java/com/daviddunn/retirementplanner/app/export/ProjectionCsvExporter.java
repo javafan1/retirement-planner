@@ -60,6 +60,13 @@ public class ProjectionCsvExporter {
                         + "Beginning Investable Assets,"
                         + "Investment Growth,"
                         + "Guaranteed Income,"
+                        + "Primary Own Social Security,"
+                        + "Spouse Own Social Security,"
+                        + "Primary Survivor Candidate,"
+                        + "Spouse Survivor Candidate,"
+                        + "Primary Selected Social Security Benefit,"
+                        + "Spouse Selected Social Security Benefit,"
+                        + "Household Social Security,"
                         + "Annual Expenses,"
                         + "Cash Flow Need,"
                         + "Portfolio Withdrawal,"
@@ -127,6 +134,22 @@ public class ProjectionCsvExporter {
                 year.getBeginningInvestableAssets(),
                 year.getInvestmentGrowth(),
                 year.getGuaranteedIncome(),
+                year.getSocialSecurityResult()
+                        .primaryOwnBenefit(),
+                year.getSocialSecurityResult()
+                        .spouseOwnBenefit(),
+                year.getSocialSecurityResult()
+                        .primarySurvivorCandidate(),
+                year.getSocialSecurityResult()
+                        .spouseSurvivorCandidate(),
+                year.getSocialSecurityResult()
+                        .primarySelection()
+                        .getDisplayName(),
+                year.getSocialSecurityResult()
+                        .spouseSelection()
+                        .getDisplayName(),
+                year.getSocialSecurityResult()
+                        .householdBenefit(),
                 year.getAnnualExpenses(),
                 year.getCashFlowNeed(),
                 year.getPortfolioWithdrawal(),

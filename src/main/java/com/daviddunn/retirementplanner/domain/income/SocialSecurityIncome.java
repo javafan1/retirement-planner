@@ -17,6 +17,12 @@ public class SocialSecurityIncome extends IncomeSource {
 
     private final BigDecimal fullRetirementMonthlyBenefit;
     private final int claimingAge;
+    /*
+     * Legacy JSON compatibility property only.
+     *
+     * Social Security calculations must receive the plan's
+     * EconomicAssumptions Social Security COLA explicitly.
+     */
     private final BigDecimal annualColaRate;
     private final int benefitValuationYear;
     private final CompoundGrowthService
@@ -111,14 +117,9 @@ public BigDecimal getFullRetirementMonthlyBenefit() {
             LocalDate projectionDate,
             int activeMonths) {
 
-        return getProjectedMonthlyBenefit(
-                person,
-                projectionDate)
-                .multiply(
-                        BigDecimal.valueOf(activeMonths))
-                .setScale(
-                        2,
-                        RoundingMode.HALF_UP);
+        throw new UnsupportedOperationException(
+                "Social Security income requires the economic "
+                        + "Social Security COLA rate.");
     }
 
     public int getClaimingAge() {
@@ -153,14 +154,14 @@ public BigDecimal getFullRetirementMonthlyBenefit() {
                 .setScale(2, RoundingMode.HALF_UP);
     }
 
+    @Deprecated(forRemoval = true)
     public BigDecimal getProjectedMonthlyBenefit(
             Person person,
             LocalDate projectionDate) {
 
-        return getProjectedMonthlyBenefit(
-                person,
-                projectionDate,
-                annualColaRate);
+        throw new UnsupportedOperationException(
+                "Use getProjectedMonthlyBenefit with the economic "
+                        + "Social Security COLA rate.");
     }
 
     public BigDecimal getProjectedMonthlyBenefit(
@@ -201,14 +202,14 @@ public BigDecimal getFullRetirementMonthlyBenefit() {
                         RoundingMode.HALF_UP);
     }
 
+    @Deprecated(forRemoval = true)
     public BigDecimal getMonthlyBenefitAtDeath(
             Person person,
             LocalDate deathDate) {
 
-        return getMonthlyBenefitAtDeath(
-                person,
-                deathDate,
-                annualColaRate);
+        throw new UnsupportedOperationException(
+                "Use getMonthlyBenefitAtDeath with the economic "
+                        + "Social Security COLA rate.");
     }
 
     public BigDecimal getMonthlyBenefitAtDeath(
@@ -258,6 +259,52 @@ public BigDecimal getFullRetirementMonthlyBenefit() {
                 person,
                 deathDate,
                 socialSecurityColaRate);
+    }
+
+    public BigDecimal getProjectedSurvivorBenefitBase(
+            Person person,
+            LocalDate modeledDeathDate,
+            LocalDate projectionDate,
+            BigDecimal socialSecurityColaRate) {
+
+        Objects.requireNonNull(
+                person,
+                "Person is required.");
+
+        Objects.requireNonNull(
+                modeledDeathDate,
+                "Modeled death date is required.");
+
+        Objects.requireNonNull(
+                projectionDate,
+                "Projection date is required.");
+
+        Objects.requireNonNull(
+                socialSecurityColaRate,
+                "Social Security COLA rate is required.");
+
+        BigDecimal benefitBasis =
+                getStartDate().isAfter(modeledDeathDate)
+                        ? fullRetirementMonthlyBenefit
+                        : SocialSecurityBenefitCalculator
+                                .calculateMonthlyBenefit(
+                                        fullRetirementMonthlyBenefit,
+                                        person.getBirthDate(),
+                                        claimingAge);
+
+        int colaYears =
+                Math.max(
+                        projectionDate.getYear()
+                                - benefitValuationYear,
+                        0);
+
+        return compoundGrowthService.project(
+                        benefitBasis,
+                        socialSecurityColaRate,
+                        colaYears)
+                .setScale(
+                        2,
+                        RoundingMode.HALF_UP);
     }
 
 

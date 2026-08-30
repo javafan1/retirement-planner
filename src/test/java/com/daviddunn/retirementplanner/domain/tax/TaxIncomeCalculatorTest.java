@@ -1,6 +1,8 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitSelection;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.Household;
@@ -12,8 +14,75 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TaxIncomeCalculatorTest {
+
+    @Test
+    void compatibilityOverloadCannotUseLegacySocialSecurityCola() {
+
+        Person primary = new Person(
+                "David",
+                "Dunn",
+                LocalDate.of(1963, 6, 4));
+        Person spouse = new Person(
+                "Lisa",
+                "Dunn",
+                LocalDate.of(1965, 2, 28));
+
+        primary.addIncomeSource(new SocialSecurityIncome(
+                "Social Security",
+                AccountOwnership.PRIMARY,
+                LocalDate.of(2030, 6, 4),
+                null,
+                new BigDecimal("3000"),
+                67,
+                new BigDecimal("0.20"),
+                2030));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new TaxIncomeCalculator().calculate(
+                        new Household(primary, spouse),
+                        LocalDate.of(2033, 12, 31),
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO));
+    }
+
+    @Test
+    void suppliedAuditResultIsTheGrossSocialSecurityTaxInput() {
+
+        Household household = new Household(
+                new Person("David", "Dunn", LocalDate.of(1963, 6, 4)),
+                new Person("Lisa", "Dunn", LocalDate.of(1965, 2, 28)));
+
+        HouseholdSocialSecurityResult socialSecurity =
+                new HouseholdSocialSecurityResult(
+                        new BigDecimal("30000"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("40000"),
+                        BigDecimal.ZERO,
+                        SocialSecurityBenefitSelection.SURVIVOR,
+                        SocialSecurityBenefitSelection.NONE,
+                        new BigDecimal("40000"));
+
+        TaxIncome taxIncome = new TaxIncomeCalculator().calculate(
+                household,
+                LocalDate.of(2035, 12, 31),
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                null,
+                null,
+                socialSecurity);
+
+        assertEquals(
+                0,
+                socialSecurity.householdBenefit().compareTo(
+                        taxIncome.getSocialSecurityIncome()));
+    }
 
     @Test
     void separatesPensionSocialSecurityAndTaxDeferredWithdrawals() {
@@ -112,7 +181,10 @@ class TaxIncomeCalculatorTest {
                 calculator.calculate(
                         household,
                         LocalDate.of(2026, 1, 1),
-                        new BigDecimal("25000"),BigDecimal.ZERO,BigDecimal.ZERO);
+                        new BigDecimal("25000"),
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO);
 
         assertEquals(
                 0,

@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.projection;
 
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitSelection;
 import com.daviddunn.retirementplanner.testutil.FederalTaxCalculationBuilder;
 import com.daviddunn.retirementplanner.testutil.MichiganTaxCalculationBuilder;
 import com.daviddunn.retirementplanner.testutil.ProjectionYearBuilder;
@@ -10,6 +12,33 @@ import java.math.BigDecimal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ProjectionYearTest {
+
+    @Test
+    void retainsSocialSecurityAuditResult() {
+
+        HouseholdSocialSecurityResult socialSecurity =
+                new HouseholdSocialSecurityResult(
+                        new BigDecimal("40000"),
+                        new BigDecimal("30000"),
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        SocialSecurityBenefitSelection.OWN,
+                        SocialSecurityBenefitSelection.OWN,
+                        new BigDecimal("70000"));
+
+        ProjectionYear year = ProjectionYearBuilder
+                .aProjectionYear()
+                .withGuaranteedIncome(70000)
+                .withSocialSecurityResult(socialSecurity)
+                .build();
+
+        assertEquals(socialSecurity, year.getSocialSecurityResult());
+        assertEquals(
+                0,
+                year.getGuaranteedIncome().compareTo(
+                        year.getSocialSecurityResult()
+                                .householdBenefit()));
+    }
 
     @Test
     void calculatesCombinedEffectiveTaxRate() {

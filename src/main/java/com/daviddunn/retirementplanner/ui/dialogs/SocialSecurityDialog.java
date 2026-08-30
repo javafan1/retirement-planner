@@ -1,7 +1,10 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitStartDateCalculator;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.model.Household;
+import com.daviddunn.retirementplanner.domain.model.Person;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
@@ -20,10 +23,15 @@ public class SocialSecurityDialog
     private final int benefitValuationYear;
     private final int planProjectionStartYear;
     private final CheckBox useTodaysDollarConventionCheckBox;
+    private final Household household;
+    private final Label startDateValidationLabel;
 
     public SocialSecurityDialog(
             SocialSecurityIncome socialSecurity,
-            int benefitValuationYear) {
+            int benefitValuationYear,
+            Household household) {
+
+        this.household = household;
 
         this.planProjectionStartYear = benefitValuationYear;
         this.benefitValuationYear = socialSecurity != null
@@ -51,6 +59,11 @@ public class SocialSecurityDialog
         ownershipCombo.getSelectionModel().selectFirst();
 
         startDatePicker = new DatePicker();
+        startDatePicker.setEditable(false);
+        startDatePicker.setDisable(true);
+
+        startDateValidationLabel = new Label();
+        startDateValidationLabel.setWrapText(true);
 
         fraBenefitField = new TextField();
 
@@ -66,9 +79,6 @@ public class SocialSecurityDialog
 
             ownershipCombo.setValue(
                     socialSecurity.getOwnership());
-
-            startDatePicker.setValue(
-                    socialSecurity.getStartDate());
 
             fraBenefitField.setText(
                     socialSecurity
@@ -96,6 +106,13 @@ public class SocialSecurityDialog
 
         grid.add(new Label("Benefit Start Date:"), 0, row);
         grid.add(startDatePicker, 1, row++);
+
+        Label startDateHelp = new Label(
+                "Derived from the owner's DOB and claiming age.");
+        startDateHelp.setWrapText(true);
+        grid.add(startDateHelp, 1, row++);
+
+        grid.add(startDateValidationLabel, 1, row++);
 
         grid.add(new Label(
                 "FRA Monthly Benefit (Today's Dollars):"), 0, row);
@@ -145,6 +162,16 @@ public class SocialSecurityDialog
                 ButtonType.OK,
                 ButtonType.CANCEL);
 
+        ownershipCombo.valueProperty().addListener(
+                (observable, oldValue, newValue) ->
+                        updateDerivedStartDate());
+
+        claimingAgeCombo.valueProperty().addListener(
+                (observable, oldValue, newValue) ->
+                        updateDerivedStartDate());
+
+        updateDerivedStartDate();
+
         setResultConverter(button -> {
 
             if (button != ButtonType.OK) {
@@ -184,5 +211,48 @@ public class SocialSecurityDialog
                             : BigDecimal.ZERO,
                     resolvedValuationYear);
         });
+    }
+
+    private void updateDerivedStartDate() {
+
+        AccountOwnership ownership =
+                ownershipCombo.getValue();
+
+        Integer claimingAge =
+                claimingAgeCombo.getValue();
+
+        LocalDate startDate = null;
+
+        if (ownership != null && claimingAge != null) {
+            startDate = SocialSecurityBenefitStartDateCalculator
+                    .calculate(
+                            getPerson(ownership),
+                            claimingAge)
+                    .orElse(null);
+        }
+
+        startDatePicker.setValue(startDate);
+
+        boolean missingBirthDate = startDate == null;
+
+        startDateValidationLabel.setText(
+                missingBirthDate
+                        ? "Enter the selected owner's birth date before saving Social Security."
+                        : "");
+
+        getDialogPane()
+                .lookupButton(ButtonType.OK)
+                .setDisable(missingBirthDate);
+    }
+
+    private Person getPerson(
+            AccountOwnership ownership) {
+
+        return switch (ownership) {
+            case PRIMARY -> household.getPrimaryPerson();
+            case SPOUSE -> household.getSpouse();
+            case JOINT -> throw new IllegalArgumentException(
+                    "Social Security cannot have joint ownership.");
+        };
     }
 }

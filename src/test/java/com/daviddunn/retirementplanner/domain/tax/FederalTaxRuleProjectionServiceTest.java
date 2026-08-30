@@ -186,7 +186,7 @@ class FederalTaxRuleProjectionServiceTest {
                         new BigDecimal("0.025"),
                         new BigDecimal("0.030"),
                         new BigDecimal("0.20"),
-                        BigDecimal.ZERO,
+                        null,
                         null));
 
         assertEquals(
@@ -226,7 +226,7 @@ class FederalTaxRuleProjectionServiceTest {
                 bracketGrowthRate,
                 deductionGrowthRate,
                 generalInflationRate,
-                BigDecimal.ZERO,
+                null,
                 null);
     }
 

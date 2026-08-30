@@ -4,7 +4,6 @@ import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.estate.AfterTaxEstateCalculator;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.income.Pension;
-import com.daviddunn.retirementplanner.domain.income.SocialSecuritySurvivorBenefitCalculator;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.roth.*;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
@@ -12,6 +11,7 @@ import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityIncomeCalculator;
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 
 import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
@@ -53,9 +53,6 @@ public class ProjectionEngine {
 
     private final CompoundGrowthService compoundGrowthService;
 
-
-    private final TaxIncomeCalculator
-            taxIncomeCalculator;
 
     private final HouseholdSocialSecurityIncomeCalculator
             householdSocialSecurityIncomeCalculator;
@@ -106,8 +103,6 @@ public class ProjectionEngine {
 
         this.compoundGrowthService = new CompoundGrowthService();
 
-
-        this.taxIncomeCalculator = new TaxIncomeCalculator();
 
         this.householdSocialSecurityIncomeCalculator =
                 new HouseholdSocialSecurityIncomeCalculator();
@@ -304,11 +299,19 @@ public class ProjectionEngine {
         Household household =
                 plan.getHousehold();
 
+        HouseholdSocialSecurityResult socialSecurityResult =
+                householdSocialSecurityIncomeCalculator.calculate(
+                        household,
+                        projectionDate,
+                        assumptions.getDeathScenarioAssumptions(),
+                        assumptions.getSocialSecurityColaRate());
+
         BigDecimal guaranteedIncome =
                 calculateTotalIncome(
                         household,
                         projectionDate,
-                        assumptions);
+                        assumptions,
+                        socialSecurityResult);
 
         BigDecimal annualExpenses =
                 calculateProjectedExpenses(
@@ -533,16 +536,6 @@ public class ProjectionEngine {
         ProjectedPortfolio portfolioAfterConversion =
                 rothConversionResult.getPortfolio();
 
-        TaxIncome baseTaxIncome =
-                taxIncomeCalculator.calculate(
-                        household,
-                        projectionDate,
-                        totalWithdrawalBreakdown
-                                .getTaxDeferredWithdrawal()
-                                .add(rmdDistributedBeforeProjection),
-                        rothConversion,BigDecimal.ZERO);
-
-
         TaxFundingResult taxFundingResult =
                 taxFundingCalculator.calculate(
                         household,
@@ -558,7 +551,8 @@ public class ProjectionEngine {
                         BigDecimal.ZERO,
                         assumptions.getSocialSecurityColaRate(),
                         assumptions.getDeathScenarioAssumptions(),
-                        rmdDistributedBeforeProjection);
+                        rmdDistributedBeforeProjection,
+                        socialSecurityResult);
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();
@@ -642,8 +636,14 @@ public class ProjectionEngine {
         Person primaryPerson =
                 household.getPrimaryPerson();
 
+        LocalDate projectionYearEnd =
+                LocalDate.of(
+                        calendarYear,
+                        12,
+                        31);
+
         int primaryPersonAge =
-                primaryPerson.getAge(projectionDate);
+                primaryPerson.getAge(projectionYearEnd);
 
 //        AfterTaxEstateCalculator afterTaxEstateCalculator =
 //                new AfterTaxEstateCalculator();
@@ -671,6 +671,7 @@ public class ProjectionEngine {
                         beginningAssets,
                         investmentGrowth,
                         guaranteedIncome,
+                        socialSecurityResult,
                         annualExpenses,
                         withdrawalResult.getCashFlowNeed(),
                         totalPortfolioWithdrawal,
@@ -790,7 +791,8 @@ public class ProjectionEngine {
     private BigDecimal calculateTotalIncome(
             Household household,
             LocalDate projectionDate,
-            PlanningAssumptions assumptions) {
+            PlanningAssumptions assumptions,
+            HouseholdSocialSecurityResult socialSecurityResult) {
 
         BigDecimal total =
                 BigDecimal.ZERO;
@@ -808,14 +810,7 @@ public class ProjectionEngine {
                         assumptions));
 
         total = total.add(
-                householdSocialSecurityIncomeCalculator
-                        .calculateAnnualIncome(
-                                household,
-                                projectionDate,
-                                assumptions
-                                        .getDeathScenarioAssumptions(),
-                                assumptions
-                                        .getSocialSecurityColaRate()));
+                socialSecurityResult.householdBenefit());
 
         total = total.add(
                 calculateSurvivorPensionIncome(
@@ -886,160 +881,6 @@ public class ProjectionEngine {
         return total;
     }
 
-    private BigDecimal calculateSurvivorSocialSecurityIncome(
-            Household household,
-            LocalDate projectionDate,
-            PlanningAssumptions assumptions) {
-
-        DeathScenario deathScenario =
-                assumptions
-                        .getDeathScenarioAssumptions()
-                        .getDeathScenario();
-
-        if (deathScenario == DeathScenario.BOTH_SURVIVE) {
-            return BigDecimal.ZERO;
-        }
-
-        Person deceasedPerson;
-        Person survivingPerson;
-
-        if (deathScenario == DeathScenario.PRIMARY_DIES) {
-
-            deceasedPerson =
-                    household.getPrimaryPerson();
-
-            survivingPerson =
-                    household.getSpouse();
-
-        } else {
-
-            deceasedPerson =
-                    household.getSpouse();
-
-            survivingPerson =
-                    household.getPrimaryPerson();
-        }
-
-        /*
-         * Survivor benefits do not begin until the
-         * death scenario is active.
-         */
-        if (!assumptions
-                .getDeathScenarioAssumptions()
-                .isDeathScenarioActive(
-                        projectionDate.getYear())) {
-
-            return BigDecimal.ZERO;
-        }
-
-        BigDecimal deceasedMonthlyBenefit =
-                BigDecimal.ZERO;
-
-        /*
-         * Find the deceased person's Social Security
-         * income and determine the monthly benefit
-         * that would have applied in this projection year.
-         */
-        for (IncomeSource income :
-                deceasedPerson.getIncomeSources()) {
-
-            if (income instanceof SocialSecurityIncome socialSecurityIncome) {
-
-                deceasedMonthlyBenefit =
-                        socialSecurityIncome
-                                .getProjectedMonthlyBenefit(
-                                        deceasedPerson,
-                                        projectionDate);
-
-                break;
-            }
-        }
-
-        if (deceasedMonthlyBenefit.signum() <= 0) {
-            return BigDecimal.ZERO;
-        }
-
-        /*
-         * Determine the survivor's own Social Security
-         * benefit for comparison.
-         */
-        BigDecimal survivingOwnMonthlyBenefit =
-                BigDecimal.ZERO;
-
-        for (IncomeSource income :
-                survivingPerson.getIncomeSources()) {
-
-            if (income instanceof SocialSecurityIncome socialSecurityIncome) {
-
-                survivingOwnMonthlyBenefit =
-                        socialSecurityIncome
-                                .getProjectedMonthlyBenefit(
-                                        survivingPerson,
-                                        projectionDate);
-
-                break;
-            }
-        }
-
-
-        int survivorClaimingAge =
-                assumptions
-                        .getDeathScenarioAssumptions()
-                        .getSurvivorClaimingAge();
-
-        int survivorAge =
-                survivingPerson.getAge(
-                        projectionDate);
-
-        /*
-         * Survivor benefits do not begin until the
-         * surviving spouse reaches their planned
-         * survivor claiming age.
-         */
-        if (survivorAge < survivorClaimingAge) {
-            return BigDecimal.ZERO;
-        }
-
-        /*
-         * Calculate the survivor benefit using the
-         * survivor's planned claiming age.
-         */
-        BigDecimal survivorMonthlyBenefit =
-                SocialSecuritySurvivorBenefitCalculator
-                        .calculateMonthlyBenefit(
-                                deceasedMonthlyBenefit,
-                                survivingPerson.getBirthDate(),
-                                survivorClaimingAge);
-
-
-
-        /*
-         * The survivor does not receive both benefits.
-         *
-         * Their applicable benefit is the greater
-         * of their own benefit or the survivor benefit.
-         *
-         * Their own benefit is already included by
-         * calculateIncome(), so we only add the
-         * incremental amount here.
-         */
-        BigDecimal additionalMonthlyBenefit =
-                survivorMonthlyBenefit
-                        .subtract(
-                                survivingOwnMonthlyBenefit);
-
-        if (additionalMonthlyBenefit.signum() <= 0) {
-            return BigDecimal.ZERO;
-        }
-
-        return additionalMonthlyBenefit
-                .multiply(
-                        BigDecimal.valueOf(12))
-                .setScale(
-                        2,
-                        RoundingMode.HALF_UP);
-    }
-
     private BigDecimal calculateIncome(
             Person person,
             LocalDate projectionDate,
@@ -1064,22 +905,10 @@ public class ProjectionEngine {
                 continue;
             }
 
-            if (income instanceof SocialSecurityIncome socialSecurity) {
-
-                total = total.add(
-                        socialSecurity.getAnnualIncome(
-                                person,
-                                projectionDate,
-                                assumptions
-                                        .getSocialSecurityColaRate()));
-
-            } else {
-
-                total = total.add(
-                        income.getAnnualIncome(
-                                person,
-                                projectionDate));
-            }
+            total = total.add(
+                    income.getAnnualIncome(
+                            person,
+                            projectionDate));
         }
 
         return total;

@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
@@ -140,6 +141,37 @@ public final class TaxFundingCalculator {
             DeathScenarioAssumptions deathAssumptions,
             BigDecimal openingTaxDeferredDistribution) {
 
+        return calculate(
+                household,
+                projectionDate,
+                portfolio,
+                existingWithdrawals,
+                withdrawalStrategy,
+                filingStatus,
+                projectedGovernmentRules,
+                rothConversion,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                deathAssumptions,
+                openingTaxDeferredDistribution,
+                null);
+    }
+
+    public TaxFundingResult calculate(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution,
+            HouseholdSocialSecurityResult socialSecurityResult) {
+
         Objects.requireNonNull(
                 household,
                 "Household is required.");
@@ -233,7 +265,8 @@ public final class TaxFundingCalculator {
                             rothConversion,
                             taxableInterestIncome,
                             socialSecurityColaRate,
-                            deathAssumptions);
+                            deathAssumptions,
+                            socialSecurityResult);
 
             FederalTaxCalculation federalTaxCalculation =
                     federalTaxCalculator.calculate(
@@ -288,7 +321,8 @@ public final class TaxFundingCalculator {
                                 rothConversion,
                                 taxableInterestIncome,
                                 socialSecurityColaRate,
-                                deathAssumptions);
+                                deathAssumptions,
+                                socialSecurityResult);
 
                 FederalTaxCalculation finalFederalTaxCalculation =
                         federalTaxCalculator.calculate(

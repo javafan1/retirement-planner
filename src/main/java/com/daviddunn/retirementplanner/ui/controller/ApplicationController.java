@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionReadiness;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.projection.statistics.ProjectionStatisticsService;
 import com.daviddunn.retirementplanner.domain.projection.summary.IncomeSummaryService;
@@ -132,6 +133,10 @@ public class ApplicationController {
      */
     public Projection getCurrentProjection() {
 
+        if (!isCurrentPlanReadyForProjection()) {
+            return null;
+        }
+
         if (currentProjection == null) {
 
             currentProjection =
@@ -140,6 +145,12 @@ public class ApplicationController {
         }
 
         return currentProjection;
+    }
+
+    public boolean isCurrentPlanReadyForProjection() {
+
+        return ProjectionReadiness.isReady(
+                currentPlan);
     }
 
     public Projection getBaselineProjection() {
@@ -253,10 +264,17 @@ public class ApplicationController {
 
         if (currentProjectionSummary == null) {
 
+            Projection projection =
+                    getCurrentProjection();
+
+            if (projection == null) {
+                return null;
+            }
+
             currentProjectionSummary =
                     projectionSummaryService.summarize(
                             currentPlan,
-                            getCurrentProjection());
+                            projection);
         }
 
         return currentProjectionSummary;

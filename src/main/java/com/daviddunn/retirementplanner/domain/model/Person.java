@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.Period;
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.util.ArrayList;
@@ -110,6 +111,15 @@ public class Person {
         BigDecimal total = BigDecimal.ZERO;
 
         for (IncomeSource income : incomeSources) {
+
+            /*
+             * Social Security requires the plan-wide economic COLA
+             * and is calculated through its dedicated household path.
+             */
+            if (income instanceof SocialSecurityIncome) {
+                continue;
+            }
+
             total = total.add(
                     income.getAnnualIncome(this,projectionDate));
         }

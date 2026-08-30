@@ -19,6 +19,7 @@ import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
 import com.daviddunn.retirementplanner.app.export.ProjectionCsvExporter;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitCalculator;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitStartDateCalculator;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
@@ -1059,7 +1060,7 @@ public class ResultsSummaryView extends BorderPane {
                         true),
 
                 createComparisonMetricCard(
-                        "Net Worth",
+                        "Total Net Worth",
                         "metric-blue",
                         netWorthBaselineLabel,
                         netWorthCurrentLabel,
@@ -1067,7 +1068,7 @@ public class ResultsSummaryView extends BorderPane {
                         true),
 
                 createComparisonMetricCard(
-                        "After-Tax Estate",
+                        "Investable After-Tax Estate",
                         "metric-purple",
                         estateBaselineLabel,
                         estateCurrentLabel,
@@ -1198,13 +1199,7 @@ public class ResultsSummaryView extends BorderPane {
                         taxRateDetail),
 
 
-                createMetricCard(
-                         "Ending Non-Investable Assets",
-                        FontAwesomeSolid.HOME,
-                        "metric-orange",
-                        "metric-icon-orange",
-                        nonInvestableAssetsValue,
-                        nonInvestableAssetsDetail),
+
 
                 createMetricCard(
                         "Ending Investable Assets",
@@ -1214,24 +1209,31 @@ public class ResultsSummaryView extends BorderPane {
                         endingAssetsValue,
                         endingAssetsDetail),
 
-                createMetricCard(
-                        "Ending After-Tax Estate",
-                        FontAwesomeSolid.USERS,
-                        "metric-purple",
-                        "metric-icon-purple",
-                        estateValue,
-                        estateDetail),
-
-
 
 
                 createMetricCard(
-                        "Ending Total Net Worth",
+                        "Home Equity/Other Assets",
+                        FontAwesomeSolid.HOME,
+                        "metric-orange",
+                        "metric-icon-orange",
+                        nonInvestableAssetsValue,
+                        nonInvestableAssetsDetail),
+
+                createMetricCard(
+                        "Total Net Worth",
                         FontAwesomeSolid.DOLLAR_SIGN,
                         "metric-blue",
                         "metric-icon-blue",
                         netWorthValue,
-                        netWorthDetail));
+                        netWorthDetail),
+
+        createMetricCard(
+                "After-Tax Estate Heir Value",
+                FontAwesomeSolid.USERS,
+                "metric-purple",
+                "metric-icon-purple",
+                estateValue,
+                estateDetail));
 
         for (var card :
                 cards.getChildren()) {
@@ -2444,6 +2446,9 @@ public class ResultsSummaryView extends BorderPane {
             clearMetrics();
             clearCharts();
 
+            baselineComparisonBox.setVisible(false);
+            baselineComparisonBox.setManaged(false);
+
             return;
         }
 
@@ -2505,7 +2510,10 @@ public class ResultsSummaryView extends BorderPane {
                 tax.getFutureFederalMarginalRateAdjustment();
 
         futureFederalMarginalRateChangeField.setText(
-                percentForField(futureFederalMarginalRateAdjustment));
+                futureFederalMarginalRateAdjustment != null
+                        ? percentForField(
+                        futureFederalMarginalRateAdjustment)
+                        : "");
 
         Integer futureFederalMarginalRateEffectiveYear =
                 tax.getFutureFederalMarginalRateEffectiveYear();
@@ -2870,28 +2878,12 @@ public class ResultsSummaryView extends BorderPane {
                             inflationField
                                     .getText());
 
-            BigDecimal futureFederalMarginalRateAdjustment =
-                    parsePercent(
+            FutureFederalTaxRateChangeInput futureFederalRateChange =
+                    FutureFederalTaxRateChangeInput.parse(
                             futureFederalMarginalRateChangeField
+                                    .getText(),
+                            futureFederalMarginalRateEffectiveYearField
                                     .getText());
-
-            String futureFederalMarginalRateEffectiveYearText =
-                    futureFederalMarginalRateEffectiveYearField
-                            .getText()
-                            .trim();
-
-            Integer futureFederalMarginalRateEffectiveYear =
-                    futureFederalMarginalRateEffectiveYearText.isEmpty()
-                            ? null
-                            : Integer.parseInt(
-                            futureFederalMarginalRateEffectiveYearText);
-
-            if (futureFederalMarginalRateAdjustment.signum() != 0
-                    && futureFederalMarginalRateEffectiveYear == null) {
-
-                throw new IllegalArgumentException(
-                        "Effective year is required for a future federal tax rate change.");
-            }
 
             PlanningAssumptions current =
                     currentPlan
@@ -2922,8 +2914,8 @@ public class ResultsSummaryView extends BorderPane {
                             existingTax.getFilingStatus(),
                             existingTax
                                     .getEstimatedHeirTaxRateOnTaxDeferredAssets(),
-                            futureFederalMarginalRateAdjustment,
-                            futureFederalMarginalRateEffectiveYear);
+                            futureFederalRateChange.adjustment(),
+                            futureFederalRateChange.effectiveYear());
 
             PlanningAssumptions updated =
                     new PlanningAssumptions(
@@ -3049,6 +3041,20 @@ public class ResultsSummaryView extends BorderPane {
             boolean enabled =
                     rothEnabledCheckBox.isSelected();
 
+            /*
+             * A plan with no Roth conversion request
+             * intentionally loads with blank fields.
+             * Disabling the feature must therefore not
+             * require or parse those fields.
+             */
+            if (!enabled) {
+
+                rothConversionHandler.accept(
+                        null);
+
+                return;
+            }
+
             RothConversionStrategy strategy =
                     rothStrategyComboBox.getValue();
 
@@ -3058,11 +3064,20 @@ public class ResultsSummaryView extends BorderPane {
                         "Roth conversion strategy is required.");
             }
 
+            String startYearText =
+                    rothStartYearField
+                            .getText()
+                            .trim();
+
+            if (startYearText.isEmpty()) {
+
+                throw new IllegalArgumentException(
+                        "Roth conversion start year is required.");
+            }
+
             int startYear =
                     Integer.parseInt(
-                            rothStartYearField
-                                    .getText()
-                                    .trim());
+                            startYearText);
 
             BigDecimal annualAmount =
                     BigDecimal.ZERO;
@@ -3120,6 +3135,12 @@ public class ResultsSummaryView extends BorderPane {
                         "Roth conversion frequency is required.");
             }
 
+            if (stopRule == null) {
+
+                throw new IllegalArgumentException(
+                        "Roth conversion stop rule is required.");
+            }
+
             RothConversionRequest request =
                     new RothConversionRequest(
                             enabled,
@@ -3133,12 +3154,24 @@ public class ResultsSummaryView extends BorderPane {
             rothConversionHandler.accept(
                     request);
 
-        } catch (Exception ex) {
+        } catch (NumberFormatException ex) {
+
+            showError(
+                    "Roth conversion year and monetary values must be valid.");
+
+        } catch (IllegalArgumentException ex) {
+
+            showError(
+                    ex.getMessage() != null
+                            ? ex.getMessage()
+                            : "Please enter valid Roth conversion values.");
+
+        } catch (RuntimeException ex) {
 
             ex.printStackTrace();
 
             showError(
-                    "Please enter valid Roth conversion values.");
+                    "Roth conversion changes could not be applied.");
         }
     }
 
@@ -3728,8 +3761,14 @@ public class ResultsSummaryView extends BorderPane {
         }
 
         LocalDate claimDate =
-                person.getBirthDate()
-                        .plusYears(claimingAge);
+                SocialSecurityBenefitStartDateCalculator
+                        .calculate(person, claimingAge)
+                        .orElse(null);
+
+        if (claimDate == null) {
+            benefitLabel.setText("-");
+            return;
+        }
 
         SocialSecurityIncome preview =
                 new SocialSecurityIncome(
@@ -3782,8 +3821,15 @@ public class ResultsSummaryView extends BorderPane {
                         row.source;
 
                 LocalDate newStartDate =
-                        row.person.getBirthDate()
-                                .plusYears(claimingAge);
+                        SocialSecurityBenefitStartDateCalculator
+                                .calculate(
+                                        row.person,
+                                        claimingAge)
+                                .orElse(null);
+
+                if (newStartDate == null) {
+                    continue;
+                }
 
                 SocialSecurityIncome updated =
                         new SocialSecurityIncome(

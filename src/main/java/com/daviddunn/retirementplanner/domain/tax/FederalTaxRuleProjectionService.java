@@ -126,8 +126,7 @@ public final class FederalTaxRuleProjectionService {
                 .getTaxAssumptions()
                 .getFutureFederalMarginalRateEffectiveYear();
 
-        if (adjustment.signum() == 0
-                || effectiveYear == null
+        if (adjustment == null
                 || projectionTaxYear < effectiveYear) {
 
             return publishedTaxRate;

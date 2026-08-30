@@ -30,7 +30,8 @@ class SocialSecurityIncomeTest {
         BigDecimal annualIncome =
                 income.getAnnualIncome(
                         person,
-                        LocalDate.of(2030, 1, 1));
+                        LocalDate.of(2030, 1, 1),
+                        new BigDecimal("0.025"));
 
         assertEquals(
                 new BigDecimal("36000.00"),
@@ -46,7 +47,8 @@ class SocialSecurityIncomeTest {
         BigDecimal annualIncome =
                 income.getAnnualIncome(
                         person,
-                        LocalDate.of(2030, 1, 1));
+                        LocalDate.of(2030, 1, 1),
+                        new BigDecimal("0.025"));
 
         assertEquals(
                 new BigDecimal("25200.00"),
@@ -62,7 +64,8 @@ class SocialSecurityIncomeTest {
         BigDecimal annualIncome =
                 income.getAnnualIncome(
                         person,
-                        LocalDate.of(2030, 1, 1));
+                        LocalDate.of(2030, 1, 1),
+                        new BigDecimal("0.025"));
 
         assertEquals(
                 new BigDecimal("44640.00"),
@@ -78,7 +81,8 @@ class SocialSecurityIncomeTest {
         BigDecimal annualIncome =
                 income.getAnnualIncome(
                         person,
-                        LocalDate.of(2029, 12, 31));
+                        LocalDate.of(2029, 12, 31),
+                        new BigDecimal("0.025"));
 
         assertEquals(
                 BigDecimal.ZERO,
@@ -86,7 +90,7 @@ class SocialSecurityIncomeTest {
     }
 
     @Test
-    void socialSecurityAppliesColaAfterFirstYear() {
+    void socialSecurityAppliesExplicitEconomicColaAfterFirstYear() {
 
         SocialSecurityIncome income =
                 createIncome(67);
@@ -94,7 +98,8 @@ class SocialSecurityIncomeTest {
         BigDecimal annualIncome =
                 income.getAnnualIncome(
                         person,
-                        LocalDate.of(2031, 1, 1));
+                        LocalDate.of(2031, 1, 1),
+                        new BigDecimal("0.025"));
 
         assertEquals(
                 new BigDecimal("36900.00"),
@@ -135,7 +140,8 @@ class SocialSecurityIncomeTest {
         BigDecimal monthlyBenefit =
                 socialSecurity.getProjectedMonthlyBenefit(
                         person,
-                        LocalDate.of(2035, 1, 1));
+                        LocalDate.of(2035, 1, 1),
+                        BigDecimal.ZERO);
 
         BigDecimal expected =
                 SocialSecurityBenefitCalculator
@@ -171,7 +177,8 @@ class SocialSecurityIncomeTest {
         BigDecimal result =
                 income.getMonthlyBenefitAtDeath(
                         person,
-                        LocalDate.of(2035, 1, 1));
+                        LocalDate.of(2035, 1, 1),
+                        BigDecimal.ZERO);
 
         assertEquals(
                 new BigDecimal("3000.00"),
@@ -201,7 +208,8 @@ class SocialSecurityIncomeTest {
         BigDecimal result =
                 income.getMonthlyBenefitAtDeath(
                         person,
-                        LocalDate.of(2035, 1, 1));
+                        LocalDate.of(2035, 1, 1),
+                        new BigDecimal("0.025"));
 
 
         assertEquals(

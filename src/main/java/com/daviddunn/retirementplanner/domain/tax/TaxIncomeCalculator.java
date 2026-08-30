@@ -4,6 +4,7 @@ import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityIncomeCalculator;
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
@@ -65,6 +66,29 @@ public final class TaxIncomeCalculator {
             BigDecimal socialSecurityColaRate,
             DeathScenarioAssumptions deathAssumptions) {
 
+        return calculate(
+                household,
+                projectionDate,
+                taxDeferredWithdrawals,
+                openingTaxDeferredDistribution,
+                rothConversion,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                deathAssumptions,
+                null);
+    }
+
+    public TaxIncome calculate(
+            Household household,
+            LocalDate projectionDate,
+            BigDecimal taxDeferredWithdrawals,
+            BigDecimal openingTaxDeferredDistribution,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            HouseholdSocialSecurityResult socialSecurityResult) {
+
         Objects.requireNonNull(
                 household,
                 "Household is required.");
@@ -110,7 +134,8 @@ public final class TaxIncomeCalculator {
                 calculateIncome(
                         household.getPrimaryPerson(),
                         projectionDate,
-                        socialSecurityColaRate);
+                        socialSecurityColaRate,
+                        socialSecurityResult != null);
 
         pensionIncome =
                 pensionIncome.add(
@@ -124,7 +149,8 @@ public final class TaxIncomeCalculator {
                 calculateIncome(
                         household.getSpouse(),
                         projectionDate,
-                        socialSecurityColaRate);
+                        socialSecurityColaRate,
+                        socialSecurityResult != null);
 
         pensionIncome =
                 pensionIncome.add(
@@ -134,7 +160,12 @@ public final class TaxIncomeCalculator {
                 socialSecurityIncome.add(
                         spouseTotals.socialSecurityIncome());
 
-        if (deathAssumptions != null
+        if (socialSecurityResult != null) {
+
+            socialSecurityIncome =
+                    socialSecurityResult.householdBenefit();
+
+        } else if (deathAssumptions != null
                 && socialSecurityColaRate != null) {
 
             socialSecurityIncome =
@@ -187,7 +218,8 @@ public final class TaxIncomeCalculator {
     private IncomeTotals calculateIncome(
             Person person,
             LocalDate projectionDate,
-            BigDecimal socialSecurityColaRate) {
+            BigDecimal socialSecurityColaRate,
+            boolean socialSecurityAlreadyCalculated) {
 
         BigDecimal pensionIncome =
                 BigDecimal.ZERO;
@@ -198,6 +230,11 @@ public final class TaxIncomeCalculator {
         for (IncomeSource income :
                 person.getIncomeSources()) {
 
+            if (socialSecurityAlreadyCalculated
+                    && income instanceof SocialSecurityIncome) {
+                continue;
+            }
+
             BigDecimal annualIncome;
 
             if (income instanceof SocialSecurityIncome socialSecurity
@@ -207,6 +244,13 @@ public final class TaxIncomeCalculator {
                         person,
                         projectionDate,
                         socialSecurityColaRate);
+
+            } else if (income instanceof SocialSecurityIncome) {
+
+                throw new IllegalArgumentException(
+                        "Social Security tax income requires the economic "
+                                + "Social Security COLA rate or a calculated "
+                                + "household Social Security result.");
 
             } else {
 

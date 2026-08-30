@@ -361,8 +361,6 @@ public class MainWindow {
         updateWindowTitle();
 
         refreshAllViews();
-
-        statusLabel.setText("Ready");
     }
 
     private void saveCurrentPlan() {
@@ -558,7 +556,10 @@ public class MainWindow {
                     projection,
                     controller.getCurrentNonInvestableAssetProjections());
 
-            statusLabel.setText("Projection updated.");
+            statusLabel.setText(
+                    projection == null
+                            ? "Complete the required plan information to run a projection."
+                            : "Projection updated.");
         }
         catch (Exception ex) {
 
@@ -613,7 +614,10 @@ public class MainWindow {
 
         updateWindowTitle();
 
-        statusLabel.setText("New plan.");
+        statusLabel.setText(
+                controller.isCurrentPlanReadyForProjection()
+                        ? "New plan."
+                        : "Complete the required plan information to run a projection.");
     }
 
     private void refreshAllViews() {

@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.domain.projection;
 
 
 import com.daviddunn.retirementplanner.domain.financial.Account;
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculation;
 import com.daviddunn.retirementplanner.domain.rules.IrmaaBracket;
 import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
@@ -24,6 +25,7 @@ public class ProjectionYear {
     private final BigDecimal investmentGrowth;
 
     private final BigDecimal guaranteedIncome;
+    private final HouseholdSocialSecurityResult socialSecurityResult;
     private final BigDecimal annualExpenses;
 
     private final BigDecimal cashFlowNeed;
@@ -45,6 +47,11 @@ public class ProjectionYear {
     private final BigDecimal federalIncomeTax;
     private final BigDecimal michiganIncomeTax;
 
+    /*
+     * Primary person's age on December 31 of this
+     * projection calendar year. This is reporting
+     * metadata and is not a financial-calculation age.
+     */
     private final int primaryPersonAge;
 
     private final BigDecimal michiganRetirementIncome;
@@ -113,6 +120,9 @@ public class ProjectionYear {
                 Objects.requireNonNull(
                         guaranteedIncome,
                         "guaranteedIncome");
+
+        this.socialSecurityResult =
+                HouseholdSocialSecurityResult.zero();
 
         this.annualExpenses =
                 Objects.requireNonNull(
@@ -259,6 +269,9 @@ public class ProjectionYear {
                         guaranteedIncome,
                         "guaranteedIncome");
 
+        this.socialSecurityResult =
+                HouseholdSocialSecurityResult.zero();
+
         this.annualExpenses =
                 Objects.requireNonNull(
                         annualExpenses,
@@ -368,6 +381,7 @@ public class ProjectionYear {
             BigDecimal beginningInvestableAssets,
             BigDecimal investmentGrowth,
             BigDecimal guaranteedIncome,
+            HouseholdSocialSecurityResult socialSecurityResult,
             BigDecimal annualExpenses,
             BigDecimal cashFlowNeed,
             BigDecimal portfolioWithdrawal,
@@ -415,6 +429,11 @@ public class ProjectionYear {
                 Objects.requireNonNull(
                         guaranteedIncome,
                         "guaranteedIncome");
+
+        this.socialSecurityResult =
+                Objects.requireNonNull(
+                        socialSecurityResult,
+                        "Social Security result is required.");
 
         this.annualExpenses =
                 Objects.requireNonNull(
@@ -635,6 +654,10 @@ public class ProjectionYear {
 
     public BigDecimal getGuaranteedIncome() {
         return guaranteedIncome;
+    }
+
+    public HouseholdSocialSecurityResult getSocialSecurityResult() {
+        return socialSecurityResult;
     }
 
     public BigDecimal getAnnualExpenses() {

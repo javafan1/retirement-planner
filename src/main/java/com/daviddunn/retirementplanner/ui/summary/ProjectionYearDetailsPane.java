@@ -89,48 +89,35 @@ public class ProjectionYearDetailsPane
 
         int row = 1;
 
-
         row =
-                createPortfolioRows(
+                createCashFlowRows(
                         grid,
                         row);
 
-
         row =
-                createIncomeRows(
+                createIncomeSourceRows(
                         grid,
                         row);
 
-
         row =
-                createExpenseRows(
+                createRetirementActivityRows(
                         grid,
                         row);
 
-
         row =
-                createFederalTaxRows(
+                createTaxRows(
                         grid,
                         row);
-
-
-        row =
-                createMichiganTaxRows(
-                        grid,
-                        row);
-
 
         row =
                 createMedicareRows(
                         grid,
                         row);
 
-
         row =
-                createTotalsRows(
+                createPortfolioRows(
                         grid,
                         row);
-
 
         createEstateRows(
                 grid,
@@ -284,10 +271,10 @@ public class ProjectionYearDetailsPane
 
 
     // ============================================================
-    // Portfolio
+    // Year Cash Flow
     // ============================================================
 
-    private int createPortfolioRows(
+    private int createCashFlowRows(
             GridPane grid,
             int row) {
 
@@ -295,143 +282,7 @@ public class ProjectionYearDetailsPane
                 addSectionHeader(
                         grid,
                         row,
-                        "Portfolio");
-
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Beginning Assets",
-                        year.getBeginningInvestableAssets(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getBeginningInvestableAssets));
-
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Investment Growth",
-                        year.getInvestmentGrowth(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getInvestmentGrowth));
-
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Tax-Deferred Accounts",
-                        getEndingBalanceByAssetType(
-                                year,
-                                ProjectionAssetType.TAX_DEFERRED),
-                        getBaselineAccountBalanceByAssetType(
-                                ProjectionAssetType.TAX_DEFERRED));
-
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Taxable Accounts",
-                        getEndingBalanceByTaxTreatment(
-                                year,
-                                TaxTreatment.TAXABLE),
-                        getBaselineAccountBalanceByTaxTreatment(
-                                TaxTreatment.TAXABLE));
-
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Roth Accounts",
-                        getEndingBalanceByAssetType(
-                                year,
-                                ProjectionAssetType.ROTH),
-                        getBaselineAccountBalanceByAssetType(
-                                ProjectionAssetType.ROTH));
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Beginning Retained RMD Assets",
-                        year.getBeginningRetainedRmdAssets(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getBeginningRetainedRmdAssets));
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Growth on Retained RMD Assets",
-                        year.getRetainedRmdAssetGrowth(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getRetainedRmdAssetGrowth));
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "New Excess RMD",
-                        year.getExcessRmd(),
-                        getBaselineValue(
-                                ProjectionYear::getExcessRmd));
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Ending Retained RMD Assets",
-                        year.getEndingRetainedRmdAssets(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getEndingRetainedRmdAssets));
-
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Cash Accounts",
-                        getEndingBalanceByTaxTreatment(
-                                year,
-                                TaxTreatment.CASH),
-                        getBaselineAccountBalanceByTaxTreatment(
-                                TaxTreatment.CASH));
-
-
-        return addMoneyComparisonRow(
-                grid,
-                row,
-                "Ending Assets",
-                year.getEndingInvestableAssets(),
-                getBaselineValue(
-                        ProjectionYear::
-                                getEndingInvestableAssets));
-    }
-
-
-    // ============================================================
-    // Income & Withdrawals
-    // ============================================================
-
-    private int createIncomeRows(
-            GridPane grid,
-            int row) {
-
-        row =
-                addSectionHeader(
-                        grid,
-                        row,
-                        "Income & Withdrawals");
-
+                        "Year Cash Flow");
 
         row =
                 addMoneyComparisonRow(
@@ -443,129 +294,6 @@ public class ProjectionYearDetailsPane
                                 ProjectionYear::
                                         getGuaranteedIncome));
 
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Portfolio Withdrawal",
-                        year.getPortfolioWithdrawal(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getPortfolioWithdrawal));
-
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Requested Roth Conversion",
-                        year.getRequestedRothConversion(),
-                        null);
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Roth Conversion",
-                        year.getRothConversion(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getRothConversion));
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Roth Conversion Shortfall",
-                        year.getRothConversionShortfall(),
-                        null);
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Primary Roth Conversion",
-                        year.getPrimaryRothConversion(),
-                        null);
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Spouse Roth Conversion",
-                        year.getSpouseRothConversion(),
-                        null);
-
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Tax Funding Withdrawal",
-                        year.getTaxFundingWithdrawal(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getTaxFundingWithdrawal));
-
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Required Minimum Distribution",
-                        year.getRequiredMinimumDistribution(),
-                        getBaselineValue(
-                        ProjectionYear::
-                                getRequiredMinimumDistribution));
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "RMD Distributed Before Projection",
-                        year.getRmdDistributedBeforeProjection(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getRmdDistributedBeforeProjection));
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "RMD Distributed in Projection",
-                        year.getRmdDistributedInProjection(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getRmdDistributedInProjection));
-
-
-        return addMoneyComparisonRow(
-                grid,
-                row,
-                "Excess RMD",
-                year.getExcessRmd(),
-                getBaselineValue(
-                        ProjectionYear::
-                                getExcessRmd));
-    }
-
-
-    // ============================================================
-    // Expenses
-    // ============================================================
-
-    private int createExpenseRows(
-            GridPane grid,
-            int row) {
-
-        row =
-                addSectionHeader(
-                        grid,
-                        row,
-                        "Expenses");
-
-
         row =
                 addMoneyComparisonRow(
                         grid,
@@ -576,23 +304,57 @@ public class ProjectionYearDetailsPane
                                 ProjectionYear::
                                         getAnnualExpenses));
 
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Cash Flow Need",
+                        year.getCashFlowNeed(),
+                        getBaselineValue(
+                                ProjectionYear::getCashFlowNeed));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Portfolio Withdrawal",
+                        year.getPortfolioWithdrawal(),
+                        getBaselineValue(
+                                ProjectionYear::getPortfolioWithdrawal));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Tax Funding Withdrawal",
+                        year.getTaxFundingWithdrawal(),
+                        getBaselineValue(
+                                ProjectionYear::getTaxFundingWithdrawal));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Total Income Tax",
+                        year.getTotalIncomeTax(),
+                        getBaselineValue(
+                                ProjectionYear::getTotalIncomeTax));
 
         return addMoneyComparisonRow(
                 grid,
                 row,
-                "Cash Flow Need",
-                year.getCashFlowNeed(),
+                "Total Annual Medicare Premium",
+                year.getAnnualMedicarePremium(),
                 getBaselineValue(
-                        ProjectionYear::
-                                getCashFlowNeed));
+                        ProjectionYear::getAnnualMedicarePremium));
     }
 
 
     // ============================================================
-    // Federal Tax
+    // Income Sources
     // ============================================================
 
-    private int createFederalTaxRows(
+    private int createIncomeSourceRows(
             GridPane grid,
             int row) {
 
@@ -600,7 +362,203 @@ public class ProjectionYearDetailsPane
                 addSectionHeader(
                         grid,
                         row,
-                        "Federal Income Tax");
+                        "Income Sources");
+
+        row =
+                addSubsectionHeader(
+                        grid,
+                        row,
+                        "Social Security");
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Primary Own Benefit / Candidate",
+                        year.getSocialSecurityResult()
+                                .primaryOwnBenefit(),
+                        getBaselineValue(value ->
+                                value.getSocialSecurityResult()
+                                        .primaryOwnBenefit()));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Spouse Own Benefit / Candidate",
+                        year.getSocialSecurityResult()
+                                .spouseOwnBenefit(),
+                        getBaselineValue(value ->
+                                value.getSocialSecurityResult()
+                                        .spouseOwnBenefit()));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Primary Survivor Candidate",
+                        year.getSocialSecurityResult()
+                                .primarySurvivorCandidate(),
+                        getBaselineValue(value ->
+                                value.getSocialSecurityResult()
+                                        .primarySurvivorCandidate()));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Spouse Survivor Candidate",
+                        year.getSocialSecurityResult()
+                                .spouseSurvivorCandidate(),
+                        getBaselineValue(value ->
+                                value.getSocialSecurityResult()
+                                        .spouseSurvivorCandidate()));
+
+        row =
+                addTextComparisonRow(
+                        grid,
+                        row,
+                        "Primary Selected Benefit",
+                        year.getSocialSecurityResult()
+                                .primarySelection()
+                                .getDisplayName(),
+                        getBaselineText(value ->
+                                value.getSocialSecurityResult()
+                                        .primarySelection()
+                                        .getDisplayName()));
+
+        row =
+                addTextComparisonRow(
+                        grid,
+                        row,
+                        "Spouse Selected Benefit",
+                        year.getSocialSecurityResult()
+                                .spouseSelection()
+                                .getDisplayName(),
+                        getBaselineText(value ->
+                                value.getSocialSecurityResult()
+                                        .spouseSelection()
+                                        .getDisplayName()));
+
+        row =
+                addMoneyComparisonRow(
+                        grid,
+                        row,
+                        "Household Social Security Received",
+                        year.getSocialSecurityResult()
+                                .householdBenefit(),
+                        getBaselineValue(value ->
+                                value.getSocialSecurityResult()
+                                        .householdBenefit()));
+
+        return row;
+    }
+
+
+    // ============================================================
+    // Retirement Account Activity
+    // ============================================================
+
+    private int createRetirementActivityRows(
+            GridPane grid,
+            int row) {
+
+        row =
+                addSectionHeader(
+                        grid,
+                        row,
+                        "Retirement Account Activity");
+
+        row =
+                addSubsectionHeader(
+                        grid,
+                        row,
+                        "Roth Conversions");
+
+        row = addMoneyComparisonRow(
+                grid, row, "Requested Roth Conversion",
+                year.getRequestedRothConversion(), null);
+        row = addMoneyComparisonRow(
+                grid, row, "Roth Conversion",
+                year.getRothConversion(),
+                getBaselineValue(ProjectionYear::getRothConversion));
+        row = addMoneyComparisonRow(
+                grid, row, "Roth Conversion Shortfall",
+                year.getRothConversionShortfall(), null);
+        row = addMoneyComparisonRow(
+                grid, row, "Primary Roth Conversion",
+                year.getPrimaryRothConversion(), null);
+        row = addMoneyComparisonRow(
+                grid, row, "Spouse Roth Conversion",
+                year.getSpouseRothConversion(), null);
+
+        row = addSubsectionHeader(
+                grid, row, "Required Minimum Distributions");
+
+        row = addMoneyComparisonRow(
+                grid, row, "Required Minimum Distribution",
+                year.getRequiredMinimumDistribution(),
+                getBaselineValue(
+                        ProjectionYear::getRequiredMinimumDistribution));
+        row = addMoneyComparisonRow(
+                grid, row, "RMD Distributed Before Projection",
+                year.getRmdDistributedBeforeProjection(),
+                getBaselineValue(
+                        ProjectionYear::getRmdDistributedBeforeProjection));
+        row = addMoneyComparisonRow(
+                grid, row, "RMD Distributed in Projection",
+                year.getRmdDistributedInProjection(),
+                getBaselineValue(
+                        ProjectionYear::getRmdDistributedInProjection));
+
+        return addMoneyComparisonRow(
+                grid, row, "Excess RMD",
+                year.getExcessRmd(),
+                getBaselineValue(ProjectionYear::getExcessRmd));
+    }
+
+
+    // ============================================================
+    // Taxes
+    // ============================================================
+
+    private int createTaxRows(
+            GridPane grid,
+            int row) {
+
+        row =
+                addSectionHeader(
+                        grid,
+                        row,
+                        "Taxes");
+
+        row = createFederalTaxRows(grid, row);
+        row = createMichiganTaxRows(grid, row);
+
+        row = addSubsectionHeader(
+                grid, row, "Tax Summary");
+
+        row = addMoneyComparisonRow(
+                grid, row, "Total Income Tax",
+                year.getTotalIncomeTax(),
+                getBaselineValue(ProjectionYear::getTotalIncomeTax));
+
+        return addPercentageComparisonRow(
+                grid, row, "Combined Effective Tax Rate",
+                year.getCombinedEffectiveTaxRate(),
+                getBaselineValue(
+                        ProjectionYear::getCombinedEffectiveTaxRate));
+    }
+
+    private int createFederalTaxRows(
+            GridPane grid,
+            int row) {
+
+        row =
+                addSubsectionHeader(
+                        grid,
+                        row,
+                        "Federal");
 
 
         row =
@@ -629,22 +587,22 @@ public class ProjectionYearDetailsPane
                 addMoneyComparisonRow(
                         grid,
                         row,
-                        "Federal Taxable Income",
-                        year.getFederalTaxableIncome(),
+                        "Standard Deduction",
+                        year.getFederalStandardDeduction(),
                         getBaselineValue(
                                 ProjectionYear::
-                                        getFederalTaxableIncome));
+                                        getFederalStandardDeduction));
 
 
         row =
                 addMoneyComparisonRow(
                         grid,
                         row,
-                        "Standard Deduction",
-                        year.getFederalStandardDeduction(),
+                        "Federal Taxable Income",
+                        year.getFederalTaxableIncome(),
                         getBaselineValue(
                                 ProjectionYear::
-                                        getFederalStandardDeduction));
+                                        getFederalTaxableIncome));
 
 
         return addMoneyComparisonRow(
@@ -659,18 +617,15 @@ public class ProjectionYearDetailsPane
 
 
     // ============================================================
-    // Michigan Tax
-    // ============================================================
-
     private int createMichiganTaxRows(
             GridPane grid,
             int row) {
 
         row =
-                addSectionHeader(
+                addSubsectionHeader(
                         grid,
                         row,
-                        "Michigan Income Tax");
+                        "Michigan");
 
 
         row =
@@ -718,7 +673,7 @@ public class ProjectionYearDetailsPane
 
 
     // ============================================================
-    // Medicare
+    // Medicare / IRMAA
     // ============================================================
 
     private int createMedicareRows(
@@ -729,7 +684,7 @@ public class ProjectionYearDetailsPane
                 addSectionHeader(
                         grid,
                         row,
-                        "Medicare");
+                        "Medicare / IRMAA");
 
 
         row =
@@ -755,6 +710,12 @@ public class ProjectionYearDetailsPane
 
 
         row =
+                addSubsectionHeader(
+                        grid,
+                        row,
+                        "Part B");
+
+        row =
                 addMoneyComparisonRow(
                         grid,
                         row,
@@ -775,6 +736,12 @@ public class ProjectionYearDetailsPane
                                 ProjectionYear::
                                         getAnnualPartBPremium));
 
+
+        row =
+                addSubsectionHeader(
+                        grid,
+                        row,
+                        "Part D");
 
         row =
                 addMoneyComparisonRow(
@@ -810,44 +777,88 @@ public class ProjectionYearDetailsPane
 
 
     // ============================================================
-    // Totals
+    // Portfolio
     // ============================================================
 
-    private int createTotalsRows(
+    private int createPortfolioRows(
             GridPane grid,
             int row) {
 
-        row =
-                addSectionHeader(
-                        grid,
-                        row,
-                        "Totals");
+        row = addSectionHeader(grid, row, "Portfolio");
+        row = addSubsectionHeader(
+                grid, row, "Portfolio Activity");
 
-
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Total Income Tax",
-                        year.getTotalIncomeTax(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getTotalIncomeTax));
-
-
-        return addPercentageComparisonRow(
-                grid,
-                row,
-                "Combined Effective Tax Rate",
-                year.getCombinedEffectiveTaxRate(),
+        row = addMoneyComparisonRow(
+                grid, row, "Beginning Assets",
+                year.getBeginningInvestableAssets(),
                 getBaselineValue(
-                        ProjectionYear::
-                                getCombinedEffectiveTaxRate));
+                        ProjectionYear::getBeginningInvestableAssets));
+        row = addMoneyComparisonRow(
+                grid, row, "Investment Growth",
+                year.getInvestmentGrowth(),
+                getBaselineValue(ProjectionYear::getInvestmentGrowth));
+        row = addMoneyComparisonRow(
+                grid, row, "Ending Assets",
+                year.getEndingInvestableAssets(),
+                getBaselineValue(
+                        ProjectionYear::getEndingInvestableAssets));
+
+        row = addSubsectionHeader(
+                grid, row, "Ending Portfolio Composition");
+
+        row = addMoneyComparisonRow(
+                grid, row, "Tax-Deferred Accounts",
+                getEndingBalanceByAssetType(
+                        year, ProjectionAssetType.TAX_DEFERRED),
+                getBaselineAccountBalanceByAssetType(
+                        ProjectionAssetType.TAX_DEFERRED));
+        row = addMoneyComparisonRow(
+                grid, row, "Roth Accounts",
+                getEndingBalanceByAssetType(
+                        year, ProjectionAssetType.ROTH),
+                getBaselineAccountBalanceByAssetType(
+                        ProjectionAssetType.ROTH));
+        row = addMoneyComparisonRow(
+                grid, row, "Taxable Accounts",
+                getEndingBalanceByTaxTreatment(
+                        year, TaxTreatment.TAXABLE),
+                getBaselineAccountBalanceByTaxTreatment(
+                        TaxTreatment.TAXABLE));
+        row = addMoneyComparisonRow(
+                grid, row, "Cash Accounts",
+                getEndingBalanceByTaxTreatment(
+                        year, TaxTreatment.CASH),
+                getBaselineAccountBalanceByTaxTreatment(
+                        TaxTreatment.CASH));
+
+        row = addSubsectionHeader(
+                grid, row, "Retained RMD Assets");
+
+        row = addMoneyComparisonRow(
+                grid, row, "Beginning Retained RMD Assets",
+                year.getBeginningRetainedRmdAssets(),
+                getBaselineValue(
+                        ProjectionYear::getBeginningRetainedRmdAssets));
+        row = addMoneyComparisonRow(
+                grid, row, "Growth on Retained RMD Assets",
+                year.getRetainedRmdAssetGrowth(),
+                getBaselineValue(
+                        ProjectionYear::getRetainedRmdAssetGrowth));
+        row = addMoneyComparisonRow(
+                grid, row, "New Excess RMD",
+                year.getExcessRmd(),
+                getBaselineValue(ProjectionYear::getExcessRmd));
+
+        return addMoneyComparisonRow(
+                grid, row, "Ending Retained RMD Assets",
+                year.getEndingRetainedRmdAssets(),
+                getBaselineValue(
+                        ProjectionYear::getEndingRetainedRmdAssets));
     }
 
 
     // ============================================================
-    // Estate
+    // Estate & Net Worth
     // ============================================================
 
     private int createEstateRows(
@@ -858,14 +869,14 @@ public class ProjectionYearDetailsPane
                 addSectionHeader(
                         grid,
                         row,
-                        "Estimated Estate Value");
+                        "Estate & Net Worth");
 
 
         row =
                 addMoneyComparisonRow(
                         grid,
                         row,
-                        "Gross Investable Estate",
+                        "Ending Investable Assets",
                         year.getEndingInvestableAssets(),
                         getBaselineValue(
                                 ProjectionYear::
@@ -881,23 +892,22 @@ public class ProjectionYearDetailsPane
                         baselineNonInvestableAssetValue);
 
 
-        BigDecimal totalGrossEstate =
+        BigDecimal totalNetWorth =
                 year.getEndingInvestableAssets()
                         .add(
                                 nonInvestableAssetValue);
 
 
-        BigDecimal baselineTotalGrossEstate =
+        BigDecimal baselineTotalNetWorth =
                 getBaselineTotalGrossEstate();
-
 
         row =
                 addMoneyComparisonRow(
                         grid,
                         row,
-                        "Total Gross Estate",
-                        totalGrossEstate,
-                        baselineTotalGrossEstate);
+                        "Total Net Worth",
+                        totalNetWorth,
+                        baselineTotalNetWorth);
 
 
         row =
@@ -911,23 +921,14 @@ public class ProjectionYearDetailsPane
                                         getEstimatedHeirTax));
 
 
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Projected After-Tax Estate",
-                        year.getAfterTaxEstateValue(),
-                        getBaselineValue(
-                                ProjectionYear::
-                                        getAfterTaxEstateValue));
-
-
         return addMoneyComparisonRow(
                 grid,
                 row,
-                "Total Net Worth",
-                totalGrossEstate,
-                baselineTotalGrossEstate);
+                "Projected After-Tax Estate",
+                year.getAfterTaxEstateValue(),
+                getBaselineValue(
+                        ProjectionYear::
+                                getAfterTaxEstateValue));
     }
 
 
@@ -1282,6 +1283,38 @@ public class ProjectionYearDetailsPane
                 5,
                 1);
 
+
+        return row + 1;
+    }
+
+
+    private int addSubsectionHeader(
+            GridPane grid,
+            int row,
+            String title) {
+
+        Label label =
+                new Label(title);
+
+        label.setStyle(
+                "-fx-text-fill: #334155; " +
+                        "-fx-font-size: 12px; " +
+                        "-fx-font-weight: bold;");
+
+        GridPane.setMargin(
+                label,
+                new Insets(
+                        8,
+                        0,
+                        0,
+                        10));
+
+        grid.add(
+                label,
+                0,
+                row,
+                5,
+                1);
 
         return row + 1;
     }
