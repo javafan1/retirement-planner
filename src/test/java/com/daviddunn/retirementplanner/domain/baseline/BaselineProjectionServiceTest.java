@@ -8,6 +8,8 @@ import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetPr
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
+import com.daviddunn.retirementplanner.domain.financial.BrokerageAccount;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -46,6 +48,11 @@ class BaselineProjectionServiceTest {
                                 1965,
                                 2,
                                 28));
+
+        plan.getAccountPortfolio().addAccount(new BrokerageAccount(
+                "Baseline projection funding account",
+                AccountOwnership.PRIMARY,
+                new BigDecimal("100000")));
 
         ProjectionBaseline baseline =
                 ProjectionBaselineFactory.create(

@@ -21,8 +21,8 @@ public class ProjectionComparisonService {
         Objects.requireNonNull(baselineNonInvestableAssets, "Baseline non-investable assets are required.");
         Objects.requireNonNull(currentNonInvestableAssets, "Current non-investable assets are required.");
 
-        ProjectionMetrics baseline = calculate(baselineProjection, baselineNonInvestableAssets);
-        ProjectionMetrics current = calculate(currentProjection, currentNonInvestableAssets);
+        SummaryMetrics baseline = calculate(baselineProjection, baselineNonInvestableAssets);
+        SummaryMetrics current = calculate(currentProjection, currentNonInvestableAssets);
 
         return new ProjectionComparison(
                 current.calendarYear(),
@@ -35,7 +35,7 @@ public class ProjectionComparisonService {
                 baseline.afterTaxEstate(), current.afterTaxEstate());
     }
 
-    private ProjectionMetrics calculate(
+    private SummaryMetrics calculate(
             Projection projection,
             List<NonInvestableAssetProjection> nonInvestableAssets) {
 
@@ -49,7 +49,7 @@ public class ProjectionComparisonService {
                 .orElse(BigDecimal.ZERO);
 
         if (years.isEmpty()) {
-            return new ProjectionMetrics(
+            return new SummaryMetrics(
                     0, investmentGrowth, totalIncome, totalTaxes,
                     peakAnnualTax, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
         }
@@ -61,7 +61,7 @@ public class ProjectionComparisonService {
                 .map(NonInvestableAssetProjection::getTotalValue)
                 .orElse(BigDecimal.ZERO);
 
-        return new ProjectionMetrics(
+        return new SummaryMetrics(
                 finalYear.getCalendarYear(), investmentGrowth, totalIncome, totalTaxes,
                 peakAnnualTax, finalYear.getEndingInvestableAssets(),
                 finalYear.getEndingInvestableAssets().add(nonInvestable),
@@ -77,7 +77,7 @@ public class ProjectionComparisonService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private record ProjectionMetrics(
+    private record SummaryMetrics(
             int calendarYear,
             BigDecimal investmentGrowth,
             BigDecimal totalIncome,

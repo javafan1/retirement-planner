@@ -10,6 +10,7 @@ import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.ui.charts.PortfolioChartView;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 import com.daviddunn.retirementplanner.ui.views.RothConversionView;
+import com.daviddunn.retirementplanner.ui.socialsecurity.SocialSecurityStrategyAnalyzerDialog;
 
 import com.daviddunn.retirementplanner.ui.views.*;
 import com.daviddunn.retirementplanner.ui.dialogs.*;
@@ -249,13 +250,22 @@ public class MainWindow {
                 new SeparatorMenuItem(),
                 exitItem);
 
+        Menu analysisMenu = new Menu("Analysis");
+        MenuItem socialSecurityAnalyzerItem =
+                new MenuItem("Social Security Strategy Analyzer...");
+        socialSecurityAnalyzerItem.setOnAction(event ->
+                new SocialSecurityStrategyAnalyzerDialog(
+                        stage,
+                        controller.getCurrentPlan()).show());
+        analysisMenu.getItems().add(socialSecurityAnalyzerItem);
+
         Menu helpMenu = new Menu("Help");
 
         MenuItem aboutItem = new MenuItem("About");
 
         helpMenu.getItems().add(aboutItem);
 
-        return new MenuBar(fileMenu, helpMenu);
+        return new MenuBar(fileMenu, analysisMenu, helpMenu);
     }
 
     private TabPane createTabPane() {

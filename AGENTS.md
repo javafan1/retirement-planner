@@ -103,6 +103,16 @@ Roth conversion behavior is implemented in `domain.roth` and invoked within the 
 - `ProjectionYear` records actual household, primary, and spouse conversions. Taxes use the actual executed household conversion, never an unexecuted requested amount.
 - RMD processing occurs before Roth conversion. Annual statutory RMD, RMD distributed before projection, and RMD distributed during projection remain distinct. RMD dollars are not converted; a fully pre-satisfied opening RMD does not prevent conversion of remaining eligible assets.
 - A conversion must not mutate persisted account balances.
+- The projection year's `HouseholdSocialSecurityResult` is the authoritative
+  gross Social Security input for guaranteed income, Roth bracket-fill tax
+  calculations, and final annual tax calculations. When that result is
+  available, bracket fill must not independently use a legacy Social Security
+  calculation.
+- Modeled Medicare premiums are annual household cash-flow expenses. The same
+  authoritative annual `MedicarePremiumCalculation` total feeds reporting,
+  lifetime Medicare metrics, and the established portfolio/RMD cash-funding
+  mechanics; it must not be deducted separately from Social Security or ending
+  assets.
 
 # Baselines
 
@@ -244,3 +254,90 @@ Do not commit changes unless the user separately requests a commit.
 - Report exactly which files were changed and which tests were run.
 - Do not consider a task complete if tests fail.
 - If Maven is unavailable in the environment, report that clearly; do not claim Maven tests were run.
+
+# Social Security projection architecture
+
+The advanced monthly `SocialSecurityStrategyCalculator` is the authoritative
+benefit engine for both the read-only Social Security Strategy Analyzer and
+normal two-person, modern-cohort retirement projections. `ProjectionEngine`
+uses `SocialSecurityProjectionIncomeProvider` to translate configured plan
+elections once per projection run and index annual results for cash flow,
+taxes, and reporting. Projection does not run claiming optimization or
+mortality weighting. Its year-only death scenario maps death to January 1 of
+the configured year, and its persisted survivor claiming age maps to the
+survivor's exact birthday. Unsupported legacy plan shapes remain on an
+explicit compatibility fallback pending broader single-person/legacy-cohort
+support.
+
+The headless Integrated Social Security Strategy Evaluator is distinct from
+the Social Security-only analyzer. The analyzer uses mortality-weighted Social
+Security values and does not invoke `ProjectionEngine`. Integrated evaluation
+deep-copies the complete `RetirementPlan` and supplies one immutable,
+projection-run-only strategy override containing exact independent retirement
+and survivor dates. `ProjectionEngine.project(plan)` continues to use persisted
+retirement elections and the persisted survivor policy; only the explicit
+context overload uses the override. Integrated evaluation runs one
+deterministic full-plan projection and does not search or rank strategies.
+
+`IntegratedSocialSecurityStrategyComparisonService` consumes a small ordered
+set of complete analyzer strategies. It evaluates the persisted current plan
+once as a baseline, removes only exact duplicate strategy inputs, and then
+performs independent sequential integrated evaluations in caller order.
+Candidate-minus-baseline differences are reported without selecting an
+integrated winner or objective. Candidate failures are retained structurally
+without discarding successful evaluations. The service does not run claiming
+searches, mortality-weighted full-plan projections, or JavaFX behavior.
+
+The read-only JavaFX Social Security Strategy Analyzer presents two modes.
+`Social Security Only` retains the mortality-weighted claiming analysis and
+ranks complete strategies by expected Social Security present value.
+`Integrated Retirement Plan` takes a small analyzer-ordered top-N set and runs
+the headless comparison service on one background task. It displays the
+persisted current-plan baseline and deterministic future-dollar full-plan
+outcomes without choosing an integrated objective, applying a strategy, or
+persisting analysis results. Analyzer mortality adjustments and discounting
+affect SS-only strategy generation and expected-value columns, not the
+deterministic full-plan projection metrics.
+
+The headless `IntegratedRetirementClaimingGridCalculator` is separate from
+both the mortality-weighted Social Security claiming grid and the top-N
+integrated comparison. It evaluates every requested primary/spouse whole-year
+retirement age pair (standard range 62 through 70, producing 81 cells) through
+the deterministic full `RetirementPlan`. It calculates the persisted current
+strategy baseline once and holds a single explicit survivor policy fixed across
+all cells: the persisted shared survivor claiming age is converted to each
+person's exact birthday at that age. The grid preserves row-major age order,
+retains complete projections and candidate-minus-baseline metrics, continues
+after structured cell failures, and does not select an integrated objective or
+run mortality-weighted full-plan analysis.
+
+The headless complete deterministic integrated Social Security search expands
+both retirement and survivor elections without using Social Security-only rank
+as a filter. Its standard universe is whole-year retirement ages 62 through 70
+for both people crossed with both authoritative survivor candidate lists. Every
+strategy is evaluated through an isolated deterministic full-plan projection.
+All strategies retain compact integrated metrics and candidate-minus-baseline
+differences; only the configured top detail count (default 20) retains complete
+projections. `AFTER_TAX_ESTATE` supplies a named deterministic metric ranking
+with exact ties and generation-order tie stability. This ranking is not a
+recommendation and does not introduce mortality-weighted full-plan analysis.
+
+The JavaFX `Integrated Retirement Plan` mode exposes that backend through two
+read-only sub-tabs. `Quick Comparison` preserves the small analyzer-ordered
+top-N comparison. `Exhaustive Search` evaluates the full tested complete
+strategy universe independently of Social Security-only rank and presents a
+deterministic After-Tax Estate Ranking, current-plan position/gap, and grouped
+financially identical display rows. Grouping is presentation-only; the search
+still evaluates and retains a compact result for every strategy, with bounded
+full-projection retention.
+
+Long-running Social Security work reports real computation progress through
+neutral `domain.analysis` callbacks rather than JavaFX properties in financial
+calculators. Social Security-only analysis reports Stage 1 retirement-grid
+cells and Stage 2 complete survivor strategies. Quick Comparison reports its
+baseline and unique candidates. Exhaustive Search reports its baseline and
+every generated strategy. JavaFX adapts those counts to a phase, percent,
+completed/total text, progress bar, and activity indicator. Exhaustive
+cancellation is cooperative at strategy boundaries, publishes no partial
+ranking, and preserves the previous successful UI result. These analysis paths
+do not mutate or persist the active plan.

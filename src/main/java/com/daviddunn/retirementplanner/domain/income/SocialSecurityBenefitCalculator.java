@@ -3,6 +3,8 @@ package com.daviddunn.retirementplanner.domain.income;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 
 public final class SocialSecurityBenefitCalculator {
 
@@ -29,6 +31,40 @@ public static BigDecimal calculateMonthlyBenefit(
 
     return primaryInsuranceAmount.multiply(factor);
 }
+
+    /**
+     * Calculates an own-retirement benefit using an exact candidate
+     * claim date. The claim month is compared with the person's precise
+     * full-retirement month, including the January 1 birth convention.
+     * Existing integer-age callers intentionally retain their established
+     * calculation path above.
+     */
+    public static BigDecimal calculateMonthlyBenefit(
+            BigDecimal primaryInsuranceAmount,
+            LocalDate birthDate,
+            LocalDate claimDate) {
+
+        return primaryInsuranceAmount.multiply(
+                calculateRetirementBenefitFactor(
+                        birthDate,
+                        claimDate));
+    }
+
+    public static BigDecimal calculateRetirementBenefitFactor(
+            LocalDate birthDate,
+            LocalDate claimDate) {
+
+        LocalDate fullRetirementDate =
+                SocialSecurityRetirementDateCalculator
+                        .calculateFullRetirementDate(birthDate);
+
+        long monthDifference = ChronoUnit.MONTHS.between(
+                YearMonth.from(fullRetirementDate),
+                YearMonth.from(claimDate));
+
+        return calculateBenefitFactor(
+                Math.toIntExact(monthDifference));
+    }
 
     private static int toTotalMonths(
             FullRetirementAge fra) {

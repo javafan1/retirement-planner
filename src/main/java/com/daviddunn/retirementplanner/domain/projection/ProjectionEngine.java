@@ -10,7 +10,6 @@ import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
-import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityIncomeCalculator;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 
@@ -34,6 +33,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 
 public class ProjectionEngine {
@@ -54,8 +54,8 @@ public class ProjectionEngine {
     private final CompoundGrowthService compoundGrowthService;
 
 
-    private final HouseholdSocialSecurityIncomeCalculator
-            householdSocialSecurityIncomeCalculator;
+    private final SocialSecurityProjectionIncomeProvider
+            socialSecurityProjectionIncomeProvider;
 
 
     private final ScheduledRothConversionPolicy
@@ -104,8 +104,8 @@ public class ProjectionEngine {
         this.compoundGrowthService = new CompoundGrowthService();
 
 
-        this.householdSocialSecurityIncomeCalculator =
-                new HouseholdSocialSecurityIncomeCalculator();
+        this.socialSecurityProjectionIncomeProvider =
+                new SocialSecurityProjectionIncomeProvider();
 
 
 
@@ -150,6 +150,18 @@ public class ProjectionEngine {
     public Projection project(
             RetirementPlan plan) {
 
+        return project(plan, ProjectionEvaluationContext.empty());
+    }
+
+    public Projection project(
+            RetirementPlan plan,
+            ProjectionEvaluationContext evaluationContext) {
+
+        java.util.Objects.requireNonNull(plan, "Retirement plan is required.");
+        java.util.Objects.requireNonNull(
+                evaluationContext,
+                "Projection evaluation context is required.");
+
         Projection projection =
                 new Projection();
 
@@ -184,6 +196,13 @@ public class ProjectionEngine {
         int projectionLength =
                 assumptions.getProjectionLengthYears();
 
+        Map<Integer, HouseholdSocialSecurityResult> socialSecurityByYear =
+                socialSecurityProjectionIncomeProvider.calculate(
+                        plan,
+                        startYear,
+                        startYear + projectionLength - 1,
+                        evaluationContext);
+
         /*
          * There is intentionally no prior-year-end
          * snapshot for the first projection year.
@@ -209,7 +228,10 @@ public class ProjectionEngine {
                             calendarYear,
                             projectedPortfolio,
                             priorYearEndSnapshot,
-                            withdrawalStrategy);
+                            withdrawalStrategy,
+                            socialSecurityByYear.getOrDefault(
+                                    calendarYear,
+                                    HouseholdSocialSecurityResult.zero()));
 
             ProjectionYear projectionYear =
                     calculation.getProjectionYear();
@@ -250,7 +272,29 @@ public class ProjectionEngine {
             int calendarYear,
             ProjectedPortfolio projectedPortfolio,
             RmdBalanceSnapshot priorYearEndSnapshot,
-            WithdrawalStrategy withdrawalStrategy) {
+            WithdrawalStrategy withdrawalStrategy,
+            HouseholdSocialSecurityResult socialSecurityResult) {
+
+        return calculateProjectionYear(
+                plan,
+                yearOffset,
+                calendarYear,
+                projectedPortfolio,
+                priorYearEndSnapshot,
+                withdrawalStrategy,
+                socialSecurityResult,
+                null);
+    }
+
+    private ProjectionYearCalculation calculateProjectionYear(
+            RetirementPlan plan,
+            int yearOffset,
+            int calendarYear,
+            ProjectedPortfolio projectedPortfolio,
+            RmdBalanceSnapshot priorYearEndSnapshot,
+            WithdrawalStrategy withdrawalStrategy,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            MedicarePremiumCalculation authoritativeMedicarePremium) {
 
         BigDecimal beginningAssets =
                 projectedPortfolio.getTotalBalance();
@@ -299,13 +343,6 @@ public class ProjectionEngine {
         Household household =
                 plan.getHousehold();
 
-        HouseholdSocialSecurityResult socialSecurityResult =
-                householdSocialSecurityIncomeCalculator.calculate(
-                        household,
-                        projectionDate,
-                        assumptions.getDeathScenarioAssumptions(),
-                        assumptions.getSocialSecurityColaRate());
-
         BigDecimal guaranteedIncome =
                 calculateTotalIncome(
                         household,
@@ -319,6 +356,13 @@ public class ProjectionEngine {
                         assumptions,
                         yearOffset,
                         projectionDate);
+
+        BigDecimal cashFlowExpenses =
+                annualExpenses.add(
+                        authoritativeMedicarePremium == null
+                                ? BigDecimal.ZERO
+                                : authoritativeMedicarePremium
+                                        .totalAnnualMedicarePremium());
 
 
 
@@ -363,7 +407,7 @@ public class ProjectionEngine {
                 withdrawalCalculator
                         .calculateWithdrawal(
                                 guaranteedIncome,
-                                annualExpenses,
+                                cashFlowExpenses,
                                 projectedPeriodRmdResult
                                         .getTotalRmd());
 
@@ -510,7 +554,8 @@ public class ProjectionEngine {
                                                 .getSocialSecurityColaRate(),
                                         assumptions
                                                 .getDeathScenarioAssumptions(),
-                                        rmdDistributedBeforeProjection);
+                                        rmdDistributedBeforeProjection,
+                                        socialSecurityResult);
             }
         }
 
@@ -579,11 +624,28 @@ public class ProjectionEngine {
                         projectionDate);
 
         MedicarePremiumCalculation medicarePremiumCalculation =
-                medicarePremiumCalculator.calculate(
-                        federalTaxCalculation,
-                        projectionFilingStatus,
-                        projectedGovernmentRules,
-                        coveredIndividuals);
+                authoritativeMedicarePremium == null
+                        ? medicarePremiumCalculator.calculate(
+                                federalTaxCalculation,
+                                projectionFilingStatus,
+                                projectedGovernmentRules,
+                                coveredIndividuals)
+                        : authoritativeMedicarePremium;
+
+        if (authoritativeMedicarePremium == null
+                && medicarePremiumCalculation
+                        .totalAnnualMedicarePremium()
+                        .signum() > 0) {
+            return calculateProjectionYear(
+                    plan,
+                    yearOffset,
+                    calendarYear,
+                    projectedPortfolio,
+                    priorYearEndSnapshot,
+                    withdrawalStrategy,
+                    socialSecurityResult,
+                    medicarePremiumCalculation);
+        }
 
         ProjectedPortfolio portfolioAfterTaxWithdrawal =
                 withdrawalAllocator.applyAdditionalWithdrawal(

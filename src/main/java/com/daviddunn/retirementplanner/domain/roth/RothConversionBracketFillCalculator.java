@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.domain.roth;
 
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
@@ -151,6 +152,37 @@ public final class RothConversionBracketFillCalculator {
             DeathScenarioAssumptions deathAssumptions,
             BigDecimal openingTaxDeferredDistribution) {
 
+        return calculateConversion(
+                household,
+                projectionDate,
+                portfolio,
+                existingWithdrawals,
+                withdrawalStrategy,
+                filingStatus,
+                projectedGovernmentRules,
+                targetTaxableIncome,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                deathAssumptions,
+                openingTaxDeferredDistribution,
+                null);
+    }
+
+    public BigDecimal calculateConversion(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal targetTaxableIncome,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution,
+            HouseholdSocialSecurityResult socialSecurityResult) {
+
         Objects.requireNonNull(
                 household,
                 "Household is required.");
@@ -223,7 +255,8 @@ public final class RothConversionBracketFillCalculator {
                         taxableInterestIncome,
                         socialSecurityColaRate,
                         deathAssumptions,
-                        openingTaxDeferredDistribution);
+                        openingTaxDeferredDistribution,
+                        socialSecurityResult);
 
         FederalTaxCalculation
                 preConversionFederalTax =
@@ -273,7 +306,8 @@ public final class RothConversionBracketFillCalculator {
                             taxableInterestIncome,
                             socialSecurityColaRate,
                             deathAssumptions,
-                            openingTaxDeferredDistribution);
+                            openingTaxDeferredDistribution,
+                            socialSecurityResult);
 
             BigDecimal finalTaxableIncome =
                     taxFundingResult

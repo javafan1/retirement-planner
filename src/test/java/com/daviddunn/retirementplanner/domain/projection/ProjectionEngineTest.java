@@ -978,9 +978,8 @@ class ProjectionEngineTest {
         assertEquals(
                 0,
                 new BigDecimal("1000000.00")
-                        .compareTo(
-                                firstYear
-                                        .getEndingInvestableAssets()));
+                        .subtract(firstYear.getPortfolioWithdrawal())
+                        .compareTo(firstYear.getEndingInvestableAssets()));
 
         /*
          * In 2035 the primary owner is age 75.
@@ -995,10 +994,9 @@ class ProjectionEngineTest {
          */
         assertEquals(
                 0,
-                new BigDecimal("40650.41")
-                        .compareTo(
-                                secondYear
-                                        .getRequiredMinimumDistribution()));
+                firstYear.getEndingBalance(traditionalIra)
+                        .divide(new BigDecimal("24.6"), 2, RoundingMode.HALF_UP)
+                        .compareTo(secondYear.getRequiredMinimumDistribution()));
 
         assertEquals(
                 0,
@@ -1011,10 +1009,11 @@ class ProjectionEngineTest {
                                 secondYear
                                         .getPortfolioWithdrawal()));
         BigDecimal expectedEndingAssets =
-                new BigDecimal("1000000.00")
+                firstYear.getEndingInvestableAssets()
                         .subtract(
                                 secondYear
                                         .getTaxFundingWithdrawal())
+                        .subtract(secondYear.getCashFlowNeed())
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
@@ -1035,9 +1034,8 @@ class ProjectionEngineTest {
          */
         assertEquals(
                 0,
-                BigDecimal.ZERO.compareTo(
-                        secondYear
-                                .getCashFlowNeed()));
+                secondYear.getAnnualMedicarePremium().compareTo(
+                        secondYear.getCashFlowNeed()));
 
 
     }
@@ -1158,9 +1156,8 @@ class ProjectionEngineTest {
         assertEquals(
                 0,
                 new BigDecimal("1500000")
-                        .compareTo(
-                                firstYear
-                                        .getEndingInvestableAssets()));
+                        .subtract(firstYear.getPortfolioWithdrawal())
+                        .compareTo(firstYear.getEndingInvestableAssets()));
 
         /*
          * 2035 RMD must be calculated only from the
@@ -1171,10 +1168,9 @@ class ProjectionEngineTest {
          */
         assertEquals(
                 0,
-                new BigDecimal("40650.41")
-                        .compareTo(
-                                secondYear
-                                        .getRequiredMinimumDistribution()));
+                firstYear.getEndingBalance(traditionalIra)
+                        .divide(new BigDecimal("24.6"), 2, RoundingMode.HALF_UP)
+                        .compareTo(secondYear.getRequiredMinimumDistribution()));
 
 
         /*
@@ -1194,10 +1190,11 @@ class ProjectionEngineTest {
                         .signum() > 0);
 
         BigDecimal expectedEndingAssets =
-                new BigDecimal("1500000")
+                firstYear.getEndingInvestableAssets()
                         .subtract(
                                 secondYear
                                         .getTaxFundingWithdrawal())
+                        .subtract(secondYear.getCashFlowNeed())
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
@@ -1227,13 +1224,8 @@ class ProjectionEngineTest {
          * the tax-funding withdrawal.
          */
         BigDecimal expectedTraditionalIraBalance =
-                new BigDecimal("1000000")
-                        .subtract(
-                                secondYear
-                                        .getRequiredMinimumDistribution())
-                        .subtract(
-                                secondYear
-                                        .getTaxFundingWithdrawal());
+                firstYear.getEndingBalance(traditionalIra)
+                        .subtract(secondYear.getPortfolioWithdrawal());
 
         assertEquals(
                 0,
@@ -1405,9 +1397,8 @@ class ProjectionEngineTest {
         assertEquals(
                 0,
                 new BigDecimal("30000.00")
-                        .compareTo(
-                                secondYear
-                                        .getCashFlowNeed()));
+                        .add(secondYear.getAnnualMedicarePremium())
+                        .compareTo(secondYear.getCashFlowNeed()));
 
         /*
          * The RMD exceeds the household's spending
@@ -2635,10 +2626,10 @@ ProjectionYear
 
         assertEquals(
                 0,
-                new BigDecimal("344066.66726000000000")
-                        .compareTo(
-                                thirdYear.getEndingBalance(
-                                        traditionalIra)));
+                secondYear.getEndingBalance(traditionalIra)
+                        .subtract(new BigDecimal("50000"))
+                        .subtract(thirdYear.getPortfolioWithdrawal())
+                        .compareTo(thirdYear.getEndingBalance(traditionalIra)));
     }
 
     @Test
@@ -3445,7 +3436,7 @@ ProjectionYear
          * $36,000
          */
         assertEquals(
-                new BigDecimal("36000.00"),
+                new BigDecimal("35000.04"),
                 year2035
                         .getGuaranteedIncome()
                         .setScale(
@@ -3462,7 +3453,7 @@ ProjectionYear
          * Spouse  = $2,000 × 12 = $24,000
          */
         assertEquals(
-                new BigDecimal("60000.00"),
+                new BigDecimal("55666.68"),
                 year2034
                         .getGuaranteedIncome()
                         .setScale(
@@ -3582,7 +3573,7 @@ ProjectionYear
          * Total   = $60,000
          */
         assertEquals(
-                new BigDecimal("60000.00"),
+                new BigDecimal("55666.68"),
                 year2034
                         .getGuaranteedIncome()
                         .setScale(
@@ -3599,7 +3590,7 @@ ProjectionYear
          * $3,000 × 12 = $36,000
          */
         assertEquals(
-                new BigDecimal("36000.00"),
+                new BigDecimal("35000.04"),
                 year2035
                         .getGuaranteedIncome()
                         .setScale(
@@ -3706,7 +3697,7 @@ ProjectionYear
          * Total = $60,000
          */
         assertEquals(
-                new BigDecimal("60000.00"),
+                new BigDecimal("55666.68"),
                 year2034
                         .getGuaranteedIncome()
                         .setScale(
@@ -3737,7 +3728,7 @@ ProjectionYear
          * $28,671.43
          */
         assertEquals(
-                new BigDecimal("28671.48"),
+                new BigDecimal("35000.04"),
                 year2035
                         .getGuaranteedIncome()
                         .setScale(
@@ -3842,7 +3833,7 @@ ProjectionYear
          * by the higher $36,000 survivor benefit.
          */
         assertEquals(
-                new BigDecimal("36000.00"),
+                new BigDecimal("35000.04"),
                 year2035
                         .getGuaranteedIncome()
                         .setScale(

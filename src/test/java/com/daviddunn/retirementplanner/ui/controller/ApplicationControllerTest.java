@@ -1,9 +1,12 @@
 package com.daviddunn.retirementplanner.ui.controller;
 
 import com.daviddunn.retirementplanner.domain.projection.Projection;
+import com.daviddunn.retirementplanner.domain.financial.BrokerageAccount;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -41,6 +44,12 @@ class ApplicationControllerTest {
                 .getHousehold()
                 .getSpouse()
                 .setBirthDate(LocalDate.of(1962, 1, 1));
+
+        controller.getCurrentPlan().getAccountPortfolio().addAccount(
+                new BrokerageAccount(
+                        "Projection funding account",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000")));
 
         assertTrue(
                 controller.isCurrentPlanReadyForProjection());

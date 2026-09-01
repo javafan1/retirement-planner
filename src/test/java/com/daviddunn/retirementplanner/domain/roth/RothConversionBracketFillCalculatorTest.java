@@ -13,10 +13,15 @@ import com.daviddunn.retirementplanner.domain.withdrawal.TaxableFirstWithdrawalS
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalBreakdown;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
 import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitSelection;
 import com.daviddunn.retirementplanner.domain.financial.TraditionalIRA;
 import com.daviddunn.retirementplanner.domain.withdrawal.TaxDeferredFirstWithdrawalStrategy;
 import com.daviddunn.retirementplanner.domain.tax.TaxFundingCalculator;
 import com.daviddunn.retirementplanner.domain.tax.TaxFundingResult;
+import com.daviddunn.retirementplanner.domain.tax.TaxIncome;
+import com.daviddunn.retirementplanner.domain.tax.TaxIncomeCalculator;
+import com.daviddunn.retirementplanner.domain.tax.SocialSecurityTaxCalculator;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -47,6 +52,41 @@ class RothConversionBracketFillCalculatorTest {
         rules =
                 repository.load(
                         "/rules/government-rules-2026.json");
+    }
+
+    @Test
+    void authoritativeSocialSecurityChangesConversionAndStillFillsTarget() {
+        Person primary = new Person("Primary", "Person", LocalDate.of(1963, 6, 4));
+        Person spouse = new Person("Spouse", "Person", LocalDate.of(1965, 2, 28));
+        Household household = new Household(primary, spouse);
+        BrokerageAccount brokerage = new BrokerageAccount(
+                "Brokerage", AccountOwnership.PRIMARY, new BigDecimal("1000000"));
+        ProjectedPortfolio portfolio = new ProjectedPortfolio(List.of(
+                new ProjectedAccountBalance(brokerage, new BigDecimal("1000000"))));
+        WithdrawalBreakdown withdrawals = new WithdrawalBreakdown(
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        BigDecimal target = new BigDecimal("100000");
+        HouseholdSocialSecurityResult zero = HouseholdSocialSecurityResult.zero();
+        HouseholdSocialSecurityResult auxiliary = new HouseholdSocialSecurityResult(
+                new BigDecimal("20000"), BigDecimal.ZERO,
+                new BigDecimal("20000"), BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO,
+                SocialSecurityBenefitSelection.OWN,
+                SocialSecurityBenefitSelection.NONE,
+                new BigDecimal("40000"));
+
+        BigDecimal zeroConversion = authoritativeConversion(
+                household, portfolio, withdrawals, target, zero);
+        BigDecimal auxiliaryConversion = authoritativeConversion(
+                household, portfolio, withdrawals, target, auxiliary);
+        BigDecimal repeatedAuxiliaryConversion = authoritativeConversion(
+                household, portfolio, withdrawals, target, auxiliary);
+
+        assertTrue(auxiliaryConversion.compareTo(zeroConversion) < 0);
+        assertEquals(0, auxiliaryConversion.compareTo(repeatedAuxiliaryConversion));
+        assertTarget(household, portfolio, withdrawals, target, zeroConversion, zero);
+        assertTarget(household, portfolio, withdrawals, target,
+                auxiliaryConversion, auxiliary);
     }
 
     @Test
@@ -379,5 +419,47 @@ class RothConversionBracketFillCalculatorTest {
         assertEquals(
                 0,
                 BigDecimal.ZERO.compareTo(conversion));
+    }
+
+    private BigDecimal authoritativeConversion(
+            Household household,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown withdrawals,
+            BigDecimal target,
+            HouseholdSocialSecurityResult socialSecurity) {
+        return calculator.calculateConversion(
+                household, LocalDate.of(2026, 1, 1), portfolio, withdrawals,
+                new TaxableFirstWithdrawalStrategy(),
+                FilingStatus.MARRIED_FILING_JOINTLY, rules, target,
+                BigDecimal.ZERO, BigDecimal.ZERO, null, BigDecimal.ZERO,
+                socialSecurity);
+    }
+
+    private void assertTarget(
+            Household household,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown withdrawals,
+            BigDecimal target,
+            BigDecimal conversion,
+            HouseholdSocialSecurityResult socialSecurity) {
+        TaxFundingResult result = new TaxFundingCalculator().calculate(
+                household, LocalDate.of(2026, 1, 1), portfolio, withdrawals,
+                new TaxableFirstWithdrawalStrategy(),
+                FilingStatus.MARRIED_FILING_JOINTLY, rules, conversion,
+                BigDecimal.ZERO, BigDecimal.ZERO, null, BigDecimal.ZERO,
+                socialSecurity);
+        assertTrue(target.subtract(result.getFederalTaxCalculation()
+                .getTaxableIncome()).abs().compareTo(new BigDecimal("0.01")) <= 0);
+        TaxIncome taxIncome = new TaxIncomeCalculator().calculate(
+                household, LocalDate.of(2026, 1, 1), BigDecimal.ZERO,
+                BigDecimal.ZERO, conversion, BigDecimal.ZERO, BigDecimal.ZERO,
+                null, socialSecurity);
+        assertEquals(0, socialSecurity.householdBenefit().compareTo(
+                taxIncome.getSocialSecurityIncome()));
+        BigDecimal taxableSocialSecurity = new SocialSecurityTaxCalculator()
+                .calculateTaxableBenefits(
+                        taxIncome, FilingStatus.MARRIED_FILING_JOINTLY, rules);
+        assertEquals(0, taxableSocialSecurity.compareTo(
+                result.getFederalTaxCalculation().getTaxableSocialSecurity()));
     }
 }
