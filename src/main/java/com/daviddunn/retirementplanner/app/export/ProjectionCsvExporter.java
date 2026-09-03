@@ -74,15 +74,18 @@ public class ProjectionCsvExporter {
                         + "RMD Distributed Before Projection,"
                         + "RMD Distributed In Projection,"
                         + "Excess RMD,"
-                        + "Beginning Retained RMD Assets,"
-                        + "Retained RMD Asset Growth,"
+                        + "Beginning Retained Non-Qualified Assets,"
+                        + "Retained Non-Qualified Asset Growth,"
+                        + "Retained Household Surplus,"
+                        + "Retained from Excess RMD,"
+                        + "Retained from Guaranteed Income,"
                         + "Tax Funding Withdrawal,"
                         + "Requested Roth Conversion,"
                         + "Primary Roth Conversion,"
                         + "Spouse Roth Conversion,"
                         + "Roth Conversion,"
                         + "Roth Conversion Shortfall,"
-                        + "Ending Retained RMD Assets,"
+                        + "Ending Retained Non-Qualified Assets,"
                         + "Ending Investable Assets,"
                         + "Non-Investable Assets,"
                         + "Net Worth,"
@@ -157,15 +160,18 @@ public class ProjectionCsvExporter {
                 year.getRmdDistributedBeforeProjection(),
                 year.getRmdDistributedInProjection(),
                 year.getExcessRmd(),
-                year.getBeginningRetainedRmdAssets(),
-                year.getRetainedRmdAssetGrowth(),
+                year.getBeginningRetainedNonQualifiedAssets(),
+                year.getRetainedNonQualifiedAssetGrowth(),
+                year.getRetainedHouseholdSurplus(),
+                year.getRetainedFromExcessRmd(),
+                year.getRetainedFromGuaranteedIncome(),
                 year.getTaxFundingWithdrawal(),
                 year.getRequestedRothConversion(),
                 year.getPrimaryRothConversion(),
                 year.getSpouseRothConversion(),
                 year.getRothConversion(),
                 year.getRothConversionShortfall(),
-                year.getEndingRetainedRmdAssets(),
+                year.getEndingRetainedNonQualifiedAssets(),
                 year.getEndingInvestableAssets(),
 
                 nonInvestableValue,

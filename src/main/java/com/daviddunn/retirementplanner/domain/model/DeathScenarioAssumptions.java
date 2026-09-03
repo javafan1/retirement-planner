@@ -161,6 +161,17 @@ public final class DeathScenarioAssumptions {
             AccountOwnership ownership,
             int calendarYear) {
 
+        return isAlive(ownership, calendarYear);
+    }
+
+    /**
+     * Returns whether the owner is modeled alive for the full projection year.
+     * A configured death is effective January 1 of the death year.
+     */
+    public boolean isAlive(
+            AccountOwnership ownership,
+            int calendarYear) {
+
         Objects.requireNonNull(
                 ownership,
                 "Account ownership is required.");

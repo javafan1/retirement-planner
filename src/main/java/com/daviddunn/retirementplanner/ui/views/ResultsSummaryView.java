@@ -2768,7 +2768,7 @@ public class ResultsSummaryView extends BorderPane {
                                     .TAXABLE)
                             .add(
                                     year
-                                            .getUnallocatedCash());
+                                            .getEndingRetainedNonQualifiedAssets());
 
             taxableSeries.getData().add(
                     new XYChart.Data<>(

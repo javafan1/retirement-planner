@@ -1009,11 +1009,10 @@ class ProjectionEngineTest {
                                 secondYear
                                         .getPortfolioWithdrawal()));
         BigDecimal expectedEndingAssets =
-                firstYear.getEndingInvestableAssets()
-                        .subtract(
-                                secondYear
-                                        .getTaxFundingWithdrawal())
-                        .subtract(secondYear.getCashFlowNeed())
+                secondYear.getBeginningInvestableAssets()
+                        .add(secondYear.getInvestmentGrowth())
+                        .subtract(secondYear.getPortfolioWithdrawal())
+                        .add(secondYear.getRetainedHouseholdSurplus())
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
@@ -1184,17 +1183,15 @@ class ProjectionEngineTest {
          * household outflow and therefore reduces
          * total investable assets.
          */
-        assertTrue(
-                secondYear
-                        .getTaxFundingWithdrawal()
-                        .signum() > 0);
+        assertEquals(0, BigDecimal.ZERO.compareTo(
+                secondYear.getTaxFundingWithdrawal()));
+        assertTrue(secondYear.getRetainedFromExcessRmd().signum() > 0);
 
         BigDecimal expectedEndingAssets =
-                firstYear.getEndingInvestableAssets()
-                        .subtract(
-                                secondYear
-                                        .getTaxFundingWithdrawal())
-                        .subtract(secondYear.getCashFlowNeed())
+                secondYear.getBeginningInvestableAssets()
+                        .add(secondYear.getInvestmentGrowth())
+                        .subtract(secondYear.getPortfolioWithdrawal())
+                        .add(secondYear.getRetainedHouseholdSurplus())
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
@@ -1424,10 +1421,8 @@ class ProjectionEngineTest {
          * The RMD is taxable income, so federal tax
          * must also be funded.
          */
-        assertTrue(
-                secondYear
-                        .getTaxFundingWithdrawal()
-                        .signum() > 0);
+        assertEquals(0, BigDecimal.ZERO.compareTo(
+                secondYear.getTaxFundingWithdrawal()));
 
         /*
          * Total portfolio distributions consist of
@@ -1456,7 +1451,7 @@ class ProjectionEngineTest {
          * beginning assets
          * + investment growth
          * - total portfolio withdrawal
-         * + excess RMD
+         * + retained household surplus
          *
          * gives ending investable assets.
          */
@@ -1471,7 +1466,7 @@ class ProjectionEngineTest {
                                         .getPortfolioWithdrawal())
                         .add(
                                 secondYear
-                                        .getExcessRmd())
+                                        .getRetainedHouseholdSurplus())
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
@@ -1610,14 +1605,22 @@ class ProjectionEngineTest {
          * + growth on those retained assets
          * + 2036 excess RMD
          */
+        BigDecimal retainedBeforeNewSurplus =
+                thirdYear.getBeginningRetainedNonQualifiedAssets()
+                        .add(
+                                thirdYear
+                                        .getRetainedNonQualifiedAssetGrowth())
+                        .subtract(
+                                thirdYear.getHouseholdCashSettlement()
+                                        .spendingWithdrawal())
+                        .subtract(thirdYear.getTaxFundingWithdrawal())
+                        .max(BigDecimal.ZERO);
+
         BigDecimal expectedEndingCash =
-                excessRmd2035
+                retainedBeforeNewSurplus
                         .add(
                                 thirdYear
-                                        .getRetainedRmdAssetGrowth())
-                        .add(
-                                thirdYear
-                                        .getExcessRmd())
+                                        .getRetainedHouseholdSurplus())
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
@@ -1626,23 +1629,25 @@ class ProjectionEngineTest {
                 0,
                 expectedEndingCash.compareTo(
                         thirdYear
-                                .getUnallocatedCash()
+                                .getEndingRetainedNonQualifiedAssets()
                                 .setScale(
                                         2,
                                         RoundingMode.HALF_UP)));
 
         assertEquals(
                 0,
-                excessRmd2035.compareTo(
+                secondYear
+                        .getEndingRetainedNonQualifiedAssets()
+                        .compareTo(
                         thirdYear
-                                .getBeginningRetainedRmdAssets()));
+                                .getBeginningRetainedNonQualifiedAssets()));
 
         BigDecimal accountGrowth =
                 thirdYear
                         .getInvestmentGrowth()
                         .subtract(
                                 thirdYear
-                                        .getRetainedRmdAssetGrowth());
+                                        .getRetainedNonQualifiedAssetGrowth());
 
         assertEquals(
                 0,
@@ -1651,7 +1656,7 @@ class ProjectionEngineTest {
                         .compareTo(
                                 accountGrowth.add(
                                         thirdYear
-                                                .getRetainedRmdAssetGrowth())));
+                                                .getRetainedNonQualifiedAssetGrowth())));
 
         BigDecimal expectedEndingAssets =
                 thirdYear
@@ -1664,7 +1669,7 @@ class ProjectionEngineTest {
                                         .getPortfolioWithdrawal())
                         .add(
                                 thirdYear
-                                        .getExcessRmd())
+                                        .getRetainedHouseholdSurplus())
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);

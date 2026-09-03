@@ -66,11 +66,10 @@ public class ProjectionYear {
     private final BigDecimal primaryRothConversion;
     private final BigDecimal spouseRothConversion;
 
-    private final BigDecimal beginningRetainedRmdAssets;
-    private final BigDecimal retainedRmdAssetGrowth;
-    private final BigDecimal endingRetainedRmdAssets;
-
-    private final BigDecimal unallocatedCash;
+    private final BigDecimal beginningRetainedNonQualifiedAssets;
+    private final BigDecimal retainedNonQualifiedAssetGrowth;
+    private final BigDecimal endingRetainedNonQualifiedAssets;
+    private final HouseholdCashSettlement householdCashSettlement;
 
     private final BigDecimal combinedEffectiveTaxRate;
 
@@ -161,10 +160,10 @@ public class ProjectionYear {
                 BigDecimal.ZERO;
 
 
-        this.unallocatedCash = BigDecimal.ZERO;
-        this.beginningRetainedRmdAssets = BigDecimal.ZERO;
-        this.retainedRmdAssetGrowth = BigDecimal.ZERO;
-        this.endingRetainedRmdAssets = BigDecimal.ZERO;
+        this.beginningRetainedNonQualifiedAssets = BigDecimal.ZERO;
+        this.retainedNonQualifiedAssetGrowth = BigDecimal.ZERO;
+        this.endingRetainedNonQualifiedAssets = BigDecimal.ZERO;
+        this.householdCashSettlement = HouseholdCashSettlement.zero();
 //        this.unallocatedCash =
 //                Objects.requireNonNull(
 //                        unallocatedCash,
@@ -309,10 +308,10 @@ public class ProjectionYear {
                 endingAccountSnapshots,
                 "Ending account snapshots are required.");
 
-        this.unallocatedCash = BigDecimal.ZERO;
-        this.beginningRetainedRmdAssets = BigDecimal.ZERO;
-        this.retainedRmdAssetGrowth = BigDecimal.ZERO;
-        this.endingRetainedRmdAssets = BigDecimal.ZERO;
+        this.beginningRetainedNonQualifiedAssets = BigDecimal.ZERO;
+        this.retainedNonQualifiedAssetGrowth = BigDecimal.ZERO;
+        this.endingRetainedNonQualifiedAssets = BigDecimal.ZERO;
+        this.householdCashSettlement = HouseholdCashSettlement.zero();
 
         this.estimatedHeirTax =
                 BigDecimal.ZERO;
@@ -389,9 +388,10 @@ public class ProjectionYear {
             BigDecimal rmdDistributedBeforeProjection,
             BigDecimal rmdDistributedInProjection,
             BigDecimal excessRmd,
-            BigDecimal beginningRetainedRmdAssets,
-            BigDecimal retainedRmdAssetGrowth,
-            BigDecimal unallocatedCash,
+            BigDecimal beginningRetainedNonQualifiedAssets,
+            BigDecimal retainedNonQualifiedAssetGrowth,
+            BigDecimal endingRetainedNonQualifiedAssets,
+            HouseholdCashSettlement householdCashSettlement,
             BigDecimal endingInvestableAssets,
             List<ProjectedAccountSnapshot> endingAccountSnapshots,
             FederalTaxCalculation federalTaxCalculation,
@@ -562,23 +562,25 @@ public class ProjectionYear {
                     "Tax funding withdrawal cannot be negative.");
         }
 
-        this.unallocatedCash =
+        this.beginningRetainedNonQualifiedAssets =
                 Objects.requireNonNull(
-                        unallocatedCash,
-                        "unallocatedCash");
+                        beginningRetainedNonQualifiedAssets,
+                        "beginningRetainedNonQualifiedAssets");
 
-        this.beginningRetainedRmdAssets =
+        this.retainedNonQualifiedAssetGrowth =
                 Objects.requireNonNull(
-                        beginningRetainedRmdAssets,
-                        "beginningRetainedRmdAssets");
+                        retainedNonQualifiedAssetGrowth,
+                        "retainedNonQualifiedAssetGrowth");
 
-        this.retainedRmdAssetGrowth =
+        this.endingRetainedNonQualifiedAssets =
                 Objects.requireNonNull(
-                        retainedRmdAssetGrowth,
-                        "retainedRmdAssetGrowth");
+                        endingRetainedNonQualifiedAssets,
+                        "endingRetainedNonQualifiedAssets");
 
-        this.endingRetainedRmdAssets =
-                this.unallocatedCash;
+        this.householdCashSettlement =
+                Objects.requireNonNull(
+                        householdCashSettlement,
+                        "Household cash settlement is required.");
 
         this.requestedRothConversion = requireNonNegative(
                 requestedRothConversion,
@@ -873,7 +875,7 @@ public class ProjectionYear {
     }
 
     public BigDecimal getUnallocatedCash() {
-        return unallocatedCash;
+        return getEndingRetainedNonQualifiedAssets();
     }
 
     private static BigDecimal requireNonNegative(
@@ -891,15 +893,43 @@ public class ProjectionYear {
     }
 
     public BigDecimal getBeginningRetainedRmdAssets() {
-        return beginningRetainedRmdAssets;
+        return getBeginningRetainedNonQualifiedAssets();
     }
 
     public BigDecimal getRetainedRmdAssetGrowth() {
-        return retainedRmdAssetGrowth;
+        return getRetainedNonQualifiedAssetGrowth();
     }
 
     public BigDecimal getEndingRetainedRmdAssets() {
-        return endingRetainedRmdAssets;
+        return getEndingRetainedNonQualifiedAssets();
+    }
+
+    public BigDecimal getBeginningRetainedNonQualifiedAssets() {
+        return beginningRetainedNonQualifiedAssets;
+    }
+
+    public BigDecimal getRetainedNonQualifiedAssetGrowth() {
+        return retainedNonQualifiedAssetGrowth;
+    }
+
+    public BigDecimal getEndingRetainedNonQualifiedAssets() {
+        return endingRetainedNonQualifiedAssets;
+    }
+
+    public HouseholdCashSettlement getHouseholdCashSettlement() {
+        return householdCashSettlement;
+    }
+
+    public BigDecimal getRetainedHouseholdSurplus() {
+        return householdCashSettlement.retainedHouseholdSurplus();
+    }
+
+    public BigDecimal getRetainedFromExcessRmd() {
+        return householdCashSettlement.retainedFromExcessRmd();
+    }
+
+    public BigDecimal getRetainedFromGuaranteedIncome() {
+        return householdCashSettlement.retainedFromGuaranteedIncome();
     }
 
     public BigDecimal getEstimatedHeirTax() {

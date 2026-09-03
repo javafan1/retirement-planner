@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.testutil;
 import com.daviddunn.retirementplanner.domain.medicare.MedicarePremiumCalculation;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountSnapshot;
+import com.daviddunn.retirementplanner.domain.projection.HouseholdCashSettlement;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.tax.FederalTaxCalculation;
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
@@ -219,6 +220,7 @@ public class ProjectionYearBuilder {
                 BigDecimal.ZERO,
                 BigDecimal.ZERO,
                 unallocatedCash,
+                HouseholdCashSettlement.zero(),
                 endingInvestableAssets,
                 endingAccountSnapshots,
                 federalTaxCalculation,

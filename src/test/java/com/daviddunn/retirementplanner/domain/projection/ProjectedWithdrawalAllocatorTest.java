@@ -69,6 +69,51 @@ class ProjectedWithdrawalAllocatorTest {
     }
 
     @Test
+    void retainedNonQualifiedAssetsFundAdditionalWithdrawalBeforeAccounts() {
+
+        BrokerageAccount brokerage =
+                new BrokerageAccount(
+                        "Brokerage",
+                        AccountOwnership.PRIMARY,
+                        new BigDecimal("100000.00"));
+
+        ProjectedPortfolio portfolio =
+                new ProjectedPortfolio(
+                        List.of(
+                                new ProjectedAccountBalance(
+                                        brokerage,
+                                        new BigDecimal("100000.00"))),
+                        new BigDecimal("20000.00"));
+
+        ProjectedWithdrawalAllocation allocation =
+                new ProjectedWithdrawalAllocator()
+                        .allocateAdditionalWithdrawal(
+                                portfolio,
+                                new BigDecimal("30000.00"),
+                                new TaxableFirstWithdrawalStrategy());
+
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(
+                        allocation.getPortfolio()
+                                .getRetainedNonQualifiedAssets()));
+        assertEquals(
+                0,
+                new BigDecimal("90000.00").compareTo(
+                        allocation.getPortfolio().getBalance(brokerage)));
+        assertEquals(
+                0,
+                new BigDecimal("20000.00").compareTo(
+                        allocation.getWithdrawalBreakdown()
+                                .getCashWithdrawal()));
+        assertEquals(
+                0,
+                new BigDecimal("10000.00").compareTo(
+                        allocation.getWithdrawalBreakdown()
+                                .getTaxableWithdrawal()));
+    }
+
+    @Test
     void applyingAccountRmdDoesNotModifyOriginalPortfolio() {
 
         Traditional401K account =

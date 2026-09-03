@@ -192,8 +192,8 @@ public class ResultsView extends BorderPane {
 
         TableColumn<ProjectionYear, BigDecimal> accumulatedRmdCashColumn =
                 createMoneyColumn(
-                        "Retained RMD Assets",
-                        ProjectionYear::getEndingRetainedRmdAssets);
+                        "Retained Non-Qualified Assets",
+                        ProjectionYear::getEndingRetainedNonQualifiedAssets);
 
 
         TableColumn<ProjectionYear, BigDecimal> endingAssetsColumn =

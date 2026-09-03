@@ -319,18 +319,18 @@ public class ProjectionEngine {
                         yearOffset,
                         projectionStartDate);
 
-        BigDecimal beginningRetainedRmdAssets =
-                projectedPortfolio.getUnallocatedCash();
+        BigDecimal beginningRetainedNonQualifiedAssets =
+                projectedPortfolio.getRetainedNonQualifiedAssets();
 
-        BigDecimal retainedRmdAssetGrowth =
-                calculateRetainedRmdAssetGrowth(
+        BigDecimal retainedNonQualifiedAssetGrowth =
+                calculateRetainedNonQualifiedAssetGrowth(
                         investmentGrowth,
-                        beginningRetainedRmdAssets,
+                        beginningRetainedNonQualifiedAssets,
                         beginningAssets);
 
         BigDecimal accountAssetGrowth =
                 investmentGrowth.subtract(
-                        retainedRmdAssetGrowth);
+                        retainedNonQualifiedAssetGrowth);
 
         LocalDate projectionDate =
                 yearOffset == 0
@@ -428,7 +428,7 @@ public class ProjectionEngine {
         ProjectedPortfolio portfolioAfterGrowth =
                 projectedPortfolio.withGrowth(
                         accountAssetGrowth,
-                        retainedRmdAssetGrowth);
+                        retainedNonQualifiedAssetGrowth);
 
         ProjectedWithdrawalAllocation rmdAllocation =
                 withdrawalAllocator.allocateHouseholdRmds(
@@ -464,6 +464,15 @@ public class ProjectionEngine {
         WithdrawalBreakdown totalWithdrawalBreakdown =
                 rmdWithdrawalBreakdown.plus(
                         withdrawalBreakdown);
+
+        BigDecimal spendingWithdrawal =
+                withdrawalResult.getAdditionalWithdrawalRequired();
+
+        BigDecimal availableHouseholdCashForTaxes =
+                guaranteedIncome
+                        .add(projectedPeriodRmdResult.getTotalRmd())
+                        .subtract(cashFlowExpenses)
+                        .max(BigDecimal.ZERO);
 
         RothConversionRequest rothConversionRequest =
                 plan.getRothConversionRequest();
@@ -555,7 +564,8 @@ public class ProjectionEngine {
                                         assumptions
                                                 .getDeathScenarioAssumptions(),
                                         rmdDistributedBeforeProjection,
-                                        socialSecurityResult);
+                                        socialSecurityResult,
+                                        availableHouseholdCashForTaxes);
             }
         }
 
@@ -597,7 +607,8 @@ public class ProjectionEngine {
                         assumptions.getSocialSecurityColaRate(),
                         assumptions.getDeathScenarioAssumptions(),
                         rmdDistributedBeforeProjection,
-                        socialSecurityResult);
+                        socialSecurityResult,
+                        availableHouseholdCashForTaxes);
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();
@@ -615,7 +626,8 @@ public class ProjectionEngine {
         int coveredIndividuals =
                 calculateCoveredMedicareParticipants(
                         household,
-                        projectionDate);
+                        projectionDate,
+                        assumptions.getDeathScenarioAssumptions());
 
 
         FilingStatus projectionFilingStatus =
@@ -647,27 +659,27 @@ public class ProjectionEngine {
                     medicarePremiumCalculation);
         }
 
+        HouseholdCashSettlement cashSettlement =
+                HouseholdCashSettlement.calculate(
+                        guaranteedIncome,
+                        projectedPeriodRmdResult.getTotalRmd(),
+                        spendingWithdrawal,
+                        taxFundingWithdrawal,
+                        annualExpenses,
+                        medicarePremiumCalculation
+                                .totalAnnualMedicarePremium(),
+                        taxFundingResult.getTotalIncomeTax());
+
         ProjectedPortfolio portfolioAfterTaxWithdrawal =
                 withdrawalAllocator.applyAdditionalWithdrawal(
                         portfolioAfterConversion,
                         taxFundingWithdrawal,
                         withdrawalStrategy);
 
-        /*
-         * If the RMD exceeded the household's
-         * spending need, the excess remains an
-         * investable household asset.
-         */
-//        ProjectedPortfolio endingPortfolio =
-//                portfolioAfterTaxWithdrawal
-//                        .withAdditionalCash(
-//                                withdrawalResult.getExcessRmd());
-
         ProjectedPortfolio endingPortfolio =
                 portfolioAfterTaxWithdrawal
-                        .withAdditionalCash(
-                                withdrawalResult
-                                        .getExcessRmd());
+                        .withAdditionalRetainedNonQualifiedAssets(
+                                cashSettlement.retainedHouseholdSurplus());
 
         List<ProjectedAccountSnapshot> endingAccountSnapshots =
                 endingPortfolio
@@ -690,8 +702,7 @@ public class ProjectionEngine {
                         .add(investmentGrowth)
                         .subtract(totalPortfolioWithdrawal)
                         .add(
-                                withdrawalResult
-                                        .getExcessRmd())
+                                cashSettlement.retainedHouseholdSurplus())
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
@@ -741,9 +752,10 @@ public class ProjectionEngine {
                         rmdDistributedBeforeProjection,
                         projectedPeriodRmdResult.getTotalRmd(),
                         withdrawalResult.getExcessRmd(),
-                        beginningRetainedRmdAssets,
-                        retainedRmdAssetGrowth,
-                        endingPortfolio.getUnallocatedCash(),
+                        beginningRetainedNonQualifiedAssets,
+                        retainedNonQualifiedAssetGrowth,
+                        endingPortfolio.getRetainedNonQualifiedAssets(),
+                        cashSettlement,
                         endingAssets,
                         endingAccountSnapshots,
                         federalTaxCalculation,
@@ -829,18 +841,18 @@ public class ProjectionEngine {
                 RoundingMode.HALF_UP);
     }
 
-    private BigDecimal calculateRetainedRmdAssetGrowth(
+    private BigDecimal calculateRetainedNonQualifiedAssetGrowth(
             BigDecimal totalInvestmentGrowth,
-            BigDecimal beginningRetainedRmdAssets,
+            BigDecimal beginningRetainedNonQualifiedAssets,
             BigDecimal beginningInvestableAssets) {
 
-        if (beginningRetainedRmdAssets.signum() == 0
+        if (beginningRetainedNonQualifiedAssets.signum() == 0
                 || beginningInvestableAssets.signum() == 0) {
             return BigDecimal.ZERO;
         }
 
         return totalInvestmentGrowth
-                .multiply(beginningRetainedRmdAssets)
+                .multiply(beginningRetainedNonQualifiedAssets)
                 .divide(
                         beginningInvestableAssets,
                         12,
@@ -1124,37 +1136,19 @@ public class ProjectionEngine {
                         2,
                         RoundingMode.HALF_UP);
     }
-//
-//    private int calculateCoveredMedicareParticipants(
-//            Household household,
-//            LocalDate projectionDate) {
-//
-//        int participants = 0;
-//
-//        if (household.getPrimaryPerson()
-//                .getAge(projectionDate) >= 65) {
-//
-//            participants++;
-//        }
-//
-//        if (household.getSpouse()
-//                .getAge(projectionDate) >= 65) {
-//
-//            participants++;
-//        }
-//
-//        return participants;
-//    }
-
     private int calculateCoveredMedicareParticipants(
             Household household,
-            LocalDate projectionDate) {
+            LocalDate projectionDate,
+            DeathScenarioAssumptions deathAssumptions) {
 
         int participants = 0;
 
         Person primary = household.getPrimaryPerson();
 
         if (primary.getBirthDate() != null &&
+                deathAssumptions.isAlive(
+                        AccountOwnership.PRIMARY,
+                        projectionDate.getYear()) &&
                 primary.getAge(projectionDate) >= 65) {
             participants++;
         }
@@ -1162,6 +1156,9 @@ public class ProjectionEngine {
         Person spouse = household.getSpouse();
 
         if (spouse.getBirthDate() != null &&
+                deathAssumptions.isAlive(
+                        AccountOwnership.SPOUSE,
+                        projectionDate.getYear()) &&
                 spouse.getAge(projectionDate) >= 65) {
             participants++;
         }

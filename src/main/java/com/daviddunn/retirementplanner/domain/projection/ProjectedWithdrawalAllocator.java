@@ -235,6 +235,18 @@ public final class ProjectedWithdrawalAllocator {
         ProjectedPortfolio updatedPortfolio =
                 portfolio;
 
+        BigDecimal retainedAssetWithdrawal =
+                remaining.min(
+                        updatedPortfolio.getRetainedNonQualifiedAssets());
+
+        if (retainedAssetWithdrawal.signum() > 0) {
+            updatedPortfolio =
+                    updatedPortfolio
+                            .withRetainedNonQualifiedAssetWithdrawal(
+                                    retainedAssetWithdrawal);
+            remaining = remaining.subtract(retainedAssetWithdrawal);
+        }
+
         /*
          * Strategy determines which accounts are
          * considered first.
@@ -324,6 +336,20 @@ public final class ProjectedWithdrawalAllocator {
 
         ProjectedPortfolio updatedPortfolio =
                 portfolio;
+
+        BigDecimal retainedAssetWithdrawal =
+                remaining.min(
+                        updatedPortfolio.getRetainedNonQualifiedAssets());
+
+        if (retainedAssetWithdrawal.signum() > 0) {
+            updatedPortfolio =
+                    updatedPortfolio
+                            .withRetainedNonQualifiedAssetWithdrawal(
+                                    retainedAssetWithdrawal);
+            cashWithdrawal =
+                    cashWithdrawal.add(retainedAssetWithdrawal);
+            remaining = remaining.subtract(retainedAssetWithdrawal);
+        }
 
         List<ProjectedAccountBalance> orderedAccounts =
                 withdrawalStrategy.orderAccounts(
@@ -547,7 +573,10 @@ public final class ProjectedWithdrawalAllocator {
                 withdrawalAmount;
 
         BigDecimal cashWithdrawal =
-                BigDecimal.ZERO;
+                remaining.min(
+                        portfolio.getRetainedNonQualifiedAssets());
+
+        remaining = remaining.subtract(cashWithdrawal);
 
         BigDecimal taxableWithdrawal =
                 BigDecimal.ZERO;

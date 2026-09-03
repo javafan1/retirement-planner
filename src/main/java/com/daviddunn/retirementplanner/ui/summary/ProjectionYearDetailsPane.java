@@ -832,28 +832,43 @@ public class ProjectionYearDetailsPane
                         TaxTreatment.CASH));
 
         row = addSubsectionHeader(
-                grid, row, "Retained RMD Assets");
+                grid, row, "Retained Non-Qualified Assets");
 
         row = addMoneyComparisonRow(
-                grid, row, "Beginning Retained RMD Assets",
-                year.getBeginningRetainedRmdAssets(),
+                grid, row, "Beginning Retained Non-Qualified Assets",
+                year.getBeginningRetainedNonQualifiedAssets(),
                 getBaselineValue(
-                        ProjectionYear::getBeginningRetainedRmdAssets));
+                        ProjectionYear::getBeginningRetainedNonQualifiedAssets));
         row = addMoneyComparisonRow(
-                grid, row, "Growth on Retained RMD Assets",
-                year.getRetainedRmdAssetGrowth(),
+                grid, row, "Growth on Retained Non-Qualified Assets",
+                year.getRetainedNonQualifiedAssetGrowth(),
                 getBaselineValue(
-                        ProjectionYear::getRetainedRmdAssetGrowth));
+                        ProjectionYear::getRetainedNonQualifiedAssetGrowth));
+        row = addMoneyComparisonRow(
+                grid, row, "Retained Household Surplus",
+                year.getRetainedHouseholdSurplus(),
+                getBaselineValue(ProjectionYear::getRetainedHouseholdSurplus));
+
+        row = addMoneyComparisonRow(
+                grid, row, "Retained from Excess RMD",
+                year.getRetainedFromExcessRmd(),
+                getBaselineValue(ProjectionYear::getRetainedFromExcessRmd));
+
+        row = addMoneyComparisonRow(
+                grid, row, "Retained from Guaranteed Income",
+                year.getRetainedFromGuaranteedIncome(),
+                getBaselineValue(ProjectionYear::getRetainedFromGuaranteedIncome));
+
         row = addMoneyComparisonRow(
                 grid, row, "New Excess RMD",
                 year.getExcessRmd(),
                 getBaselineValue(ProjectionYear::getExcessRmd));
 
         return addMoneyComparisonRow(
-                grid, row, "Ending Retained RMD Assets",
-                year.getEndingRetainedRmdAssets(),
+                grid, row, "Ending Retained Non-Qualified Assets",
+                year.getEndingRetainedNonQualifiedAssets(),
                 getBaselineValue(
-                        ProjectionYear::getEndingRetainedRmdAssets));
+                        ProjectionYear::getEndingRetainedNonQualifiedAssets));
     }
 
 

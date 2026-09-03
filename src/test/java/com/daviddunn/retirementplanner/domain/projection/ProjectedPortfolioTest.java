@@ -299,7 +299,7 @@ class ProjectedPortfolioTest {
     }
 
     @Test
-    void defaultsUnallocatedCashToZero() {
+    void defaultsRetainedNonQualifiedAssetsToZero() {
 
         ProjectedPortfolio portfolio =
                 new ProjectedPortfolio(
@@ -308,11 +308,11 @@ class ProjectedPortfolioTest {
         assertEquals(
                 0,
                 BigDecimal.ZERO.compareTo(
-                        portfolio.getUnallocatedCash()));
+                        portfolio.getRetainedNonQualifiedAssets()));
     }
 
     @Test
-    void addsCashToUnallocatedCash() {
+    void addsRetainedNonQualifiedAssets() {
 
         ProjectedPortfolio portfolio =
                 new ProjectedPortfolio(
@@ -320,7 +320,7 @@ class ProjectedPortfolioTest {
                         new BigDecimal("5000.00"));
 
         ProjectedPortfolio updated =
-                portfolio.withAdditionalCash(
+                portfolio.withAdditionalRetainedNonQualifiedAssets(
                         new BigDecimal("9430.89"));
 
         assertEquals(
@@ -549,7 +549,7 @@ class ProjectedPortfolioTest {
                 0,
                 new BigDecimal("110000.00")
                         .compareTo(
-                                updated.getUnallocatedCash()));
+                                updated.getRetainedNonQualifiedAssets()));
 
         assertEquals(
                 0,

@@ -15,7 +15,7 @@ import java.util.Objects;
 public final class ProjectedPortfolio {
 
     private final List<ProjectedAccountBalance> accountBalances;
-    private final BigDecimal unallocatedCash;
+    private final BigDecimal retainedNonQualifiedAssets;
 
     public ProjectedPortfolio(
             List<ProjectedAccountBalance> accountBalances) {
@@ -27,20 +27,20 @@ public final class ProjectedPortfolio {
 
     public ProjectedPortfolio(
             List<ProjectedAccountBalance> accountBalances,
-            BigDecimal unallocatedCash) {
+            BigDecimal retainedNonQualifiedAssets) {
 
         Objects.requireNonNull(
                 accountBalances,
                 "Projected account balances are required.");
 
-        this.unallocatedCash =
+        this.retainedNonQualifiedAssets =
                 Objects.requireNonNull(
-                        unallocatedCash,
-                        "Unallocated cash is required.");
+                        retainedNonQualifiedAssets,
+                        "Retained non-qualified assets are required.");
 
-        if (unallocatedCash.signum() < 0) {
+        if (retainedNonQualifiedAssets.signum() < 0) {
             throw new IllegalArgumentException(
-                    "Unallocated cash cannot be negative.");
+                    "Retained non-qualified assets cannot be negative.");
         }
 
         this.accountBalances =
@@ -77,7 +77,11 @@ public final class ProjectedPortfolio {
     }
 
     public BigDecimal getUnallocatedCash() {
-        return unallocatedCash;
+        return getRetainedNonQualifiedAssets();
+    }
+
+    public BigDecimal getRetainedNonQualifiedAssets() {
+        return retainedNonQualifiedAssets;
     }
 
     public List<ProjectedAccountBalance> getAccountBalances() {
@@ -87,7 +91,7 @@ public final class ProjectedPortfolio {
     public BigDecimal getTotalBalance() {
 
         return getAccountBalanceTotal().add(
-                unallocatedCash);
+                retainedNonQualifiedAssets);
     }
 
     public BigDecimal getAccountBalanceTotal() {
@@ -171,7 +175,7 @@ public final class ProjectedPortfolio {
 
         return new ProjectedPortfolio(
                 updatedBalances,
-                unallocatedCash);
+                retainedNonQualifiedAssets);
     }
 
     public BigDecimal getBalance(
@@ -222,10 +226,17 @@ public final class ProjectedPortfolio {
 
         return new ProjectedPortfolio(
                 updatedBalances,
-                unallocatedCash);
+                retainedNonQualifiedAssets.multiply(
+                        BigDecimal.ONE.add(annualReturnRate)));
     }
 
     public ProjectedPortfolio withAdditionalCash(
+            BigDecimal amount) {
+
+        return withAdditionalRetainedNonQualifiedAssets(amount);
+    }
+
+    public ProjectedPortfolio withAdditionalRetainedNonQualifiedAssets(
             BigDecimal amount) {
 
         Objects.requireNonNull(
@@ -239,7 +250,27 @@ public final class ProjectedPortfolio {
 
         return new ProjectedPortfolio(
                 accountBalances,
-                unallocatedCash.add(amount));
+                retainedNonQualifiedAssets.add(amount));
+    }
+
+    public ProjectedPortfolio withRetainedNonQualifiedAssetWithdrawal(
+            BigDecimal amount) {
+
+        Objects.requireNonNull(amount, "Withdrawal amount is required.");
+
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Withdrawal amount cannot be negative.");
+        }
+
+        if (amount.compareTo(retainedNonQualifiedAssets) > 0) {
+            throw new IllegalArgumentException(
+                    "Withdrawal cannot exceed retained non-qualified assets.");
+        }
+
+        return new ProjectedPortfolio(
+                accountBalances,
+                retainedNonQualifiedAssets.subtract(amount));
     }
 
     public ProjectedPortfolio withWithdrawal(
@@ -302,15 +333,15 @@ public final class ProjectedPortfolio {
      */
     public ProjectedPortfolio withGrowth(
             BigDecimal accountGrowth,
-            BigDecimal retainedRmdAssetGrowth) {
+            BigDecimal retainedNonQualifiedAssetGrowth) {
 
         Objects.requireNonNull(
                 accountGrowth,
                 "Account growth is required.");
 
         Objects.requireNonNull(
-                retainedRmdAssetGrowth,
-                "Retained RMD asset growth is required.");
+                retainedNonQualifiedAssetGrowth,
+                "Retained non-qualified asset growth is required.");
 
         BigDecimal accountTotal = getAccountBalanceTotal();
 
@@ -322,8 +353,8 @@ public final class ProjectedPortfolio {
 
             return new ProjectedPortfolio(
                     accountBalances,
-                    unallocatedCash.add(
-                            retainedRmdAssetGrowth));
+                    retainedNonQualifiedAssets.add(
+                            retainedNonQualifiedAssetGrowth));
         }
 
         List<ProjectedAccountBalance> updatedBalances =
@@ -356,8 +387,8 @@ public final class ProjectedPortfolio {
 
         return new ProjectedPortfolio(
                 updatedBalances,
-                unallocatedCash.add(
-                        retainedRmdAssetGrowth));
+                retainedNonQualifiedAssets.add(
+                        retainedNonQualifiedAssetGrowth));
     }
 
 

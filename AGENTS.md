@@ -83,9 +83,23 @@ Projection-specific rules:
 - Apply RMD withdrawals from eligible projected accounts first. An RMD can satisfy all or part of the household cash-flow need.
 - Use the configured withdrawal strategy only for the remaining portfolio withdrawal after RMD allocation.
 - Calculate tax-funding withdrawals after calculating taxes; include them in total portfolio withdrawals.
-- Excess RMD and unallocated cash remain investable household assets and carry forward as projected cash.
+- Projection-generated retained non-qualified assets form one household-level,
+  non-persisted balance. Annual excess RMD is source-attribution flow data, not
+  a separate balance-sheet pool.
+- No modeled household cash may disappear: guaranteed income and
+  projection-period RMD cash fund ordinary expenses, Medicare, and taxes;
+  genuinely unspent post-tax cash is deposited once as retained
+  non-qualified assets.
+- Retained non-qualified assets receive the configured investment return,
+  enter investable assets/net worth/after-tax estate without a tax-deferred
+  haircut, and fund later spending and taxes before persisted accounts. They
+  are excluded from RMD calculations and Roth conversions.
 - Use the filing status applicable to each projection year. The configured status applies through the death year; the surviving filer becomes `SINGLE` in later years.
 - Medicare premiums depend on the federal tax result, filing status, projected rules, and number of covered individuals.
+- Medicare coverage in a projection year requires both modeled alive status
+  and the existing Medicare age eligibility. A configured death is effective
+  January 1 of the death year, so the deceased person is excluded for that
+  entire year and all later years; Medicare remains annual rather than partial-year.
 
 # Roth conversions
 

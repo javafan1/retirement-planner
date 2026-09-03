@@ -183,6 +183,39 @@ public final class RothConversionBracketFillCalculator {
             BigDecimal openingTaxDeferredDistribution,
             HouseholdSocialSecurityResult socialSecurityResult) {
 
+        return calculateConversion(
+                household,
+                projectionDate,
+                portfolio,
+                existingWithdrawals,
+                withdrawalStrategy,
+                filingStatus,
+                projectedGovernmentRules,
+                targetTaxableIncome,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                deathAssumptions,
+                openingTaxDeferredDistribution,
+                socialSecurityResult,
+                BigDecimal.ZERO);
+    }
+
+    public BigDecimal calculateConversion(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal targetTaxableIncome,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal availableHouseholdCash) {
+
         Objects.requireNonNull(
                 household,
                 "Household is required.");
@@ -238,6 +271,15 @@ public final class RothConversionBracketFillCalculator {
                     "Opening tax-deferred distribution cannot be negative.");
         }
 
+        Objects.requireNonNull(
+                availableHouseholdCash,
+                "Available household cash is required.");
+
+        if (availableHouseholdCash.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Available household cash cannot be negative.");
+        }
+
         /*
          * First determine taxable income with
          * no Roth conversion.
@@ -256,7 +298,8 @@ public final class RothConversionBracketFillCalculator {
                         socialSecurityColaRate,
                         deathAssumptions,
                         openingTaxDeferredDistribution,
-                        socialSecurityResult);
+                        socialSecurityResult,
+                        availableHouseholdCash);
 
         FederalTaxCalculation
                 preConversionFederalTax =
@@ -307,7 +350,8 @@ public final class RothConversionBracketFillCalculator {
                             socialSecurityColaRate,
                             deathAssumptions,
                             openingTaxDeferredDistribution,
-                            socialSecurityResult);
+                            socialSecurityResult,
+                            availableHouseholdCash);
 
             BigDecimal finalTaxableIncome =
                     taxFundingResult
