@@ -12,6 +12,7 @@ import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class SocialSecurityStrategyAnalysisRequestFactoryTest {
 
@@ -96,6 +97,14 @@ class SocialSecurityStrategyAnalysisRequestFactoryTest {
                 standard.primaryMortalityAdjustment().factor()));
         assertEquals(0, BigDecimal.ONE.compareTo(
                 standard.spouseMortalityAdjustment().factor()));
+        assertNotEquals(standard.request().retirementGridRequest().primaryMortality().probabilities(),
+                adjusted.request().retirementGridRequest().primaryMortality().probabilities());
+        assertNotEquals(standard.request().retirementGridRequest().spouseMortality().probabilities(),
+                adjusted.request().retirementGridRequest().spouseMortality().probabilities());
+        assertEquals(LocalDate.of(2026, 7, 1),
+                adjusted.request().retirementGridRequest().mortalityBaseDate());
+        assertEquals(adjusted.request().retirementGridRequest().mortalityBaseDate(),
+                adjusted.request().retirementGridRequest().presentValueBaseDate());
     }
 
     private RetirementPlan plan(boolean includeSpouseSource) {

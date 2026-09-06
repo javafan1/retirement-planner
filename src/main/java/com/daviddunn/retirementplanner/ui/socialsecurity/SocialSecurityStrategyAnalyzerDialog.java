@@ -45,7 +45,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private final TextField spouseMortalityAdjustment = new TextField("1.00");
     private final TextField discountRate = new TextField("1.0");
     private final DatePicker pvDate;
-    private final Button runButton = new Button("Run Analysis");
+    private final Button runButton = new Button("Run Social Security Analysis");
     private final AnalysisProgressView socialSecurityProgress = new AnalysisProgressView();
     private final Label status = new Label("Choose mortality categories, then run analysis.");
     private final Label stale = new Label();
@@ -57,7 +57,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private final Label strategyDetails = new Label("Select a complete strategy.");
     private final TextArea assumptions = new TextArea();
     private final Spinner<Integer> integratedCandidateCount = new Spinner<>(1, 20, 10);
-    private final Button integratedRunButton = new Button("Run Integrated Analysis");
+    private final Button integratedRunButton = new Button("Run Quick Comparison");
     private final AnalysisProgressView integratedProgress = new AnalysisProgressView();
     private final Label integratedStatus = new Label(
             "Run Social Security analysis first, then run the integrated comparison.");
@@ -74,6 +74,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             "Run exhaustive search to evaluate the complete tested strategy universe.");
     private final Label exhaustiveStale = new Label();
     private final VBox exhaustiveSummary = new VBox(5);
+    private final Label exhaustiveSocialSecurityReference = new Label();
     private final TableView<ExhaustiveIntegratedSearchPresentation.Group> exhaustiveTable =
             new TableView<>();
     private final TextArea exhaustiveDetails = new TextArea();
@@ -131,12 +132,30 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         VBox header = new VBox(8,
                 new Label("Social Security Strategy Analyzer"),
                 householdSummary(),
-                inputs(),
-                new HBox(10, runButton, status),
-                socialSecurityProgress,
-                stale);
+                heading("Longevity and Valuation Assumptions"),
+                wrappedLabel("These are shared analyzer assumptions. Each analysis mode explains "
+                        + "how it uses them. The valuation date also sets the Social Security "
+                        + "analysis and mortality base date."),
+                inputs());
         header.setPadding(new Insets(12));
 
+        TabPane modes = new TabPane(
+                tab("Social Security Only", socialSecurityContent()),
+                tab("Integrated Retirement Plan", integratedContent()));
+        BorderPane root = new BorderPane(modes);
+        root.setTop(header);
+        Button closeButton = new Button("Close");
+        closeButton.setOnAction(event -> stage.close());
+        Label scope = new Label(
+                "Read-only analysis. No strategy is applied to or saved in the active retirement plan.");
+        HBox footer = new HBox(12, scope, closeButton);
+        HBox.setHgrow(scope, Priority.ALWAYS);
+        footer.setPadding(new Insets(10));
+        root.setBottom(footer);
+        return root;
+    }
+
+    private VBox socialSecurityContent() {
         recommendation.setPadding(new Insets(16));
         recommendation.getChildren().add(new Label(
                 "Run analysis to identify the highest expected-PV tested strategy."));
@@ -153,27 +172,27 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 tab("Claiming Grid", gridScroll),
                 tab("Top Strategies", strategyBox),
                 tab("Assumptions", assumptions));
-        TabPane modes = new TabPane(
-                tab("Social Security Only", socialSecurityTabs),
-                tab("Integrated Retirement Plan", integratedContent()));
-        BorderPane root = new BorderPane(modes);
-        root.setTop(header);
-        Button closeButton = new Button("Close");
-        closeButton.setOnAction(event -> stage.close());
-        Label scope = new Label(
-                "Read-only analysis. No strategy is applied to or saved in the active retirement plan.");
-        HBox footer = new HBox(12, scope, closeButton);
-        HBox.setHgrow(scope, Priority.ALWAYS);
-        footer.setPadding(new Insets(10));
-        root.setBottom(footer);
-        return root;
+        VBox content = new VBox(8,
+                wrappedLabel("Uses the longevity assumptions above to weight Social Security benefits."),
+                new HBox(10, runButton, status), socialSecurityProgress, stale, socialSecurityTabs);
+        content.setPadding(new Insets(12));
+        VBox.setVgrow(socialSecurityTabs, Priority.ALWAYS);
+        return content;
     }
 
     private VBox integratedContent() {
+        // Keep deterministic content separate for a future Longevity-Weighted mode.
+        return deterministicIntegratedContent();
+    }
+
+    private VBox deterministicIntegratedContent() {
         TabPane tabs = new TabPane(
                 tab("Quick Comparison", quickComparisonContent()),
                 tab("Exhaustive Search", exhaustiveSearchContent()));
-        VBox content = new VBox(8, heading("Integrated Retirement Plan"), tabs);
+        VBox content = new VBox(8, heading("Deterministic Integrated Retirement Plan"),
+                wrappedLabel("Deterministic integrated analysis uses the retirement plan's configured "
+                        + "death scenario for full-plan outcomes. It does not use the longevity "
+                        + "assumptions above to weight full retirement-plan projections."), tabs);
         content.setPadding(new Insets(12));
         VBox.setVgrow(tabs, Priority.ALWAYS);
         return content;
@@ -214,7 +233,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 new VBox(8, heading("Selected Candidate"), integratedDetails));
         details.setDividerPositions(0.45);
         VBox content = new VBox(10,
-                explanation, actions, integratedProgress, integratedStale,
+                explanation,
+                wrappedLabel("Candidate selection and Social Security Expected PV use the longevity "
+                        + "assumptions above. Integrated retirement-plan outcome columns remain deterministic."),
+                actions, integratedProgress, integratedStale,
                 details, tableBox, heading("Methodology and Assumptions"), integratedMethodology);
         content.setPadding(new Insets(12));
         VBox.setVgrow(tableBox, Priority.ALWAYS);
@@ -229,8 +251,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         exhaustiveSummary.getChildren().setAll(new Label(
                 "Current-plan and exhaustive-search summary will appear after a successful run."));
         Label explanation = new Label(
-                "Exhaustive Search evaluates all tested retirement and survivor claiming "
-                        + "combinations directly against the full retirement plan. The ranking "
+                "Exhaustive Search evaluates all tested claiming strategies against the "
+                        + "deterministic full retirement plan. Longevity assumptions above are not "
+                        + "used in this search. The ranking "
                         + "shown is deterministic After-Tax Estate Ranking under current projection "
                         + "assumptions. It is not a universal recommendation.");
         explanation.setWrapText(true);
@@ -300,7 +323,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         grid.add(help, 0, 2, 4, 1);
         grid.addRow(3,
                 new Label("Real discount rate (%):"), discountRate,
-                new Label("PV base date:"), pvDate);
+                new Label("Valuation date:"), pvDate);
         return grid;
     }
 
@@ -348,6 +371,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 presentation = SocialSecurityStrategyAnalyzerPresentation.from(run.result());
                 render(run.context(), presentation);
                 socialSecurityResultCurrent = true;
+                refreshExhaustiveSocialSecurityReference();
                 stale.setText("");
                 integratedRunButton.setDisable(false);
                 markIntegratedStale("Social Security analysis changed - run integrated analysis again.");
@@ -655,7 +679,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 new Label("Successful: " + result.successfulStrategyCount()
                         + " | Failed: " + result.failedStrategyCount()
                         + " | Runtime: " + formatDuration(model.runtime())),
-                new Label(socialSecurityCrossReference(model)));
+                exhaustiveSocialSecurityReference);
+        refreshExhaustiveSocialSecurityReference();
         exhaustiveTable.getItems().setAll(model.groups());
         if (model.groups().isEmpty()) {
             exhaustiveDetails.setText("No successful exhaustive-search outcomes were returned.");
@@ -957,7 +982,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         context.request().retirementGridRequest().baseStrategy().socialSecurityColaRate())
                 + "\nReal discount rate: " + percent(
                         context.request().retirementGridRequest().realDiscountRate())
-                + "\nPV base date: " + DATE.format(
+                + "\nValuation date: " + DATE.format(
                         context.request().retirementGridRequest().presentValueBaseDate())
                 + "\nRetirement claims tested: whole ages 62–70"
                 + "\nSurvivor claims tested: age 60, whole years, plus exact survivor FRA"
@@ -974,10 +999,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private void markStale() {
         if (presentation != null) {
             socialSecurityResultCurrent = false;
-            stale.setText("Inputs changed - run analysis again.");
+            refreshExhaustiveSocialSecurityReference();
+            stale.setText("Inputs changed - run Social Security analysis again.");
             integratedRunButton.setDisable(true);
             markIntegratedStale(
-                    "Social Security inputs changed - rerun both analyses.");
+                    "Social Security inputs changed - rerun Social Security analysis and Quick Comparison.");
         }
     }
 
@@ -985,15 +1011,16 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         if (integratedPresentation != null) {
             integratedStale.setText(message);
         }
+    }
+
+    private void refreshExhaustiveSocialSecurityReference() {
         if (exhaustivePresentation != null) {
-            exhaustiveStale.setText(message);
+            exhaustiveSocialSecurityReference.setText(socialSecurityCrossReference(exhaustivePresentation));
         }
     }
 
     private void setBusy(boolean busy) {
-        setAnalysisInputsDisabled(busy);
-        runButton.setDisable(busy);
-        integratedRunButton.setDisable(busy || !socialSecurityResultCurrent);
+        setAnalysisBusy(busy);
         if (!busy) {
             socialSecurityProgress.hide();
         }
@@ -1003,11 +1030,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void setIntegratedBusy(boolean busy) {
-        setAnalysisInputsDisabled(busy);
-        integratedCandidateCount.setDisable(busy);
-        runButton.setDisable(busy);
-        integratedRunButton.setDisable(busy || !socialSecurityResultCurrent);
-        exhaustiveRunButton.setDisable(busy);
+        setAnalysisBusy(busy);
         if (!busy) {
             integratedProgress.hide();
         }
@@ -1017,11 +1040,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void setExhaustiveBusy(boolean busy) {
-        setAnalysisInputsDisabled(busy);
-        runButton.setDisable(busy);
-        integratedRunButton.setDisable(busy || !socialSecurityResultCurrent);
-        integratedCandidateCount.setDisable(busy);
-        exhaustiveRunButton.setDisable(busy);
+        setAnalysisBusy(busy);
         exhaustiveCancelButton.setVisible(busy);
         exhaustiveCancelButton.setManaged(busy);
         if (!busy) {
@@ -1031,7 +1050,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         }
     }
 
-    private void setAnalysisInputsDisabled(boolean disabled) {
+    private void setAnalysisBusy(boolean disabled) {
+        runButton.setDisable(disabled);
+        integratedRunButton.setDisable(disabled || !socialSecurityResultCurrent);
+        exhaustiveRunButton.setDisable(disabled);
+        integratedCandidateCount.setDisable(disabled);
         primaryCategory.setDisable(disabled);
         spouseCategory.setDisable(disabled);
         primaryMortalityAdjustment.setDisable(disabled);
@@ -1065,6 +1088,12 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private static Label heading(String text) {
         Label label = new Label(text);
         label.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        return label;
+    }
+
+    private static Label wrappedLabel(String text) {
+        Label label = new Label(text);
+        label.setWrapText(true);
         return label;
     }
 

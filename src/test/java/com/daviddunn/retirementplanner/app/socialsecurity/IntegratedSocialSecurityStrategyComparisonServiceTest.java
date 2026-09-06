@@ -258,6 +258,19 @@ class IntegratedSocialSecurityStrategyComparisonServiceTest {
         assertSame(expected, entry.socialSecurityOnlyExpectedValue().orElseThrow());
         assertNotEquals(expected.expectedPresentValue(),
                 entry.integratedResult().orElseThrow().metrics().afterTaxEstate());
+
+        SocialSecurityMortalityWeightedStrategyValue differentExpected =
+                new SocialSecurityMortalityWeightedStrategyValue(
+                        new BigDecimal("600"), new BigDecimal("500"),
+                        new BigDecimal("450"), new BigDecimal("400"),
+                        new BigDecimal("200"), 8);
+        var changed = service.compareAnalyzerCandidates(plan, List.of(
+                new SocialSecuritySurvivorClaimingOptimizationCell(strategy, differentExpected)))
+                .entries().getFirst();
+        assertSame(differentExpected, changed.socialSecurityOnlyExpectedValue().orElseThrow());
+        assertEquals(entry.integratedResult().orElseThrow().metrics(),
+                changed.integratedResult().orElseThrow().metrics());
+        assertEquals(entry.differencesFromCurrentPlan(), changed.differencesFromCurrentPlan());
     }
 
     private RetirementPlan plan() {
