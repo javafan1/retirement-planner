@@ -13,7 +13,7 @@ class ResultsSummaryRothValidationTest {
     void disabledRothConversionDoesNotParseBlankFields()
             throws Exception {
 
-        String method = applyRothConversionMethod();
+        String method = applyRothConversionMethod().replace("\r\n", "\n");
 
         int disabledCheck =
                 method.indexOf("if (!enabled)");
