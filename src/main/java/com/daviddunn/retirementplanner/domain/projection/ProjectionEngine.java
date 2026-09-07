@@ -200,6 +200,12 @@ public class ProjectionEngine {
         int projectionLength =
                 assumptions.getProjectionLengthYears();
 
+        if (evaluationContext.endingYearOverride().isPresent()) {
+            int lastYear = Math.max(startYear + projectionLength - 1,
+                    evaluationContext.endingYearOverride().orElseThrow());
+            projectionLength = Math.addExact(Math.subtractExact(lastYear, startYear), 1);
+        }
+
         EffectiveHouseholdDeathView deathView = EffectiveHouseholdDeathView.resolve(
                 assumptions.getDeathScenarioAssumptions(), evaluationContext.householdLifetimeScenario());
 

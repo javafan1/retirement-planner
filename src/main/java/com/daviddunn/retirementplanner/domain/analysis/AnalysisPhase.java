@@ -6,7 +6,8 @@ public enum AnalysisPhase {
     SOCIAL_SECURITY_SURVIVOR_STRATEGIES("Stage 2 of 2: Survivor strategy evaluation"),
     CURRENT_PLAN_BASELINE("Evaluating current-plan baseline"),
     QUICK_COMPARISON_CANDIDATES("Evaluating integrated candidates"),
-    EXHAUSTIVE_INTEGRATED_STRATEGIES("Evaluating integrated strategies");
+    EXHAUSTIVE_INTEGRATED_STRATEGIES("Evaluating integrated strategies"),
+    LONGEVITY_INTEGRATED_SCENARIOS("Evaluating household lifetime scenarios");
 
     private final String displayName;
 

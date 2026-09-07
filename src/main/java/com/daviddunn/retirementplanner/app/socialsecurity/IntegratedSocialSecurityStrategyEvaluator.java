@@ -97,7 +97,7 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
                 strategy, projection, metrics, advanced, warnings);
     }
 
-    private static void requireAdvancedPlan(RetirementPlan plan) {
+    static void requireAdvancedPlan(RetirementPlan plan) {
         if (!new SocialSecurityProjectionIncomeProvider().supportsAdvancedPath(plan)) {
             throw new IllegalArgumentException(
                     "Integrated Social Security strategy evaluation requires two modern-cohort "
@@ -106,7 +106,7 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
         }
     }
 
-    private static void validateStrategy(
+    static void validateStrategy(
             RetirementPlan plan,
             SocialSecurityHouseholdClaimingStrategy strategy) {
         validateOwnerStrategy(plan.getHousehold().getPrimaryPerson(),

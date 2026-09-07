@@ -8,7 +8,8 @@ import java.util.Optional;
 /** Immutable overrides scoped to one projection execution. */
 public record ProjectionEvaluationContext(
         Optional<SocialSecurityHouseholdClaimingStrategy> socialSecurityStrategy,
-        Optional<HouseholdLifetimeScenario> householdLifetimeScenario) {
+        Optional<HouseholdLifetimeScenario> householdLifetimeScenario,
+        Optional<Integer> endingYearOverride) {
 
     public ProjectionEvaluationContext {
         socialSecurityStrategy = Objects.requireNonNull(
@@ -16,6 +17,20 @@ public record ProjectionEvaluationContext(
                 "Social Security strategy override is required.");
         householdLifetimeScenario = Objects.requireNonNull(
                 householdLifetimeScenario, "Lifetime scenario optional is required.");
+        endingYearOverride = Objects.requireNonNull(endingYearOverride, "Ending year optional is required.");
+        endingYearOverride.ifPresent(java.time.Year::of);
+    }
+
+    public ProjectionEvaluationContext(
+            Optional<SocialSecurityHouseholdClaimingStrategy> socialSecurityStrategy,
+            Optional<HouseholdLifetimeScenario> householdLifetimeScenario) {
+        this(socialSecurityStrategy, householdLifetimeScenario, Optional.empty());
+    }
+
+    /** Extension only: the engine retains at least the configured horizon. */
+    public ProjectionEvaluationContext withEndingYear(int endingYear) {
+        return new ProjectionEvaluationContext(socialSecurityStrategy,
+                householdLifetimeScenario, Optional.of(endingYear));
     }
 
     public ProjectionEvaluationContext(
