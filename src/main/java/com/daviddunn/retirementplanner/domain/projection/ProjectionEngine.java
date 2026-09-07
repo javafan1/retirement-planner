@@ -1,9 +1,12 @@
 package com.daviddunn.retirementplanner.domain.projection;
 
+import java.util.Optional;
+import java.util.Set;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.estate.AfterTaxEstateCalculator;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.income.HouseholdPensionIncomeCalculator;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.roth.*;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
@@ -11,7 +14,6 @@ import com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket;
 import com.daviddunn.retirementplanner.domain.rules.FederalTaxRules;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
-import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 
 import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
@@ -38,6 +40,8 @@ import java.util.Map;
 
 public class ProjectionEngine {
 
+    private final HouseholdPensionIncomeCalculator householdPensionIncomeCalculator =
+            new HouseholdPensionIncomeCalculator();
     private final WithdrawalCalculator withdrawalCalculator;
     private final HouseholdRmdCalculator householdRmdCalculator;
     private final OpeningRmdCalculator openingRmdCalculator;
@@ -196,12 +200,16 @@ public class ProjectionEngine {
         int projectionLength =
                 assumptions.getProjectionLengthYears();
 
+        EffectiveHouseholdDeathView deathView = EffectiveHouseholdDeathView.resolve(
+                assumptions.getDeathScenarioAssumptions(), evaluationContext.householdLifetimeScenario());
+
         Map<Integer, HouseholdSocialSecurityResult> socialSecurityByYear =
                 socialSecurityProjectionIncomeProvider.calculate(
                         plan,
                         startYear,
                         startYear + projectionLength - 1,
-                        evaluationContext);
+                        evaluationContext,
+                        deathView);
 
         /*
          * There is intentionally no prior-year-end
@@ -214,6 +222,8 @@ public class ProjectionEngine {
         RmdBalanceSnapshot priorYearEndSnapshot =
                 null;
 
+        boolean lifetimeRun = evaluationContext.householdLifetimeScenario().isPresent();
+        boolean householdRmdHasOccurred = false;
         for (int yearOffset = 0;
              yearOffset < projectionLength;
              yearOffset++) {
@@ -231,11 +241,15 @@ public class ProjectionEngine {
                             withdrawalStrategy,
                             socialSecurityByYear.getOrDefault(
                                     calendarYear,
-                                    HouseholdSocialSecurityResult.zero()));
+                                    HouseholdSocialSecurityResult.zero()),
+                            deathView,
+                            lifetimeRun,
+                            householdRmdHasOccurred);
 
             ProjectionYear projectionYear =
                     calculation.getProjectionYear();
 
+            householdRmdHasOccurred |= projectionYear.getRequiredMinimumDistribution().signum() > 0;
             ProjectedPortfolio endingPortfolio =
                     calculation.getEndingPortfolio();
 
@@ -273,7 +287,10 @@ public class ProjectionEngine {
             ProjectedPortfolio projectedPortfolio,
             RmdBalanceSnapshot priorYearEndSnapshot,
             WithdrawalStrategy withdrawalStrategy,
-            HouseholdSocialSecurityResult socialSecurityResult) {
+            HouseholdSocialSecurityResult socialSecurityResult,
+            EffectiveHouseholdDeathView deathView,
+            boolean lifetimeRun,
+            boolean householdRmdHasOccurred) {
 
         return calculateProjectionYear(
                 plan,
@@ -283,6 +300,9 @@ public class ProjectionEngine {
                 priorYearEndSnapshot,
                 withdrawalStrategy,
                 socialSecurityResult,
+                deathView,
+                lifetimeRun,
+                householdRmdHasOccurred,
                 null);
     }
 
@@ -294,6 +314,9 @@ public class ProjectionEngine {
             RmdBalanceSnapshot priorYearEndSnapshot,
             WithdrawalStrategy withdrawalStrategy,
             HouseholdSocialSecurityResult socialSecurityResult,
+            EffectiveHouseholdDeathView deathView,
+            boolean lifetimeRun,
+            boolean householdRmdHasOccurred,
             MedicarePremiumCalculation authoritativeMedicarePremium) {
 
         BigDecimal beginningAssets =
@@ -343,19 +366,30 @@ public class ProjectionEngine {
         Household household =
                 plan.getHousehold();
 
+        Set<AccountOwnership> eligibleOwners = java.util.stream.Stream.of(
+                        AccountOwnership.PRIMARY, AccountOwnership.SPOUSE)
+                .filter(owner -> !lifetimeRun || deathView.isAlive(owner, calendarYear))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        Optional<BigDecimal> authoritativePensionIncome = lifetimeRun
+                ? Optional.of(householdPensionIncomeCalculator
+                        .calculate(household, projectionDate, deathView))
+                : Optional.empty();
+
         BigDecimal guaranteedIncome =
                 calculateTotalIncome(
                         household,
                         projectionDate,
                         assumptions,
-                        socialSecurityResult);
+                        socialSecurityResult,
+                        deathView, authoritativePensionIncome);
 
         BigDecimal annualExpenses =
                 calculateProjectedExpenses(
                         household,
                         assumptions,
                         yearOffset,
-                        projectionDate);
+                        projectionDate,
+                        deathView);
 
         BigDecimal cashFlowExpenses =
                 annualExpenses.add(
@@ -375,7 +409,7 @@ public class ProjectionEngine {
                 ? openingRmdCalculator.calculate(
                         plan,
                         calendarYear,
-                        governmentRules)
+                        governmentRules, eligibleOwners)
                 : null;
 
         HouseholdRmdResult annualHouseholdRmdResult =
@@ -384,7 +418,7 @@ public class ProjectionEngine {
                         : calculateRequiredMinimumDistribution(
                                 plan,
                                 calendarYear,
-                                priorYearEndSnapshot);
+                                priorYearEndSnapshot, eligibleOwners);
 
         HouseholdRmdResult projectedPeriodRmdResult =
                 openingRmdCalculation != null
@@ -490,7 +524,7 @@ public class ProjectionEngine {
                         .shouldExecuteConvert(
                                 rothConversionRequest,
                                 calendarYear,
-                                householdSubjectToRmd)) {
+                                householdSubjectToRmd || (lifetimeRun && householdRmdHasOccurred))) {
 
             RothConversionStrategy strategy =
                     rothConversionRequest.getStrategy();
@@ -507,7 +541,8 @@ public class ProjectionEngine {
                 FilingStatus projectionFilingStatus =
                         getProjectionFilingStatus(
                                 assumptions,
-                                projectionDate);
+                                projectionDate,
+                                deathView);
 
                 BigDecimal targetTaxableIncome;
 
@@ -565,7 +600,8 @@ public class ProjectionEngine {
                                                 .getDeathScenarioAssumptions(),
                                         rmdDistributedBeforeProjection,
                                         socialSecurityResult,
-                                        availableHouseholdCashForTaxes);
+                                        availableHouseholdCashForTaxes,
+                                        authoritativePensionIncome);
             }
         }
 
@@ -579,12 +615,12 @@ public class ProjectionEngine {
         rothConversion = rothConversion.min(
                 projectedPortfolioRothConverter
                         .getMaximumConvertibleAmount(
-                                portfolioAfterAdditionalWithdrawal));
+                                portfolioAfterAdditionalWithdrawal, eligibleOwners));
 
         ProjectedRothConversionResult rothConversionResult =
                 projectedPortfolioRothConverter.convertHousehold(
                         portfolioAfterAdditionalWithdrawal,
-                        rothConversion);
+                        rothConversion, eligibleOwners);
 
         rothConversion = rothConversionResult.getTotalConversion();
 
@@ -600,7 +636,8 @@ public class ProjectionEngine {
                         withdrawalStrategy,
                         getProjectionFilingStatus(
                                 assumptions,
-                                projectionDate),
+                                projectionDate,
+                                deathView),
                         projectedGovernmentRules,
                         rothConversion,
                         BigDecimal.ZERO,
@@ -608,7 +645,8 @@ public class ProjectionEngine {
                         assumptions.getDeathScenarioAssumptions(),
                         rmdDistributedBeforeProjection,
                         socialSecurityResult,
-                        availableHouseholdCashForTaxes);
+                        availableHouseholdCashForTaxes,
+                        authoritativePensionIncome);
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();
@@ -627,13 +665,14 @@ public class ProjectionEngine {
                 calculateCoveredMedicareParticipants(
                         household,
                         projectionDate,
-                        assumptions.getDeathScenarioAssumptions());
+                        deathView);
 
 
         FilingStatus projectionFilingStatus =
                 getProjectionFilingStatus(
                         assumptions,
-                        projectionDate);
+                        projectionDate,
+                        deathView);
 
         MedicarePremiumCalculation medicarePremiumCalculation =
                 authoritativeMedicarePremium == null
@@ -656,6 +695,9 @@ public class ProjectionEngine {
                     priorYearEndSnapshot,
                     withdrawalStrategy,
                     socialSecurityResult,
+                    deathView,
+                    lifetimeRun,
+                    householdRmdHasOccurred,
                     medicarePremiumCalculation);
         }
 
@@ -786,7 +828,7 @@ public class ProjectionEngine {
     private HouseholdRmdResult calculateRequiredMinimumDistribution(
             RetirementPlan plan,
             int calendarYear,
-            RmdBalanceSnapshot priorYearEndSnapshot) {
+            RmdBalanceSnapshot priorYearEndSnapshot, Set<AccountOwnership> eligibleOwners) {
 
         /*
          * The first projection year does not have
@@ -800,7 +842,7 @@ public class ProjectionEngine {
                 plan,
                 priorYearEndSnapshot,
                 calendarYear,
-                governmentRules);
+                governmentRules, eligibleOwners);
     }
 
     private BigDecimal calculateInvestmentGrowth(
@@ -866,7 +908,8 @@ public class ProjectionEngine {
             Household household,
             LocalDate projectionDate,
             PlanningAssumptions assumptions,
-            HouseholdSocialSecurityResult socialSecurityResult) {
+            HouseholdSocialSecurityResult socialSecurityResult,
+            EffectiveHouseholdDeathView deathView, Optional<BigDecimal> authoritativePensionIncome) {
 
         BigDecimal total =
                 BigDecimal.ZERO;
@@ -875,22 +918,22 @@ public class ProjectionEngine {
                 calculateIncome(
                         household.getPrimaryPerson(),
                         projectionDate,
-                        assumptions));
+                        deathView, authoritativePensionIncome.isPresent()));
 
         total = total.add(
                 calculateIncome(
                         household.getSpouse(),
                         projectionDate,
-                        assumptions));
+                        deathView, authoritativePensionIncome.isPresent()));
 
         total = total.add(
                 socialSecurityResult.householdBenefit());
 
-        total = total.add(
+        total = total.add(authoritativePensionIncome.orElseGet(() ->
                 calculateSurvivorPensionIncome(
                         household,
                         projectionDate,
-                        assumptions));
+                        deathView)));
 
         return total;
     }
@@ -898,42 +941,16 @@ public class ProjectionEngine {
     private BigDecimal calculateSurvivorPensionIncome(
             Household household,
             LocalDate projectionDate,
-            PlanningAssumptions assumptions) {
+            EffectiveHouseholdDeathView deathView) {
 
-        DeathScenario deathScenario =
-                assumptions
-                        .getDeathScenarioAssumptions()
-                        .getDeathScenario();
-
-        if (deathScenario == DeathScenario.BOTH_SURVIVE) {
+        int year = projectionDate.getYear();
+        boolean primaryAlive = deathView.isAlive(AccountOwnership.PRIMARY, year);
+        boolean spouseAlive = deathView.isAlive(AccountOwnership.SPOUSE, year);
+        if (primaryAlive == spouseAlive) {
             return BigDecimal.ZERO;
         }
-
-        Person deceasedPerson;
-
-        if (deathScenario == DeathScenario.PRIMARY_DIES) {
-
-            deceasedPerson =
-                    household.getPrimaryPerson();
-
-        } else {
-
-            deceasedPerson =
-                    household.getSpouse();
-        }
-
-        /*
-         * Survivor benefits do not begin until the
-         * death scenario is active.
-         */
-        if (!assumptions
-                .getDeathScenarioAssumptions()
-                .isDeathScenarioActive(
-                        projectionDate.getYear())) {
-
-            return BigDecimal.ZERO;
-        }
-
+        Person deceasedPerson = primaryAlive
+                ? household.getSpouse() : household.getPrimaryPerson();
         BigDecimal total =
                 BigDecimal.ZERO;
 
@@ -958,7 +975,7 @@ public class ProjectionEngine {
     private BigDecimal calculateIncome(
             Person person,
             LocalDate projectionDate,
-            PlanningAssumptions assumptions) {
+            EffectiveHouseholdDeathView deathView, boolean pensionAlreadyCalculated) {
 
         BigDecimal total =
                 BigDecimal.ZERO;
@@ -966,15 +983,13 @@ public class ProjectionEngine {
         for (IncomeSource income :
                 person.getIncomeSources()) {
 
-            if (income instanceof SocialSecurityIncome) {
+            if (income instanceof SocialSecurityIncome || (pensionAlreadyCalculated && income instanceof Pension)) {
                 continue;
             }
 
-            if (!assumptions
-                    .getDeathScenarioAssumptions()
-                    .isIncomeActive(
-                            income.getOwnership(),
-                            projectionDate.getYear())) {
+            if (!deathView.isAlive(
+                    income.getOwnership(),
+                    projectionDate.getYear())) {
 
                 continue;
             }
@@ -991,7 +1006,8 @@ public class ProjectionEngine {
             Household household,
             PlanningAssumptions assumptions,
             int yearOffset,
-            LocalDate projectionDate) {
+            LocalDate projectionDate,
+            EffectiveHouseholdDeathView deathView) {
 
         BigDecimal totalExpenses =
                 BigDecimal.ZERO;
@@ -1003,6 +1019,11 @@ public class ProjectionEngine {
                     projectionDate.getYear(),
                     assumptions.getProjectionStartDate())) {
 
+                continue;
+            }
+
+            if (expense.getExpenseType() == ExpenseType.RECURRING
+                    && deathView.areBothDeceased(projectionDate.getYear())) {
                 continue;
             }
 
@@ -1048,9 +1069,7 @@ public class ProjectionEngine {
              */
             if (expense.getExpenseType()
                     == ExpenseType.RECURRING
-                    && assumptions
-                    .getDeathScenarioAssumptions()
-                    .isDeathScenarioActive(
+                    && deathView.hasAnyDeathOccurred(
                             projectionDate.getYear())) {
 
                 projectedExpense =
@@ -1139,14 +1158,14 @@ public class ProjectionEngine {
     private int calculateCoveredMedicareParticipants(
             Household household,
             LocalDate projectionDate,
-            DeathScenarioAssumptions deathAssumptions) {
+            EffectiveHouseholdDeathView deathView) {
 
         int participants = 0;
 
         Person primary = household.getPrimaryPerson();
 
         if (primary.getBirthDate() != null &&
-                deathAssumptions.isAlive(
+                deathView.isAlive(
                         AccountOwnership.PRIMARY,
                         projectionDate.getYear()) &&
                 primary.getAge(projectionDate) >= 65) {
@@ -1156,7 +1175,7 @@ public class ProjectionEngine {
         Person spouse = household.getSpouse();
 
         if (spouse.getBirthDate() != null &&
-                deathAssumptions.isAlive(
+                deathView.isAlive(
                         AccountOwnership.SPOUSE,
                         projectionDate.getYear()) &&
                 spouse.getAge(projectionDate) >= 65) {
@@ -1169,36 +1188,14 @@ public class ProjectionEngine {
 
     private static FilingStatus getProjectionFilingStatus(
             PlanningAssumptions assumptions,
-            LocalDate projectionDate) {
+            LocalDate projectionDate,
+            EffectiveHouseholdDeathView deathView) {
 
-        DeathScenarioAssumptions deathScenario =
-                assumptions
-                        .getDeathScenarioAssumptions();
-
-        /*
-         * Before the death scenario becomes active,
-         * use the filing status configured by the user.
-         */
-        if (!deathScenario.isDeathScenarioActive(
-                projectionDate.getYear())) {
-
+        int year = projectionDate.getYear();
+        if (!deathView.hasAnyDeathOccurred(year)
+                || deathView.firstDeathYear().orElseThrow().getValue() == year) {
             return getFilingStatus(assumptions);
         }
-
-        /*
-         * The death year retains the configured
-         * filing status.
-         */
-        if (projectionDate.getYear()
-                == deathScenario.getDeathYear()) {
-
-            return getFilingStatus(assumptions);
-        }
-
-        /*
-         * Beginning the year after death, the
-         * surviving spouse files as Single.
-         */
         return FilingStatus.SINGLE;
     }
 

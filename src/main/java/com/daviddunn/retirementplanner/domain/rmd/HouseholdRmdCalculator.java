@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.rmd;
 
+import java.util.Set;
 import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.Household;
@@ -92,6 +93,17 @@ public final class HouseholdRmdCalculator {
             int projectionYear,
             GovernmentRules governmentRules) {
 
+        return calculate(plan, balanceSnapshot, projectionYear, governmentRules,
+                Set.of(AccountOwnership.PRIMARY, AccountOwnership.SPOUSE));
+    }
+
+    public HouseholdRmdResult calculate(
+            RetirementPlan plan,
+            RmdBalanceSnapshot balanceSnapshot,
+            int projectionYear,
+            GovernmentRules governmentRules,
+            Set<AccountOwnership> eligibleOwners) {
+        eligibleOwners = Set.copyOf(Objects.requireNonNull(eligibleOwners));
         Objects.requireNonNull(
                 plan,
                 "Retirement plan is required.");
@@ -117,22 +129,22 @@ public final class HouseholdRmdCalculator {
                 household.getSpouse();
 
         OwnerRmdResult primaryResult =
-                calculateOwnerRmd(
+                eligibleOwners.contains(AccountOwnership.PRIMARY) ? calculateOwnerRmd(
                         portfolio,
                         balanceSnapshot,
                         primary,
                         AccountOwnership.PRIMARY,
                         projectionYear,
-                        governmentRules);
+                        governmentRules) : OwnerRmdResult.zero();
 
         OwnerRmdResult spouseResult =
-                calculateOwnerRmd(
+                eligibleOwners.contains(AccountOwnership.SPOUSE) ? calculateOwnerRmd(
                         portfolio,
                         balanceSnapshot,
                         spouse,
                         AccountOwnership.SPOUSE,
                         projectionYear,
-                        governmentRules);
+                        governmentRules) : OwnerRmdResult.zero();
 
         return new HouseholdRmdResult(
                 primaryResult,

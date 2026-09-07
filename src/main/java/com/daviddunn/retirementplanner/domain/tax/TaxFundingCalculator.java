@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
+import java.util.Optional;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
@@ -204,6 +205,42 @@ public final class TaxFundingCalculator {
             BigDecimal openingTaxDeferredDistribution,
             HouseholdSocialSecurityResult socialSecurityResult,
             BigDecimal availableHouseholdCash) {
+        return calculate(
+                household,
+                projectionDate,
+                portfolio,
+                existingWithdrawals,
+                withdrawalStrategy,
+                filingStatus,
+                projectedGovernmentRules,
+                rothConversion,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                deathAssumptions,
+                openingTaxDeferredDistribution,
+                socialSecurityResult,
+                availableHouseholdCash,
+                Optional.empty());
+    }
+
+    public TaxFundingResult calculate(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal availableHouseholdCash,
+            Optional<BigDecimal> authoritativePensionIncome) {
+        Objects.requireNonNull(authoritativePensionIncome, "Authoritative pension optional is required.");
+
 
         Objects.requireNonNull(
                 household,
@@ -308,7 +345,8 @@ public final class TaxFundingCalculator {
                             taxableInterestIncome,
                             socialSecurityColaRate,
                             deathAssumptions,
-                            socialSecurityResult);
+                            socialSecurityResult,
+                            authoritativePensionIncome);
 
             FederalTaxCalculation federalTaxCalculation =
                     federalTaxCalculator.calculate(
@@ -366,7 +404,8 @@ public final class TaxFundingCalculator {
                                 taxableInterestIncome,
                                 socialSecurityColaRate,
                                 deathAssumptions,
-                                socialSecurityResult);
+                                socialSecurityResult,
+                                authoritativePensionIncome);
 
                 FederalTaxCalculation finalFederalTaxCalculation =
                         federalTaxCalculator.calculate(

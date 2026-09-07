@@ -58,7 +58,11 @@ class SocialSecuritySurvivorClaimingOptimizationCalculatorTest {
                         retirementStrategy,
                         strategy.primarySurvivorElection().claimDate(),
                         strategy.spouseSurvivorElection().claimDate(),
-                        result.retirementGrid().jointMortalityScenarios(),
+                        HouseholdLongevityScenarioFactoryTest.legacyScenarios(
+                                request.retirementGridRequest().baseStrategy().primaryElection().birthDate(),
+                                request.retirementGridRequest().baseStrategy().spouseElection().birthDate(),
+                                request.retirementGridRequest().primaryMortality(),
+                                request.retirementGridRequest().spouseMortality()),
                         request.retirementGridRequest().presentValueBaseDate(),
                         request.retirementGridRequest().realDiscountRate());
 

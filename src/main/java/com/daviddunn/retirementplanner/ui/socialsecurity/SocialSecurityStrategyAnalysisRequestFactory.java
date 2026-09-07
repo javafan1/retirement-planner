@@ -58,18 +58,15 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
         requireBenefit(spouseSource, "Spouse");
 
         SocialSecurityMortalityTable table = SocialSecurityMortalityTables.ssaPeriod2022();
-        SocialSecurityMortalityDistributionProvider provider =
-                new SocialSecurityMortalityDistributionProvider(table);
-        SocialSecurityMortalityDistribution primaryMortality = provider.createDistribution(
-                new SocialSecurityMortalityDistributionRequest(
-                        primary.getBirthDate(), presentValueBaseDate, primaryCategory,
-                        primaryAdjustment))
-                .distribution();
-        SocialSecurityMortalityDistribution spouseMortality = provider.createDistribution(
-                new SocialSecurityMortalityDistributionRequest(
-                        spouse.getBirthDate(), presentValueBaseDate, spouseCategory,
-                        spouseAdjustment))
-                .distribution();
+        // The compatibility UI supplies one date, but conditioning is a separate concept.
+        AnalyzerLongevityAssumptions longevity = new AnalyzerLongevityAssumptions(
+                primaryCategory, primaryAdjustment, spouseCategory, spouseAdjustment,
+                presentValueBaseDate, table.metadata(),
+                SocialSecurityMortalityPartialYearConvention.NEXT_COMPLETE_BIRTHDAY_INTERVAL);
+        HouseholdLongevityScenarios prepared = new HouseholdLongevityScenarioFactory(table)
+                .create(primary.getBirthDate(), spouse.getBirthDate(), longevity);
+        SocialSecurityMortalityDistribution primaryMortality = prepared.primary().distribution();
+        SocialSecurityMortalityDistribution spouseMortality = prepared.spouse().distribution();
         LocalDate primaryDeath = SocialSecurityDeathDateCalculator.calculateDeathDate(
                 primary.getBirthDate(), primaryMortality.deathAges().getLast());
         LocalDate spouseDeath = SocialSecurityDeathDateCalculator.calculateDeathDate(
@@ -111,7 +108,8 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
                 spouseCategory,
                 primaryAdjustment,
                 spouseAdjustment,
-                table.metadata());
+                table.metadata(),
+                longevity);
     }
 
     private static Person requirePerson(Person person, String owner) {

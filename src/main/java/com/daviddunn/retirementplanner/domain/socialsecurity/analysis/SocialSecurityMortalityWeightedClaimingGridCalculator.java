@@ -60,7 +60,12 @@ public final class SocialSecurityMortalityWeightedClaimingGridCalculator {
         Objects.requireNonNull(request, "Mortality-weighted grid request is required.");
         Objects.requireNonNull(progressListener, "Progress listener is required.");
 
-        List<SocialSecurityJointMortalityScenario> scenarios = scenarios(request);
+        List<SocialSecurityJointMortalityScenario> scenarios =
+                HouseholdLongevityScenarioFactory.combine(
+                        request.baseStrategy().primaryElection().birthDate(),
+                        request.baseStrategy().spouseElection().birthDate(),
+                        request.primaryMortality(),
+                        request.spouseMortality());
         Map<Integer, LocalDate> primaryDates = claimDates(
                 request.baseStrategy().primaryElection().birthDate(),
                 request.primaryClaimAges());
@@ -198,44 +203,6 @@ public final class SocialSecurityMortalityWeightedClaimingGridCalculator {
                             + exception.getMessage(),
                     exception);
         }
-    }
-
-    private static List<SocialSecurityJointMortalityScenario> scenarios(
-            SocialSecurityMortalityWeightedClaimingGridRequest request) {
-        SocialSecurityIndependentJointMortalityCalculator jointCalculator =
-                new SocialSecurityIndependentJointMortalityCalculator();
-        List<SocialSecurityJointMortalityScenario> scenarios = new ArrayList<>();
-        BigDecimal total = BigDecimal.ZERO;
-        for (SocialSecurityMortalityProbability primary
-                : request.primaryMortality().probabilities()) {
-            LocalDate primaryDeathDate = SocialSecurityDeathDateCalculator
-                    .calculateDeathDate(
-                            request.baseStrategy().primaryElection().birthDate(),
-                            primary.deathAge());
-            for (SocialSecurityMortalityProbability spouse
-                    : request.spouseMortality().probabilities()) {
-                LocalDate spouseDeathDate = SocialSecurityDeathDateCalculator
-                        .calculateDeathDate(
-                                request.baseStrategy().spouseElection().birthDate(),
-                                spouse.deathAge());
-                BigDecimal joint = jointCalculator.calculate(
-                        primary.probability(), spouse.probability());
-                scenarios.add(new SocialSecurityJointMortalityScenario(
-                        primary.deathAge(),
-                        spouse.deathAge(),
-                        primaryDeathDate,
-                        spouseDeathDate,
-                        primary.probability(),
-                        spouse.probability(),
-                        joint));
-                total = total.add(joint);
-            }
-        }
-        if (total.compareTo(BigDecimal.ONE) != 0) {
-            throw new IllegalStateException(
-                    "Joint mortality probabilities must sum exactly to 1.");
-        }
-        return List.copyOf(scenarios);
     }
 
     private static Map<Integer, LocalDate> claimDates(

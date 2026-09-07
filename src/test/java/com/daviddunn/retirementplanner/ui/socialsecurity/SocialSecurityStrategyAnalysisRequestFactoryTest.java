@@ -45,6 +45,11 @@ class SocialSecurityStrategyAnalysisRequestFactoryTest {
                 context.request().retirementGridRequest().presentValueBaseDate());
         assertEquals(SocialSecurityMortalityCategory.MALE,
                 context.primaryMortalityCategory());
+        assertEquals(context.primaryMortalityCategory(), context.longevityAssumptions().primaryCategory());
+        assertEquals(context.spouseMortalityCategory(), context.longevityAssumptions().spouseCategory());
+        assertEquals(context.mortalityMetadata(), context.longevityAssumptions().tableMetadata());
+        assertEquals(context.request().retirementGridRequest().mortalityBaseDate(),
+                context.longevityAssumptions().mortalityBaseDate());
         assertEquals(originalStart, primarySource.getStartDate());
         assertEquals(originalBenefit, primarySource.getFullRetirementMonthlyBenefit());
         assertEquals(1, primary.getIncomeSources().size());

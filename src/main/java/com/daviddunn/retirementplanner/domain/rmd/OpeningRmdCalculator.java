@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.rmd;
 
+import java.util.Set;
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
@@ -42,10 +43,32 @@ public final class OpeningRmdCalculator {
             int distributionYear,
             GovernmentRules governmentRules) {
 
+        return calculate(plan, distributionYear, governmentRules,
+                Set.of(AccountOwnership.PRIMARY, AccountOwnership.SPOUSE));
+    }
+
+    public OpeningRmdCalculation calculate(
+            RetirementPlan plan,
+            int distributionYear,
+            GovernmentRules governmentRules,
+            Set<AccountOwnership> eligibleOwners) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         Objects.requireNonNull(governmentRules, "Government rules are required.");
+        eligibleOwners = Set.copyOf(Objects.requireNonNull(eligibleOwners));
+        for (Account account : plan.getAccountPortfolio().getAccounts()) {
+            OpeningRmdAccountData data = account.getOpeningRmdAccountData();
+            if (account.getOwnership() != AccountOwnership.JOINT
+                    && !eligibleOwners.contains(account.getOwnership())
+                    && account.getType().isSubjectToOwnerRmd()
+                    && data != null && data.getDistributionYear() == distributionYear
+                    && data.getRmdAlreadyDistributedBeforeProjection().signum() > 0) {
+                throw new IllegalStateException("Inconsistent lifetime scenario: deceased owner has an already-distributed RMD for "
+                        + account.getName() + " in " + distributionYear + ".");
+            }
+        }
 
-        validateRequiredOpeningData(plan, distributionYear, governmentRules);
+
+        validateRequiredOpeningData(plan, distributionYear, governmentRules, eligibleOwners);
 
         RmdBalanceSnapshot openingSnapshot =
                 RmdBalanceSnapshot.fromOpeningRmdData(
@@ -56,17 +79,17 @@ public final class OpeningRmdCalculator {
                         plan,
                         openingSnapshot,
                         distributionYear,
-                        governmentRules);
+                        governmentRules, eligibleOwners);
 
-        OwnerRemainingRmd primary = calculateRemainingOwnerRmd(
+        OwnerRemainingRmd primary = eligibleOwners.contains(AccountOwnership.PRIMARY) ? calculateRemainingOwnerRmd(
                 plan.getAccountPortfolio(),
                 AccountOwnership.PRIMARY,
-                annualRequirement.getPrimaryRmd());
+                annualRequirement.getPrimaryRmd()) : new OwnerRemainingRmd(OwnerRmdResult.zero(), BigDecimal.ZERO);
 
-        OwnerRemainingRmd spouse = calculateRemainingOwnerRmd(
+        OwnerRemainingRmd spouse = eligibleOwners.contains(AccountOwnership.SPOUSE) ? calculateRemainingOwnerRmd(
                 plan.getAccountPortfolio(),
                 AccountOwnership.SPOUSE,
-                annualRequirement.getSpouseRmd());
+                annualRequirement.getSpouseRmd()) : new OwnerRemainingRmd(OwnerRmdResult.zero(), BigDecimal.ZERO);
 
         return new OpeningRmdCalculation(
                 annualRequirement,
@@ -78,16 +101,16 @@ public final class OpeningRmdCalculator {
     private void validateRequiredOpeningData(
             RetirementPlan plan,
             int distributionYear,
-            GovernmentRules governmentRules) {
+            GovernmentRules governmentRules, Set<AccountOwnership> eligibleOwners) {
 
         Household household = plan.getHousehold();
-        validateOwnerOpeningData(
+        if (eligibleOwners.contains(AccountOwnership.PRIMARY)) validateOwnerOpeningData(
                 plan.getAccountPortfolio(),
                 household.getPrimaryPerson(),
                 AccountOwnership.PRIMARY,
                 distributionYear,
                 governmentRules);
-        validateOwnerOpeningData(
+        if (eligibleOwners.contains(AccountOwnership.SPOUSE)) validateOwnerOpeningData(
                 plan.getAccountPortfolio(),
                 household.getSpouse(),
                 AccountOwnership.SPOUSE,

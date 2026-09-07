@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
+import java.util.Optional;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
@@ -88,6 +89,22 @@ public final class TaxIncomeCalculator {
             BigDecimal socialSecurityColaRate,
             DeathScenarioAssumptions deathAssumptions,
             HouseholdSocialSecurityResult socialSecurityResult) {
+        return calculate(household, projectionDate, taxDeferredWithdrawals, openingTaxDeferredDistribution,
+                rothConversion, taxableInterestIncome, socialSecurityColaRate, deathAssumptions,
+                socialSecurityResult, Optional.empty());
+    }
+    public TaxIncome calculate(
+            Household household,
+            LocalDate projectionDate,
+            BigDecimal taxDeferredWithdrawals,
+            BigDecimal openingTaxDeferredDistribution,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            Optional<BigDecimal> authoritativePensionIncome) {
+        Objects.requireNonNull(authoritativePensionIncome, "Authoritative pension optional is required.");
 
         Objects.requireNonNull(
                 household,
@@ -135,7 +152,7 @@ public final class TaxIncomeCalculator {
                         household.getPrimaryPerson(),
                         projectionDate,
                         socialSecurityColaRate,
-                        socialSecurityResult != null);
+                        socialSecurityResult != null, authoritativePensionIncome.isPresent());
 
         pensionIncome =
                 pensionIncome.add(
@@ -150,7 +167,7 @@ public final class TaxIncomeCalculator {
                         household.getSpouse(),
                         projectionDate,
                         socialSecurityColaRate,
-                        socialSecurityResult != null);
+                        socialSecurityResult != null, authoritativePensionIncome.isPresent());
 
         pensionIncome =
                 pensionIncome.add(
@@ -187,7 +204,7 @@ public final class TaxIncomeCalculator {
         }
 
         return new TaxIncome(
-                pensionIncome,
+                authoritativePensionIncome.orElse(pensionIncome),
                 socialSecurityIncome,
                 taxDeferredWithdrawals.add(
                         openingTaxDeferredDistribution),
@@ -219,7 +236,7 @@ public final class TaxIncomeCalculator {
             Person person,
             LocalDate projectionDate,
             BigDecimal socialSecurityColaRate,
-            boolean socialSecurityAlreadyCalculated) {
+            boolean socialSecurityAlreadyCalculated, boolean pensionAlreadyCalculated) {
 
         BigDecimal pensionIncome =
                 BigDecimal.ZERO;
@@ -230,6 +247,9 @@ public final class TaxIncomeCalculator {
         for (IncomeSource income :
                 person.getIncomeSources()) {
 
+            if (pensionAlreadyCalculated && income instanceof Pension) {
+                continue;
+            }
             if (socialSecurityAlreadyCalculated
                     && income instanceof SocialSecurityIncome) {
                 continue;

@@ -110,6 +110,32 @@ class SocialSecurityMortalityWeightedClaimingGridCalculatorTest {
                 () -> request(List.of(), List.of(62), certain(90), certain(95)));
     }
 
+    @Test
+    void extractedScenariosPreserveEveryGridValueAndRankingWithSeparateValuationDate() {
+        var original = request(List.of(62, 67, 70), List.of(62, 70), twoPoint(), twoPoint());
+        var request = new SocialSecurityMortalityWeightedClaimingGridRequest(
+                original.baseStrategy(), original.primaryClaimAges(), original.spouseClaimAges(),
+                original.primaryMortality(), original.spouseMortality(), original.mortalityBaseDate(),
+                LocalDate.of(2024, 1, 1), new BigDecimal("0.025"));
+        var legacyScenarios = HouseholdLongevityScenarioFactoryTest.legacyScenarios(
+                request.baseStrategy().primaryElection().birthDate(),
+                request.baseStrategy().spouseElection().birthDate(),
+                request.primaryMortality(), request.spouseMortality());
+        var result = calculator.calculate(request);
+        assertEquals(legacyScenarios, result.jointMortalityScenarios());
+        for (var cell : result.cells()) {
+            var strategy = SocialSecurityClaimingGridCalculator.deriveStrategy(
+                    request.baseStrategy(), cell.primaryClaimDate(), cell.spouseClaimDate());
+            var legacyValue = new SocialSecurityMortalityWeightedStrategyCalculator().calculate(
+                    strategy, legacyScenarios, request.presentValueBaseDate(), request.realDiscountRate());
+            assertEquals(new SocialSecurityMortalityWeightedClaimingGridCell(
+                    cell.primaryClaimAge(), cell.spouseClaimAge(), cell.primaryClaimDate(),
+                    cell.spouseClaimDate(), legacyValue), cell);
+        }
+        verifyRanking(result.cells(), result.highestExpectedNominal());
+        verifyRanking(result.cells(), result.highestExpectedReal());
+        verifyRanking(result.cells(), result.highestExpectedPresentValue());
+    }
     private void verifyRanking(
             List<SocialSecurityMortalityWeightedClaimingGridCell> cells,
             SocialSecurityMortalityWeightedClaimingGridRanking ranking) {

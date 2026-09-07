@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.roth;
 
+import java.util.Optional;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
@@ -215,6 +216,42 @@ public final class RothConversionBracketFillCalculator {
             BigDecimal openingTaxDeferredDistribution,
             HouseholdSocialSecurityResult socialSecurityResult,
             BigDecimal availableHouseholdCash) {
+        return calculateConversion(
+                household,
+                projectionDate,
+                portfolio,
+                existingWithdrawals,
+                withdrawalStrategy,
+                filingStatus,
+                projectedGovernmentRules,
+                targetTaxableIncome,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                deathAssumptions,
+                openingTaxDeferredDistribution,
+                socialSecurityResult,
+                availableHouseholdCash,
+                Optional.empty());
+    }
+
+    public BigDecimal calculateConversion(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal targetTaxableIncome,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal availableHouseholdCash,
+            Optional<BigDecimal> authoritativePensionIncome) {
+        Objects.requireNonNull(authoritativePensionIncome, "Authoritative pension optional is required.");
+
 
         Objects.requireNonNull(
                 household,
@@ -299,7 +336,8 @@ public final class RothConversionBracketFillCalculator {
                         deathAssumptions,
                         openingTaxDeferredDistribution,
                         socialSecurityResult,
-                        availableHouseholdCash);
+                        availableHouseholdCash,
+                        authoritativePensionIncome);
 
         FederalTaxCalculation
                 preConversionFederalTax =
@@ -351,7 +389,8 @@ public final class RothConversionBracketFillCalculator {
                             deathAssumptions,
                             openingTaxDeferredDistribution,
                             socialSecurityResult,
-                            availableHouseholdCash);
+                            availableHouseholdCash,
+                            authoritativePensionIncome);
 
             BigDecimal finalTaxableIncome =
                     taxFundingResult

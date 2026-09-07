@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.roth;
 
+import java.util.Set;
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountBalance;
@@ -79,6 +80,15 @@ public final class ProjectedPortfolioRothConverter {
             ProjectedPortfolio portfolio,
             BigDecimal amount) {
 
+        return convertHousehold(portfolio, amount,
+                Set.of(AccountOwnership.PRIMARY, AccountOwnership.SPOUSE));
+    }
+
+    public ProjectedRothConversionResult convertHousehold(
+            ProjectedPortfolio portfolio,
+            BigDecimal amount,
+            Set<AccountOwnership> eligibleOwners) {
+        eligibleOwners = Set.copyOf(Objects.requireNonNull(eligibleOwners));
         Objects.requireNonNull(
                 portfolio,
                 "Projected portfolio is required.");
@@ -106,6 +116,9 @@ public final class ProjectedPortfolioRothConverter {
                 AccountOwnership.PRIMARY,
                 AccountOwnership.SPOUSE)) {
 
+            if (!eligibleOwners.contains(ownership)) {
+                continue;
+            }
             Account destinationAccount = findDestinationAccount(
                     updatedPortfolio,
                     ownership);
@@ -164,6 +177,14 @@ public final class ProjectedPortfolioRothConverter {
     public BigDecimal getMaximumConvertibleAmount(
             ProjectedPortfolio portfolio) {
 
+        return getMaximumConvertibleAmount(portfolio,
+                Set.of(AccountOwnership.PRIMARY, AccountOwnership.SPOUSE));
+    }
+
+    public BigDecimal getMaximumConvertibleAmount(
+            ProjectedPortfolio portfolio,
+            Set<AccountOwnership> eligibleOwners) {
+        Set<AccountOwnership> owners = Set.copyOf(Objects.requireNonNull(eligibleOwners));
         Objects.requireNonNull(
                 portfolio,
                 "Projected portfolio is required.");
@@ -172,7 +193,7 @@ public final class ProjectedPortfolioRothConverter {
                 .filter(projected -> {
                     AccountOwnership ownership = projected.getAccount()
                             .getOwnership();
-                    return ownership != AccountOwnership.JOINT
+                    return owners.contains(ownership) && ownership != AccountOwnership.JOINT
                             && findDestinationAccount(portfolio, ownership)
                             != null;
                 })

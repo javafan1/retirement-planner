@@ -11,6 +11,12 @@ import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityRetirementDateCalculator;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionMetrics;
+import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.AnalyzerLongevityAssumptions;
+import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.HouseholdLongevityScenarioFactory;
+import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityMortalityTables;
+import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityMortalityCategory;
+import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityMortalityAdjustment;
+import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityMortalityPartialYearConvention;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityHouseholdClaimingStrategy;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecuritySurvivorClaimingCandidate;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +42,37 @@ class IntegratedSocialSecurityCompleteStrategySearchCalculatorTest {
     private final IntegratedSocialSecurityStrategyEvaluator evaluator =
             new IntegratedSocialSecurityStrategyEvaluator();
 
+    @Test
+    void sharedLongevityPreparationDoesNotAffectDeterministicSearch() throws Exception {
+        RetirementPlan plan = plan(DeathScenario.SPOUSE_DIES);
+        String before = json(plan);
+        var standard = IntegratedSocialSecurityCompleteStrategySearchRequest.standard(plan);
+        var request = new IntegratedSocialSecurityCompleteStrategySearchRequest(
+                plan, List.of(62, 70), List.of(62),
+                standard.primarySurvivorCandidates().subList(0, 1),
+                standard.spouseSurvivorCandidates().subList(0, 1),
+                IntegratedStrategyRankingMeasure.AFTER_TAX_ESTATE, 2);
+        var baseline = calculator.calculate(request);
+        var table = SocialSecurityMortalityTables.ssaPeriod2022();
+        for (String factor : List.of("0.80", "1.00", "1.50")) {
+            var assumptions = new AnalyzerLongevityAssumptions(
+                    SocialSecurityMortalityCategory.MALE,
+                    SocialSecurityMortalityAdjustment.of(new BigDecimal(factor)),
+                    SocialSecurityMortalityCategory.FEMALE,
+                    SocialSecurityMortalityAdjustment.standard(),
+                    LocalDate.of(2026, 7, 1), table.metadata(),
+                    SocialSecurityMortalityPartialYearConvention.NEXT_COMPLETE_BIRTHDAY_INTERVAL);
+            new HouseholdLongevityScenarioFactory(table).create(
+                    plan.getHousehold().getPrimaryPerson().getBirthDate(),
+                    plan.getHousehold().getSpouse().getBirthDate(), assumptions);
+            var actual = calculator.calculate(request);
+            assertEquals(baseline.entries().stream().map(entry -> entry.metrics()).toList(),
+                    actual.entries().stream().map(entry -> entry.metrics()).toList());
+            assertEquals(baseline.entries().stream().map(entry -> entry.strategy()).toList(),
+                    actual.entries().stream().map(entry -> entry.strategy()).toList());
+            assertEquals(before, json(plan));
+        }
+    }
     @Test
     void progressIsMonotonicEndsAtTotalAndDoesNotChangeResults() {
         RetirementPlan plan = plan(DeathScenario.SPOUSE_DIES);

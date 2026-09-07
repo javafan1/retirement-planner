@@ -63,6 +63,19 @@ public final class SocialSecurityProjectionIncomeProvider {
             int lastCalendarYear,
             ProjectionEvaluationContext evaluationContext) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
+        Objects.requireNonNull(evaluationContext, "Projection evaluation context is required.");
+        return calculate(plan, firstCalendarYear, lastCalendarYear, evaluationContext,
+                EffectiveHouseholdDeathView.resolve(plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
+                        evaluationContext.householdLifetimeScenario()));
+    }
+
+    Map<Integer, HouseholdSocialSecurityResult> calculate(
+            RetirementPlan plan,
+            int firstCalendarYear,
+            int lastCalendarYear,
+            ProjectionEvaluationContext evaluationContext,
+            EffectiveHouseholdDeathView deathView) {
+        Objects.requireNonNull(plan, "Retirement plan is required.");
         Objects.requireNonNull(evaluationContext,
                 "Projection evaluation context is required.");
         if (firstCalendarYear <= 0 || lastCalendarYear < firstCalendarYear) {
@@ -76,6 +89,11 @@ public final class SocialSecurityProjectionIncomeProvider {
         List<SocialSecurityIncome> spouseSources = sources(spouse, AccountOwnership.SPOUSE);
 
         if (!supportsAdvanced(primary, spouse, primarySources, spouseSources)) {
+            if (evaluationContext.householdLifetimeScenario().isPresent()) {
+                throw new IllegalArgumentException(
+                        "A lifetime scenario requires the advanced two-person Social Security path; "
+                                + "legacy compatibility fallback is unavailable.");
+            }
             if (evaluationContext.socialSecurityStrategy().isPresent()) {
                 throw new IllegalArgumentException(
                         "A complete Social Security strategy override requires the advanced "
@@ -88,22 +106,37 @@ public final class SocialSecurityProjectionIncomeProvider {
         SocialSecurityIncome spouseSource = spouseSources.getFirst();
         DeathScenarioAssumptions death = plan.getPlanningAssumptions()
                 .getDeathScenarioAssumptions();
-        LocalDate primaryDeath = deathDate(death, DeathScenario.PRIMARY_DIES);
-        LocalDate spouseDeath = deathDate(death, DeathScenario.SPOUSE_DIES);
+        LocalDate primaryDeath = deathView.deathDate(AccountOwnership.PRIMARY).orElse(null);
+        LocalDate spouseDeath = deathView.deathDate(AccountOwnership.SPOUSE).orElse(null);
+        boolean lifetimeOverride = evaluationContext.householdLifetimeScenario().isPresent();
+        if (lifetimeOverride) {
+            primaryDeath = withinHorizon(primaryDeath, lastCalendarYear);
+            spouseDeath = withinHorizon(spouseDeath, lastCalendarYear);
+        }
         SocialSecurityHouseholdClaimingStrategy override =
                 evaluationContext.socialSecurityStrategy().orElse(null);
         if (override != null) {
             validateOverride(primary, spouse, override);
         }
-        LocalDate primarySurvivorClaim = override != null
-                ? applicableSurvivorClaim(primaryDeath, spouseDeath,
-                        override.primarySurvivorElection().claimDate(), true)
-                : survivorClaimDate(death, DeathScenario.SPOUSE_DIES, primary);
-        LocalDate spouseSurvivorClaim = override != null
-                ? applicableSurvivorClaim(primaryDeath, spouseDeath,
-                        override.spouseSurvivorElection().claimDate(), false)
-                : survivorClaimDate(death, DeathScenario.PRIMARY_DIES, spouse);
-
+        LocalDate primarySurvivorClaim;
+        LocalDate spouseSurvivorClaim;
+        if (lifetimeOverride) {
+            primarySurvivorClaim = lifetimeSurvivorClaim(primary, primaryDeath, spouseDeath,
+                    override == null ? null : override.primarySurvivorElection().claimDate(),
+                    death.getSurvivorClaimingAge(), firstCalendarYear, lastCalendarYear);
+            spouseSurvivorClaim = lifetimeSurvivorClaim(spouse, spouseDeath, primaryDeath,
+                    override == null ? null : override.spouseSurvivorElection().claimDate(),
+                    death.getSurvivorClaimingAge(), firstCalendarYear, lastCalendarYear);
+        } else {
+            primarySurvivorClaim = override != null
+                    ? applicableSurvivorClaim(primaryDeath, spouseDeath,
+                            override.primarySurvivorElection().claimDate(), true)
+                    : survivorClaimDate(death, DeathScenario.SPOUSE_DIES, primary);
+            spouseSurvivorClaim = override != null
+                    ? applicableSurvivorClaim(primaryDeath, spouseDeath,
+                            override.spouseSurvivorElection().claimDate(), false)
+                    : survivorClaimDate(death, DeathScenario.PRIMARY_DIES, spouse);
+        }
         SocialSecurityStrategyRequest request = new SocialSecurityStrategyRequest(
                 LocalDate.of(firstCalendarYear, 1, 1),
                 LocalDate.of(lastCalendarYear, 12, 31),
@@ -222,15 +255,43 @@ public final class SocialSecurityProjectionIncomeProvider {
         }
     }
 
-    /** Existing production death-year semantics: deceased from January 1. */
-    private static LocalDate deathDate(
-            DeathScenarioAssumptions assumptions,
-            DeathScenario ownerDeathScenario) {
-        return assumptions.getDeathScenario() == ownerDeathScenario
-                ? LocalDate.of(assumptions.getDeathYear(), 1, 1)
-                : null;
+    private static LocalDate withinHorizon(LocalDate death, int lastYear) {
+        return death != null && death.getYear() <= lastYear ? death : null;
     }
 
+    private static LocalDate lifetimeSurvivorClaim(
+            Person claimant,
+            LocalDate claimantDeath,
+            LocalDate otherDeath,
+            LocalDate explicitClaim,
+            Integer persistedAge,
+            int firstYear,
+            int lastYear) {
+        LocalDate earliest = com.daviddunn.retirementplanner.domain.socialsecurity.analysis.
+                SocialSecuritySurvivorBenefitCalculator.calculateEarliestSurvivorClaimDate(claimant.getBirthDate());
+        LocalDate firstPossible = LocalDate.of(firstYear, 1, 1);
+        if (otherDeath == null) {
+            return null;
+        }
+        if (otherDeath.isAfter(firstPossible)) {
+            firstPossible = otherDeath;
+        }
+        if (earliest.isAfter(firstPossible)) {
+            firstPossible = earliest;
+        }
+        if (firstPossible.isAfter(LocalDate.of(lastYear, 12, 31))
+                || (claimantDeath != null && !firstPossible.isBefore(claimantDeath))) {
+            return null;
+        }
+        if (explicitClaim == null && persistedAge == null) {
+            throw new IllegalArgumentException(
+                    "Lifetime scenario survivor behavior requires a persisted survivor claiming age "
+                            + "or a complete Social Security strategy override.");
+        }
+        LocalDate claim = explicitClaim != null
+                ? explicitClaim : claimant.getBirthDate().plusYears(persistedAge);
+        return claimantDeath != null && !claim.isBefore(claimantDeath) ? null : claim;
+    }
     /** Persisted integer survivor age maps to that survivor's exact birthday. */
     private static LocalDate survivorClaimDate(
             DeathScenarioAssumptions assumptions,
