@@ -57,7 +57,7 @@ class LongevityWeightedEquivalenceBenchmarkTest {
                 LocalDate.of(2029, 7, 1), new BigDecimal("0.03"), Optional.empty(),
                 new LongevityWeightedDetailRetentionPolicy(false, Set.of(8)),
                 AnalysisProgressListener.none(), AnalysisCancellationToken.none());
-        var result = new LongevityWeightedIntegratedStrategyComparisonService().compare(request);
+        var result = new LongevityWeightedIntegratedStrategyComparisonService().compareWithEquivalenceOnly(request);
         assertEquals(24, result.completedStrategyCount());
         assertEquals(3, result.equivalencePlan().orElseThrow().equivalenceGroupCount());
         assertEquals(3, result.work().stageFourEvaluations());

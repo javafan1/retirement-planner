@@ -10,20 +10,27 @@ import java.util.*;
 /** Exact sequential comparison with optional proven schedule equivalence outside the financial engine. */
 public final class LongevityWeightedIntegratedStrategyComparisonService {
     private final LongevityWeightedIntegratedStrategyEvaluator evaluator = new LongevityWeightedIntegratedStrategyEvaluator();
+    private final LongevityWeightedContinuationEvaluator continuationEvaluator = new LongevityWeightedContinuationEvaluator();
 
     public LongevityWeightedIntegratedStrategyComparisonResult compare(
             LongevityWeightedIntegratedStrategyComparisonRequest request) {
-        return compare(request, true);
+        return compare(request, true, true);
     }
 
     /** Stage 5A/5B financial reference: evaluates every original occurrence independently. */
     public LongevityWeightedIntegratedStrategyComparisonResult compareExact(
             LongevityWeightedIntegratedStrategyComparisonRequest request) {
-        return compare(request, false);
+        return compare(request, false, false);
+    }
+
+    /** Stage 5C1 reference, retaining its original independent representative evaluations. */
+    LongevityWeightedIntegratedStrategyComparisonResult compareWithEquivalenceOnly(
+            LongevityWeightedIntegratedStrategyComparisonRequest request) {
+        return compare(request, true, false);
     }
 
     private LongevityWeightedIntegratedStrategyComparisonResult compare(
-            LongevityWeightedIntegratedStrategyComparisonRequest request, boolean optimize) {
+            LongevityWeightedIntegratedStrategyComparisonRequest request, boolean optimize, boolean continuations) {
         Objects.requireNonNull(request, "Comparison request is required.");
         long started = System.nanoTime();
         request.cancellationToken().throwIfCancellationRequested();
@@ -38,7 +45,7 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
         Optional<LongevityWeightedIntegratedStrategyComparisonEntry> baseline = Optional.empty();
         if (request.baselineStrategy().isPresent()) {
             baseline = Optional.of(evaluate(request, plan, request.baselineStrategy().orElseThrow(), 0,
-                    request.detailRetention().retainBaseline(), work));
+                    request.detailRetention().retainBaseline(), work, continuations));
             report(request, ++completed, total);
         }
         List<LongevityWeightedIntegratedStrategyComparisonEntry> entries = new ArrayList<>();
@@ -54,7 +61,7 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
             var value = representatives.get(representative);
             if (value == null || !value.successful()) {
                 value = evaluate(request, plan, request.candidates().get(index), order,
-                        retain || detailRepresentatives.contains(order), work);
+                        retain || detailRepresentatives.contains(order), work, continuations);
                 if (order == representative) {
                     representatives.put(order, value);
                 }
@@ -112,14 +119,27 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
 
     private LongevityWeightedIntegratedStrategyComparisonEntry evaluate(
             LongevityWeightedIntegratedStrategyComparisonRequest request, RetirementPlan plan,
-            SocialSecurityHouseholdClaimingStrategy strategy, int order, boolean retainDetail, WorkCounter work) {
+            SocialSecurityHouseholdClaimingStrategy strategy, int order, boolean retainDetail, WorkCounter work,
+            boolean continuations) {
         request.cancellationToken().throwIfCancellationRequested();
         try {
             LongevityWeightedIntegratedStrategyComparisonRequest.validateCompleteStrategy(plan, strategy);
-            work.evaluations++;
-            var result = evaluator.evaluate(new LongevityWeightedIntegratedStrategyRequest(plan, strategy,
+            var evaluationRequest = new LongevityWeightedIntegratedStrategyRequest(plan, strategy,
                     request.longevityScenarios(), request.valuationDate(), request.realDiscountRate(),
-                    AnalysisProgressListener.none(), request.cancellationToken()), work::observe);
+                    AnalysisProgressListener.none(), request.cancellationToken());
+            LongevityWeightedIntegratedStrategyResult result;
+            if (continuations) {
+                work.continuationEvaluations++;
+                LongevityContinuationWork[] latest = {LongevityContinuationWork.zero()};
+                try {
+                    result = continuationEvaluator.evaluate(evaluationRequest, value -> latest[0] = value);
+                } finally {
+                    work.continuation = work.continuation.plus(latest[0]);
+                }
+            } else {
+                work.evaluations++;
+                result = evaluator.evaluate(evaluationRequest, work::observe);
+            }
             request.cancellationToken().throwIfCancellationRequested();
             return new LongevityWeightedIntegratedStrategyComparisonEntry(order, strategy,
                     Optional.of(LongevityWeightedStrategyAggregate.from(result)), Optional.empty(),
@@ -176,6 +196,8 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
         private long completedScenarios;
         private long projections;
         private long completedProjections;
+        private long continuationEvaluations;
+        private LongevityContinuationWork continuation = LongevityContinuationWork.zero();
 
         private void observe(LongevityWeightedEvaluationWork event) {
             switch (event) {
@@ -187,8 +209,10 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
         }
 
         private LongevityWeightedIntegratedStrategyComparisonResult.Work snapshot() {
-            return new LongevityWeightedIntegratedStrategyComparisonResult.Work(evaluations, scenarios,
-                    completedScenarios, projections, completedProjections);
+            return new LongevityWeightedIntegratedStrategyComparisonResult.Work(evaluations,
+                    scenarios + continuation.scenariosStarted(), completedScenarios + continuation.outcomesProduced(),
+                    projections + continuation.projectionStarts(), completedProjections + continuation.completedProjections(),
+                    continuationEvaluations, continuation);
         }
     }
 }

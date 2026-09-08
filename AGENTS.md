@@ -11,6 +11,7 @@ When running Maven inside Codex, always use:
 
 Do not use C:\Users\david\.m2\repository from the Codex sandbox.
 
+
 # Project overview
 
 Retirement Planner is a Java 25 Maven application for modeling multi-year retirement outcomes. Its primary desktop interface is JavaFX; Jackson provides JSON persistence; PDFBox supports PDF export.

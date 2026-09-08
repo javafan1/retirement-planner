@@ -67,7 +67,14 @@ public record LongevityWeightedIntegratedStrategyComparisonResult(
 
     /** Actual job work, including baseline and failed attempts; never inferred from strategy counts. */
     public record Work(long stageFourEvaluations, long scenarioEvaluations, long completedScenarioEvaluations,
-            long projectionEngineRuns, long completedProjectionEngineRuns) { }
+            long projectionEngineRuns, long completedProjectionEngineRuns,
+            long continuationEvaluations, LongevityContinuationWork continuation) {
+        public Work(long stageFourEvaluations, long scenarioEvaluations, long completedScenarioEvaluations,
+                long projectionEngineRuns, long completedProjectionEngineRuns) {
+            this(stageFourEvaluations, scenarioEvaluations, completedScenarioEvaluations, projectionEngineRuns,
+                    completedProjectionEngineRuns, 0, LongevityContinuationWork.zero());
+        }
+    }
 
     /** Shared once per job. Entries and retained scenario lists contain no mortality/methodology copies. */
     public record Metadata(String methodologyVersion, String methodologyReference,

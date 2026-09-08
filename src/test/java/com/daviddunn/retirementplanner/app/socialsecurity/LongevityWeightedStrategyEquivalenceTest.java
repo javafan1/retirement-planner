@@ -201,7 +201,7 @@ class LongevityWeightedStrategyEquivalenceTest {
                     }
                 }, () -> stop.get() || (location.equals("inside-stage4") && inFinancialPhase.get()
                         && checks.incrementAndGet() >= 7));
-        assertThrows(AnalysisCancelledException.class, () -> service.compare(request));
+        assertThrows(AnalysisCancelledException.class, () -> service.compareWithEquivalenceOnly(request));
         if (location.equals("inside-stage4")) {
             assertEquals(List.of(0), progress.stream().filter(p -> p.phase() == AnalysisPhase.LONGEVITY_INTEGRATED_COMPARISON)
                     .map(AnalysisProgress::completedWork).toList());
@@ -213,7 +213,7 @@ class LongevityWeightedStrategyEquivalenceTest {
         var plan = Stage4TestPlans.plan();
         var first = strategy(plan, 67, 67);
         var progress = new ArrayList<AnalysisProgress>();
-        service.compare(new LongevityWeightedIntegratedStrategyComparisonRequest(plan, List.of(first, first, first),
+        service.compareWithEquivalenceOnly(new LongevityWeightedIntegratedStrategyComparisonRequest(plan, List.of(first, first, first),
                 scenarios(plan), LocalDate.of(2030, 1, 1), BigDecimal.ZERO, Optional.empty(),
                 LongevityWeightedDetailRetentionPolicy.aggregateOnly(), progress::add, AnalysisCancellationToken.none()));
         assertEquals(List.of(0, 1, 2, 3), progress.stream()
@@ -268,7 +268,7 @@ class LongevityWeightedStrategyEquivalenceTest {
         var calculator = new IntegratedSocialSecurityCompleteStrategySearchCalculator();
         var before = calculator.calculate(grid);
         var candidates = before.entries().stream().map(IntegratedSocialSecurityCompleteStrategySearchEntry::strategy).toList();
-        var weighted = service.compare(request(plan, candidates));
+        var weighted = service.compareWithEquivalenceOnly(request(plan, candidates));
         var after = calculator.calculate(grid);
         assertEquals(before.entries(), after.entries());
         assertEquals(before.rankedSuccessfulEntries(), after.rankedSuccessfulEntries());
@@ -290,7 +290,7 @@ class LongevityWeightedStrategyEquivalenceTest {
                         plan.getAccountPortfolio().getAccounts().getFirst().setCurrentBalance(BigDecimal.ONE);
                     }
                 }, AnalysisCancellationToken.none());
-        assertEquals(exact.orderedEntries(), service.compare(request).orderedEntries());
+        assertEquals(exact.orderedEntries(), service.compareWithEquivalenceOnly(request).orderedEntries());
     }
     @Test
     void zeroProbabilityEarlyDeathIsSkippedWithoutRenormalization() {
@@ -313,7 +313,7 @@ class LongevityWeightedStrategyEquivalenceTest {
     private LongevityWeightedIntegratedStrategyComparisonResult assertReference(
             LongevityWeightedIntegratedStrategyComparisonRequest request) {
         var exact = service.compareExact(request);
-        var optimized = service.compare(request);
+        var optimized = service.compareWithEquivalenceOnly(request);
         assertEquals(exact.orderedEntries(), optimized.orderedEntries());
         assertEquals(exact.rankedSuccessfulEntries(), optimized.rankedSuccessfulEntries());
         assertEquals(exact.baseline(), optimized.baseline());

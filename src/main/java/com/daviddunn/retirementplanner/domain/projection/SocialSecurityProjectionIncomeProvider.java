@@ -93,6 +93,26 @@ public final class SocialSecurityProjectionIncomeProvider {
             RetirementPlan plan, int firstCalendarYear, int lastCalendarYear,
             ProjectionEvaluationContext evaluationContext, EffectiveHouseholdDeathView deathView,
             Map<SocialSecurityStrategyCalculator.ScheduleKey, Map<Integer, HouseholdSocialSecurityResult>> cache) {
+        return calculate(plan, firstCalendarYear, lastCalendarYear, evaluationContext, deathView, cache, false);
+    }
+
+    /** Runs the identical finite-request construction/validation without generating another schedule. */
+    public void validateForContinuation(RetirementPlan plan, int firstCalendarYear, int lastCalendarYear,
+            ProjectionEvaluationContext context) {
+        Objects.requireNonNull(context);
+        if (context.householdLifetimeScenario().isEmpty()) {
+            throw new IllegalArgumentException("Continuation validation requires a lifetime scenario.");
+        }
+        calculate(plan, firstCalendarYear, lastCalendarYear, context,
+                EffectiveHouseholdDeathView.resolve(plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
+                        context.householdLifetimeScenario()), null, true);
+    }
+
+    private Map<Integer, HouseholdSocialSecurityResult> calculate(
+            RetirementPlan plan, int firstCalendarYear, int lastCalendarYear,
+            ProjectionEvaluationContext evaluationContext, EffectiveHouseholdDeathView deathView,
+            Map<SocialSecurityStrategyCalculator.ScheduleKey, Map<Integer, HouseholdSocialSecurityResult>> cache,
+            boolean validationOnly) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         Objects.requireNonNull(evaluationContext,
                 "Projection evaluation context is required.");
@@ -170,6 +190,7 @@ public final class SocialSecurityProjectionIncomeProvider {
                 spouseDeath,
                 plan.getPlanningAssumptions().getSocialSecurityColaRate());
 
+        if (validationOnly) return Map.of();
         var key = cache == null ? null : SocialSecurityStrategyCalculator.scheduleKey(request);
         if (cache != null && cache.containsKey(key)) {
             return cache.get(key);

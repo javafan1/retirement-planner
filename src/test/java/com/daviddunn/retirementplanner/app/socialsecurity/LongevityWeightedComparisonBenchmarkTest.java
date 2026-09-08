@@ -32,7 +32,7 @@ class LongevityWeightedComparisonBenchmarkTest {
                                 + " elapsedMillis=" + (System.nanoTime() - started) / 1_000_000);
                     }
                 }, AnalysisCancellationToken.none());
-        var result = new LongevityWeightedIntegratedStrategyComparisonService().compare(request);
+        var result = new LongevityWeightedIntegratedStrategyComparisonService().compareWithEquivalenceOnly(request);
         System.out.println("Stage 5 benchmark: Stage4Evaluations=" + result.work().stageFourEvaluations()
                 + " ProjectionEngineRuns=" + result.work().projectionEngineRuns()
                 + " retainedOutcomes=" + result.retainedDetailedScenarioOutcomeCount()
