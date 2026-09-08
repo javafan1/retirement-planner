@@ -308,12 +308,7 @@ public final class SocialSecurityStrategyCalculator {
         }
 
         YearMonth workerDeathMonth = YearMonth.from(workerDeathDate);
-        YearMonth intendedClaimMonth = YearMonth.from(
-                intendedSurvivorClaimDate);
-        YearMonth entitlementMonth = intendedClaimMonth.isAfter(
-                workerDeathMonth)
-                ? intendedClaimMonth
-                : workerDeathMonth;
+        YearMonth entitlementMonth = survivorEntitlementMonth(intendedSurvivorClaimDate, workerDeathDate);
 
         if (paymentMonth.isBefore(entitlementMonth)) {
             return BigDecimal.ZERO;
@@ -338,6 +333,35 @@ public final class SocialSecurityStrategyCalculator {
                         entitlementMonth)
                 .survivorBenefit();
     }
+
+    /**
+     * Exact calculation-input key, after request validation. Survivor elections enter
+     * this calculator only through their resolved entitlement month. All other inputs
+     * are retained, including exact retirement dates and BigDecimal scales.
+     * This key is for caller-owned, bounded caches; the calculator stores no cache.
+     */
+    public static ScheduleKey scheduleKey(SocialSecurityStrategyRequest request) {
+        Objects.requireNonNull(request);
+        return new ScheduleKey(request.analysisDate(), request.resolvedAnalysisEndDate(),
+                request.primaryElection(), request.spouseElection(),
+                survivorEntitlementMonth(request.primarySurvivorClaimDate(), request.spouseDeathDate()),
+                survivorEntitlementMonth(request.spouseSurvivorClaimDate(), request.primaryDeathDate()),
+                request.primaryDeathDate(), request.spouseDeathDate(), request.socialSecurityColaRate());
+    }
+
+    private static YearMonth survivorEntitlementMonth(LocalDate claim, LocalDate death) {
+        if (claim == null || death == null) {
+            return null;
+        }
+        YearMonth claimMonth = YearMonth.from(claim);
+        YearMonth deathMonth = YearMonth.from(death);
+        return claimMonth.isAfter(deathMonth) ? claimMonth : deathMonth;
+    }
+
+    public record ScheduleKey(LocalDate start, LocalDate end,
+            SocialSecurityClaimingElection primary, SocialSecurityClaimingElection spouse,
+            YearMonth primarySurvivorEntitlement, YearMonth spouseSurvivorEntitlement,
+            LocalDate primaryDeath, LocalDate spouseDeath, BigDecimal cola) { }
 
     private boolean isAlive(
             YearMonth month,

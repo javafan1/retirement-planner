@@ -75,6 +75,24 @@ public final class SocialSecurityProjectionIncomeProvider {
             int lastCalendarYear,
             ProjectionEvaluationContext evaluationContext,
             EffectiveHouseholdDeathView deathView) {
+        return calculate(plan, firstCalendarYear, lastCalendarYear, evaluationContext, deathView, null);
+    }
+
+    /** Job-local proof support. Ordinary projections never use this caller-owned cache. */
+    public Map<Integer, HouseholdSocialSecurityResult> calculateForEquivalence(
+            RetirementPlan plan, int firstCalendarYear, int lastCalendarYear,
+            ProjectionEvaluationContext context,
+            Map<SocialSecurityStrategyCalculator.ScheduleKey, Map<Integer, HouseholdSocialSecurityResult>> cache) {
+        Objects.requireNonNull(cache);
+        return calculate(plan, firstCalendarYear, lastCalendarYear, context,
+                EffectiveHouseholdDeathView.resolve(plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
+                        context.householdLifetimeScenario()), cache);
+    }
+
+    private Map<Integer, HouseholdSocialSecurityResult> calculate(
+            RetirementPlan plan, int firstCalendarYear, int lastCalendarYear,
+            ProjectionEvaluationContext evaluationContext, EffectiveHouseholdDeathView deathView,
+            Map<SocialSecurityStrategyCalculator.ScheduleKey, Map<Integer, HouseholdSocialSecurityResult>> cache) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         Objects.requireNonNull(evaluationContext,
                 "Projection evaluation context is required.");
@@ -152,12 +170,20 @@ public final class SocialSecurityProjectionIncomeProvider {
                 spouseDeath,
                 plan.getPlanningAssumptions().getSocialSecurityColaRate());
 
+        var key = cache == null ? null : SocialSecurityStrategyCalculator.scheduleKey(request);
+        if (cache != null && cache.containsKey(key)) {
+            return cache.get(key);
+        }
         Map<Integer, HouseholdSocialSecurityResult> results = new LinkedHashMap<>();
         for (SocialSecurityAnnualResult annual :
                 strategyCalculator.calculate(request).annualResults()) {
             results.put(annual.calendarYear(), fromAnnual(annual));
         }
-        return Map.copyOf(results);
+        var immutable = Map.copyOf(results);
+        if (cache != null) {
+            cache.put(key, immutable);
+        }
+        return immutable;
     }
 
     public boolean supportsAdvancedPath(RetirementPlan plan) {
