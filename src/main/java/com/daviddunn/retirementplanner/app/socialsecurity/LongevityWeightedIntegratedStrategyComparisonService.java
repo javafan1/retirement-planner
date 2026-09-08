@@ -35,7 +35,9 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
         long started = System.nanoTime();
         request.cancellationToken().throwIfCancellationRequested();
         var plan = request.newPlanCopy();
-        var proof = optimize ? Optional.of(new LongevityWeightedStrategyEquivalencePlanner().plan(request))
+        var proof = optimize ? Optional.of(continuations
+                ? new LongevityWeightedPrefixEquivalencePlanner().plan(request)
+                : new LongevityWeightedStrategyEquivalencePlanner().plan(request))
                 : Optional.<LongevityWeightedStrategyEquivalencePlanner.Plan>empty();
         var work = new WorkCounter();
         long avoided = 0;

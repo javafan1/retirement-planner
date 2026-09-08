@@ -113,6 +113,31 @@ public final class SocialSecurityProjectionIncomeProvider {
             ProjectionEvaluationContext evaluationContext, EffectiveHouseholdDeathView deathView,
             Map<SocialSecurityStrategyCalculator.ScheduleKey, Map<Integer, HouseholdSocialSecurityResult>> cache,
             boolean validationOnly) {
+        return calculate(plan, firstCalendarYear, lastCalendarYear, evaluationContext, deathView,
+                cache, validationOnly, null);
+    }
+
+    /** Validated finite inputs for exact SS prefix proofs. Does not calculate benefits or cache results. */
+    public SocialSecurityStrategyCalculator.ScheduleKey validatedKeyForEquivalence(
+            RetirementPlan plan, int firstCalendarYear, int lastCalendarYear,
+            ProjectionEvaluationContext context) {
+        Objects.requireNonNull(context);
+        if (context.householdLifetimeScenario().isEmpty()) {
+            throw new IllegalArgumentException("Equivalence coverage validation requires a lifetime scenario.");
+        }
+        SocialSecurityStrategyCalculator.ScheduleKey[] result = new SocialSecurityStrategyCalculator.ScheduleKey[1];
+        calculate(plan, firstCalendarYear, lastCalendarYear, context,
+                EffectiveHouseholdDeathView.resolve(plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
+                        context.householdLifetimeScenario()), null, true, key -> result[0] = key);
+        return Objects.requireNonNull(result[0]);
+    }
+
+    private Map<Integer, HouseholdSocialSecurityResult> calculate(
+            RetirementPlan plan, int firstCalendarYear, int lastCalendarYear,
+            ProjectionEvaluationContext evaluationContext, EffectiveHouseholdDeathView deathView,
+            Map<SocialSecurityStrategyCalculator.ScheduleKey, Map<Integer, HouseholdSocialSecurityResult>> cache,
+            boolean validationOnly,
+            java.util.function.Consumer<SocialSecurityStrategyCalculator.ScheduleKey> validatedKey) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         Objects.requireNonNull(evaluationContext,
                 "Projection evaluation context is required.");
@@ -190,7 +215,10 @@ public final class SocialSecurityProjectionIncomeProvider {
                 spouseDeath,
                 plan.getPlanningAssumptions().getSocialSecurityColaRate());
 
-        if (validationOnly) return Map.of();
+        if (validationOnly) {
+            if (validatedKey != null) validatedKey.accept(SocialSecurityStrategyCalculator.scheduleKey(request));
+            return Map.of();
+        }
         var key = cache == null ? null : SocialSecurityStrategyCalculator.scheduleKey(request);
         if (cache != null && cache.containsKey(key)) {
             return cache.get(key);

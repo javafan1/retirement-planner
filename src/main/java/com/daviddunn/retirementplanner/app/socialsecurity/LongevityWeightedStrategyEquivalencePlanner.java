@@ -104,10 +104,17 @@ public final class LongevityWeightedStrategyEquivalencePlanner {
     }
 
     public record Plan(List<List<Integer>> groups, List<Integer> representativeOrders,
-            long scheduleRequests, long scheduleCalculations, Duration elapsedTime) {
+            long scheduleRequests, long scheduleCalculations, Duration elapsedTime,
+            Optional<LongevityEquivalencePlanningWork> coverageWork) {
+        public Plan(List<List<Integer>> groups, List<Integer> representativeOrders,
+                long scheduleRequests, long scheduleCalculations, Duration elapsedTime) {
+            this(groups, representativeOrders, scheduleRequests, scheduleCalculations, elapsedTime, Optional.empty());
+        }
+
         public Plan {
             groups = groups.stream().map(List::copyOf).toList();
             representativeOrders = List.copyOf(representativeOrders);
+            coverageWork = Objects.requireNonNull(coverageWork);
         }
 
         public int equivalenceGroupCount() { return groups.size(); }
