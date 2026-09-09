@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.app.socialsecurity;
 
+import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken;
+import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancelledException;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisPhase;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisProgress;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisProgressListener;
@@ -43,12 +45,20 @@ public final class IntegratedSocialSecurityStrategyComparisonService {
             RetirementPlan plan,
             List<SocialSecurityHouseholdClaimingStrategy> candidates,
             AnalysisProgressListener progressListener) {
+        return compare(plan, candidates, progressListener, AnalysisCancellationToken.none());
+    }
+
+    public IntegratedSocialSecurityStrategyComparisonResult compare(
+            RetirementPlan plan,
+            List<SocialSecurityHouseholdClaimingStrategy> candidates,
+            AnalysisProgressListener progressListener,
+            AnalysisCancellationToken cancellation) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         List<SocialSecurityHouseholdClaimingStrategy> supplied = List.copyOf(
                 Objects.requireNonNull(candidates, "Candidate strategies are required."));
         return compareInputs(plan, supplied.stream()
                 .map(strategy -> new CandidateInput(strategy, Optional.empty()))
-                .toList(), progressListener);
+                .toList(), progressListener, cancellation);
     }
 
     /** Retains the analyzer's existing expected-value object without recalculation. */
@@ -62,26 +72,38 @@ public final class IntegratedSocialSecurityStrategyComparisonService {
             RetirementPlan plan,
             List<SocialSecuritySurvivorClaimingOptimizationCell> candidates,
             AnalysisProgressListener progressListener) {
+        return compareAnalyzerCandidates(plan, candidates, progressListener, AnalysisCancellationToken.none());
+    }
+
+    public IntegratedSocialSecurityStrategyComparisonResult compareAnalyzerCandidates(
+            RetirementPlan plan,
+            List<SocialSecuritySurvivorClaimingOptimizationCell> candidates,
+            AnalysisProgressListener progressListener,
+            AnalysisCancellationToken cancellation) {
         Objects.requireNonNull(candidates, "Analyzer candidates are required.");
         return compareInputs(plan, List.copyOf(candidates).stream()
                 .map(cell -> new CandidateInput(cell.strategy(),
                         Optional.of(cell.expectedValue())))
-                .toList(), progressListener);
+                .toList(), progressListener, cancellation);
     }
 
     private IntegratedSocialSecurityStrategyComparisonResult compareInputs(
             RetirementPlan plan,
             List<CandidateInput> supplied,
-            AnalysisProgressListener progressListener) {
+            AnalysisProgressListener progressListener,
+            AnalysisCancellationToken cancellation) {
+        Objects.requireNonNull(cancellation).throwIfCancellationRequested();
         Objects.requireNonNull(plan, "Retirement plan is required.");
         Objects.requireNonNull(progressListener, "Progress listener is required.");
 
         progressListener.onProgress(new AnalysisProgress(
                 AnalysisPhase.CURRENT_PLAN_BASELINE, 0, 1));
+        cancellation.throwIfCancellationRequested();
         IntegratedSocialSecurityStrategyResult baseline =
                 evaluator.evaluateCurrentStrategy(plan);
         progressListener.onProgress(new AnalysisProgress(
                 AnalysisPhase.CURRENT_PLAN_BASELINE, 1, 1));
+        cancellation.throwIfCancellationRequested();
         Set<SocialSecurityHouseholdClaimingStrategy> seen = new LinkedHashSet<>();
         List<IntegratedSocialSecurityStrategyComparisonEntry> entries = new ArrayList<>();
         int uniqueCount = (int) supplied.stream()
@@ -99,6 +121,7 @@ public final class IntegratedSocialSecurityStrategyComparisonService {
             if (!seen.add(strategy)) {
                 continue;
             }
+            cancellation.throwIfCancellationRequested();
             int callerOrder = index + 1;
             try {
                 IntegratedSocialSecurityStrategyResult result = evaluator.evaluate(plan, strategy);
@@ -106,6 +129,8 @@ public final class IntegratedSocialSecurityStrategyComparisonService {
                         callerOrder, strategy, input.expectedValue(), result,
                         ProjectionMetricsDifferenceCalculator.subtract(
                                 result.metrics(), baseline.metrics())));
+            } catch (AnalysisCancelledException exception) {
+                throw exception;
             } catch (RuntimeException exception) {
                 String message = exception.getMessage() == null
                         || exception.getMessage().isBlank()
@@ -126,6 +151,7 @@ public final class IntegratedSocialSecurityStrategyComparisonService {
                     completed,
                     uniqueCount));
         }
+        cancellation.throwIfCancellationRequested();
         return new IntegratedSocialSecurityStrategyComparisonResult(
                 baseline, supplied.size(), entries);
     }

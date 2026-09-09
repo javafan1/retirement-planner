@@ -154,28 +154,81 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
     }
 
     @Test
-    void everyAnalysisDisablesCompetingRunsAndRestoresPrerequisites() throws Exception {
+    void everyAnalysisDisablesCompetingRunsAndCancellationWaitsForCleanup() throws Exception {
         onFx(dialog -> {
-            for (String method : List.of("setBusy", "setIntegratedBusy", "setExhaustiveBusy")) {
-                for (boolean current : List.of(false, true)) {
-                    set(dialog, "socialSecurityResultCurrent", current);
-                    invoke(dialog, method, true);
-                    for (String button : List.of("runButton", "integratedRunButton", "exhaustiveRunButton")) {
-                        assertTrue(field(dialog, button, Button.class).isDisabled(), method + ": " + button);
-                    }
-                    assertTrue(field(dialog, "integratedCandidateCount", Spinner.class).isDisabled());
-                    assertTrue(field(dialog, "pvDate", DatePicker.class).isDisabled());
-                    invoke(dialog, method, false);
-                    assertFalse(field(dialog, "runButton", Button.class).isDisabled());
-                    assertFalse(field(dialog, "exhaustiveRunButton", Button.class).isDisabled());
-                    assertEquals(!current, field(dialog, "integratedRunButton", Button.class).isDisabled());
-                    assertFalse(field(dialog, "integratedCandidateCount", Spinner.class).isDisabled());
-                    assertFalse(field(dialog, "pvDate", DatePicker.class).isDisabled());
+            var jobs = field(dialog, "jobs", SocialSecurityAnalyzerJobController.class);
+            var coordinator = field(jobs, "coordinator", SocialSecurityAnalysisJobCoordinator.class);
+            var executor = field(coordinator, "executor", SocialSecurityAnalyzerJobControllerTest.ManualExecutor.class);
+            for (var mode : SocialSecurityAnalyzerJobController.Mode.values()) {
+                assertTrue(jobs.start(mode, (p, c) -> "done", value -> fail("cancelled"), error -> fail(error)));
+                for (String button : List.of("runButton", "integratedRunButton", "exhaustiveRunButton")) {
+                    assertTrue(field(dialog, button, Button.class).isDisabled());
                 }
+                assertTrue(field(dialog, "pvDate", DatePicker.class).isDisabled());
+                assertFalse(field(dialog, "socialSecurityCancelButton", Button.class).isDisabled());
+                field(dialog, "socialSecurityCancelButton", Button.class).fire();
+                assertEquals(SocialSecurityAnalyzerJobController.State.CANCELLING, jobs.state());
+                assertTrue(field(dialog, "socialSecurityCancelButton", Button.class).isDisabled());
+                assertTrue(field(dialog, "runButton", Button.class).isDisabled());
+                assertTrue(coordinator.isBusy());
+                executor.run();
+                assertEquals(SocialSecurityAnalyzerJobController.State.IDLE, jobs.state());
+                assertFalse(field(dialog, "runButton", Button.class).isDisabled());
+                assertFalse(field(dialog, "pvDate", DatePicker.class).isDisabled());
+                assertTrue(field(dialog, "integratedRunButton", Button.class).isDisabled());
             }
         });
     }
 
+    @Test
+    void footerWindowAndHideAllDisposeAndPreserveResults() throws Exception {
+        for (String route : List.of("footer", "window", "hide")) {
+            onFx(dialog -> {
+                installResults(dialog);
+                var jobs = field(dialog, "jobs", SocialSecurityAnalyzerJobController.class);
+                var coordinator = field(jobs, "coordinator", SocialSecurityAnalysisJobCoordinator.class);
+                var executor = field(coordinator, "executor", SocialSecurityAnalyzerJobControllerTest.ManualExecutor.class);
+                var stage = field(dialog, "stage", Stage.class);
+                stage.show();
+                jobs.start(SocialSecurityAnalyzerJobController.Mode.QUICK,
+                        (p, c) -> "discard", value -> fail("post-close result"), error -> fail(error));
+                String before = field(dialog, "integratedStatus", Label.class).getText();
+                if (route.equals("footer")) {
+                    var footer = (javafx.scene.layout.HBox) ((BorderPane) stage.getScene().getRoot()).getBottom();
+                    ((Button) footer.getChildren().getLast()).fire();
+                } else if (route.equals("window")) {
+                    stage.fireEvent(new javafx.stage.WindowEvent(stage, javafx.stage.WindowEvent.WINDOW_CLOSE_REQUEST));
+                } else {
+                    stage.hide();
+                }
+                assertEquals(SocialSecurityAnalyzerJobController.State.CLOSED, jobs.state());
+                assertTrue(coordinator.isBusy());
+                executor.run();
+                assertFalse(coordinator.isBusy());
+                assertSame(quick, field(dialog, "integratedPresentation", IntegratedSocialSecurityComparisonPresentation.class));
+                assertEquals(before, field(dialog, "integratedStatus", Label.class).getText());
+            });
+        }
+    }
+
+    @Test
+    void frozenInputsPreservePlanAndCandidateBaselineCoherence() throws Exception {
+        var source = new RetirementPlanScenarioCopyService().copy(plan);
+        var selected = new java.util.ArrayList<>(socialSecurity.rankedStrategies().subList(0, 1));
+        var quickInput = SocialSecurityAnalyzerInputs.quick(source, selected);
+        var exhaustiveInput = SocialSecurityAnalyzerInputs.exhaustive(source);
+        var birth = source.getHousehold().getPrimaryPerson().getBirthDate();
+        source.getHousehold().getPrimaryPerson().setBirthDate(birth.plusYears(1));
+        selected.clear();
+        assertEquals(birth, quickInput.plan().getHousehold().getPrimaryPerson().getBirthDate());
+        assertEquals(birth, exhaustiveInput.plan().getHousehold().getPrimaryPerson().getBirthDate());
+        assertEquals(1, quickInput.selected().size());
+        assertEquals(IntegratedSocialSecurityCompleteStrategySearchRequest.standard(plan).primarySurvivorCandidates(),
+                exhaustiveInput.primarySurvivorCandidates());
+        var evaluator = new IntegratedSocialSecurityStrategyEvaluator();
+        assertEquals(evaluator.evaluateCurrentStrategy(plan).metrics(),
+                evaluator.evaluateCurrentStrategy(quickInput.plan()).metrics());
+    }
     @Test
     void exhaustiveRequestAndResultsRemainIndependentOfAnalyzerInputs() throws Exception {
         onFx(dialog -> {
@@ -189,6 +242,24 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
         assertEquals(exhaustive.result().entries(), repeated.entries());
     }
 
+    @Test
+    void sourcePlanNotificationMarksResultsAndDisposalDetachesListener() throws Exception {
+        onFx(unused -> {
+            var source = new com.daviddunn.retirementplanner.ui.controller.ApplicationController();
+            set(source, "currentPlan", new RetirementPlanScenarioCopyService().copy(plan));
+            var dialog = new SocialSecurityStrategyAnalyzerDialog(null, source);
+            installResults(dialog);
+            source.markModified();
+            assertFalse(field(dialog, "socialSecurityResultCurrent", Boolean.class));
+            assertFalse(field(dialog, "exhaustiveStale", Label.class).getText().isEmpty());
+            var close = dialog.getClass().getDeclaredMethod("close");
+            close.setAccessible(true);
+            close.invoke(dialog);
+            var before = field(dialog, "plan", RetirementPlan.class);
+            source.newPlan();
+            assertSame(before, field(dialog, "plan", RetirementPlan.class));
+        });
+    }
     private static IntegratedSocialSecurityCompleteStrategySearchRequest searchRequest() {
         var standard = IntegratedSocialSecurityCompleteStrategySearchRequest.standard(plan);
         return new IntegratedSocialSecurityCompleteStrategySearchRequest(plan, List.of(67), List.of(67),
@@ -250,14 +321,17 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
 
     private static void onFx(DialogCheck check) throws Exception {
         FutureTask<Void> task = new FutureTask<>(() -> {
-            var dialog = new SocialSecurityStrategyAnalyzerDialog(null, plan);
+            var executor = new SocialSecurityAnalyzerJobControllerTest.ManualExecutor();
+            var coordinator = new SocialSecurityAnalysisJobCoordinator(executor);
+            var jobs = new SocialSecurityAnalyzerJobController(coordinator, Runnable::run);
+            var dialog = new SocialSecurityStrategyAnalyzerDialog(null, plan, jobs);
             try {
                 check.run(dialog);
             } finally {
                 var close = dialog.getClass().getDeclaredMethod("close");
                 close.setAccessible(true);
                 close.invoke(dialog);
-                field(dialog, "stage", Stage.class).close();
+                field(dialog, "stage", Stage.class).close(); coordinator.close();
             }
             return null;
         });

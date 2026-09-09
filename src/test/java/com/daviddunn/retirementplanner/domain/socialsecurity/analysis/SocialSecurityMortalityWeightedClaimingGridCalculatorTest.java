@@ -18,6 +18,13 @@ class SocialSecurityMortalityWeightedClaimingGridCalculatorTest {
             new SocialSecurityMortalityWeightedClaimingGridCalculator();
 
     @Test
+    void cancellationAtGridBoundaryPublishesNoResult() {
+        var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        var request = request(List.of(67, 68), List.of(64), twoPoint(), twoPoint());
+        assertThrows(com.daviddunn.retirementplanner.domain.analysis.AnalysisCancelledException.class,
+                () -> calculator.calculate(request, update -> cancelled.set(true), cancelled::get));
+    }
+    @Test
     void oneByOneMatchesDirectMortalityWeightedCalculationAndOwnerTotalsReconcile() {
         SocialSecurityMortalityWeightedClaimingGridRequest request = request(
                 List.of(67), List.of(64), twoPoint(), twoPoint());
@@ -95,7 +102,7 @@ class SocialSecurityMortalityWeightedClaimingGridCalculatorTest {
         SocialSecurityMortalityWeightedClaimingGridResult parallel =
                 new SocialSecurityMortalityWeightedClaimingGridCalculator(
                         SocialSecurityMortalityWeightedClaimingGridCalculator.ExecutionMode.PARALLEL,
-                        3).calculate(request);
+                        2).calculate(request);
 
         assertEquals(sequential, parallel);
     }

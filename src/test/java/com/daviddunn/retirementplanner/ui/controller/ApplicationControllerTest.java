@@ -13,6 +13,20 @@ import static org.junit.jupiter.api.Assertions.*;
 class ApplicationControllerTest {
 
     @Test
+    void sourceRevisionCoversModificationReplacementAndListenerRemoval() {
+        var controller = new ApplicationController();
+        long initial = controller.getSourcePlanRevision();
+        var notifications = new java.util.ArrayList<Long>();
+        Runnable detach = controller.addSourcePlanRevisionListener(
+                () -> notifications.add(controller.getSourcePlanRevision()));
+        controller.markModified();
+        controller.newPlan();
+        assertEquals(java.util.List.of(initial + 1, initial + 2), notifications);
+        detach.run();
+        controller.markModified();
+        assertEquals(2, notifications.size());
+    }
+    @Test
     void incompleteNewPlanDoesNotAttemptProjection() {
 
         ApplicationController controller =

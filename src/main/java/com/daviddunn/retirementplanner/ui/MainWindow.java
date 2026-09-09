@@ -256,7 +256,7 @@ public class MainWindow {
         socialSecurityAnalyzerItem.setOnAction(event ->
                 new SocialSecurityStrategyAnalyzerDialog(
                         stage,
-                        controller.getCurrentPlan()).show());
+                        controller).show());
         analysisMenu.getItems().add(socialSecurityAnalyzerItem);
 
         Menu helpMenu = new Menu("Help");

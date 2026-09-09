@@ -1,6 +1,5 @@
 package com.daviddunn.retirementplanner.ui.socialsecurity;
 
-import javafx.concurrent.Task;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
@@ -26,16 +25,17 @@ final class AnalysisProgressView extends HBox {
         setManaged(false);
     }
 
-    void bind(Task<?> task) {
+    void show(SocialSecurityAnalysisProgressModel model) {
         unbind();
-        activity.progressProperty().bind(task.progressProperty());
-        bar.progressProperty().bind(task.progressProperty());
-        headline.textProperty().bind(task.titleProperty());
-        detail.textProperty().bind(task.messageProperty());
+        var update = model.update();
+        activity.setProgress(-1);
+        bar.setProgress(update == null ? -1 : update.fractionComplete());
+        headline.setText(model.text());
+        detail.setText(update == null ? "" : update.completedWork() + " of " + update.totalWork()
+                + " (" + update.wholePercent() + "% of phase)");
         setManaged(true);
         setVisible(true);
     }
-
     void hide() {
         unbind();
         setVisible(false);

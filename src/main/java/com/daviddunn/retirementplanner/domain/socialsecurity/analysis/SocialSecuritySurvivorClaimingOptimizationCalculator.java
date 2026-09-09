@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.socialsecurity.analysis;
 
+import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisPhase;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisProgress;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisProgressListener;
@@ -57,10 +58,19 @@ public final class SocialSecuritySurvivorClaimingOptimizationCalculator {
     public SocialSecuritySurvivorClaimingOptimizationResult calculate(
             SocialSecuritySurvivorClaimingOptimizationRequest request,
             AnalysisProgressListener progressListener) {
+        return calculate(request, progressListener, AnalysisCancellationToken.none());
+    }
+
+    public SocialSecuritySurvivorClaimingOptimizationResult calculate(
+            SocialSecuritySurvivorClaimingOptimizationRequest request,
+            AnalysisProgressListener progressListener,
+            AnalysisCancellationToken cancellation) {
+        Objects.requireNonNull(cancellation, "Cancellation token is required.");
+        cancellation.throwIfCancellationRequested();
         Objects.requireNonNull(request, "Survivor optimization request is required.");
         Objects.requireNonNull(progressListener, "Progress listener is required.");
         SocialSecurityMortalityWeightedClaimingGridResult stageOne =
-                gridCalculator.calculate(request.retirementGridRequest(), progressListener);
+                gridCalculator.calculate(request.retirementGridRequest(), progressListener, cancellation);
         List<SocialSecurityMortalityWeightedClaimingGridCell> retained =
                 retainTopWithCutoffTies(
                         stageOne.cells(),
@@ -81,7 +91,7 @@ public final class SocialSecuritySurvivorClaimingOptimizationCalculator {
                 }
             }
         }
-        ProgressCounter progress = new ProgressCounter(progressListener, completeCandidates.size());
+        ProgressCounter progress = new ProgressCounter(progressListener, completeCandidates.size(), cancellation);
         List<SocialSecuritySurvivorClaimingOptimizationCell> evaluated =
                 evaluateCandidates(request, stageOne, completeCandidates, progress);
 
@@ -93,6 +103,7 @@ public final class SocialSecuritySurvivorClaimingOptimizationCalculator {
                 .filter(cell -> cell.expectedPresentValue().compareTo(maximum) == 0)
                 .toList();
         int strategyCount = evaluated.size();
+        cancellation.throwIfCancellationRequested();
         return new SocialSecuritySurvivorClaimingOptimizationResult(
                 request,
                 stageOne,
@@ -116,6 +127,7 @@ public final class SocialSecuritySurvivorClaimingOptimizationCalculator {
         if (executionMode == ExecutionMode.SEQUENTIAL || candidates.size() == 1) {
             List<SocialSecuritySurvivorClaimingOptimizationCell> results = new ArrayList<>();
             for (CompleteCandidate candidate : candidates) {
+                progress.cancellation.throwIfCancellationRequested();
                 results.add(evaluate(request, stageOne, candidate));
                 progress.completedOne();
             }
@@ -127,7 +139,10 @@ public final class SocialSecuritySurvivorClaimingOptimizationCalculator {
             List<Future<SocialSecuritySurvivorClaimingOptimizationCell>> futures =
                     candidates.stream()
                             .map(candidate -> executor.submit(
-                                    () -> evaluate(request, stageOne, candidate)))
+                                    () -> {
+                                        progress.cancellation.throwIfCancellationRequested();
+                                        return evaluate(request, stageOne, candidate);
+                                    }))
                             .toList();
             List<SocialSecuritySurvivorClaimingOptimizationCell> results =
                     new ArrayList<>(futures.size());
@@ -152,7 +167,8 @@ public final class SocialSecuritySurvivorClaimingOptimizationCalculator {
             }
             return List.copyOf(results);
         } finally {
-            executor.shutdownNow();
+            executor.shutdown();
+            executor.close();
         }
     }
 
@@ -230,9 +246,11 @@ public final class SocialSecuritySurvivorClaimingOptimizationCalculator {
     private static final class ProgressCounter {
         private final AnalysisProgressListener listener;
         private final int total;
+        private final AnalysisCancellationToken cancellation;
         private int completed;
 
-        private ProgressCounter(AnalysisProgressListener listener, int total) {
+        private ProgressCounter(AnalysisProgressListener listener, int total, AnalysisCancellationToken cancellation) {
+            this.cancellation = cancellation;
             this.listener = listener;
             this.total = total;
             listener.onProgress(new AnalysisProgress(
@@ -240,6 +258,7 @@ public final class SocialSecuritySurvivorClaimingOptimizationCalculator {
         }
 
         private synchronized void completedOne() {
+            cancellation.throwIfCancellationRequested();
             completed++;
             listener.onProgress(new AnalysisProgress(
                     AnalysisPhase.SOCIAL_SECURITY_SURVIVOR_STRATEGIES,

@@ -26,6 +26,24 @@ import java.util.List;
 
 public class ApplicationController {
 
+    private long sourcePlanRevision;
+    private final java.util.List<Runnable> sourcePlanListeners = new java.util.ArrayList<>();
+
+    public long getSourcePlanRevision() {
+        return sourcePlanRevision;
+    }
+
+    /** UI-thread notification; the returned removal action belongs to the subscriber. */
+    public Runnable addSourcePlanRevisionListener(Runnable listener) {
+        sourcePlanListeners.add(java.util.Objects.requireNonNull(listener));
+        return () -> sourcePlanListeners.remove(listener);
+    }
+
+    private void sourcePlanChanged() {
+        sourcePlanRevision++;
+        java.util.List.copyOf(sourcePlanListeners).forEach(Runnable::run);
+    }
+
     private RetirementPlan currentPlan;
     private ProjectionSummary currentProjectionSummary;
     private Path currentFile;
@@ -255,6 +273,7 @@ public class ApplicationController {
         baselineNonInvestableAssetProjections = null;
 
         modified = true;
+        sourcePlanChanged();
     }
 
     /**
@@ -305,6 +324,7 @@ public class ApplicationController {
 
         currentPlan =
                 RetirementPlanFactory.createEmptyPlan();
+        sourcePlanChanged();
 
         currentFile = null;
 
@@ -321,6 +341,7 @@ public class ApplicationController {
 
         currentPlan =
                 repository.load(file);
+        sourcePlanChanged();
 //
 //        System.out.println(
 //                "Primary Birth Date = "
@@ -502,6 +523,7 @@ public class ApplicationController {
     public void markModified() {
 
         modified = true;
+        sourcePlanChanged();
     }
 
     public boolean isModified() {

@@ -6,8 +6,8 @@ import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecuri
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityCompleteStrategySearchCalculator;
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityCompleteStrategySearchEntry;
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityCompleteStrategySearchRequest;
-import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancelledException;
-import com.daviddunn.retirementplanner.domain.analysis.AnalysisProgress;
+
+
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
@@ -15,7 +15,6 @@ import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionMetri
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.*;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import javafx.beans.property.ReadOnlyStringWrapper;
-import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -29,15 +28,13 @@ import java.time.LocalDate;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /** Resizable, read-only Social Security strategy analysis window. */
 public final class SocialSecurityStrategyAnalyzerDialog {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMM d, uuuu");
 
-    private final RetirementPlan plan;
+    private RetirementPlan plan;
     private final Stage stage = new Stage();
     private final ComboBox<SocialSecurityMortalityCategory> primaryCategory = new ComboBox<>();
     private final ComboBox<SocialSecurityMortalityCategory> spouseCategory = new ComboBox<>();
@@ -78,19 +75,25 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private final TableView<ExhaustiveIntegratedSearchPresentation.Group> exhaustiveTable =
             new TableView<>();
     private final TextArea exhaustiveDetails = new TextArea();
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "social-security-analyzer-ui");
-        thread.setDaemon(true);
-        return thread;
-    });
-    private Task<?> activeTask;
+    private final SocialSecurityAnalyzerJobController jobs;
+    private Runnable detachPlanListener = () -> { };
+    private final java.util.List<Runnable> detachInputListeners = new java.util.ArrayList<>();
+    private final Button socialSecurityCancelButton = new Button("Cancel");
+    private final Button integratedCancelButton = new Button("Cancel");
     private SocialSecurityStrategyAnalyzerPresentation presentation;
     private IntegratedSocialSecurityComparisonPresentation integratedPresentation;
     private ExhaustiveIntegratedSearchPresentation exhaustivePresentation;
     private boolean socialSecurityResultCurrent;
 
     public SocialSecurityStrategyAnalyzerDialog(Window owner, RetirementPlan plan) {
+        this(owner, plan, new SocialSecurityAnalyzerJobController(
+                com.daviddunn.retirementplanner.ui.MainApplication.analysisJobs()));
+    }
+
+    SocialSecurityStrategyAnalyzerDialog(Window owner, RetirementPlan plan,
+            SocialSecurityAnalyzerJobController jobs) {
         this.plan = plan;
+        this.jobs = jobs;
         pvDate = new DatePicker(plan.getPlanningAssumptions().getProjectionStartDate());
         stage.initOwner(owner);
         stage.initModality(Modality.WINDOW_MODAL);
@@ -101,8 +104,23 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         stage.setHeight(820);
         stage.setScene(new Scene(content()));
         stage.setOnCloseRequest(event -> close());
+        stage.setOnHidden(event -> close());
+        jobs.onChanged(this::refreshJobState);
+        refreshJobState();
     }
 
+    public SocialSecurityStrategyAnalyzerDialog(Window owner,
+            com.daviddunn.retirementplanner.ui.controller.ApplicationController source) {
+        this(owner, source.getCurrentPlan());
+        detachPlanListener = source.addSourcePlanRevisionListener(() -> {
+            plan = source.getCurrentPlan();
+            jobs.invalidate(SocialSecurityAnalyzerJobController.Change.PLAN);
+            markStale();
+            if (exhaustivePresentation != null) {
+                exhaustiveStale.setText("Plan changed - run exhaustive search again.");
+            }
+        });
+    }
     public void show() {
         stage.showAndWait();
     }
@@ -119,15 +137,19 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         runButton.setOnAction(event -> runAnalysis());
         integratedRunButton.setOnAction(event -> runIntegratedAnalysis());
         exhaustiveRunButton.setOnAction(event -> runExhaustiveSearch());
-        exhaustiveCancelButton.setOnAction(event -> cancelExhaustiveSearch());
-        primaryCategory.valueProperty().addListener((o, a, b) -> markStale());
-        spouseCategory.valueProperty().addListener((o, a, b) -> markStale());
-        primaryMortalityAdjustment.textProperty().addListener((o, a, b) -> markStale());
-        spouseMortalityAdjustment.textProperty().addListener((o, a, b) -> markStale());
-        discountRate.textProperty().addListener((o, a, b) -> markStale());
-        pvDate.valueProperty().addListener((o, a, b) -> markStale());
-        integratedCandidateCount.valueProperty().addListener((o, a, b) ->
-                markIntegratedStale("Candidate count changed - run integrated analysis again."));
+        exhaustiveCancelButton.setOnAction(event -> jobs.cancel());
+        socialSecurityCancelButton.setOnAction(event -> jobs.cancel());
+        integratedCancelButton.setOnAction(event -> jobs.cancel());
+        observe(primaryCategory.valueProperty(), this::markStale);
+        observe(spouseCategory.valueProperty(), this::markStale);
+        observe(primaryMortalityAdjustment.textProperty(), this::markStale);
+        observe(spouseMortalityAdjustment.textProperty(), this::markStale);
+        observe(discountRate.textProperty(), this::markStale);
+        observe(pvDate.valueProperty(), this::markStale);
+        observe(integratedCandidateCount.valueProperty(), () -> {
+            jobs.invalidate(SocialSecurityAnalyzerJobController.Change.QUICK_CANDIDATES);
+            markIntegratedStale("Candidate count changed - run integrated analysis again.");
+        });
 
         VBox header = new VBox(8,
                 new Label("Social Security Strategy Analyzer"),
@@ -145,7 +167,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         BorderPane root = new BorderPane(modes);
         root.setTop(header);
         Button closeButton = new Button("Close");
-        closeButton.setOnAction(event -> stage.close());
+        closeButton.setOnAction(event -> { close(); stage.close(); });
         Label scope = new Label(
                 "Read-only analysis. No strategy is applied to or saved in the active retirement plan.");
         HBox footer = new HBox(12, scope, closeButton);
@@ -174,7 +196,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 tab("Assumptions", assumptions));
         VBox content = new VBox(8,
                 wrappedLabel("Uses the longevity assumptions above to weight Social Security benefits."),
-                new HBox(10, runButton, status), socialSecurityProgress, stale, socialSecurityTabs);
+                new HBox(10, runButton, socialSecurityCancelButton, status), socialSecurityProgress, stale, socialSecurityTabs);
         content.setPadding(new Insets(12));
         VBox.setVgrow(socialSecurityTabs, Priority.ALWAYS);
         return content;
@@ -214,7 +236,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         + "Mortality categories, mortality adjustments, and the real discount rate affect "
                         + "strategy generation and SS Expected PV. They do not make the full-plan projection "
                         + "mortality-weighted and do not discount its future-dollar metrics.\n\n"
-                        + "If the active plan changes while this window remains open, close and reopen the "
+                        + "If the active plan changes while this window remains open, rerun the "
                         + "analyzer before relying on the comparison.");
         integratedBaseline.getChildren().setAll(new Label(
                 "The current-plan baseline will appear after integrated analysis."));
@@ -225,7 +247,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         explanation.setWrapText(true);
         HBox actions = new HBox(10,
                 new Label("Integrated candidates (1-20):"), integratedCandidateCount,
-                integratedRunButton, integratedStatus);
+                integratedRunButton, integratedCancelButton, integratedStatus);
         VBox tableBox = new VBox(8, heading("Candidate Comparison"), integratedTable);
         VBox.setVgrow(integratedTable, Priority.ALWAYS);
         SplitPane details = new SplitPane(
@@ -344,49 +366,23 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                             spouseAdjustment,
                             rate,
                             pvDate.getValue());
-            setBusy(true);
-            Task<RunResult> task = new Task<>() {
-                @Override
-                protected RunResult call() {
-                    return new RunResult(
-                            context,
+            boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY,
+                    (progress, cancellation) -> new RunResult(context,
                             new SocialSecuritySurvivorClaimingOptimizationCalculator()
-                                    .calculate(context.request(), this::reportProgress));
-                }
-
-                private void reportProgress(AnalysisProgress update) {
-                    updateProgress(update.completedWork(), update.totalWork());
-                    updateTitle("Social Security Analysis - " + update.wholePercent() + "%");
-                    updateMessage(update.phase().displayName() + " - "
-                            + update.completedWork() + " of " + update.totalWork());
-                }
-            };
-            activeTask = task;
-            socialSecurityProgress.bind(task);
-            task.setOnSucceeded(event -> {
-                if (!stage.isShowing()) {
-                    return;
-                }
-                RunResult run = task.getValue();
+                                    .calculate(context.request(), progress, cancellation)), run -> {
                 presentation = SocialSecurityStrategyAnalyzerPresentation.from(run.result());
                 render(run.context(), presentation);
                 socialSecurityResultCurrent = true;
+                jobs.invalidate(SocialSecurityAnalyzerJobController.Change.SOCIAL_SECURITY_RESULT);
                 refreshExhaustiveSocialSecurityReference();
                 stale.setText("");
-                integratedRunButton.setDisable(false);
                 markIntegratedStale("Social Security analysis changed - run integrated analysis again.");
-                setBusy(false);
+                setAnalysisBusy(false);
                 status.setText("Analysis complete.");
-            });
-            task.setOnFailed(event -> {
-                if (!stage.isShowing()) {
-                    return;
-                }
-                setBusy(false);
-                status.setText("Analysis failed; the prior result was preserved.");
-                showError(task.getException());
-            });
-            executor.execute(task);
+            }, this::showError);
+            if (!accepted) {
+                status.setText("Another Social Security analysis is running or cleaning up.");
+            }
         } catch (RuntimeException exception) {
             showError(exception);
         }
@@ -471,50 +467,19 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             List<SocialSecuritySurvivorClaimingOptimizationCell> cells = selected.stream()
                     .map(SocialSecurityStrategyAnalyzerPresentation.RankedStrategy::cell)
                     .toList();
-            setIntegratedBusy(true);
-            Task<IntegratedSocialSecurityComparisonPresentation> task = new Task<>() {
-                @Override
-                protected IntegratedSocialSecurityComparisonPresentation call() {
-                    return IntegratedSocialSecurityComparisonPresentation.from(
+            var input = SocialSecurityAnalyzerInputs.quick(plan, selected);
+            boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.QUICK,
+                    (progress, cancellation) -> IntegratedSocialSecurityComparisonPresentation.from(
                             new IntegratedSocialSecurityStrategyComparisonService()
-                                    .compareAnalyzerCandidates(plan, cells, this::reportProgress),
-                            selected);
-                }
-
-                private void reportProgress(AnalysisProgress update) {
-                    updateProgress(update.completedWork(), update.totalWork());
-                    updateTitle("Quick Comparison - " + update.wholePercent() + "%");
-                    String text = update.phase().displayName();
-                    if (update.phase() == com.daviddunn.retirementplanner.domain.analysis
-                            .AnalysisPhase.QUICK_COMPARISON_CANDIDATES) {
-                        text = "Evaluating candidate " + update.completedWork()
-                                + " of " + update.totalWork();
-                    }
-                    updateMessage(text);
-                }
-            };
-            activeTask = task;
-            integratedProgress.bind(task);
-            task.setOnSucceeded(event -> {
-                if (!stage.isShowing()) {
-                    return;
-                }
-                integratedPresentation = task.getValue();
-                renderIntegrated(integratedPresentation);
+                                    .compareAnalyzerCandidates(input.plan(), cells, progress, cancellation), input.selected()), model -> {
+                integratedPresentation = model;
+                renderIntegrated(model);
                 integratedStale.setText("");
-                setIntegratedBusy(false);
-                integratedStatus.setText(integratedCompletionText(integratedPresentation));
-            });
-            task.setOnFailed(event -> {
-                if (!stage.isShowing()) {
-                    return;
-                }
-                setIntegratedBusy(false);
-                integratedStatus.setText(
-                        "Integrated analysis failed; the prior result was preserved.");
-                showError(task.getException());
-            });
-            executor.execute(task);
+                integratedStatus.setText(integratedCompletionText(model));
+            }, this::showError);
+            if (!accepted) {
+                integratedStatus.setText("Another Social Security analysis is running or cleaning up.");
+            }
         } catch (RuntimeException exception) {
             showError(exception);
         }
@@ -522,84 +487,28 @@ public final class SocialSecurityStrategyAnalyzerDialog {
 
     private void runExhaustiveSearch() {
         try {
-            IntegratedSocialSecurityCompleteStrategySearchRequest request =
-                    IntegratedSocialSecurityCompleteStrategySearchRequest.standard(plan);
-            setExhaustiveBusy(true);
-            Task<ExhaustiveIntegratedSearchPresentation> task = new Task<>() {
-                @Override
-                protected ExhaustiveIntegratedSearchPresentation call() {
-                    long started = System.nanoTime();
-                    var result = new IntegratedSocialSecurityCompleteStrategySearchCalculator()
-                            .calculate(request, this::reportProgress, this::isCancelled);
-                    return ExhaustiveIntegratedSearchPresentation.from(
-                            result,
-                            Duration.ofNanos(System.nanoTime() - started),
-                            20);
-                }
-
-                private void reportProgress(AnalysisProgress update) {
-                    updateProgress(update.completedWork(), update.totalWork());
-                    updateTitle("Exhaustive Integrated Search - "
-                            + update.wholePercent() + "%");
-                    String text = update.phase().displayName();
-                    if (update.phase() == com.daviddunn.retirementplanner.domain.analysis
-                            .AnalysisPhase.EXHAUSTIVE_INTEGRATED_STRATEGIES) {
-                        text = update.completedWork() + " of " + update.totalWork()
-                                + " strategies evaluated";
-                    }
-                    updateMessage(text);
-                }
-            };
-            activeTask = task;
-            exhaustiveProgress.bind(task);
-            task.setOnSucceeded(event -> {
-                if (!stage.isShowing()) {
-                    return;
-                }
-                exhaustivePresentation = task.getValue();
-                renderExhaustive(exhaustivePresentation);
+            var request = SocialSecurityAnalyzerInputs.exhaustive(plan);
+            boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
+                    (progress, cancellation) -> {
+                        long started = System.nanoTime();
+                        var result = new IntegratedSocialSecurityCompleteStrategySearchCalculator()
+                                .calculate(request, progress, cancellation);
+                        return ExhaustiveIntegratedSearchPresentation.from(result,
+                                Duration.ofNanos(System.nanoTime() - started), 20);
+                    }, model -> {
+                exhaustivePresentation = model;
+                renderExhaustive(model);
                 exhaustiveStale.setText("");
-                setExhaustiveBusy(false);
                 exhaustiveStatus.setText("Exhaustive integrated search complete - "
-                        + exhaustivePresentation.result().totalStrategyCount()
-                        + " strategies evaluated.");
-            });
-            task.setOnCancelled(event -> {
-                if (!stage.isShowing()) {
-                    return;
-                }
-                setExhaustiveBusy(false);
-                exhaustiveStatus.setText(
-                        "Exhaustive search cancelled; the prior result was preserved.");
-            });
-            task.setOnFailed(event -> {
-                if (!stage.isShowing()) {
-                    return;
-                }
-                setExhaustiveBusy(false);
-                if (task.getException() instanceof AnalysisCancelledException) {
-                    exhaustiveStatus.setText(
-                            "Exhaustive search cancelled; the prior result was preserved.");
-                } else {
-                    exhaustiveStatus.setText(
-                            "Exhaustive integrated search could not be completed; "
-                                    + "the prior result was preserved.");
-                    showError(task.getException());
-                }
-            });
-            executor.execute(task);
+                        + model.result().totalStrategyCount() + " strategies evaluated; " + model.result().failedStrategyCount() + " unavailable.");
+            }, this::showError);
+            if (!accepted) {
+                exhaustiveStatus.setText("Another Social Security analysis is running or cleaning up.");
+            }
         } catch (RuntimeException exception) {
-            setExhaustiveBusy(false);
             showError(exception);
         }
     }
-
-    private void cancelExhaustiveSearch() {
-        if (activeTask != null) {
-            activeTask.cancel(false);
-        }
-    }
-
     private void configureExhaustiveTable() {
         exhaustiveTable.getColumns().add(exhaustiveColumn("Estate Rank", group ->
                 Integer.toString(group.representative().afterTaxEstateRank().orElseThrow()), 85));
@@ -997,6 +906,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void markStale() {
+        jobs.invalidate(SocialSecurityAnalyzerJobController.Change.ASSUMPTIONS);
         if (presentation != null) {
             socialSecurityResultCurrent = false;
             refreshExhaustiveSocialSecurityReference();
@@ -1019,37 +929,6 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         }
     }
 
-    private void setBusy(boolean busy) {
-        setAnalysisBusy(busy);
-        if (!busy) {
-            socialSecurityProgress.hide();
-        }
-        if (busy) {
-            status.setText("Analyzing Social Security claiming strategies...");
-        }
-    }
-
-    private void setIntegratedBusy(boolean busy) {
-        setAnalysisBusy(busy);
-        if (!busy) {
-            integratedProgress.hide();
-        }
-        if (busy) {
-            integratedStatus.setText("Running integrated retirement-plan comparison...");
-        }
-    }
-
-    private void setExhaustiveBusy(boolean busy) {
-        setAnalysisBusy(busy);
-        exhaustiveCancelButton.setVisible(busy);
-        exhaustiveCancelButton.setManaged(busy);
-        if (!busy) {
-            exhaustiveProgress.hide();
-        } else {
-            exhaustiveStatus.setText("Running exhaustive integrated search...");
-        }
-    }
-
     private void setAnalysisBusy(boolean disabled) {
         runButton.setDisable(disabled);
         integratedRunButton.setDisable(disabled || !socialSecurityResultCurrent);
@@ -1068,17 +947,57 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         alert.initOwner(stage);
         alert.setTitle("Social Security Analysis");
         alert.setHeaderText("Unable to run Social Security strategy analysis");
-        alert.setContentText(throwable == null ? "Unknown analysis error." : throwable.getMessage());
+        alert.setContentText(SocialSecurityAnalysisFailurePresentation.message(throwable));
         alert.showAndWait();
     }
 
-    private void close() {
-        if (activeTask != null) {
-            activeTask.cancel(true);
+    private void refreshJobState() {
+        var state = jobs.state();
+        boolean busy = state != SocialSecurityAnalyzerJobController.State.IDLE;
+        setAnalysisBusy(busy);
+        for (Button button : List.of(socialSecurityCancelButton, integratedCancelButton, exhaustiveCancelButton)) {
+            button.setVisible(busy);
+            button.setManaged(busy);
+            button.setDisable(state != SocialSecurityAnalyzerJobController.State.RUNNING);
         }
-        executor.shutdownNow();
+        socialSecurityProgress.hide();
+        integratedProgress.hide();
+        exhaustiveProgress.hide();
+        if (jobs.mode() == null) {
+            return;
+        }
+        Label label = switch (jobs.mode()) {
+            case SOCIAL_SECURITY -> status;
+            case QUICK -> integratedStatus;
+            case EXHAUSTIVE, WEIGHTED -> exhaustiveStatus;
+        };
+        label.setText(jobs.status());
+        if (busy) {
+            AnalysisProgressView view = switch (jobs.mode()) {
+                case SOCIAL_SECURITY -> socialSecurityProgress;
+                case QUICK -> integratedProgress;
+                case EXHAUSTIVE, WEIGHTED -> exhaustiveProgress;
+            };
+            view.show(jobs.progress());
+        }
     }
 
+    private <T> void observe(javafx.beans.value.ObservableValue<T> value, Runnable action) {
+        javafx.beans.value.ChangeListener<T> listener = (observable, oldValue, newValue) -> action.run();
+        value.addListener(listener);
+        detachInputListeners.add(() -> value.removeListener(listener));
+    }
+
+    private void close() {
+        jobs.close();
+        detachPlanListener.run();
+        detachPlanListener = () -> { };
+        detachInputListeners.forEach(Runnable::run);
+        detachInputListeners.clear();
+        socialSecurityProgress.hide();
+        integratedProgress.hide();
+        exhaustiveProgress.hide();
+    }
     private static Tab tab(String title, javafx.scene.Node content) {
         Tab tab = new Tab(title, content);
         tab.setClosable(false);

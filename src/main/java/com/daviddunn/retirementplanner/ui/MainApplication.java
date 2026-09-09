@@ -6,6 +6,18 @@ import javafx.stage.Stage;
 
 public class MainApplication extends Application {
 
+    private static final com.daviddunn.retirementplanner.app.socialsecurity.SocialSecurityAnalysisJobCoordinator
+            ANALYSIS_JOBS = new com.daviddunn.retirementplanner.app.socialsecurity.SocialSecurityAnalysisJobCoordinator();
+
+    public static com.daviddunn.retirementplanner.app.socialsecurity.SocialSecurityAnalysisJobCoordinator analysisJobs() {
+        return ANALYSIS_JOBS;
+    }
+
+    @Override
+    public void stop() {
+        ANALYSIS_JOBS.close();
+    }
+
     @Override
     public void start(Stage stage) {
 

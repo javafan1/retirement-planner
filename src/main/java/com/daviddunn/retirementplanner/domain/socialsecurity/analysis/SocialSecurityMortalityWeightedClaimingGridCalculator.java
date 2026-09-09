@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.socialsecurity.analysis;
 
+import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisPhase;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisProgress;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisProgressListener;
@@ -57,6 +58,15 @@ public final class SocialSecurityMortalityWeightedClaimingGridCalculator {
     public SocialSecurityMortalityWeightedClaimingGridResult calculate(
             SocialSecurityMortalityWeightedClaimingGridRequest request,
             AnalysisProgressListener progressListener) {
+        return calculate(request, progressListener, AnalysisCancellationToken.none());
+    }
+
+    public SocialSecurityMortalityWeightedClaimingGridResult calculate(
+            SocialSecurityMortalityWeightedClaimingGridRequest request,
+            AnalysisProgressListener progressListener,
+            AnalysisCancellationToken cancellation) {
+        Objects.requireNonNull(cancellation, "Cancellation token is required.");
+        cancellation.throwIfCancellationRequested();
         Objects.requireNonNull(request, "Mortality-weighted grid request is required.");
         Objects.requireNonNull(progressListener, "Progress listener is required.");
 
@@ -73,7 +83,7 @@ public final class SocialSecurityMortalityWeightedClaimingGridCalculator {
                 request.baseStrategy().spouseElection().birthDate(),
                 request.spouseClaimAges());
         List<Coordinate> coordinates = coordinates(request);
-        ProgressCounter progress = new ProgressCounter(progressListener, coordinates.size());
+        ProgressCounter progress = new ProgressCounter(progressListener, coordinates.size(), cancellation);
         List<SocialSecurityMortalityWeightedClaimingGridCell> cells =
                 executionMode == ExecutionMode.SEQUENTIAL || coordinates.size() == 1
                         ? calculateSequential(
@@ -91,6 +101,7 @@ public final class SocialSecurityMortalityWeightedClaimingGridCalculator {
                                 coordinates,
                                 progress);
 
+        cancellation.throwIfCancellationRequested();
         return new SocialSecurityMortalityWeightedClaimingGridResult(
                 request,
                 request.primaryClaimAges(),
@@ -112,6 +123,7 @@ public final class SocialSecurityMortalityWeightedClaimingGridCalculator {
             ProgressCounter progress) {
         List<SocialSecurityMortalityWeightedClaimingGridCell> cells = new ArrayList<>();
         for (Coordinate coordinate : coordinates) {
+            progress.cancellation.throwIfCancellationRequested();
             cells.add(calculateCell(
                     request, scenarios, primaryDates, spouseDates, coordinate));
             progress.completedOne();
@@ -131,12 +143,15 @@ public final class SocialSecurityMortalityWeightedClaimingGridCalculator {
         try {
             List<Future<SocialSecurityMortalityWeightedClaimingGridCell>> futures =
                     coordinates.stream()
-                            .map(coordinate -> executor.submit(() -> calculateCell(
+                            .map(coordinate -> executor.submit(() -> {
+                                progress.cancellation.throwIfCancellationRequested();
+                                return calculateCell(
                                     request,
                                     scenarios,
                                     primaryDates,
                                     spouseDates,
-                                    coordinate)))
+                                    coordinate);
+                            }))
                             .toList();
             List<SocialSecurityMortalityWeightedClaimingGridCell> cells =
                     new ArrayList<>(futures.size());
@@ -163,7 +178,8 @@ public final class SocialSecurityMortalityWeightedClaimingGridCalculator {
             }
             return List.copyOf(cells);
         } finally {
-            executor.shutdownNow();
+            executor.shutdown();
+            executor.close();
         }
     }
 
@@ -249,9 +265,11 @@ public final class SocialSecurityMortalityWeightedClaimingGridCalculator {
     private static final class ProgressCounter {
         private final AnalysisProgressListener listener;
         private final int total;
+        private final AnalysisCancellationToken cancellation;
         private int completed;
 
-        private ProgressCounter(AnalysisProgressListener listener, int total) {
+        private ProgressCounter(AnalysisProgressListener listener, int total, AnalysisCancellationToken cancellation) {
+            this.cancellation = cancellation;
             this.listener = listener;
             this.total = total;
             listener.onProgress(new AnalysisProgress(
@@ -259,6 +277,7 @@ public final class SocialSecurityMortalityWeightedClaimingGridCalculator {
         }
 
         private synchronized void completedOne() {
+            cancellation.throwIfCancellationRequested();
             completed++;
             listener.onProgress(new AnalysisProgress(
                     AnalysisPhase.SOCIAL_SECURITY_RETIREMENT_GRID, completed, total));

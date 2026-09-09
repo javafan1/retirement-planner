@@ -19,6 +19,18 @@ class SocialSecuritySurvivorClaimingOptimizationCalculatorTest {
             new SocialSecuritySurvivorClaimingOptimizationCalculator();
 
     @Test
+    void cancellationAtSurvivorBoundaryPublishesNoResult() {
+        var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        var request = request(List.of(67), List.of(64), 1, standardStrategy());
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.daviddunn.retirementplanner.domain.analysis.AnalysisCancelledException.class,
+                () -> calculator.calculate(request, update -> {
+                    if (update.phase() == AnalysisPhase.SOCIAL_SECURITY_SURVIVOR_STRATEGIES) {
+                        cancelled.set(true);
+                    }
+                }, cancelled::get));
+    }
+    @Test
     void reportsRealStageOneAndStageTwoWorkAndPreservesResult() {
         var request = request(List.of(62, 70), List.of(62, 70), 1, standardStrategy());
         List<AnalysisProgress> updates = new ArrayList<>();
@@ -148,7 +160,7 @@ class SocialSecuritySurvivorClaimingOptimizationCalculatorTest {
                         new SocialSecuritySurvivorClaimingCandidateGenerator(),
                         SocialSecuritySurvivorClaimingOptimizationCalculator
                                 .ExecutionMode.PARALLEL,
-                        3).calculate(request);
+                        2).calculate(request);
 
         assertEquals(sequential, parallel);
     }

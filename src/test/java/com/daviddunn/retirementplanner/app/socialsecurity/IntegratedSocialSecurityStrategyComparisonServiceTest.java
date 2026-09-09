@@ -30,6 +30,20 @@ class IntegratedSocialSecurityStrategyComparisonServiceTest {
             new IntegratedSocialSecurityStrategyComparisonService();
 
     @Test
+    void quickCancellationAfterBaselineAndAfterCandidateDoesNotReturnPartialResult() {
+        var plan = plan();
+        for (int boundary : List.of(0, 1)) {
+            var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+            assertThrows(com.daviddunn.retirementplanner.domain.analysis.AnalysisCancelledException.class,
+                    () -> service.compare(plan, List.of(strategy(plan, 62, 62, 60)), update -> {
+                        if (update.phase() == AnalysisPhase.QUICK_COMPARISON_CANDIDATES
+                                && update.completedWork() == boundary) {
+                            cancelled.set(true);
+                        }
+                    }, cancelled::get));
+        }
+    }
+    @Test
     void quickComparisonReportsBaselineAndActualUniqueCandidateWork() {
         RetirementPlan plan = plan();
         var first = strategy(plan, 62, 62, 60);
