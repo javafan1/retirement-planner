@@ -40,3 +40,4 @@ build/
 .DS_Store
 
 .codex-m2/
+*.log

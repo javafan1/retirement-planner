@@ -6,31 +6,55 @@ import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecu
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.*;
+import java.util.function.Function;
 
-/** Exact sequential comparison with optional proven schedule equivalence outside the financial engine. */
+/** Exact comparison with bounded representative execution and deterministic ordered assembly. */
 public final class LongevityWeightedIntegratedStrategyComparisonService {
     private final LongevityWeightedIntegratedStrategyEvaluator evaluator = new LongevityWeightedIntegratedStrategyEvaluator();
     private final LongevityWeightedContinuationEvaluator continuationEvaluator = new LongevityWeightedContinuationEvaluator();
+    private final int workerLimit;
+    private final Function<RepresentativeInput, RepresentativeResult> representativeEvaluation;
+
+    public LongevityWeightedIntegratedStrategyComparisonService() {
+        this(LongevityWeightedRepresentativeEvaluationCoordinator.DEFAULT_LIMIT);
+    }
+
+    LongevityWeightedIntegratedStrategyComparisonService(int workerLimit) {
+        this(workerLimit, LongevityWeightedIntegratedStrategyComparisonService::evaluateRepresentative);
+    }
+
+    LongevityWeightedIntegratedStrategyComparisonService(int workerLimit,
+            Function<RepresentativeInput, RepresentativeResult> evaluation) {
+        if (workerLimit < 1) throw new IllegalArgumentException("Worker limit must be positive.");
+        this.workerLimit = workerLimit;
+        this.representativeEvaluation = Objects.requireNonNull(evaluation);
+    }
+
+    /** Stage 5C3 + Stage 5C2 sequential oracle, without a coordinator. */
+    LongevityWeightedIntegratedStrategyComparisonResult compareSequential(
+            LongevityWeightedIntegratedStrategyComparisonRequest request) {
+        return compare(request, true, true, false);
+    }
 
     public LongevityWeightedIntegratedStrategyComparisonResult compare(
             LongevityWeightedIntegratedStrategyComparisonRequest request) {
-        return compare(request, true, true);
+        return compare(request, true, true, true);
     }
 
     /** Stage 5A/5B financial reference: evaluates every original occurrence independently. */
     public LongevityWeightedIntegratedStrategyComparisonResult compareExact(
             LongevityWeightedIntegratedStrategyComparisonRequest request) {
-        return compare(request, false, false);
+        return compare(request, false, false, false);
     }
 
     /** Stage 5C1 reference, retaining its original independent representative evaluations. */
     LongevityWeightedIntegratedStrategyComparisonResult compareWithEquivalenceOnly(
             LongevityWeightedIntegratedStrategyComparisonRequest request) {
-        return compare(request, true, false);
+        return compare(request, true, false, false);
     }
 
     private LongevityWeightedIntegratedStrategyComparisonResult compare(
-            LongevityWeightedIntegratedStrategyComparisonRequest request, boolean optimize, boolean continuations) {
+            LongevityWeightedIntegratedStrategyComparisonRequest request, boolean optimize, boolean continuations, boolean parallel) {
         Objects.requireNonNull(request, "Comparison request is required.");
         long started = System.nanoTime();
         request.cancellationToken().throwIfCancellationRequested();
@@ -55,27 +79,46 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
         Set<Integer> detailRepresentatives = new HashSet<>();
         proof.ifPresent(value -> request.detailRetention().selectedCandidateOrders().forEach(order ->
                 detailRepresentatives.add(value.representativeOrders().get(order - 1))));
-        for (int index = 0; index < request.candidates().size(); index++) {
-            request.cancellationToken().throwIfCancellationRequested();
-            int order = index + 1;
-            int representative = proof.isPresent() ? proof.orElseThrow().representativeOrders().get(index) : order;
-            boolean retain = request.detailRetention().selectedCandidateOrders().contains(order);
-            var value = representatives.get(representative);
-            if (value == null || !value.successful()) {
-                value = evaluate(request, plan, request.candidates().get(index), order,
-                        retain || detailRepresentatives.contains(order), work, continuations);
-                if (order == representative) {
-                    representatives.put(order, value);
+        var evaluation = representativeEvaluation;
+        try (var coordinator = parallel ? new LongevityWeightedRepresentativeEvaluationCoordinator<RepresentativeResult>(
+                workerLimit, proof.orElseThrow().representativeOrders().stream().distinct().toList(),
+                (order, token) -> {
+                    var input = new RepresentativeInput(order,
+                            new LongevityWeightedIntegratedStrategyRequest(request.newPlanCopy(), request.candidates().get(order - 1),
+                                    request.longevityScenarios(), request.valuationDate(), request.realDiscountRate(),
+                                    AnalysisProgressListener.none(), token),
+                            request.detailRetention().selectedCandidateOrders().contains(order) || detailRepresentatives.contains(order));
+                    return () -> evaluation.apply(input);
+                }, request.cancellationToken()) : null) {
+            for (int index = 0; index < request.candidates().size(); index++) {
+                request.cancellationToken().throwIfCancellationRequested();
+                int order = index + 1;
+                int representative = proof.isPresent() ? proof.orElseThrow().representativeOrders().get(index) : order;
+                boolean retain = request.detailRetention().selectedCandidateOrders().contains(order);
+                var value = representatives.get(representative);
+                if (value == null || !value.successful()) {
+                    if (coordinator != null) {
+                        var result = order == representative ? coordinator.representative(order) : coordinator.retry(order);
+                        value = result.entry();
+                        work.add(result.work());
+                    } else {
+                        value = evaluate(request, plan, request.candidates().get(index), order,
+                                retain || detailRepresentatives.contains(order), work, continuations);
+                    }
+                    if (order == representative) {
+                        representatives.put(order, value);
+                    }
+                } else {
+                    avoided++;
                 }
-            } else {
-                avoided++;
+                // Detail outcomes contain no strategy identity. The original entry owns identity.
+                // Failed representatives are never shared: each member executes the reference path.
+                entries.add(new LongevityWeightedIntegratedStrategyComparisonEntry(order, request.candidates().get(index),
+                        value.aggregate(), value.failure(), retain ? value.scenarioDetails() : Optional.empty(),
+                        OptionalInt.empty(), Optional.empty(), Optional.empty()));
+                report(request, ++completed, total);
             }
-            // Detail outcomes contain no strategy identity. The original entry owns identity.
-            // Failed representatives are never shared: each member executes the reference path.
-            entries.add(new LongevityWeightedIntegratedStrategyComparisonEntry(order, request.candidates().get(index),
-                    value.aggregate(), value.failure(), retain ? value.scenarioDetails() : Optional.empty(),
-                    OptionalInt.empty(), Optional.empty(), Optional.empty()));
-            report(request, ++completed, total);
+            request.cancellationToken().throwIfCancellationRequested();
         }
         request.cancellationToken().throwIfCancellationRequested();
         var sorted = entries.stream().filter(LongevityWeightedIntegratedStrategyComparisonEntry::successful)
@@ -123,12 +166,19 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
             LongevityWeightedIntegratedStrategyComparisonRequest request, RetirementPlan plan,
             SocialSecurityHouseholdClaimingStrategy strategy, int order, boolean retainDetail, WorkCounter work,
             boolean continuations) {
+        return evaluate(new LongevityWeightedIntegratedStrategyRequest(plan, strategy,
+                request.longevityScenarios(), request.valuationDate(), request.realDiscountRate(),
+                AnalysisProgressListener.none(), request.cancellationToken()), order, retainDetail, work, continuations);
+    }
+
+    private LongevityWeightedIntegratedStrategyComparisonEntry evaluate(
+            LongevityWeightedIntegratedStrategyRequest request, int order, boolean retainDetail,
+            WorkCounter work, boolean continuations) {
         request.cancellationToken().throwIfCancellationRequested();
+        var strategy = request.strategy();
         try {
-            LongevityWeightedIntegratedStrategyComparisonRequest.validateCompleteStrategy(plan, strategy);
-            var evaluationRequest = new LongevityWeightedIntegratedStrategyRequest(plan, strategy,
-                    request.longevityScenarios(), request.valuationDate(), request.realDiscountRate(),
-                    AnalysisProgressListener.none(), request.cancellationToken());
+            LongevityWeightedIntegratedStrategyComparisonRequest.validateCompleteStrategy(request.sourcePlan(), strategy);
+            var evaluationRequest = request;
             LongevityWeightedIntegratedStrategyResult result;
             if (continuations) {
                 work.continuationEvaluations++;
@@ -167,6 +217,18 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
         }
     }
 
+    /** The request owns its copied plan; only immutable values leave a task. */
+    record RepresentativeInput(int order, LongevityWeightedIntegratedStrategyRequest request, boolean retainDetail) { }
+    record RepresentativeResult(LongevityWeightedIntegratedStrategyComparisonEntry entry,
+            LongevityWeightedIntegratedStrategyComparisonResult.Work work) { }
+
+    static RepresentativeResult evaluateRepresentative(RepresentativeInput input) {
+        var work = new WorkCounter();
+        var service = new LongevityWeightedIntegratedStrategyComparisonService(1);
+        var entry = service.evaluate(input.request(), input.order(), input.retainDetail(), work, true);
+        return new RepresentativeResult(entry, work.snapshot());
+    }
+
     private static Comparator<LongevityWeightedIntegratedStrategyComparisonEntry> ranking() {
         return Comparator.<LongevityWeightedIntegratedStrategyComparisonEntry, BigDecimal>comparing(
                 entry -> entry.aggregate().orElseThrow().expectedPvAfterTaxEstate()).reversed()
@@ -200,6 +262,16 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
         private long completedProjections;
         private long continuationEvaluations;
         private LongevityContinuationWork continuation = LongevityContinuationWork.zero();
+
+        private void add(LongevityWeightedIntegratedStrategyComparisonResult.Work value) {
+            evaluations += value.stageFourEvaluations();
+            scenarios += value.scenarioEvaluations() - value.continuation().scenariosStarted();
+            completedScenarios += value.completedScenarioEvaluations() - value.continuation().outcomesProduced();
+            projections += value.projectionEngineRuns() - value.continuation().projectionStarts();
+            completedProjections += value.completedProjectionEngineRuns() - value.continuation().completedProjections();
+            continuationEvaluations += value.continuationEvaluations();
+            continuation = continuation.plus(value.continuation());
+        }
 
         private void observe(LongevityWeightedEvaluationWork event) {
             switch (event) {
