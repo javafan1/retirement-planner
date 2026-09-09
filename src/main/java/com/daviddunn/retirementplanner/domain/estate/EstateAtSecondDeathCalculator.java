@@ -16,14 +16,7 @@ public final class EstateAtSecondDeathCalculator {
         validateCoverageStart(plan, secondDeathDate);
         var start = plan.getPlanningAssumptions().getProjectionStartDate();
         if (secondDeathDate.equals(start)) {
-            var portfolio = ProjectedPortfolio.from(plan.getAccountPortfolio());
-            var accounts = portfolio.getAccountBalances().stream()
-                    .map(balance -> new ProjectedAccountSnapshot(balance.getAccount(), balance.getBalance()))
-                    .toList();
-            var tax = estateCalculator.calculateEstimatedTax(accounts, plan.getPlanningAssumptions()
-                    .getTaxAssumptions().getEstimatedHeirTaxRateOnTaxDeferredAssets());
-            return new EstateAtSecondDeathSnapshot(secondDeathDate, start, portfolio.getTotalBalance(),
-                    tax, estateCalculator.calculateAfterTaxEstateValue(portfolio.getTotalBalance(), tax));
+            return calculateOpening(plan, secondDeathDate);
         }
         var row = projection.getYears().stream()
                 .filter(year -> year.getCalendarYear() == secondDeathDate.getYear() - 1)
@@ -31,6 +24,25 @@ public final class EstateAtSecondDeathCalculator {
                         "No ending-balance snapshot available before second death " + secondDeathDate));
         return new EstateAtSecondDeathSnapshot(secondDeathDate, secondDeathDate.minusDays(1),
                 row.getEndingInvestableAssets(), row.getEstimatedHeirTax(), row.getAfterTaxEstateValue());
+    }
+
+    public EstateAtSecondDeathSnapshot calculateOpening(RetirementPlan plan, LocalDate secondDeathDate) {
+        Objects.requireNonNull(plan, "Plan is required.");
+        validateCoverageStart(plan, secondDeathDate);
+        var start = plan.getPlanningAssumptions().getProjectionStartDate();
+        if (!secondDeathDate.equals(start)) {
+            throw new IllegalArgumentException("Opening estate requires second death on the projection opening date.");
+        }
+        new com.daviddunn.retirementplanner.domain.rmd.OpeningRmdCalculator()
+                .validateLifetimeOpeningDistributions(plan, start.getYear(), java.util.Set.of());
+        var portfolio = ProjectedPortfolio.from(plan.getAccountPortfolio());
+        var accounts = portfolio.getAccountBalances().stream()
+                .map(balance -> new ProjectedAccountSnapshot(balance.getAccount(), balance.getBalance()))
+                .toList();
+        var tax = estateCalculator.calculateEstimatedTax(accounts, plan.getPlanningAssumptions()
+                .getTaxAssumptions().getEstimatedHeirTaxRateOnTaxDeferredAssets());
+        return new EstateAtSecondDeathSnapshot(secondDeathDate, start, portfolio.getTotalBalance(),
+                tax, estateCalculator.calculateAfterTaxEstateValue(portfolio.getTotalBalance(), tax));
     }
 
     public void validateCoverageStart(RetirementPlan plan, LocalDate secondDeathDate) {

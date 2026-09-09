@@ -1,6 +1,10 @@
 package com.daviddunn.retirementplanner.app.socialsecurity;
 
-/** Actual run-local work. Failed speculative carriers never finalize member scenarios. */
+/**
+ * Actual run-local work. Failed speculative carriers never finalize member scenarios.
+ * Stage 5G retains independentEarlyHorizonRuns for diagnostic compatibility; it is always zero.
+ * Opening snapshots count as scenarios/outcomes, but not reused outcomes or engine invocations.
+ */
 public record LongevityContinuationWork(
         long positiveScenarios,
         long carrierAttempts,

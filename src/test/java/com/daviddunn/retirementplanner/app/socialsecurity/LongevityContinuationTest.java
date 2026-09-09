@@ -79,16 +79,17 @@ class LongevityContinuationTest {
     }
 
     @Test
-    void configuredPostDeathFailureCannotBeHiddenByAnAvailableEstate() {
+    void configuredPostDeathFailureIsIrrelevantToTheRequiredEstate() throws Exception {
         var p = Stage4TestPlans.plan();
         p.getHousehold().addExpense(new Expense("Later one-time cost", new BigDecimal("100000000"),
                 GrowthCategory.GENERAL, LocalDate.of(2034,1,1), LocalDate.of(2034,12,31), ExpenseType.ONE_TIME));
         var req = request(p, mortality(p, List.of(2031), List.of(2031)));
         var work = new AtomicReference<>(LongevityContinuationWork.zero());
-        sameFailure(req, work);
-        assertEquals(1, work.get().independentEarlyHorizonRuns());
-        assertEquals(0, work.get().carrierAttempts());
-        assertEquals(0, work.get().outcomesProduced());
+        financialEquals(new LongevityWeightedIntegratedStrategyEvaluator().evaluate(req),
+                new LongevityWeightedContinuationEvaluator().evaluate(req, work::set));
+        assertEquals(0, work.get().independentEarlyHorizonRuns());
+        assertEquals(1, work.get().carrierAttempts());
+        assertEquals(1, work.get().outcomesProduced());
     }
 
     @Test

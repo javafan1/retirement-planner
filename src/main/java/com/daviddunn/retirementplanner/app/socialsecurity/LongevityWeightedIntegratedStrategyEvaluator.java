@@ -40,7 +40,8 @@ public final class LongevityWeightedIntegratedStrategyEvaluator {
         if (total == 0 || scenarios.stream().anyMatch(s -> s.jointProbability().signum() < 0)) {
             throw new IllegalArgumentException("Mortality scenarios require positive total mass and nonnegative probabilities.");
         }
-        var engine = new ProjectionEngine();
+        ProjectionEngine engine = null;
+        int projectionRuns = 0;
         Map<LocalDate, BigDecimal> discountFactors = new HashMap<>();
         List<LongevityWeightedIntegratedScenarioOutcome> outcomes = new ArrayList<>();
         BigDecimal probability = BigDecimal.ZERO;
@@ -63,13 +64,19 @@ public final class LongevityWeightedIntegratedStrategyEvaluator {
             EstateAtSecondDeathSnapshot snapshot;
             try {
                 estateCalculator.validateCoverageStart(baseline, death);
-                var isolated = copyService.copy(baseline);
-                var context = ProjectionEvaluationContext.withSocialSecurityStrategy(request.strategy(), lifetime)
-                        .withEndingYear(death.getYear() - 1);
-                workObserver.accept(LongevityWeightedEvaluationWork.PROJECTION_STARTED);
-                var projection = engine.project(isolated, context);
-                workObserver.accept(LongevityWeightedEvaluationWork.PROJECTION_COMPLETED);
-                snapshot = estateCalculator.calculate(isolated, projection, death);
+                if (death.equals(baseline.getPlanningAssumptions().getProjectionStartDate())) {
+                    snapshot = estateCalculator.calculateOpening(baseline, death);
+                } else {
+                    var isolated = copyService.copy(baseline);
+                    var context = ProjectionEvaluationContext.withSocialSecurityStrategy(request.strategy(), lifetime)
+                            .withExactEndingYear(death.getYear() - 1);
+                    if (engine == null) engine = new ProjectionEngine();
+                    workObserver.accept(LongevityWeightedEvaluationWork.PROJECTION_STARTED);
+                    projectionRuns++;
+                    var projection = engine.project(isolated, context);
+                    workObserver.accept(LongevityWeightedEvaluationWork.PROJECTION_COMPLETED);
+                    snapshot = estateCalculator.calculate(isolated, projection, death);
+                }
             } catch (RuntimeException failure) {
                 throw new IllegalStateException("Lifetime scenario failed: primary death year " + primaryYear
                         + ", spouse death year " + spouseYear + ", probability " + mortality.jointProbability()
@@ -91,10 +98,11 @@ public final class LongevityWeightedIntegratedStrategyEvaluator {
         }
         request.cancellationToken().throwIfCancellationRequested();
         return new LongevityWeightedIntegratedStrategyResult(request.strategy(), expectedPv, expectedNominal,
-                probability, scenarios.size(), outcomes.size(), minimum, maximum, request.valuationDate(),
+                probability, scenarios.size(), projectionRuns, minimum, maximum, request.valuationDate(),
                 inflation, request.realDiscountRate(), prepared.assumptions(),
                 "January 1 second death uses prior December 31 ending investable estate, or the matching "
-                        + "January 1 opening snapshot. Coverage extends through second-death year minus one. "
+                        + "January 1 opening snapshot. Each mortality scenario projects exactly through second-death "
+                        + "year minus one, independently of the configured plan horizon; opening snapshots require no projection. "
                         + "Nominal estate is deflated by general inflation and discounted at the real rate "
                         + "using actual days / 365.25 from the analyzer PV base date. Original probabilities are not renormalized.",
                 List.of("Deceased-owner accounts remain invested household assets available for spending and tax funding, "

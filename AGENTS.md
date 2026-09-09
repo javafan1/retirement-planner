@@ -382,3 +382,15 @@ Weighted tables preserve original occurrence identities and backend competition
 ranks. Cross-analysis joins require compatible source revisions and complete
 elections. UI formatting stays on FX. The weighted UI retains compact aggregates;
 any future scenario-detail loading must remain bounded and reuse Stage 5E admission.
+
+Longevity-weighted mortality runs use ProjectionEvaluationContext.withExactEndingYear
+to end exactly at second-death year minus one (January 1 death / prior December 31
+estate). An opening-date second death uses opening estate with consistency validation
+and zero ProjectionEngine calls. Failures only after the required snapshot do not
+invalidate weighted outcomes; failures through the snapshot still do. CONFIGURED and
+existing extension-only withEndingYear behavior remain unchanged, as does the persisted
+plan horizon. Financial continuation groups all supported non-opening positive scenarios,
+proves finite Social Security prefix coverage, and falls back independently when a
+carrier fails or coverage is unavailable. Strategy equivalence remains conservative;
+do not assume one representative per retirement-age pair. Preserve original scenario
+probabilities and aggregation order, and count actual engine calls rather than scenarios.

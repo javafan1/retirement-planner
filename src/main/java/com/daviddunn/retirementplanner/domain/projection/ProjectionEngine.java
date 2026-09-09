@@ -197,14 +197,9 @@ public class ProjectionEngine {
         int startYear =
                 projectionStartDate.getYear();
 
-        int projectionLength =
-                assumptions.getProjectionLengthYears();
-
-        if (evaluationContext.endingYearOverride().isPresent()) {
-            int lastYear = Math.max(startYear + projectionLength - 1,
-                    evaluationContext.endingYearOverride().orElseThrow());
-            projectionLength = Math.addExact(Math.subtractExact(lastYear, startYear), 1);
-        }
+        int endingYear = evaluationContext.resolveEndingYear(startYear,
+                Math.addExact(startYear, assumptions.getProjectionLengthYears() - 1));
+        int projectionLength = Math.addExact(Math.subtractExact(endingYear, startYear), 1);
 
         EffectiveHouseholdDeathView deathView = EffectiveHouseholdDeathView.resolve(
                 assumptions.getDeathScenarioAssumptions(), evaluationContext.householdLifetimeScenario());
@@ -213,7 +208,7 @@ public class ProjectionEngine {
                 socialSecurityProjectionIncomeProvider.calculate(
                         plan,
                         startYear,
-                        startYear + projectionLength - 1,
+                        endingYear,
                         evaluationContext,
                         deathView);
 

@@ -36,7 +36,7 @@ class Stage5DRepresentativeBenchmarkTest {
         System.out.println("Stage5D sequential WARMUP");
         var reference=new LongevityWeightedIntegratedStrategyComparisonService().compareSequential(request);
         assertEquals(81,reference.equivalencePlan().orElseThrow().equivalenceGroupCount());
-        assertEquals(9396,reference.work().projectionEngineRuns());
+        assertEquals(8100,reference.work().projectionEngineRuns()); // Stage 5G: 81 representatives x 100 paths.
         for(int workers:new int[]{0,1,2,4,6,8,8,6,4,2,1,0}){
             financial.set(false);
             System.gc();

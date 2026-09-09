@@ -90,7 +90,8 @@ public final class LongevityWeightedContinuationEvaluator {
                 probability, scenarios.size(), Math.toIntExact(session.work().projectionStarts()), minimum, maximum, request.valuationDate(),
                 inflation, request.realDiscountRate(), prepared.assumptions(),
                 "January 1 second death uses prior December 31 ending investable estate, or the matching "
-                        + "January 1 opening snapshot. Coverage extends through second-death year minus one. "
+                        + "January 1 opening snapshot. Each mortality scenario projects exactly through second-death "
+                        + "year minus one, independently of the configured plan horizon; opening snapshots require no projection. "
                         + "Nominal estate is deflated by general inflation and discounted at the real rate "
                         + "using actual days / 365.25 from the analyzer PV base date. Original probabilities are not renormalized.",
                 List.of("Deceased-owner accounts remain invested household assets available for spending and tax funding, "

@@ -97,7 +97,7 @@ class LongevityWeightedIntegratedStrategyComparisonTest {
         assertEquals(selected.aggregate().orElseThrow().expectedNominalEstateAtSecondDeath().subtract(base.expectedNominalEstateAtSecondDeath()),
                 selected.nominalDifferenceFromBaseline().orElseThrow());
         assertSame(request.longevityScenarios().assumptions(), result.metadata().longevityAssumptions());
-        assertEquals("STAGE4_EXACT_V1", result.metadata().methodologyVersion());
+        assertEquals("STAGE5G_EXACT_SECOND_DEATH_V1", result.metadata().methodologyVersion());
         assertThrows(UnsupportedOperationException.class, () -> selected.scenarioDetails().orElseThrow().clear());
         assertThrows(UnsupportedOperationException.class, () -> result.orderedEntries().clear());
     }

@@ -140,7 +140,7 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
                 .sorted(ranking()).toList();
         boolean failures = ranked.size() != ordered.size() || baseline.filter(entry -> !entry.successful()).isPresent();
         var metadata = new LongevityWeightedIntegratedStrategyComparisonResult.Metadata(
-                "STAGE4_EXACT_V1", "STAGE4-LONGEVITY-EVALUATION.md",
+                "STAGE5G_EXACT_SECOND_DEATH_V1", "STAGE5G-EXACT-SECOND-DEATH-HORIZON.md",
                 request.longevityScenarios().assumptions(), request.valuationDate(),
                 plan.getPlanningAssumptions().getEconomicAssumptions().getGeneralInflationRate(), request.realDiscountRate(),
                 request.longevityScenarios().scenarios().size(), request.longevityScenarios().scenarios().stream()

@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.app.socialsecurity;
 
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityJointMortalityScenario;
+import java.time.LocalDate;
 import java.util.*;
 
 /** Groups only pre-second-death runs. Every carrier is an actual positive-probability member. */
@@ -11,13 +12,14 @@ final class LongevityScenarioContinuationPlanner {
         Group { members = List.copyOf(members); }
     }
 
-    Map<Path, Group> plan(List<SocialSecurityJointMortalityScenario> scenarios, int configuredLastYear,
+    Map<Path, Group> plan(List<SocialSecurityJointMortalityScenario> scenarios, LocalDate openingDate,
             AnalysisCancellationToken token) {
         Map<Path, List<Integer>> members = new LinkedHashMap<>();
         for (int index = 0; index < scenarios.size(); index++) {
             token.throwIfCancellationRequested();
             var scenario = scenarios.get(index);
-            if (scenario.jointProbability().signum() > 0 && secondDeathYear(scenario) > configuredLastYear) {
+            if (scenario.jointProbability().signum() > 0
+                    && LocalDate.of(secondDeathYear(scenario), 1, 1).isAfter(openingDate)) {
                 members.computeIfAbsent(path(scenario), ignored -> new ArrayList<>()).add(index);
             }
         }

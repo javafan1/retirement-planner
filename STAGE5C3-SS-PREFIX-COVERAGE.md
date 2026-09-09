@@ -51,7 +51,8 @@ The simultaneous path uses its latest actual simultaneous member. No synthetic
 both-alive scenario or synthetic terminal death is introduced. All mortality
 dates continue through the existing mapper to January 1 of their modeled year.
 
-If second death is within the configured horizon, the member is independent.
+If second death is within the configured horizon, the member is independent for
+this conservative Social Security proof planner (not Stage 5G financial execution).
 Its full schedule includes post-second-death years; Stage 5C3 does not discard
 those years or infer their values from a longer-lived carrier.
 

@@ -1,5 +1,13 @@
 # Stage 5C2: guarded first-death continuation reuse
 
+**Stage 5G update:** This report records the original Stage 5C2 contract and measurements.
+Weighted financial runs now stop exactly at second-death year minus one; opening
+snapshots require no engine call. All supported non-opening positive scenarios can
+join financial continuation paths, including deaths inside the configured horizon.
+Post-snapshot failures no longer invalidate the member. Carrier failures still
+fall back independently. The early-horizon restrictions below are historical;
+see [Stage 5G](STAGE5G-EXACT-SECOND-DEATH-HORIZON.md) for the current contract.
+
 Completed implementation resumed September 8, 2026. Sequential, headless, exact
 financial prefix reuse; no UI, persistence, mortality approximation, candidate
 pruning, inherited-account rules, or general projection checkpoint changes.

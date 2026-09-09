@@ -69,6 +69,13 @@ probability-weighted second-death objectives. Non-investable assets are excluded
 
 ## Methodology and limitations
 
+Stage 5G corrects the weighted horizon: each mortality scenario requires only the
+December 31 snapshot before January 1 second death, or its matching opening snapshot.
+Financial execution ends exactly at that snapshot regardless of the configured
+plan horizon. Post-snapshot failures are irrelevant; earlier failures remain errors.
+The weighted UI exposes this as methodology text, not an editable horizon option.
+See [Stage 5G](STAGE5G-EXACT-SECOND-DEATH-HORIZON.md).
+
 The view explains independent spouse mortality, combinations of death years, and full retirement-plan
 projection including taxes, RMDs, Roth conversions, pensions, Medicare, withdrawals and investment growth.
 Estate is measured at household second death, deflated by general inflation, discounted at the real rate

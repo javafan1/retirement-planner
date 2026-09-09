@@ -6,11 +6,14 @@ a source plan, prepared HouseholdLongevityScenarios, the analyzer present-value 
 date, and a real discount rate. Mortality conditioning remains a separate input in
 the prepared assumptions. No claiming search, ranking, UI, or persistence is involved.
 
-Each positive-probability scenario runs through the existing ProjectionEngine on a
-deep copy. Birthday mortality outcomes retain their original probabilities and map
-to January 1 of their calendar death years. The context's optional ending-year
-override extends coverage to at least secondDeathYear - 1 and never shortens the
-configured horizon or changes the source plan. Sequential runs reuse one engine.
+Stage 5G supersedes the original extension-only weighted horizon contract; see
+[STAGE5G-EXACT-SECOND-DEATH-HORIZON.md](STAGE5G-EXACT-SECOND-DEATH-HORIZON.md).
+Each positive-probability non-opening scenario runs through ProjectionEngine on a
+deep copy, exactly through secondDeathYear - 1. Birthday mortality outcomes retain
+their original probabilities and map to January 1 of their calendar death years.
+Opening-date second death uses opening estate directly without an engine call.
+The persisted horizon is unchanged. Existing withEndingYear callers remain
+extension-only. Sequential non-opening runs reuse one engine.
 
 EstateAtSecondDeathCalculator selects the preceding December 31 projection row.
 The death-year row is not used. Death exactly at a January 1 projection opening uses

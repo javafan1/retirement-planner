@@ -28,7 +28,8 @@ class LongevityWeightedIntegratedStrategyEvaluatorTest {
         var scenarios = prepared(plan, List.of(prob(primaryAge, "1")), List.of(prob(spouseAge, "1")));
         var result = evaluator.evaluate(request(plan, scenarios));
         assertEquals(1, result.originalScenarioCount());
-        assertEquals(1, result.actualProjectionRunCount());
+        assertEquals(Math.max(1960 + primaryAge, 1962 + spouseAge) == 2030 ? 0 : 1,
+                result.actualProjectionRunCount());
         assertEquals(BigDecimal.ONE, result.totalEvaluatedProbability());
         var outcome = result.scenarioOutcomes().getFirst();
         assertEquals(1960 + primaryAge, outcome.primaryDeathYear());

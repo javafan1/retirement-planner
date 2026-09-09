@@ -55,17 +55,7 @@ public final class OpeningRmdCalculator {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         Objects.requireNonNull(governmentRules, "Government rules are required.");
         eligibleOwners = Set.copyOf(Objects.requireNonNull(eligibleOwners));
-        for (Account account : plan.getAccountPortfolio().getAccounts()) {
-            OpeningRmdAccountData data = account.getOpeningRmdAccountData();
-            if (account.getOwnership() != AccountOwnership.JOINT
-                    && !eligibleOwners.contains(account.getOwnership())
-                    && account.getType().isSubjectToOwnerRmd()
-                    && data != null && data.getDistributionYear() == distributionYear
-                    && data.getRmdAlreadyDistributedBeforeProjection().signum() > 0) {
-                throw new IllegalStateException("Inconsistent lifetime scenario: deceased owner has an already-distributed RMD for "
-                        + account.getName() + " in " + distributionYear + ".");
-            }
-        }
+        validateLifetimeOpeningDistributions(plan, distributionYear, eligibleOwners);
 
 
         validateRequiredOpeningData(plan, distributionYear, governmentRules, eligibleOwners);
@@ -96,6 +86,24 @@ public final class OpeningRmdCalculator {
                 new HouseholdRmdResult(primary.result(), spouse.result()),
                 primary.distributedBeforeProjection()
                         .add(spouse.distributedBeforeProjection()));
+    }
+
+    /** Also applies when second death uses opening balances without an annual projection. */
+    public void validateLifetimeOpeningDistributions(
+            RetirementPlan plan, int distributionYear, Set<AccountOwnership> eligibleOwners) {
+        Objects.requireNonNull(plan, "Retirement plan is required.");
+        eligibleOwners = Set.copyOf(Objects.requireNonNull(eligibleOwners));
+        for (Account account : plan.getAccountPortfolio().getAccounts()) {
+            OpeningRmdAccountData data = account.getOpeningRmdAccountData();
+            if (account.getOwnership() != AccountOwnership.JOINT
+                    && !eligibleOwners.contains(account.getOwnership())
+                    && account.getType().isSubjectToOwnerRmd()
+                    && data != null && data.getDistributionYear() == distributionYear
+                    && data.getRmdAlreadyDistributedBeforeProjection().signum() > 0) {
+                throw new IllegalStateException("Inconsistent lifetime scenario: deceased owner has an already-distributed RMD for "
+                        + account.getName() + " in " + distributionYear + ".");
+            }
+        }
     }
 
     private void validateRequiredOpeningData(

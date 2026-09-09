@@ -9,7 +9,14 @@ import java.util.Optional;
 public record ProjectionEvaluationContext(
         Optional<SocialSecurityHouseholdClaimingStrategy> socialSecurityStrategy,
         Optional<HouseholdLifetimeScenario> householdLifetimeScenario,
-        Optional<Integer> endingYearOverride) {
+        Optional<Integer> endingYearOverride,
+        HorizonPolicy horizonPolicy) {
+
+    public enum HorizonPolicy {
+        CONFIGURED,
+        EXTEND_TO_REQUESTED,
+        EXACT_REQUESTED
+    }
 
     public ProjectionEvaluationContext {
         socialSecurityStrategy = Objects.requireNonNull(
@@ -19,6 +26,37 @@ public record ProjectionEvaluationContext(
                 householdLifetimeScenario, "Lifetime scenario optional is required.");
         endingYearOverride = Objects.requireNonNull(endingYearOverride, "Ending year optional is required.");
         endingYearOverride.ifPresent(java.time.Year::of);
+        horizonPolicy = Objects.requireNonNull(horizonPolicy, "Horizon policy is required.");
+        if ((horizonPolicy == HorizonPolicy.CONFIGURED) == endingYearOverride.isPresent()) {
+            throw new IllegalArgumentException("Only a requested horizon policy requires an ending year.");
+        }
+    }
+
+    /** Existing three-argument callers retain extension-only behavior. */
+    public ProjectionEvaluationContext(
+            Optional<SocialSecurityHouseholdClaimingStrategy> socialSecurityStrategy,
+            Optional<HouseholdLifetimeScenario> householdLifetimeScenario,
+            Optional<Integer> endingYearOverride) {
+        this(socialSecurityStrategy, householdLifetimeScenario, endingYearOverride,
+                endingYearOverride.isPresent() ? HorizonPolicy.EXTEND_TO_REQUESTED : HorizonPolicy.CONFIGURED);
+    }
+
+    public ProjectionEvaluationContext withExactEndingYear(int endingYear) {
+        return new ProjectionEvaluationContext(socialSecurityStrategy,
+                householdLifetimeScenario, Optional.of(endingYear), HorizonPolicy.EXACT_REQUESTED);
+    }
+
+    /** Resolve once for both financial iteration and finite Social Security preparation. */
+    public int resolveEndingYear(int firstYear, int configuredLastYear) {
+        int lastYear = switch (horizonPolicy) {
+            case CONFIGURED -> configuredLastYear;
+            case EXTEND_TO_REQUESTED -> Math.max(configuredLastYear, endingYearOverride.orElseThrow());
+            case EXACT_REQUESTED -> endingYearOverride.orElseThrow();
+        };
+        if (lastYear < firstYear) {
+            throw new IllegalArgumentException("Projection ending year cannot precede its opening year.");
+        }
+        return lastYear;
     }
 
     public ProjectionEvaluationContext(

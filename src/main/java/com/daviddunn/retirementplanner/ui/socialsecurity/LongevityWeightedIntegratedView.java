@@ -128,6 +128,8 @@ final class LongevityWeightedIntegratedView extends VBox {
         status.setText("Complete: " + result.completedStrategyCount() + " successful; " + result.failedStrategyCount()
                 + " failed candidates. " + (result.baseline().filter(base -> !base.successful()).isPresent() ? "Baseline failed separately." : ""));
         methodology.setText(METHODOLOGY + "\n\nJanuary 1 modeled deaths use the preceding December 31 ending estate or matching opening snapshot. "
+                + "Each mortality scenario projects only through its required second-death estate snapshot; "
+                + "the configured plan horizon does not extend that scenario. Opening snapshots require no projection. "
                 + "Discount timing is actual days / 365.25. Original probabilities are not renormalized.\n"
                 + "Mortality conditioning convention: " + result.metadata().longevityAssumptions().partialYearConvention()
                 + "\nMortality conditioning date: " + result.metadata().longevityAssumptions().mortalityBaseDate()

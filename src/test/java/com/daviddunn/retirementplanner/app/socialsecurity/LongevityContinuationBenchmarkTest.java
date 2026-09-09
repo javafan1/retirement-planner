@@ -31,21 +31,19 @@ class LongevityContinuationBenchmarkTest {
         var optimized = optimizedEvaluator.evaluate(req, work::set);
         long optimizedNanos = System.nanoTime() - started;
         financialEquals(exact, optimized);
-        int last = p.getPlanningAssumptions().getProjectionStartDate().getYear()
-                + p.getPlanningAssumptions().getProjectionLengthYears() - 1;
         var eligible = s.scenarios().stream().filter(x -> x.jointProbability().signum() > 0
-                && Math.max(x.primaryDeathDate().getYear(), x.spouseDeathDate().getYear()) > last).toList();
+                && LocalDate.of(Math.max(x.primaryDeathDate().getYear(), x.spouseDeathDate().getYear()), 1, 1)
+                        .isAfter(p.getPlanningAssumptions().getProjectionStartDate())).toList();
         long primaryPaths = eligible.stream().filter(x -> x.primaryDeathDate().getYear() < x.spouseDeathDate().getYear())
                 .map(x -> x.primaryDeathDate().getYear()).distinct().count();
         long spousePaths = eligible.stream().filter(x -> x.spouseDeathDate().getYear() < x.primaryDeathDate().getYear())
                 .map(x -> x.spouseDeathDate().getYear()).distinct().count();
         long simultaneous = eligible.stream().anyMatch(x -> x.primaryDeathDate().getYear() == x.spouseDeathDate().getYear()) ? 1 : 0;
-        long early = s.scenarios().size() - eligible.size();
-        long rawRows = s.scenarios().stream().mapToLong(x -> Math.max(last,
-                Math.max(x.primaryDeathDate().getYear(), x.spouseDeathDate().getYear()) - 1) - 2030 + 1).sum();
+        long rawRows = eligible.stream().mapToLong(x ->
+                Math.max(x.primaryDeathDate().getYear(), x.spouseDeathDate().getYear()) - 2030).sum();
         assertEquals(primaryPaths + spousePaths + simultaneous, work.get().carrierAttempts());
-        assertEquals(early, work.get().independentEarlyHorizonRuns());
-        assertEquals(primaryPaths + spousePaths + simultaneous + early, work.get().projectionStarts());
+        assertEquals(0, work.get().independentEarlyHorizonRuns());
+        assertEquals(primaryPaths + spousePaths + simultaneous, work.get().projectionStarts());
         assertEquals(0, work.get().fallbackIndependentRuns());
         assertEquals(work.get().projectionStarts(), work.get().completedProjections());
         System.out.println("Stage 5C2 OLDER rawRuns=" + exact.actualProjectionRunCount() + " rawRows=" + rawRows
