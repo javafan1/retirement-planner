@@ -64,7 +64,16 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             new TableView<>();
     private final TextArea integratedDetails = new TextArea();
     private final TextArea integratedMethodology = new TextArea();
-    private final Button exhaustiveRunButton = new Button("Run Exhaustive Search");
+    private final Button exhaustiveRunButton = new Button("Run Deterministic Exhaustive Search");
+    private final LongevityWeightedIntegratedView weightedView = new LongevityWeightedIntegratedView();
+    private final AnalysisProgressView sharedProgress = new AnalysisProgressView();
+    private final Label sharedStatus = new Label();
+    private final Button sharedCancel = new Button("Cancel");
+    private LongevityWeightedIntegratedPresentation weightedPresentation;
+    private long planRevision;
+    private long assumptionsRevision;
+    private long exhaustiveRevision = -1;
+    private boolean weightedCurrent;
     private final Button exhaustiveCancelButton = new Button("Cancel");
     private final AnalysisProgressView exhaustiveProgress = new AnalysisProgressView();
     private final Label exhaustiveStatus = new Label(
@@ -114,6 +123,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         this(owner, source.getCurrentPlan());
         detachPlanListener = source.addSourcePlanRevisionListener(() -> {
             plan = source.getCurrentPlan();
+            planRevision++;
             jobs.invalidate(SocialSecurityAnalyzerJobController.Change.PLAN);
             markStale();
             if (exhaustivePresentation != null) {
@@ -137,6 +147,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         runButton.setOnAction(event -> runAnalysis());
         integratedRunButton.setOnAction(event -> runIntegratedAnalysis());
         exhaustiveRunButton.setOnAction(event -> runExhaustiveSearch());
+        weightedView.run.setOnAction(event -> runWeightedAnalysis());
+        sharedCancel.setOnAction(event -> jobs.cancel());
         exhaustiveCancelButton.setOnAction(event -> jobs.cancel());
         socialSecurityCancelButton.setOnAction(event -> jobs.cancel());
         integratedCancelButton.setOnAction(event -> jobs.cancel());
@@ -155,10 +167,12 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 new Label("Social Security Strategy Analyzer"),
                 householdSummary(),
                 heading("Longevity and Valuation Assumptions"),
-                wrappedLabel("These are shared analyzer assumptions. Each analysis mode explains "
-                        + "how it uses them. The valuation date also sets the Social Security "
-                        + "analysis and mortality base date."),
-                inputs());
+                wrappedLabel("Used for Social Security-only analysis and Longevity-Weighted Integrated analysis. "
+                        + "Quick Comparison uses these assumptions for candidate selection and Social Security expected PV; "
+                        + "its retirement-plan outcomes remain deterministic. Deterministic Exhaustive Search uses the plan's configured death scenario."),
+                wrappedLabel("The valuation date is also used as the mortality conditioning date in this analyzer. "
+                        + "These are distinct concepts currently controlled by one date."),
+                inputs(), new HBox(10, sharedCancel, sharedStatus), sharedProgress);
         header.setPadding(new Insets(12));
 
         TabPane modes = new TabPane(
@@ -203,14 +217,23 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private VBox integratedContent() {
-        // Keep deterministic content separate for a future Longevity-Weighted mode.
-        return deterministicIntegratedContent();
+        weightedView.initialCurrent(personText(plan.getHousehold().getPrimaryPerson()) + "\n"
+                + personText(plan.getHousehold().getSpouse()),
+                plan.getPlanningAssumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge() == null);
+        ScrollPane weightedScroll = new ScrollPane(weightedView);
+        weightedScroll.setFitToWidth(true);
+        weightedScroll.setFitToHeight(true);
+        TabPane tabs = new TabPane(tab("Deterministic", deterministicIntegratedContent()),
+                tab("Longevity-Weighted", weightedScroll));
+        VBox content = new VBox(tabs);
+        VBox.setVgrow(tabs, Priority.ALWAYS);
+        return content;
     }
 
     private VBox deterministicIntegratedContent() {
         TabPane tabs = new TabPane(
                 tab("Quick Comparison", quickComparisonContent()),
-                tab("Exhaustive Search", exhaustiveSearchContent()));
+                tab("Deterministic Exhaustive Search", exhaustiveSearchContent()));
         VBox content = new VBox(8, heading("Deterministic Integrated Retirement Plan"),
                 wrappedLabel("Deterministic integrated analysis uses the retirement plan's configured "
                         + "death scenario for full-plan outcomes. It does not use the longevity "
@@ -485,9 +508,49 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         }
     }
 
+    private void runWeightedAnalysis() {
+        try {
+            var factory = new LongevityWeightedAnalysisRequestFactory();
+            var snapshot = factory.capture(plan, primaryCategory.getValue(), spouseCategory.getValue(),
+                    adjustment(primaryMortalityAdjustment.getText(), "Primary"),
+                    adjustment(spouseMortalityAdjustment.getText(), "Spouse"), pvDate.getValue(),
+                    new BigDecimal(discountRate.getText().trim()).movePointLeft(2), planRevision, assumptionsRevision);
+            String knownElections = personText(plan.getHousehold().getPrimaryPerson())
+                    + "\n" + personText(plan.getHousehold().getSpouse());
+            boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
+                    (progress, cancellation) -> new com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedIntegratedStrategyComparisonService()
+                            .compare(factory.create(snapshot, progress, cancellation)), result -> {
+                        weightedPresentation = new LongevityWeightedIntegratedPresentation(result,
+                                snapshot.planRevision, snapshot.assumptionsRevision);
+                        weightedCurrent = true;
+                        weightedView.render(weightedPresentation, knownElections);
+                        refreshWeightedComparison();
+                    }, failure -> weightedView.status.setText(SocialSecurityAnalysisFailurePresentation.message(failure)));
+            if (!accepted) {
+                weightedView.status.setText("Another Social Security analysis is running or cleaning up.");
+            } else if (weightedPresentation != null) {
+                weightedView.status.setText("Rerunning — previous successful result shown");
+            }
+        } catch (RuntimeException failure) {
+            weightedView.status.setText(SocialSecurityAnalysisFailurePresentation.message(failure));
+        }
+    }
+
+    private void refreshWeightedComparison() {
+        if (weightedPresentation != null) {
+            var deterministic = exhaustivePresentation == null ? null : exhaustivePresentation.result();
+            weightedView.comparisons(IntegratedAnalysisComparisonPresentation.create(weightedPresentation,
+                    deterministic,
+                    exhaustiveRevision, planRevision, weightedCurrent));
+            weightedView.deterministicReference(IntegratedAnalysisComparisonPresentation.compatible(weightedPresentation,
+                    deterministic, exhaustiveRevision, planRevision, weightedCurrent) ? deterministic : null);
+        }
+    }
+
     private void runExhaustiveSearch() {
         try {
             var request = SocialSecurityAnalyzerInputs.exhaustive(plan);
+            long capturedRevision = planRevision;
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
                     (progress, cancellation) -> {
                         long started = System.nanoTime();
@@ -497,7 +560,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                                 Duration.ofNanos(System.nanoTime() - started), 20);
                     }, model -> {
                 exhaustivePresentation = model;
+                exhaustiveRevision = capturedRevision;
                 renderExhaustive(model);
+                refreshWeightedComparison();
                 exhaustiveStale.setText("");
                 exhaustiveStatus.setText("Exhaustive integrated search complete - "
                         + model.result().totalStrategyCount() + " strategies evaluated; " + model.result().failedStrategyCount() + " unavailable.");
@@ -906,7 +971,14 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void markStale() {
+        assumptionsRevision++;
         jobs.invalidate(SocialSecurityAnalyzerJobController.Change.ASSUMPTIONS);
+        setAnalysisBusy(jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE);
+        if (weightedPresentation != null) {
+            weightedCurrent = false;
+            weightedView.stale.setText("Inputs changed — rerun");
+            refreshWeightedComparison();
+        }
         if (presentation != null) {
             socialSecurityResultCurrent = false;
             refreshExhaustiveSocialSecurityReference();
@@ -933,6 +1005,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         runButton.setDisable(disabled);
         integratedRunButton.setDisable(disabled || !socialSecurityResultCurrent);
         exhaustiveRunButton.setDisable(disabled);
+        weightedView.run.setDisable(disabled || !weightedInputsValid());
         integratedCandidateCount.setDisable(disabled);
         primaryCategory.setDisable(disabled);
         spouseCategory.setDisable(disabled);
@@ -940,6 +1013,19 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         spouseMortalityAdjustment.setDisable(disabled);
         discountRate.setDisable(disabled);
         pvDate.setDisable(disabled);
+    }
+
+    private boolean weightedInputsValid() {
+        if (primaryCategory.getValue() == null || spouseCategory.getValue() == null || pvDate.getValue() == null) return false;
+        try {
+            adjustment(primaryMortalityAdjustment.getText(), "Primary");
+            adjustment(spouseMortalityAdjustment.getText(), "Spouse");
+            com.daviddunn.retirementplanner.domain.estate.EstatePresentValueCalculator.validateRate(
+                    new BigDecimal(discountRate.getText().trim()).movePointLeft(2));
+            return true;
+        } catch (RuntimeException invalid) {
+            return false;
+        }
     }
 
     private void showError(Throwable throwable) {
@@ -955,6 +1041,15 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         var state = jobs.state();
         boolean busy = state != SocialSecurityAnalyzerJobController.State.IDLE;
         setAnalysisBusy(busy);
+        sharedCancel.setVisible(busy);
+        sharedCancel.setManaged(busy);
+        sharedCancel.setDisable(state != SocialSecurityAnalyzerJobController.State.RUNNING);
+        sharedStatus.setText(jobs.status());
+        if (busy) {
+            sharedProgress.show(jobs.progress());
+        } else {
+            sharedProgress.hide();
+        }
         for (Button button : List.of(socialSecurityCancelButton, integratedCancelButton, exhaustiveCancelButton)) {
             button.setVisible(busy);
             button.setManaged(busy);
@@ -969,16 +1064,14 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         Label label = switch (jobs.mode()) {
             case SOCIAL_SECURITY -> status;
             case QUICK -> integratedStatus;
-            case EXHAUSTIVE, WEIGHTED -> exhaustiveStatus;
+            case EXHAUSTIVE -> exhaustiveStatus;
+            case WEIGHTED -> weightedView.status;
         };
         label.setText(jobs.status());
         if (busy) {
-            AnalysisProgressView view = switch (jobs.mode()) {
-                case SOCIAL_SECURITY -> socialSecurityProgress;
-                case QUICK -> integratedProgress;
-                case EXHAUSTIVE, WEIGHTED -> exhaustiveProgress;
-            };
-            view.show(jobs.progress());
+            if (jobs.mode() == SocialSecurityAnalyzerJobController.Mode.WEIGHTED && weightedPresentation != null) {
+                weightedView.status.setText(jobs.status() + " — previous successful result shown");
+            }
         }
     }
 
@@ -997,6 +1090,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         socialSecurityProgress.hide();
         integratedProgress.hide();
         exhaustiveProgress.hide();
+        sharedProgress.hide();
     }
     private static Tab tab(String title, javafx.scene.Node content) {
         Tab tab = new Tab(title, content);

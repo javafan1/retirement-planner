@@ -369,3 +369,16 @@ completed/total text, progress bar, and activity indicator. Exhaustive
 cancellation is cooperative at strategy boundaries, publishes no partial
 ranking, and preserves the previous successful UI result. These analysis paths
 do not mutate or persist the active plan.
+
+The analyzer's Integrated Retirement Plan tab separates Deterministic (Quick
+Comparison and Deterministic Exhaustive Search) from Longevity-Weighted.
+Weighted UI requests capture an isolated plan and immutable analyzer assumptions
+before admission-controlled work, enumerate the complete claiming universe,
+and use the existing weighted comparison service through Stage 5E Mode.WEIGHTED.
+Missing persisted survivor policy omits the weighted baseline without inventing
+an election. Expected PV After-Tax Estate means after-tax investable estate at
+second death in valuation-date dollars; it excludes non-investable assets.
+Weighted tables preserve original occurrence identities and backend competition
+ranks. Cross-analysis joins require compatible source revisions and complete
+elections. UI formatting stays on FX. The weighted UI retains compact aggregates;
+any future scenario-detail loading must remain bounded and reuse Stage 5E admission.

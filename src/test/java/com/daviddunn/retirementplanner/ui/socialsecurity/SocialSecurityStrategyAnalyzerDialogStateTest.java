@@ -95,6 +95,11 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
                     + "assumptions above. Integrated retirement-plan outcome columns remain deterministic."));
             assertTrue(integrated.contains("Exhaustive Search evaluates all tested claiming strategies against the "
                     + "deterministic full retirement plan. Longevity assumptions above are not used in this search."));
+            assertTrue(integrated.contains("Longevity-Weighted"));
+            assertTrue(integrated.contains("Run Longevity-Weighted Exhaustive Search"));
+            assertTrue(integrated.contains("Run Deterministic Exhaustive Search"));
+            assertTrue(text(root.getTop()).contains("mortality conditioning date"));
+            assertTrue(text(root.getTop()).contains("Quick Comparison uses these assumptions for candidate selection"));
         });
     }
 
@@ -249,7 +254,13 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
             set(source, "currentPlan", new RetirementPlanScenarioCopyService().copy(plan));
             var dialog = new SocialSecurityStrategyAnalyzerDialog(null, source);
             installResults(dialog);
+            var weighted = LongevityWeightedIntegratedPresentationTest.model(
+                    List.of(LongevityWeightedIntegratedPresentationTest.entry(1, "100", 1)), java.util.Optional.empty());
+            set(dialog, "weightedPresentation", weighted);
+            set(dialog, "weightedCurrent", true);
             source.markModified();
+            assertFalse(field(dialog, "weightedCurrent", Boolean.class));
+            assertSame(weighted, field(dialog, "weightedPresentation", LongevityWeightedIntegratedPresentation.class));
             assertFalse(field(dialog, "socialSecurityResultCurrent", Boolean.class));
             assertFalse(field(dialog, "exhaustiveStale", Label.class).getText().isEmpty());
             var close = dialog.getClass().getDeclaredMethod("close");
@@ -265,6 +276,107 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
         return new IntegratedSocialSecurityCompleteStrategySearchRequest(plan, List.of(67), List.of(67),
                 standard.primarySurvivorCandidates().subList(0, 1),
                 standard.spouseSurvivorCandidates().subList(0, 1), standard.rankingMeasure(), 0);
+    }
+
+    @Test
+    void weightedStalesWithoutAnySocialSecurityRunAndCandidateCountPreservesIt() throws Exception {
+        onFx(dialog -> {
+            var weighted = LongevityWeightedIntegratedPresentationTest.model(
+                    List.of(LongevityWeightedIntegratedPresentationTest.entry(1, "100", 1)), java.util.Optional.empty());
+            set(dialog, "weightedPresentation", weighted);
+            set(dialog, "weightedCurrent", true);
+            var view = field(dialog, "weightedView", LongevityWeightedIntegratedView.class);
+            view.render(weighted, "Current retirement elections");
+            field(dialog, "integratedCandidateCount", Spinner.class).getValueFactory().setValue(5);
+            assertTrue(field(dialog, "weightedCurrent", Boolean.class));
+            assertEquals("", view.stale.getText());
+            for (Runnable edit : List.<Runnable>of(
+                    () -> uncheckedField(dialog, "primaryMortalityAdjustment", TextField.class).setText("1.10"),
+                    () -> uncheckedField(dialog, "discountRate", TextField.class).setText("3.0"),
+                    () -> uncheckedField(dialog, "pvDate", DatePicker.class).setValue(LocalDate.of(2027, 1, 1)))) {
+                set(dialog, "weightedCurrent", true);
+                edit.run();
+                assertFalse(field(dialog, "weightedCurrent", Boolean.class));
+                assertEquals("Inputs changed — rerun", view.stale.getText());
+                assertSame(weighted, field(dialog, "weightedPresentation", LongevityWeightedIntegratedPresentation.class));
+            }
+        });
+    }
+
+    @Test
+    void weightedTypedSortAndAggregateDetailRemainUsableAtLaptopSizes() throws Exception {
+        onFx(dialog -> {
+            var view = field(dialog, "weightedView", LongevityWeightedIntegratedView.class);
+            var model = LongevityWeightedIntegratedPresentationTest.model(List.of(
+                    LongevityWeightedIntegratedPresentationTest.entry(1, "9", 10),
+                    LongevityWeightedIntegratedPresentationTest.entry(2, "100", 2)), java.util.Optional.empty());
+            view.render(model, "Current retirement elections");
+            assertEquals(2, view.table.getItems().getFirst().rank().orElseThrow());
+            assertEquals(7, view.table.getColumns().size());
+            assertInstanceOf(BigDecimal.class, view.table.getColumns().get(5).getCellData(0));
+            view.table.getSortOrder().setAll(view.table.getColumns().get(5));
+            view.table.sort();
+            assertEquals(new BigDecimal("9"), view.table.getColumns().get(5).getCellData(0));
+            assertEquals(10, view.table.getItems().getFirst().rank().orElseThrow());
+            assertTrue(field(view, "current", Label.class).getText().contains("No survivor age has been assumed"));
+            assertTrue(field(view, "detail", TextArea.class).getText().contains("Evaluated probability coverage"));
+            var stage = field(dialog, "stage", Stage.class);
+            var top = (TabPane) ((BorderPane) stage.getScene().getRoot()).getCenter();
+            top.getSelectionModel().selectLast();
+            var inner = (TabPane) ((javafx.scene.layout.VBox) top.getSelectionModel().getSelectedItem().getContent()).getChildren().getFirst();
+            inner.getSelectionModel().selectLast();
+            for (int[] size : List.of(new int[]{1180, 820}, new int[]{900, 650}, new int[]{1366, 768})) {
+                stage.setWidth(size[0]); stage.setHeight(size[1]); stage.show();
+                stage.getScene().getRoot().applyCss(); stage.getScene().getRoot().layout();
+                assertTrue(view.table.getWidth() > 600);
+                assertTrue(view.table.getHeight() >= 100);
+                assertTrue(view.run.isFocusTraversable());
+                assertTrue(field(dialog, "sharedCancel", Button.class).isFocusTraversable());
+            }
+        });
+    }
+
+    @Test
+    void weightedRunUsesControllerAndCancellationPreservesResultBeforeExecution() throws Exception {
+        onFx(dialog -> {
+            var view = field(dialog, "weightedView", LongevityWeightedIntegratedView.class);
+            assertTrue(view.run.isDisabled());
+            field(dialog, "primaryCategory", ComboBox.class).setValue(SocialSecurityMortalityCategory.MALE);
+            field(dialog, "spouseCategory", ComboBox.class).setValue(SocialSecurityMortalityCategory.FEMALE);
+            assertFalse(view.run.isDisabled());
+            var previous = LongevityWeightedIntegratedPresentationTest.model(
+                    List.of(LongevityWeightedIntegratedPresentationTest.entry(1, "100", 1)), java.util.Optional.empty());
+            set(dialog, "weightedPresentation", previous);
+            view.render(previous, "Current elections");
+            view.run.fire();
+            var jobs = field(dialog, "jobs", SocialSecurityAnalyzerJobController.class);
+            assertEquals(SocialSecurityAnalyzerJobController.Mode.WEIGHTED, jobs.mode());
+            assertTrue(view.run.isDisabled());
+            assertTrue(view.status.getText().contains("Rerunning"));
+            field(dialog, "sharedCancel", Button.class).fire();
+            var coordinator = field(jobs, "coordinator", SocialSecurityAnalysisJobCoordinator.class);
+            assertTrue(coordinator.isBusy());
+            field(coordinator, "executor", SocialSecurityAnalyzerJobControllerTest.ManualExecutor.class).run();
+            assertEquals("Analysis cancelled", view.status.getText());
+            assertSame(previous, field(dialog, "weightedPresentation", LongevityWeightedIntegratedPresentation.class));
+            assertFalse(view.run.isDisabled());
+        });
+    }
+
+    @Test
+    void weightedCompleteBaselineRendersItsRankWithoutInventingFailure() throws Exception {
+        onFx(dialog -> {
+            var view = field(dialog, "weightedView", LongevityWeightedIntegratedView.class);
+            var model = LongevityWeightedIntegratedPresentationTest.model(
+                    List.of(LongevityWeightedIntegratedPresentationTest.entry(1, "100", 1)),
+                    java.util.Optional.of(LongevityWeightedIntegratedPresentationTest.entry(0, "100", null)));
+            view.render(model, "Current elections");
+            String current = field(view, "current", Label.class).getText();
+            assertTrue(current.contains("Weighted rank: 1"));
+            assertTrue(current.contains("Expected PV After-Tax Estate"));
+            assertTrue(current.contains("Tested strategies tied at current expected PV: 1"));
+            assertFalse(current.contains("unavailable"));
+        });
     }
 
     private static Person person(String name, AccountOwnership owner, LocalDate birth) {
@@ -287,6 +399,8 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
         Stream<String> own = node instanceof Labeled labeled ? Stream.of(labeled.getText()) : Stream.empty();
         Stream<String> children = node instanceof TabPane tabs
                 ? tabs.getTabs().stream().map(tab -> tab.getText() + " " + text(tab.getContent()))
+                : node instanceof ScrollPane scroll ? Stream.of(text(scroll.getContent()))
+                : node instanceof TitledPane titled ? Stream.of(text(titled.getContent()))
                 : node instanceof Parent parent
                         ? parent.getChildrenUnmodifiable().stream().map(SocialSecurityStrategyAnalyzerDialogStateTest::text)
                         : Stream.empty();
