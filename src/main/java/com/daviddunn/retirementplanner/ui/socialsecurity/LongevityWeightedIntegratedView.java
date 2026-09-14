@@ -28,8 +28,14 @@ final class LongevityWeightedIntegratedView extends VBox {
     final TableView<LongevityWeightedIntegratedStrategyComparisonEntry> table = new TableView<>();
     private final Label highest = label("Run analysis to display the highest tested strategy.");
     private final Label current = label("Current strategy will appear after analysis.");
-    private final TextArea detail = area();
-    private final TextArea technical = area();
+    private final Label detail = label("");
+    private final TitledPane detailSection = fold("Selected Strategy Details", detail, false);
+    final ClaimingStrategyHeatMapView heatMap = new ClaimingStrategyHeatMapView(this::openHeatMapStrategy);
+    final VBox rankedContent = new VBox(6);
+    final Tab rankedTab = new Tab("Ranked Strategies", rankedContent);
+    final Tab heatMapTab = new Tab("Claiming-Age Heat Map", heatMap);
+    final TabPane resultTabs = new IntegratedAnalysisResultTabs(rankedTab, heatMapTab);
+    private final Label technical = label("");
     private final VBox comparison = new VBox(6);
     private final Label methodology = label(METHODOLOGY);
     private LongevityWeightedIntegratedPresentation model;
@@ -42,13 +48,15 @@ final class LongevityWeightedIntegratedView extends VBox {
         getChildren().addAll(label("Rank complete claiming strategies by Expected PV After-Tax Estate across modeled household lifespans."),
                 run, status, stale, limitation);
         HBox cards = new HBox(12, card("Highest Longevity-Weighted Tested Strategy", highest), card("Current Strategy", current));
-        getChildren().add(fold("Highest and Current Strategy", cards, false));
+        rankedContent.getChildren().add(fold("Highest and Current Strategy", cards, false));
         configureTable();
-        getChildren().add(table);
-        VBox.setVgrow(table, Priority.ALWAYS);
+        rankedContent.getChildren().add(table);
+        VBox.setVgrow(table, Priority.NEVER);
         table.setMinHeight(110);
-        getChildren().addAll(fold("Compare Analysis Outcomes", comparison, false),
-                fold("Selected Strategy Details", detail, false),
+        getChildren().add(resultTabs);
+        heatMap.resultNotice.textProperty().bind(stale.textProperty());
+        rankedContent.getChildren().addAll(fold("Compare Analysis Outcomes", comparison, false),
+                detailSection,
                 fold("Methodology and Result-Time Assumptions", methodology, false),
                 fold("Technical Details", technical, false));
         comparison.getChildren().add(label(IntegratedAnalysisComparisonPresentation.EXPLANATION));
@@ -72,10 +80,14 @@ final class LongevityWeightedIntegratedView extends VBox {
                 + entry.strategy().primarySurvivorElection().ageMonths(), LongevityWeightedIntegratedView::age);
         column("Spouse Survivor", 110, entry -> entry.strategy().spouseSurvivorElection().ageYears() * 12
                 + entry.strategy().spouseSurvivorElection().ageMonths(), LongevityWeightedIntegratedView::age);
+        column("Expected Investable Assets at Second Death", 165, entry -> entry.aggregate()
+                .map(LongevityWeightedStrategyAggregate::expectedInvestableAssetsAtSecondDeath).orElse(null), LongevityWeightedIntegratedView::money);
+        column("Expected After-Tax Heir Value", 155, entry -> entry.aggregate()
+                .map(LongevityWeightedStrategyAggregate::expectedNominalEstateAtSecondDeath).orElse(null), LongevityWeightedIntegratedView::money);
         column("Expected PV After-Tax Estate", 160, entry -> entry.aggregate()
                 .map(LongevityWeightedStrategyAggregate::expectedPvAfterTaxEstate).orElse(null), LongevityWeightedIntegratedView::money);
         column("Difference vs Current", 140, entry -> entry.pvDifferenceFromBaseline().orElse(null), LongevityWeightedIntegratedView::signed);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         table.getSortOrder().add(rank);
         table.setPlaceholder(label("Run longevity-weighted exhaustive search to display strategies."));
     }
@@ -87,6 +99,10 @@ final class LongevityWeightedIntegratedView extends VBox {
         Label header = label(title);
         header.setMaxWidth(width - 12);
         column.setGraphic(header);
+        header.setTooltip(new Tooltip(title.startsWith("Expected PV")
+                ? "Valuation-date present value; ranking objective"
+                : title.startsWith("Expected") ? "Nominal future-dollar expected value across second-death dates"
+                : title.equals("Difference vs Current") ? "Candidate expected PV minus current expected PV" : title));
         column.setPrefWidth(width);
         column.setMinWidth(65);
         column.setComparator(Comparator.nullsLast(Comparator.naturalOrder()));
@@ -102,29 +118,42 @@ final class LongevityWeightedIntegratedView extends VBox {
     }
 
     void render(LongevityWeightedIntegratedPresentation value, String knownRetirementElections) {
+        render(value, value.result().baseline().map(base -> elections(base.strategy())).orElse(knownRetirementElections), MISSING_BASELINE);
+    }
+
+    void render(LongevityWeightedIntegratedPresentation value, CurrentStrategyBaseline baseline) {
+        render(value, baseline.summary(), baseline.problem());
+    }
+
+    private void render(LongevityWeightedIntegratedPresentation value, String knownElections, String baselineProblem) {
         model = value;
         stale.setText("");
         var result = value.result();
         String date = "\nValuation date: " + result.metadata().valuationDate();
         highest.setText(value.highest().map(entry -> elections(entry.strategy())
-                + "\nExpected PV After-Tax Estate: " + money(LongevityWeightedIntegratedPresentation.pv(entry)) + date
+                + metrics(entry.aggregate().orElseThrow()) + date
                 + "\nWeighted rank: " + entry.rank().orElseThrow()
                 + "\nTied highest strategies: " + value.highestTieCount()
-                + entry.pvDifferenceFromBaseline().map(delta -> "\nImprovement vs current: " + signed(delta)
-                        + " / " + value.improvementPercent().map(percent -> percent + "%").orElse("percentage unavailable")).orElse(""))
+                + entry.pvDifferenceFromBaseline().map(delta -> "\nPV Difference vs Current: " + signed(delta)
+                        + " / " + value.improvementPercent().map(percent -> percent + "%").orElse("percentage unavailable"))
+                        .orElse("\nPV Difference vs Current: Unavailable"))
                 .orElse("No successful candidate; no highest strategy is available."));
-        current.setText(result.baseline().map(base -> elections(base.strategy())
-                + base.aggregate().map(aggregate -> "\nExpected PV After-Tax Estate: " + money(aggregate.expectedPvAfterTaxEstate())
+        current.setText(result.baseline().map(base -> knownElections
+                + base.aggregate().map(aggregate -> metrics(aggregate) + "\nPV Difference vs Current: " + money(BigDecimal.ZERO)
                         + date + "\n" + (value.currentHasCandidateRank() ? "Weighted rank: " : "Metric position among tested strategies: ")
                         + value.currentPosition().orElseThrow()
                         + "\nTested strategies tied at current expected PV: " + value.currentTieCount()
+                        + value.highest().map(best -> "\nDifference from Highest Strategy (current minus highest PV): "
+                                + signed(aggregate.expectedPvAfterTaxEstate().subtract(LongevityWeightedIntegratedPresentation.pv(best))))
+                                .orElse("\nDifference from Highest Strategy: Unavailable")
                         + value.candidate(base.strategy()).map(entry -> "\nMatching candidate's proven-equivalence group size: "
                                 + value.provenEquivalentCount(entry.inputOrder())).orElse(""))
                         .orElseGet(() -> "\nBaseline evaluation unavailable: " + base.failure().orElseThrow().message()))
-                .orElse(knownRetirementElections + "\nSurvivor policy: incomplete\n" + MISSING_BASELINE));
+                .orElse(knownElections + "\n" + baselineProblem));
         table.getItems().setAll(result.orderedEntries());
         table.sort();
         table.getSelectionModel().selectFirst();
+        heatMap.render(LongevityWeightedHeatMapAdapter.from(value));
         status.setText("Complete: " + result.completedStrategyCount() + " successful; " + result.failedStrategyCount()
                 + " failed candidates. " + (result.baseline().filter(base -> !base.successful()).isPresent() ? "Baseline failed separately." : ""));
         methodology.setText(METHODOLOGY + "\n\nJanuary 1 modeled deaths use the preceding December 31 ending estate or matching opening snapshot. "
@@ -148,23 +177,42 @@ final class LongevityWeightedIntegratedView extends VBox {
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(8);
-        String[] headers = {"Strategy / Role", "Deterministic Estate Rank", "Weighted Rank",
-                "Deterministic After-Tax Estate — Future Dollars", "Expected PV After-Tax Estate — Valuation-Date Dollars"};
+        String[] headers = {"Strategy / Role", "Deterministic - Configured Horizon",
+                "Longevity-Weighted - Second Death"};
         for (int column = 0; column < headers.length; column++) {
             ColumnConstraints constraint = new ColumnConstraints();
-            constraint.setPercentWidth(column == 0 ? 32 : 17);
+            constraint.setPercentWidth(column == 0 ? 30 : 35);
             grid.getColumnConstraints().add(constraint);
             grid.add(label(headers[column]), column, 0);
         }
         int index = 1;
         for (var row : rows) {
             grid.addRow(index++, label(row.role() + "\n" + elections(row.strategy())),
-                    label(rank(row.deterministicRank())), label(rank(row.weightedRank())),
-                    label(row.deterministicEstate().map(LongevityWeightedIntegratedView::money).orElse("Unavailable")),
-                    label(row.weightedPv().map(LongevityWeightedIntegratedView::money).orElse("Unavailable")));
+                    label("Estate rank: " + rank(row.deterministicRank())
+                            + "\nFuture dollars at configured horizon:"
+                            + "\nEnding Investable Assets: " + optionalMoney(row.deterministicInvestableAssets())
+                            + "\nAfter-Tax Heir Value: " + optionalMoney(row.deterministicEstate())),
+                    label("Weighted rank: " + rank(row.weightedRank())
+                            + "\nNominal future-dollar expectations:"
+                            + "\nExpected Investable Assets at Second Death: " + optionalMoney(row.weightedInvestableAssets())
+                            + "\nExpected After-Tax Heir Value: " + optionalMoney(row.weightedHeirValue())
+                            + "\nExpected PV After-Tax Estate (valuation-date dollars; ranking objective): "
+                            + optionalMoney(row.weightedPv())));
         }
         comparison.getChildren().add(grid);
         showDetail(table.getSelectionModel().getSelectedItem());
+    }
+
+    private void openHeatMapStrategy(int inputOrder) {
+        if (model == null) return;
+        model.result().orderedEntries().stream().filter(entry -> entry.inputOrder() == inputOrder).findFirst().ifPresent(entry -> {
+            resultTabs.getSelectionModel().select(rankedTab);
+            table.getSelectionModel().select(entry);
+            table.scrollTo(entry);
+            detailSection.setExpanded(true);
+            detailSection.requestFocus();
+            javafx.application.Platform.runLater(() -> IntegratedAnalysisResultTabs.reveal(detailSection));
+        });
     }
 
     void deterministicReference(IntegratedSocialSecurityCompleteStrategySearchResult result) {
@@ -175,6 +223,11 @@ final class LongevityWeightedIntegratedView extends VBox {
     void initialCurrent(String knownElections, boolean missingPolicy) {
         current.setText(knownElections + (missingPolicy ? "\nSurvivor policy: incomplete\n" + MISSING_BASELINE
                 : "\nRun analysis to value the complete current strategy."));
+    }
+
+    void initialCurrent(CurrentStrategyBaseline baseline) {
+        current.setText(baseline.summary() + "\n" + (baseline.strategy().isPresent()
+                ? "Run analysis to value the complete current strategy." : baseline.problem()));
     }
 
     private void showDetail(LongevityWeightedIntegratedStrategyComparisonEntry entry) {
@@ -191,13 +244,12 @@ final class LongevityWeightedIntegratedView extends VBox {
             return;
         }
         var aggregate = entry.aggregate().orElseThrow();
-        text += "\nExpected PV After-Tax Estate: " + money(aggregate.expectedPvAfterTaxEstate())
-                + "\nExpected nominal estate at second death: " + money(aggregate.expectedNominalEstateAtSecondDeath())
+        text += metrics(aggregate)
                 + "\nMinimum nominal scenario estate: " + money(aggregate.minimumNominalScenarioEstate())
                 + "\nMaximum nominal scenario estate: " + money(aggregate.maximumNominalScenarioEstate())
                 + "\nEvaluated probability coverage: " + aggregate.totalEvaluatedProbability()
                 + "\nScenario count: " + aggregate.originalScenarioCount()
-                + "\nDifference vs current: " + entry.pvDifferenceFromBaseline().map(LongevityWeightedIntegratedView::signed).orElse("Unavailable")
+                + "\nPV Difference vs Current: " + entry.pvDifferenceFromBaseline().map(LongevityWeightedIntegratedView::signed).orElse("Unavailable")
                 + "\nProven-equivalence group size: " + model.provenEquivalentCount(entry.inputOrder())
                 + " (equal rounded values do not establish ties or equivalence)";
         text += "\nDeterministic rank: " + (deterministicReference == null ? "Unavailable"
@@ -207,23 +259,42 @@ final class LongevityWeightedIntegratedView extends VBox {
         detail.setText(text);
     }
 
+    private static String metrics(LongevityWeightedStrategyAggregate aggregate) {
+        return "\nNominal future-dollar expectations across second-death dates:"
+                + "\nExpected Investable Assets at Second Death: " + money(aggregate.expectedInvestableAssetsAtSecondDeath())
+                + "\nExpected After-Tax Heir Value: " + money(aggregate.expectedNominalEstateAtSecondDeath())
+                + "\nExpected PV After-Tax Estate (ranking objective; valuation-date dollars): " + money(aggregate.expectedPvAfterTaxEstate());
+    }
+
     static String elections(SocialSecurityHouseholdClaimingStrategy strategy) {
         return "Primary retirement: Age " + strategy.primaryRetirementAge() + " — " + strategy.primaryRetirementClaimDate()
                 + "\nSpouse retirement: Age " + strategy.spouseRetirementAge() + " — " + strategy.spouseRetirementClaimDate()
                 + "\nPrimary survivor: " + strategy.primarySurvivorElection().label() + " — " + strategy.primarySurvivorElection().claimDate()
                 + "\nSpouse survivor: " + strategy.spouseSurvivorElection().label() + " — " + strategy.spouseSurvivorElection().claimDate();
     }
+    private static String optionalMoney(Optional<BigDecimal> value) { return value.map(LongevityWeightedIntegratedView::money).orElse("Unavailable"); }
     private static String rank(OptionalInt rank) { return rank.isPresent() ? Integer.toString(rank.getAsInt()) : "Unavailable"; }
     private static String age(Integer months) { return "Age " + months / 12 + (months % 12 == 0 ? "" : "y " + months % 12 + "m"); }
     private static String money(BigDecimal amount) { return UIFormatters.money(amount); }
     private static String signed(BigDecimal amount) { return (amount.signum() > 0 ? "+" : "") + money(amount); }
-    private static Label label(String text) { Label label = new Label(text); label.setWrapText(true); return label; }
-    private static TextArea area() { TextArea area = new TextArea(); area.setEditable(false); area.setWrapText(true); area.setPrefRowCount(6); return area; }
+    private static Label label(String text) {
+        Label label = new Label(text);
+        label.setWrapText(true);
+        label.setMinWidth(0);
+        label.setMinHeight(Region.USE_PREF_SIZE);
+        label.setMaxWidth(Double.MAX_VALUE);
+        return label;
+    }
     private static VBox card(String title, Label text) {
         VBox box = new VBox(4, label(title), text); box.setMinWidth(0); box.setMaxWidth(Double.MAX_VALUE); HBox.setHgrow(box, Priority.ALWAYS); return box;
     }
     private static TitledPane fold(String title, javafx.scene.Node content, boolean expanded) {
-        ScrollPane scroll = new ScrollPane(content); scroll.setFitToWidth(true); scroll.setPrefViewportHeight(160);
-        TitledPane pane = new TitledPane(title, scroll); pane.setExpanded(expanded); pane.setAnimated(false); return pane;
+        TitledPane pane = new TitledPane(title, content);
+        // Keep the full width-dependent content height; the outer viewport scrolls.
+        pane.setMinHeight(Region.USE_PREF_SIZE);
+        pane.setMaxHeight(Region.USE_PREF_SIZE);
+        pane.setExpanded(expanded);
+        pane.setAnimated(false);
+        return pane;
     }
 }

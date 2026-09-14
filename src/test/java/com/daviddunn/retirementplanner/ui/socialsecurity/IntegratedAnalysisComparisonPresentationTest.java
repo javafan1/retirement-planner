@@ -24,6 +24,11 @@ class IntegratedAnalysisComparisonPresentationTest {
         assertTrue(rows.getFirst().deterministicRank().isPresent());
         assertTrue(rows.getFirst().weightedRank().isPresent());
         assertTrue(rows.getFirst().deterministicEstate().isPresent());
+        assertEquals(deterministic().rankedSuccessfulEntries().getFirst().metrics().orElseThrow().endingInvestableAssets(),
+                rows.getFirst().deterministicInvestableAssets().orElseThrow());
+        assertEquals(new java.math.BigDecimal("110"), rows.getFirst().weightedInvestableAssets().orElseThrow());
+        assertEquals(new java.math.BigDecimal("100"), rows.getFirst().weightedHeirValue().orElseThrow());
+        assertEquals(new java.math.BigDecimal("100"), rows.getFirst().weightedPv().orElseThrow());
     }
     @Test void staleOrDifferentRevisionPreventsJoinWithoutDiscardingWeightedValues() {
         var weighted = LongevityWeightedIntegratedPresentationTest.model(
@@ -35,6 +40,8 @@ class IntegratedAnalysisComparisonPresentationTest {
                 IntegratedAnalysisComparisonPresentation.create(weighted, deterministic, 7, 7, false),
                 IntegratedAnalysisComparisonPresentation.create(weighted, null, 7, 7, true))) {
             assertTrue(rows.getFirst().deterministicRank().isEmpty());
+            assertTrue(rows.getFirst().deterministicInvestableAssets().isEmpty());
+            assertTrue(rows.getFirst().weightedInvestableAssets().isPresent());
             assertTrue(rows.getFirst().weightedPv().isPresent());
         }
     }

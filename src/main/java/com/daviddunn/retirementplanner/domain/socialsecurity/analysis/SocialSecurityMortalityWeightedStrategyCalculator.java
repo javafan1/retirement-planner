@@ -78,10 +78,11 @@ public final class SocialSecurityMortalityWeightedStrategyCalculator {
         // Owner totals are the source of truth for the reported nominal total,
         // preserving its public reconciliation after cents rounding.
         BigDecimal roundedNominal = roundedPrimary.add(roundedSpouse);
+        // Real/PV fields also drive ranking: keep precision through this result boundary.
         return new SocialSecurityMortalityWeightedStrategyValue(
                 roundedNominal,
-                money(real),
-                money(presentValue),
+                real,
+                presentValue,
                 roundedPrimary,
                 roundedSpouse,
                 scenarios.size());

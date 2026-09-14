@@ -11,6 +11,15 @@ import java.util.*;
 
 /** Captures on FX; mortality preparation and complete enumeration run under analyzer admission. */
 final class LongevityWeightedAnalysisRequestFactory {
+    Snapshot capture(RetirementPlan plan,
+            SocialSecurityMortalityAdjustment primaryAdjustment,
+            SocialSecurityMortalityAdjustment spouseAdjustment, LocalDate conditioningDate,
+            LocalDate valuationDate, BigDecimal rate, long planRevision, long assumptionsRevision,
+            CurrentStrategyBaseline baseline) {
+        return capture(plan, null, null, primaryAdjustment, spouseAdjustment, conditioningDate,
+                valuationDate, rate, planRevision, assumptionsRevision, baseline);
+    }
+
     static final class Snapshot {
         private final RetirementPlan plan;
         final AnalyzerLongevityAssumptions longevity;
@@ -18,15 +27,18 @@ final class LongevityWeightedAnalysisRequestFactory {
         final BigDecimal discountRate;
         final long planRevision;
         final long assumptionsRevision;
+        final CurrentStrategyBaseline baseline;
 
         Snapshot(RetirementPlan source, AnalyzerLongevityAssumptions longevity,
-                LocalDate valuationDate, BigDecimal discountRate, long planRevision, long assumptionsRevision) {
+                LocalDate valuationDate, BigDecimal discountRate, long planRevision, long assumptionsRevision,
+                CurrentStrategyBaseline baseline) {
             this.plan = new RetirementPlanScenarioCopyService().copy(Objects.requireNonNull(source));
             this.longevity = Objects.requireNonNull(longevity);
             this.valuationDate = Objects.requireNonNull(valuationDate);
             this.discountRate = Objects.requireNonNull(discountRate);
             this.planRevision = planRevision;
             this.assumptionsRevision = assumptionsRevision;
+            this.baseline = Objects.requireNonNull(baseline);
         }
     }
 
@@ -34,14 +46,32 @@ final class LongevityWeightedAnalysisRequestFactory {
             SocialSecurityMortalityCategory spouse, SocialSecurityMortalityAdjustment primaryAdjustment,
             SocialSecurityMortalityAdjustment spouseAdjustment, LocalDate date, BigDecimal rate,
             long planRevision, long assumptionsRevision) {
-        if (primary == null || spouse == null) {
-            throw new IllegalArgumentException("Choose both mortality categories.");
-        }
+        return capture(plan, primary, spouse, primaryAdjustment, spouseAdjustment, date, date, rate,
+                planRevision, assumptionsRevision);
+    }
+
+    Snapshot capture(RetirementPlan plan, SocialSecurityMortalityCategory primary,
+            SocialSecurityMortalityCategory spouse, SocialSecurityMortalityAdjustment primaryAdjustment,
+            SocialSecurityMortalityAdjustment spouseAdjustment, LocalDate conditioningDate,
+            LocalDate valuationDate, BigDecimal rate, long planRevision, long assumptionsRevision) {
+        return capture(plan, primary, spouse, primaryAdjustment, spouseAdjustment, conditioningDate,
+                valuationDate, rate, planRevision, assumptionsRevision, CurrentStrategyBaseline.fromPlan(plan));
+    }
+
+    Snapshot capture(RetirementPlan plan, SocialSecurityMortalityCategory primary,
+            SocialSecurityMortalityCategory spouse, SocialSecurityMortalityAdjustment primaryAdjustment,
+            SocialSecurityMortalityAdjustment spouseAdjustment, LocalDate conditioningDate,
+            LocalDate valuationDate, BigDecimal rate, long planRevision, long assumptionsRevision,
+            CurrentStrategyBaseline baseline) {
+        // Compatibility arguments cannot override the authoritative Person values.
+        var categories = PersonMortalityCategories.from(plan.getHousehold());
+        primary = categories.primary();
+        spouse = categories.spouse();
         com.daviddunn.retirementplanner.domain.estate.EstatePresentValueCalculator.validateRate(rate);
         return new Snapshot(plan, new AnalyzerLongevityAssumptions(primary, primaryAdjustment,
-                spouse, spouseAdjustment, date, SocialSecurityMortalityTables.ssaPeriod2022().metadata(),
+                spouse, spouseAdjustment, conditioningDate, SocialSecurityMortalityTables.ssaPeriod2022().metadata(),
                 SocialSecurityMortalityPartialYearConvention.NEXT_COMPLETE_BIRTHDAY_INTERVAL),
-                date, rate, planRevision, assumptionsRevision);
+                valuationDate, rate, planRevision, assumptionsRevision, baseline);
     }
 
     LongevityWeightedIntegratedStrategyComparisonRequest create(Snapshot snapshot,
@@ -67,12 +97,8 @@ final class LongevityWeightedAnalysisRequestFactory {
                 }
             }
         }
-        Optional<SocialSecurityHouseholdClaimingStrategy> baseline =
-                plan.getPlanningAssumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge() == null
-                        ? Optional.empty()
-                        : Optional.of(LongevityWeightedIntegratedStrategyComparisonRequest.explicitCurrentStrategy(plan));
         return new LongevityWeightedIntegratedStrategyComparisonRequest(plan, candidates, scenarios,
-                snapshot.valuationDate, snapshot.discountRate, baseline,
+                snapshot.valuationDate, snapshot.discountRate, snapshot.baseline.strategy(),
                 LongevityWeightedDetailRetentionPolicy.aggregateOnly(), progress, cancellation);
     }
 }

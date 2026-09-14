@@ -375,8 +375,15 @@ Comparison and Deterministic Exhaustive Search) from Longevity-Weighted.
 Weighted UI requests capture an isolated plan and immutable analyzer assumptions
 before admission-controlled work, enumerate the complete claiming universe,
 and use the existing weighted comparison service through Stage 5E Mode.WEIGHTED.
-Missing persisted survivor policy omits the weighted baseline without inventing
-an election. Expected PV After-Tax Estate means after-tax investable estate at
+The weighted UI freezes an optional explicit Current Strategy baseline. Retirement
+ages and dates come from each owner's Social Security record. PRIMARY_DIES supplies
+only the spouse survivor age; SPOUSE_DIES supplies only the primary survivor age;
+BOTH_SURVIVE supplies neither, including when a dormant age is stored. Missing
+opposite-death survivor ages and overrides are dialog-session inputs, never plan
+writes or candidate-universe constraints. Missing/invalid baseline inputs omit only
+the comparison. Baseline edits invalidate WEIGHTED_SETTINGS alone; result-time
+elections and sources remain frozen. A different plan resets these inputs.
+Expected PV After-Tax Estate means after-tax investable estate at
 second death in valuation-date dollars; it excludes non-investable assets.
 Weighted tables preserve original occurrence identities and backend competition
 ranks. Cross-analysis joins require compatible source revisions and complete
@@ -394,3 +401,14 @@ proves finite Social Security prefix coverage, and falls back independently when
 carrier fails or coverage is unavailable. Strategy equivalence remains conservative;
 do not assume one representative per retirement-age pair. Preserve original scenario
 probabilities and aggregation order, and count actual engine calls rather than scenarios.
+
+The analyzer's shared Analysis Inputs and Plan Assumptions section displays
+current inputs through immutable presentation rows; completed result details
+continue to use frozen result-time metadata. Mortality conditioning and PV
+valuation are independent session-level dates, initialized from the old shared
+default. SS remaining-benefit analysis starts at conditioning, not valuation;
+financial projections retain the plan start. Either date invalidates SS, Quick
+and Weighted, but not Deterministic Exhaustive. Configured end/length are
+reference-only for weighted scenarios; preserve Stage 5G exact second-death
+endings and SS precise-PV ranking. Non-table expandable sections use natural
+content height in the outer analyzer scroller; ranking tables remain bounded.

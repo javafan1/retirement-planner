@@ -14,7 +14,7 @@ class LongevityWeightedIntegratedPresentationTest {
     static LongevityWeightedIntegratedStrategyComparisonEntry entry(int order, String amount, Integer rank) {
         var value = new BigDecimal(amount);
         return new LongevityWeightedIntegratedStrategyComparisonEntry(order, REQUEST.candidates().get(order == 0 ? 0 : order - 1),
-                Optional.of(new LongevityWeightedStrategyAggregate(value, value, value, value, BigDecimal.ONE, 2, 2)),
+                Optional.of(new LongevityWeightedStrategyAggregate(value, value, value.add(BigDecimal.TEN), value, value, BigDecimal.ONE, 2, 2)),
                 Optional.empty(), Optional.empty(), rank == null ? OptionalInt.empty() : OptionalInt.of(rank), Optional.empty(), Optional.empty());
     }
     static LongevityWeightedIntegratedPresentation model(List<LongevityWeightedIntegratedStrategyComparisonEntry> entries,

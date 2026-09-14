@@ -14,6 +14,7 @@ import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionMetrics;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.*;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
+import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
@@ -36,15 +37,18 @@ public final class SocialSecurityStrategyAnalyzerDialog {
 
     private RetirementPlan plan;
     private final Stage stage = new Stage();
-    private final ComboBox<SocialSecurityMortalityCategory> primaryCategory = new ComboBox<>();
-    private final ComboBox<SocialSecurityMortalityCategory> spouseCategory = new ComboBox<>();
     private final TextField primaryMortalityAdjustment = new TextField("1.00");
     private final TextField spouseMortalityAdjustment = new TextField("1.00");
     private final TextField discountRate = new TextField("1.0");
     private final DatePicker pvDate;
+    private final DatePicker mortalityDate;
+    private final SocialSecurityAnalyzerInputView inputSummary = new SocialSecurityAnalyzerInputView();
+    private final TitledPane inputSection = new TitledPane("Analysis Inputs and Plan Assumptions", inputSummary);
+    private final VBox header = new VBox(8);
+    private final TabPane modes = new TabPane();
     private final Button runButton = new Button("Run Social Security Analysis");
     private final AnalysisProgressView socialSecurityProgress = new AnalysisProgressView();
-    private final Label status = new Label("Choose mortality categories, then run analysis.");
+    private final Label status = new Label("Mortality categories come from Person information.");
     private final Label stale = new Label();
     private final VBox recommendation = new VBox(8);
     private final GridPane claimingGrid = new GridPane();
@@ -66,6 +70,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private final TextArea integratedMethodology = new TextArea();
     private final Button exhaustiveRunButton = new Button("Run Deterministic Exhaustive Search");
     private final LongevityWeightedIntegratedView weightedView = new LongevityWeightedIntegratedView();
+    private final CurrentStrategyBaselineView baselineInputs;
     private final AnalysisProgressView sharedProgress = new AnalysisProgressView();
     private final Label sharedStatus = new Label();
     private final Button sharedCancel = new Button("Cancel");
@@ -84,6 +89,13 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private final TableView<ExhaustiveIntegratedSearchPresentation.Group> exhaustiveTable =
             new TableView<>();
     private final TextArea exhaustiveDetails = new TextArea();
+    private final VBox deterministicRankedContent = new VBox(10);
+    private final ClaimingStrategyHeatMapView deterministicHeatMap = new ClaimingStrategyHeatMapView(
+            ClaimingStrategyHeatMapProfile.deterministic(), this::openDeterministicHeatMapStrategy);
+    private final Tab deterministicRankedTab = new Tab("Ranked Strategies", deterministicRankedContent);
+    private final Tab deterministicHeatMapTab = new Tab("Claiming-Age Heat Map", deterministicHeatMap);
+    private final TabPane deterministicResultTabs = new IntegratedAnalysisResultTabs(deterministicRankedTab, deterministicHeatMapTab);
+    private ExhaustiveIntegratedSearchPresentation deterministicHeatMapSource;
     private final SocialSecurityAnalyzerJobController jobs;
     private Runnable detachPlanListener = () -> { };
     private final java.util.List<Runnable> detachInputListeners = new java.util.ArrayList<>();
@@ -103,7 +115,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             SocialSecurityAnalyzerJobController jobs) {
         this.plan = plan;
         this.jobs = jobs;
+        baselineInputs = new CurrentStrategyBaselineView(plan);
+        baselineInputs.onChanged(this::baselineChanged);
         pvDate = new DatePicker(plan.getPlanningAssumptions().getProjectionStartDate());
+        mortalityDate = new DatePicker(pvDate.getValue());
         stage.initOwner(owner);
         stage.initModality(Modality.WINDOW_MODAL);
         stage.setTitle("Social Security Strategy Analyzer");
@@ -123,6 +138,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         this(owner, source.getCurrentPlan());
         detachPlanListener = source.addSourcePlanRevisionListener(() -> {
             plan = source.getCurrentPlan();
+            baselineInputs.load(plan);
+            if (weightedPresentation == null) weightedView.initialCurrent(baselineInputs.snapshot());
             planRevision++;
             jobs.invalidate(SocialSecurityAnalyzerJobController.Change.PLAN);
             markStale();
@@ -136,8 +153,6 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private BorderPane content() {
-        primaryCategory.getItems().setAll(SocialSecurityMortalityCategory.values());
-        spouseCategory.getItems().setAll(SocialSecurityMortalityCategory.values());
         stale.setStyle("-fx-text-fill: #9a6700; -fx-font-weight: bold;");
         integratedStale.setStyle("-fx-text-fill: #9a6700; -fx-font-weight: bold;");
         exhaustiveStale.setStyle("-fx-text-fill: #9a6700; -fx-font-weight: bold;");
@@ -152,34 +167,44 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         exhaustiveCancelButton.setOnAction(event -> jobs.cancel());
         socialSecurityCancelButton.setOnAction(event -> jobs.cancel());
         integratedCancelButton.setOnAction(event -> jobs.cancel());
-        observe(primaryCategory.valueProperty(), this::markStale);
-        observe(spouseCategory.valueProperty(), this::markStale);
         observe(primaryMortalityAdjustment.textProperty(), this::markStale);
         observe(spouseMortalityAdjustment.textProperty(), this::markStale);
         observe(discountRate.textProperty(), this::markStale);
-        observe(pvDate.valueProperty(), this::markStale);
+        observe(mortalityDate.valueProperty(), () -> markStale(SocialSecurityAnalyzerJobController.Change.MORTALITY_CONDITIONING_DATE));
+        observe(pvDate.valueProperty(), () -> markStale(SocialSecurityAnalyzerJobController.Change.VALUATION_DATE));
         observe(integratedCandidateCount.valueProperty(), () -> {
             jobs.invalidate(SocialSecurityAnalyzerJobController.Change.QUICK_CANDIDATES);
             markIntegratedStale("Candidate count changed - run integrated analysis again.");
         });
 
-        VBox header = new VBox(8,
+        inputSection.setExpanded(false);
+        inputSection.setAnimated(false);
+        inputSection.setMinHeight(Region.USE_PREF_SIZE);
+        inputSection.setMaxHeight(Region.USE_PREF_SIZE);
+        refreshInputSummary();
+        header.getChildren().setAll(
                 new Label("Social Security Strategy Analyzer"),
                 householdSummary(),
+                inputSection,
                 heading("Longevity and Valuation Assumptions"),
                 wrappedLabel("Used for Social Security-only analysis and Longevity-Weighted Integrated analysis. "
                         + "Quick Comparison uses these assumptions for candidate selection and Social Security expected PV; "
                         + "its retirement-plan outcomes remain deterministic. Deterministic Exhaustive Search uses the plan's configured death scenario."),
-                wrappedLabel("The valuation date is also used as the mortality conditioning date in this analyzer. "
-                        + "These are distinct concepts currently controlled by one date."),
+                wrappedLabel("Mortality conditioning assumes survival through that date. Valuation date sets PV dollars. "
+                        + "These dates are independent; neither changes the plan's projection start."),
                 inputs(), new HBox(10, sharedCancel, sharedStatus), sharedProgress);
         header.setPadding(new Insets(12));
 
-        TabPane modes = new TabPane(
+        modes.getTabs().setAll(
                 tab("Social Security Only", socialSecurityContent()),
                 tab("Integrated Retirement Plan", integratedContent()));
-        BorderPane root = new BorderPane(modes);
-        root.setTop(header);
+        modes.setMinHeight(Region.USE_PREF_SIZE);
+        modes.setMaxHeight(Region.USE_PREF_SIZE);
+        VBox body = new VBox(header, modes);
+        ScrollPane outer = new ScrollPane(body);
+        outer.setFitToWidth(true);
+        outer.setFitToHeight(false);
+        BorderPane root = new BorderPane(outer);
         Button closeButton = new Button("Close");
         closeButton.setOnAction(event -> { close(); stage.close(); });
         Label scope = new Label(
@@ -217,14 +242,14 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private VBox integratedContent() {
-        weightedView.initialCurrent(personText(plan.getHousehold().getPrimaryPerson()) + "\n"
-                + personText(plan.getHousehold().getSpouse()),
-                plan.getPlanningAssumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge() == null);
-        ScrollPane weightedScroll = new ScrollPane(weightedView);
-        weightedScroll.setFitToWidth(true);
-        weightedScroll.setFitToHeight(true);
+        var baselineSection = new TitledPane("Current Strategy Baseline", baselineInputs);
+        baselineSection.setAnimated(false);
+        baselineSection.setMinHeight(Region.USE_PREF_SIZE);
+        baselineSection.setMaxHeight(Region.USE_PREF_SIZE);
+        weightedView.getChildren().addFirst(baselineSection);
+        weightedView.initialCurrent(baselineInputs.snapshot());
         TabPane tabs = new TabPane(tab("Deterministic", deterministicIntegratedContent()),
-                tab("Longevity-Weighted", weightedScroll));
+                tab("Longevity-Weighted", weightedView));
         VBox content = new VBox(tabs);
         VBox.setVgrow(tabs, Priority.ALWAYS);
         return content;
@@ -309,14 +334,16 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         methodology.setWrapText(true);
         HBox actions = new HBox(10, exhaustiveRunButton, exhaustiveCancelButton, exhaustiveStatus);
         VBox tableBox = new VBox(8, heading("Grouped Top Tested Outcomes"), exhaustiveTable);
+        tableBox.setMaxHeight(Region.USE_PREF_SIZE);
         VBox.setVgrow(exhaustiveTable, Priority.ALWAYS);
         SplitPane details = new SplitPane(
                 new VBox(8, heading("Search Summary and Current Plan"), exhaustiveSummary),
                 new VBox(8, heading("Selected Outcome"), exhaustiveDetails));
         details.setDividerPositions(0.45);
-        VBox content = new VBox(10, explanation, actions, exhaustiveProgress, exhaustiveStale,
-                details, tableBox, heading("Methodology"), methodology);
-        VBox.setVgrow(tableBox, Priority.ALWAYS);
+        deterministicRankedContent.getChildren().setAll(details, tableBox, heading("Methodology"), methodology);
+        deterministicHeatMap.resultNotice.textProperty().bind(exhaustiveStale.textProperty());
+        VBox content = new VBox(10, explanation, actions, exhaustiveProgress, exhaustiveStale, deterministicResultTabs);
+        VBox.setVgrow(tableBox, Priority.NEVER);
         return content;
     }
 
@@ -352,23 +379,39 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private GridPane inputs() {
+        String adjustmentHelp = "Mortality risk multiplier: 1.00 means standard table mortality; 0.75 means 75% "
+                + "and 1.25 means 125% of the table's underlying mortality hazard. Annual death probabilities "
+                + "are adjusted through survival probabilities, not multiplied directly. This does not shorten "
+                + "or lengthen remaining life by that percentage.";
+        primaryMortalityAdjustment.setTooltip(HelpIcon.createTooltip(adjustmentHelp));
+        spouseMortalityAdjustment.setTooltip(HelpIcon.createTooltip(adjustmentHelp));
+        mortalityDate.setTooltip(HelpIcon.createTooltip(
+                "Future mortality probabilities assume both people are alive as of this date. Death probabilities "
+                        + "before this date are excluded; the model uses complete birthday intervals after this date. "
+                        + "This does not change the retirement-plan projection start date."));
+        pvDate.setTooltip(HelpIcon.createTooltip(
+                "The common financial date used to express present-value results. Future benefits or estate values "
+                        + "are translated to this date for comparison. Changing this date does not change the mortality "
+                        + "conditioning date or the retirement projection start date."));
+        discountRate.setTooltip(HelpIcon.createTooltip(
+                "The real rate used to discount inflation-adjusted future values back to the valuation date. "
+                        + "It represents time preference after removing general inflation. Higher values place less "
+                        + "present value on more distant future amounts."));
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(6);
         grid.addRow(0,
-                new Label("Primary mortality category:"), primaryCategory,
-                new Label("Spouse mortality category:"), spouseCategory);
-        grid.addRow(1,
                 new Label("Primary mortality adjustment:"), primaryMortalityAdjustment,
                 new Label("Spouse mortality adjustment:"), spouseMortalityAdjustment);
         Label help = new Label(
                 "1.00x uses standard SSA mortality; above 1.00x increases modeled mortality and below 1.00x decreases it. "
                         + "Planning assumption only, not a medical or actuarial assessment.");
         help.setWrapText(true);
-        grid.add(help, 0, 2, 4, 1);
-        grid.addRow(3,
+        grid.add(help, 0, 1, 4, 1);
+        grid.addRow(2,
                 new Label("Real discount rate (%):"), discountRate,
                 new Label("Valuation date:"), pvDate);
+        grid.addRow(3, new Label("Mortality conditioning date:"), mortalityDate);
         return grid;
     }
 
@@ -383,11 +426,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             SocialSecurityStrategyAnalysisContext context =
                     new SocialSecurityStrategyAnalysisRequestFactory().create(
                             plan,
-                            primaryCategory.getValue(),
-                            spouseCategory.getValue(),
                             primaryAdjustment,
                             spouseAdjustment,
                             rate,
+                            mortalityDate.getValue(),
                             pvDate.getValue());
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY,
                     (progress, cancellation) -> new RunResult(context,
@@ -511,19 +553,18 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private void runWeightedAnalysis() {
         try {
             var factory = new LongevityWeightedAnalysisRequestFactory();
-            var snapshot = factory.capture(plan, primaryCategory.getValue(), spouseCategory.getValue(),
+            var snapshot = factory.capture(plan,
                     adjustment(primaryMortalityAdjustment.getText(), "Primary"),
-                    adjustment(spouseMortalityAdjustment.getText(), "Spouse"), pvDate.getValue(),
-                    new BigDecimal(discountRate.getText().trim()).movePointLeft(2), planRevision, assumptionsRevision);
-            String knownElections = personText(plan.getHousehold().getPrimaryPerson())
-                    + "\n" + personText(plan.getHousehold().getSpouse());
+                    adjustment(spouseMortalityAdjustment.getText(), "Spouse"), mortalityDate.getValue(), pvDate.getValue(),
+                    new BigDecimal(discountRate.getText().trim()).movePointLeft(2), planRevision, assumptionsRevision,
+                    baselineInputs.snapshot());
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
                     (progress, cancellation) -> new com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedIntegratedStrategyComparisonService()
                             .compare(factory.create(snapshot, progress, cancellation)), result -> {
                         weightedPresentation = new LongevityWeightedIntegratedPresentation(result,
                                 snapshot.planRevision, snapshot.assumptionsRevision);
                         weightedCurrent = true;
-                        weightedView.render(weightedPresentation, knownElections);
+                        weightedView.render(weightedPresentation, snapshot.baseline);
                         refreshWeightedComparison();
                     }, failure -> weightedView.status.setText(SocialSecurityAnalysisFailurePresentation.message(failure)));
             if (!accepted) {
@@ -595,11 +636,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         exhaustiveTable.getColumns().add(exhaustiveColumn("Portfolio Withdrawals", group ->
                 money(group.representative().metrics().orElseThrow()
                         .lifetimePortfolioWithdrawals()), 155));
-        exhaustiveTable.getColumns().add(exhaustiveColumn("Ending Investable Assets", group ->
-                money(group.representative().metrics().orElseThrow()
-                        .endingInvestableAssets()), 165));
-        exhaustiveTable.getColumns().add(exhaustiveColumn("After-Tax Estate", group ->
-                money(group.representative().metrics().orElseThrow().afterTaxEstate()), 135));
+        exhaustiveTable.getColumns().add(moneyColumn("Ending Investable Assets", (ExhaustiveIntegratedSearchPresentation.Group group) ->
+                group.representative().metrics().orElseThrow()
+                        .endingInvestableAssets(), 165));
+        exhaustiveTable.getColumns().add(moneyColumn("After-Tax Heir Value", (ExhaustiveIntegratedSearchPresentation.Group group) ->
+                group.representative().metrics().orElseThrow().afterTaxEstate(), 150));
         exhaustiveTable.getColumns().add(exhaustiveColumn("Delta Estate vs Current", group ->
                 signedMoney(group.representative().differencesFromCurrentPlan().orElseThrow()
                         .afterTaxEstate()), 155));
@@ -626,7 +667,24 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         return column;
     }
 
+    private <T> TableColumn<T, BigDecimal> moneyColumn(
+            String title, java.util.function.Function<T, BigDecimal> value, double width) {
+        TableColumn<T, BigDecimal> column = new TableColumn<>(title);
+        column.setCellValueFactory(data -> new javafx.beans.property.ReadOnlyObjectWrapper<>(value.apply(data.getValue())));
+        column.setComparator(java.util.Comparator.nullsLast(BigDecimal::compareTo));
+        column.setCellFactory(ignored -> new TableCell<>() {
+            @Override protected void updateItem(BigDecimal amount, boolean empty) {
+                super.updateItem(amount, empty);
+                setText(empty ? null : amount == null ? "Unavailable" : money(amount));
+            }
+        });
+        column.setPrefWidth(width);
+        return column;
+    }
+
     private void renderExhaustive(ExhaustiveIntegratedSearchPresentation model) {
+        deterministicHeatMapSource = model;
+        deterministicHeatMap.render(DeterministicHeatMapAdapter.from(model));
         var result = model.result();
         ProjectionMetrics current = result.currentPlanBaseline().metrics();
         var highest = result.rankedSuccessfulEntries().isEmpty()
@@ -643,9 +701,13 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         exhaustiveSummary.getChildren().setAll(
                 new Label(strategySummary(result.currentPlanBaseline().evaluatedStrategy())),
                 new Label("Current survivor policy: persisted deterministic projection policy"),
-                new Label("Current after-tax estate: " + money(current.afterTaxEstate())),
+                new Label("Future dollars at configured projection horizon"),
+                new Label("Current Ending Investable Assets: " + money(current.endingInvestableAssets())),
+                new Label("Highest tested Ending Investable Assets: " + (highest == null ? "Unavailable"
+                        : money(highest.metrics().orElseThrow().endingInvestableAssets()))),
+                new Label("Current After-Tax Heir Value: " + money(current.afterTaxEstate())),
                 new Label("Deterministic after-tax-estate metric position: " + currentRank),
-                new Label("Highest tested after-tax estate: "
+                new Label("Highest tested After-Tax Heir Value: "
                         + (highest == null ? "Unavailable"
                         : money(highest.metrics().orElseThrow().afterTaxEstate()))),
                 new Label("Gap from highest tested: " + signedMoney(gap)
@@ -662,6 +724,25 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             exhaustiveTable.getSelectionModel().selectFirst();
             exhaustiveDetails.setText(exhaustiveDetail(model.groups().getFirst()));
         }
+    }
+
+    private void openDeterministicHeatMapStrategy(int generationOrder) {
+        if (deterministicHeatMapSource == null) return;
+        deterministicHeatMapSource.result().entries().stream()
+                .filter(entry -> entry.generationOrder() == generationOrder && entry.successful()).findFirst().ifPresent(entry -> {
+                    deterministicResultTabs.getSelectionModel().select(deterministicRankedTab);
+                    var displayed = exhaustiveTable.getItems().stream()
+                            .filter(group -> group.representative().generationOrder() == generationOrder).findFirst();
+                    if (displayed.isPresent()) {
+                        exhaustiveTable.getSelectionModel().select(displayed.orElseThrow());
+                        exhaustiveTable.scrollTo(displayed.orElseThrow());
+                    } else {
+                        exhaustiveTable.getSelectionModel().clearSelection();
+                    }
+                    exhaustiveDetails.setText(exhaustiveDetail(entry, "\nOriginal strategy occurrence: " + generationOrder));
+                    exhaustiveDetails.requestFocus();
+                    javafx.application.Platform.runLater(() -> IntegratedAnalysisResultTabs.reveal(exhaustiveDetails));
+                });
     }
 
     private String socialSecurityCrossReference(ExhaustiveIntegratedSearchPresentation model) {
@@ -686,13 +767,16 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private String exhaustiveDetail(ExhaustiveIntegratedSearchPresentation.Group group) {
-        var entry = group.representative();
+        return exhaustiveDetail(group.representative(), "\nEquivalent tested strategies: " + group.equivalentStrategyCount());
+    }
+
+    private String exhaustiveDetail(IntegratedSocialSecurityCompleteStrategySearchEntry entry, String identity) {
         ProjectionMetrics current = exhaustivePresentation.result().currentPlanBaseline().metrics();
         ProjectionMetrics candidate = entry.metrics().orElseThrow();
         ProjectionMetrics delta = entry.differencesFromCurrentPlan().orElseThrow();
         return "Deterministic After-Tax Estate Rank: "
                 + entry.afterTaxEstateRank().orElseThrow()
-                + "\nEquivalent tested strategies: " + group.equivalentStrategyCount()
+                + identity
                 + "\n" + strategySummary(entry.strategy())
                 + "\n\nIntegrated financial result (future-dollar deterministic projection)"
                 + metricLine("Investment growth", current.totalInvestmentGrowth(),
@@ -703,7 +787,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 + metricLine("Peak annual tax", current.peakAnnualTax(), candidate.peakAnnualTax(), delta.peakAnnualTax())
                 + metricLine("Ending investable assets", current.endingInvestableAssets(), candidate.endingInvestableAssets(), delta.endingInvestableAssets())
                 + metricLine("Ending net worth", current.endingNetWorth(), candidate.endingNetWorth(), delta.endingNetWorth())
-                + metricLine("After-tax estate", current.afterTaxEstate(), candidate.afterTaxEstate(), delta.afterTaxEstate())
+                + metricLine("After-Tax Heir Value", current.afterTaxEstate(), candidate.afterTaxEstate(), delta.afterTaxEstate())
                 + metricLine("Portfolio withdrawals", current.lifetimePortfolioWithdrawals(), candidate.lifetimePortfolioWithdrawals(), delta.lifetimePortfolioWithdrawals())
                 + metricLine("Roth conversions", current.lifetimeRothConversions(), candidate.lifetimeRothConversions(), delta.lifetimeRothConversions())
                 + metricLine("RMDs", current.lifetimeRequiredMinimumDistributions(), candidate.lifetimeRequiredMinimumDistributions(), delta.lifetimeRequiredMinimumDistributions())
@@ -740,10 +824,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 metric(row.entry(), ProjectionMetrics::totalTaxes), 120));
         integratedTable.getColumns().add(integratedColumn("Portfolio Withdrawals", row ->
                 metric(row.entry(), ProjectionMetrics::lifetimePortfolioWithdrawals), 155));
-        integratedTable.getColumns().add(integratedColumn("Ending Investable Assets", row ->
-                metric(row.entry(), ProjectionMetrics::endingInvestableAssets), 165));
-        integratedTable.getColumns().add(integratedColumn("After-Tax Estate", row ->
-                metric(row.entry(), ProjectionMetrics::afterTaxEstate), 135));
+        integratedTable.getColumns().add(moneyColumn("Ending Investable Assets", (IntegratedSocialSecurityComparisonPresentation.Row row) ->
+                row.entry().integratedResult().map(value -> value.metrics().endingInvestableAssets()).orElse(null), 165));
+        integratedTable.getColumns().add(moneyColumn("After-Tax Heir Value", (IntegratedSocialSecurityComparisonPresentation.Row row) ->
+                row.entry().integratedResult().map(value -> value.metrics().afterTaxEstate()).orElse(null), 150));
         integratedTable.getColumns().add(integratedColumn("Delta Estate vs Current", row ->
                 difference(row.entry(), ProjectionMetrics::afterTaxEstate), 155));
         integratedTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
@@ -776,7 +860,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 new Label("Survivor policy: current persisted projection policy"),
                 new Label("Ending investable assets: " + money(metrics.endingInvestableAssets())),
                 new Label("Ending net worth: " + money(metrics.endingNetWorth())),
-                new Label("After-tax estate: " + money(metrics.afterTaxEstate())),
+                new Label("After-Tax Heir Value: " + money(metrics.afterTaxEstate())),
                 new Label("Total taxes: " + money(metrics.totalTaxes())),
                 new Label("Portfolio withdrawals: " + money(metrics.lifetimePortfolioWithdrawals())),
                 new Label("Lifetime household Social Security: "
@@ -817,7 +901,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         candidate.endingInvestableAssets(), delta.endingInvestableAssets())
                 + metricLine("Ending net worth", current.endingNetWorth(),
                         candidate.endingNetWorth(), delta.endingNetWorth())
-                + metricLine("After-tax estate", current.afterTaxEstate(),
+                + metricLine("After-Tax Heir Value", current.afterTaxEstate(),
                         candidate.afterTaxEstate(), delta.afterTaxEstate())
                 + metricLine("Portfolio withdrawals", current.lifetimePortfolioWithdrawals(),
                         candidate.lifetimePortfolioWithdrawals(), delta.lifetimePortfolioWithdrawals())
@@ -956,6 +1040,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         context.request().retirementGridRequest().baseStrategy().socialSecurityColaRate())
                 + "\nReal discount rate: " + percent(
                         context.request().retirementGridRequest().realDiscountRate())
+                + "\nMortality conditioning date: " + DATE.format(context.longevityAssumptions().mortalityBaseDate())
+                + "\nSS remaining-benefit analysis start: " + DATE.format(context.request().retirementGridRequest().baseStrategy().analysisDate())
                 + "\nValuation date: " + DATE.format(
                         context.request().retirementGridRequest().presentValueBaseDate())
                 + "\nRetirement claims tested: whole ages 62–70"
@@ -971,8 +1057,25 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void markStale() {
+        markStale(SocialSecurityAnalyzerJobController.Change.ASSUMPTIONS);
+    }
+
+    private void baselineChanged() {
+        jobs.invalidate(SocialSecurityAnalyzerJobController.Change.WEIGHTED_SETTINGS);
+        refreshInputSummary();
+        if (weightedPresentation != null) {
+            weightedCurrent = false;
+            weightedView.stale.setText("Current Strategy baseline changed — rerun weighted analysis.");
+            refreshWeightedComparison();
+        } else {
+            weightedView.initialCurrent(baselineInputs.snapshot());
+        }
+    }
+
+    private void markStale(SocialSecurityAnalyzerJobController.Change change) {
         assumptionsRevision++;
-        jobs.invalidate(SocialSecurityAnalyzerJobController.Change.ASSUMPTIONS);
+        jobs.invalidate(change);
+        refreshInputSummary();
         setAnalysisBusy(jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE);
         if (weightedPresentation != null) {
             weightedCurrent = false;
@@ -1006,17 +1109,18 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         integratedRunButton.setDisable(disabled || !socialSecurityResultCurrent);
         exhaustiveRunButton.setDisable(disabled);
         weightedView.run.setDisable(disabled || !weightedInputsValid());
+        weightedView.heatMap.setAnalysisBusy(disabled);
+        deterministicHeatMap.setAnalysisBusy(disabled);
         integratedCandidateCount.setDisable(disabled);
-        primaryCategory.setDisable(disabled);
-        spouseCategory.setDisable(disabled);
         primaryMortalityAdjustment.setDisable(disabled);
         spouseMortalityAdjustment.setDisable(disabled);
         discountRate.setDisable(disabled);
         pvDate.setDisable(disabled);
+        mortalityDate.setDisable(disabled);
     }
 
     private boolean weightedInputsValid() {
-        if (primaryCategory.getValue() == null || spouseCategory.getValue() == null || pvDate.getValue() == null) return false;
+        if (pvDate.getValue() == null || mortalityDate.getValue() == null) return false;
         try {
             adjustment(primaryMortalityAdjustment.getText(), "Primary");
             adjustment(spouseMortalityAdjustment.getText(), "Spouse");
@@ -1026,6 +1130,27 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         } catch (RuntimeException invalid) {
             return false;
         }
+    }
+
+    private void refreshInputSummary() {
+        inputSummary.show(SocialSecurityAnalyzerInputSummary.from(plan,
+                new SocialSecurityAnalyzerInputSummary.AnalyzerValues(
+                        validAdjustment(primaryMortalityAdjustment.getText()),
+                        validAdjustment(spouseMortalityAdjustment.getText()), mortalityDate.getValue(), pvDate.getValue(),
+                        validDiscountRate(discountRate.getText())), baselineInputs.snapshot()));
+    }
+
+    private static BigDecimal validAdjustment(String text) {
+        try { return adjustment(text, "Mortality").factor(); }
+        catch (RuntimeException invalid) { return null; }
+    }
+
+    private static BigDecimal validDiscountRate(String text) {
+        try {
+            BigDecimal value = new BigDecimal(text.trim()).movePointLeft(2);
+            com.daviddunn.retirementplanner.domain.estate.EstatePresentValueCalculator.validateRate(value);
+            return value;
+        } catch (RuntimeException invalid) { return null; }
     }
 
     private void showError(Throwable throwable) {

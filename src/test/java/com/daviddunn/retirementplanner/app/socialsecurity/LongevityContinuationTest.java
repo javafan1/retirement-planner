@@ -35,6 +35,9 @@ class LongevityContinuationTest {
 
     static void financialEquals(LongevityWeightedIntegratedStrategyResult exact,
             LongevityWeightedIntegratedStrategyResult optimized) throws Exception {
+        assertEquals(exact.expectedInvestableAssetsAtSecondDeath(), optimized.expectedInvestableAssetsAtSecondDeath());
+        assertEquals(LongevityWeightedStrategyAggregate.from(exact).expectedInvestableAssetsAtSecondDeath(),
+                LongevityWeightedStrategyAggregate.from(optimized).expectedInvestableAssetsAtSecondDeath());
         for (var component : LongevityWeightedIntegratedStrategyResult.class.getRecordComponents()) {
             if (!component.getName().equals("actualProjectionRunCount")) {
                 assertEquals(component.getAccessor().invoke(exact), component.getAccessor().invoke(optimized), component.getName());

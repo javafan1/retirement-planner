@@ -7,6 +7,7 @@ import java.util.Objects;
 public record LongevityWeightedStrategyAggregate(
         BigDecimal expectedPvAfterTaxEstate,
         BigDecimal expectedNominalEstateAtSecondDeath,
+        BigDecimal expectedInvestableAssetsAtSecondDeath,
         BigDecimal minimumNominalScenarioEstate,
         BigDecimal maximumNominalScenarioEstate,
         BigDecimal totalEvaluatedProbability,
@@ -15,6 +16,7 @@ public record LongevityWeightedStrategyAggregate(
     public LongevityWeightedStrategyAggregate {
         Objects.requireNonNull(expectedPvAfterTaxEstate);
         Objects.requireNonNull(expectedNominalEstateAtSecondDeath);
+        Objects.requireNonNull(expectedInvestableAssetsAtSecondDeath);
         Objects.requireNonNull(minimumNominalScenarioEstate);
         Objects.requireNonNull(maximumNominalScenarioEstate);
         Objects.requireNonNull(totalEvaluatedProbability);
@@ -22,7 +24,8 @@ public record LongevityWeightedStrategyAggregate(
 
     public static LongevityWeightedStrategyAggregate from(LongevityWeightedIntegratedStrategyResult result) {
         return new LongevityWeightedStrategyAggregate(result.expectedPvAfterTaxEstate(),
-                result.expectedNominalEstateAtSecondDeath(), result.minimumNominalScenarioEstate(),
+                result.expectedNominalEstateAtSecondDeath(), result.expectedInvestableAssetsAtSecondDeath(),
+                result.minimumNominalScenarioEstate(),
                 result.maximumNominalScenarioEstate(), result.totalEvaluatedProbability(),
                 result.originalScenarioCount(), result.actualProjectionRunCount());
     }

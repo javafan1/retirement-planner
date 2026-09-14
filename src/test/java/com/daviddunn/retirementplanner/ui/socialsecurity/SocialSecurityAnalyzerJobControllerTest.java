@@ -14,6 +14,21 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.ui.socialsecurity.SocialSecurityAnalyzerJobController.*;
 
 class SocialSecurityAnalyzerJobControllerTest {
+    @ParameterizedTest
+    @EnumSource(Mode.class)
+    void dateRevisionsAreIndependentAndDoNotInvalidateDeterministicFinancialResults(Mode mode) {
+        for (var change : List.of(Change.MORTALITY_CONDITIONING_DATE, Change.VALUATION_DATE)) {
+            try (var f = new Fixture()) {
+                assertTrue(f.start(mode));
+                f.executor.run();
+                f.controller.invalidate(change);
+                assertEquals(change == Change.MORTALITY_CONDITIONING_DATE ? 1 : 0, f.controller.mortalityConditioningRevision());
+                assertEquals(change == Change.VALUATION_DATE ? 1 : 0, f.controller.valuationRevision());
+                f.drain();
+                assertEquals(mode == Mode.EXHAUSTIVE ? List.of("previous", "new") : List.of("previous"), f.results);
+            }
+        }
+    }
     static final class ManualExecutor extends AbstractExecutorService {
         final Queue<Runnable> queue = new ArrayDeque<>();
         boolean shutdown;

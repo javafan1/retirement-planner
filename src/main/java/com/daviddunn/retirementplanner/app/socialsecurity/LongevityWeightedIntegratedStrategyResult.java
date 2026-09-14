@@ -23,6 +23,18 @@ public record LongevityWeightedIntegratedStrategyResult(
         String methodology,
         List<String> financialLimitations,
         List<LongevityWeightedIntegratedScenarioOutcome> scenarioOutcomes) {
+    /** Exact nominal expectation from the authoritative second-death snapshots. */
+    public BigDecimal expectedInvestableAssetsAtSecondDeath() {
+        BigDecimal expected = BigDecimal.ZERO;
+        for (var outcome : scenarioOutcomes) {
+            if (outcome.probability().signum() > 0) {
+                expected = expected.add(outcome.probability()
+                        .multiply(outcome.estateSnapshot().nominalInvestableAssets()));
+            }
+        }
+        return expected;
+    }
+
     public LongevityWeightedIntegratedStrategyResult {
         Objects.requireNonNull(evaluatedStrategy);
         Objects.requireNonNull(expectedPvAfterTaxEstate);

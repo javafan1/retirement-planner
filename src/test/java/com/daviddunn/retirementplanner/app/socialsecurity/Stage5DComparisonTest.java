@@ -208,7 +208,7 @@ class Stage5DComparisonTest {
             var value=LongevityWeightedIntegratedStrategyComparisonService.evaluateRepresentative(input);
             var e=value.entry();var a=e.aggregate().orElseThrow();
             var pv=new BigDecimal(input.order()==1?"100.0":input.order()==2?"100.00":"90.00");
-            var aggregate=new LongevityWeightedStrategyAggregate(pv,a.expectedNominalEstateAtSecondDeath(),a.minimumNominalScenarioEstate(),
+            var aggregate=new LongevityWeightedStrategyAggregate(pv,a.expectedNominalEstateAtSecondDeath(),a.expectedInvestableAssetsAtSecondDeath(),a.minimumNominalScenarioEstate(),
                     a.maximumNominalScenarioEstate(),a.totalEvaluatedProbability(),a.originalScenarioCount(),a.actualProjectionRunCount());
             return new LongevityWeightedIntegratedStrategyComparisonService.RepresentativeResult(
                     new LongevityWeightedIntegratedStrategyComparisonEntry(e.inputOrder(),e.strategy(),Optional.of(aggregate),e.failure(),e.scenarioDetails(),

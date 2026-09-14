@@ -4,7 +4,6 @@ import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -70,8 +69,7 @@ class SocialSecurityMortalityWeightedComparisonCalculatorTest {
         BigDecimal manuallyWeightedPvA = result.scenarios().stream()
                 .map(scenario -> scenario.jointProbability().multiply(
                         scenario.matrixCell().comparison().strategyA().presentValue()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertMoney(manuallyWeightedPvA, result.expectedPresentValueStrategyA());
         assertMoney(result.expectedPresentValueStrategyA()
                         .subtract(result.expectedPresentValueStrategyB()),
@@ -79,8 +77,7 @@ class SocialSecurityMortalityWeightedComparisonCalculatorTest {
 
         BigDecimal weightedDifference = result.scenarios().stream()
                 .map(SocialSecurityMortalityWeightedScenario::weightedPresentValueDifference)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertMoney(result.expectedPresentValueDifference(), weightedDifference);
         assertMoney(result.expectedNominalStrategyA()
                         .subtract(result.expectedNominalStrategyB()),

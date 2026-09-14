@@ -118,15 +118,9 @@ public final class SocialSecurityMortalityWeightedComparisonCalculator {
 
         BigDecimal roundedNominalA = money(nominalA);
         BigDecimal roundedNominalB = money(nominalB);
-        BigDecimal roundedRealA = money(realA);
-        BigDecimal roundedRealB = money(realB);
-        BigDecimal roundedPresentValueA = money(presentValueA);
-        BigDecimal roundedPresentValueB = money(presentValueB);
         BigDecimal roundedNominalDifference = roundedNominalA.subtract(roundedNominalB);
-        BigDecimal roundedRealDifference = roundedRealA.subtract(roundedRealB);
-        BigDecimal roundedPresentValueDifference = roundedPresentValueA.subtract(
-                roundedPresentValueB);
 
+        // Real/PV comparisons use the exact weighted sums, not currency-rounded copies.
         return new SocialSecurityMortalityWeightedComparisonResult(
                 request,
                 matrix,
@@ -135,14 +129,14 @@ public final class SocialSecurityMortalityWeightedComparisonCalculator {
                 roundedNominalB,
                 roundedNominalDifference,
                 winner(roundedNominalDifference),
-                roundedRealA,
-                roundedRealB,
-                roundedRealDifference,
-                winner(roundedRealDifference),
-                roundedPresentValueA,
-                roundedPresentValueB,
-                roundedPresentValueDifference,
-                winner(roundedPresentValueDifference),
+                realA,
+                realB,
+                realDifference,
+                winner(realDifference),
+                presentValueA,
+                presentValueB,
+                presentValueDifference,
+                winner(presentValueDifference),
                 probabilityAWins,
                 probabilityBWins,
                 probabilityTie,

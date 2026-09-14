@@ -24,6 +24,11 @@ public class HelpIcon extends Label {
         setPrefSize(ICON_SIZE, ICON_SIZE);
         setMaxSize(ICON_SIZE, ICON_SIZE);
 
+        setTooltip(createTooltip(helpText));
+    }
+
+    public static Tooltip createTooltip(String helpText) {
+
         Tooltip tooltip = new Tooltip(helpText);
 
         tooltip.setWrapText(true);
@@ -34,6 +39,6 @@ public class HelpIcon extends Label {
         tooltip.setShowDelay(Duration.millis(250));
         tooltip.setShowDuration(Duration.minutes(5));
 
-        setTooltip(tooltip);
+        return tooltip;
     }
 }

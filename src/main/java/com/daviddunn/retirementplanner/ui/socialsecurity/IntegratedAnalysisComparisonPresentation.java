@@ -12,7 +12,9 @@ final class IntegratedAnalysisComparisonPresentation {
             + "to valuation-date present value. These objectives can favor different claiming strategies.";
     record Row(String role, SocialSecurityHouseholdClaimingStrategy strategy,
             OptionalInt deterministicRank, OptionalInt weightedRank,
-            Optional<BigDecimal> deterministicEstate, Optional<BigDecimal> weightedPv) { }
+            Optional<BigDecimal> deterministicEstate, Optional<BigDecimal> weightedPv,
+            Optional<BigDecimal> deterministicInvestableAssets,
+            Optional<BigDecimal> weightedInvestableAssets, Optional<BigDecimal> weightedHeirValue) { }
 
     static boolean compatible(LongevityWeightedIntegratedPresentation weighted,
             IntegratedSocialSecurityCompleteStrategySearchResult deterministic,
@@ -49,7 +51,14 @@ final class IntegratedAnalysisComparisonPresentation {
                     .orElseGet(OptionalInt::empty), det.flatMap(IntegratedSocialSecurityCompleteStrategySearchEntry::metrics)
                     .map(metrics -> metrics.afterTaxEstate()).or(() -> current
                             ? Optional.of(deterministic.currentPlanBaseline().metrics().afterTaxEstate()) : Optional.empty()),
-                    value.map(LongevityWeightedIntegratedPresentation::pv));
+                    value.map(LongevityWeightedIntegratedPresentation::pv),
+                    det.flatMap(IntegratedSocialSecurityCompleteStrategySearchEntry::metrics)
+                            .map(metrics -> metrics.endingInvestableAssets()).or(() -> current
+                                    ? Optional.of(deterministic.currentPlanBaseline().metrics().endingInvestableAssets()) : Optional.empty()),
+                    value.flatMap(LongevityWeightedIntegratedStrategyComparisonEntry::aggregate)
+                            .map(LongevityWeightedStrategyAggregate::expectedInvestableAssetsAtSecondDeath),
+                    value.flatMap(LongevityWeightedIntegratedStrategyComparisonEntry::aggregate)
+                            .map(LongevityWeightedStrategyAggregate::expectedNominalEstateAtSecondDeath));
         }).toList();
     }
 
@@ -57,10 +66,15 @@ final class IntegratedAnalysisComparisonPresentation {
         for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
             if (LongevityWeightedIntegratedPresentation.sameStrategy(row.strategy(), strategy)) {
-                rows.set(i, new Row(row.role() + " / " + role, strategy, OptionalInt.empty(), OptionalInt.empty(), Optional.empty(), Optional.empty()));
+                rows.set(i, emptyRow(row.role() + " / " + role, strategy));
                 return;
             }
         }
-        rows.add(new Row(role, strategy, OptionalInt.empty(), OptionalInt.empty(), Optional.empty(), Optional.empty()));
+        rows.add(emptyRow(role, strategy));
+    }
+
+    private static Row emptyRow(String role, SocialSecurityHouseholdClaimingStrategy strategy) {
+        return new Row(role, strategy, OptionalInt.empty(), OptionalInt.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty());
     }
 }

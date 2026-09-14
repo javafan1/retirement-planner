@@ -6,28 +6,29 @@ import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
-import com.daviddunn.retirementplanner.domain.model.WithdrawalAssumptions;
-
-
-
-import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
-import com.daviddunn.retirementplanner.ui.controls.HelpLabel;
 import com.daviddunn.retirementplanner.ui.help.HelpText;
 import com.daviddunn.retirementplanner.ui.rmd.OpeningRmdWorkflowService;
-
-
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.ReadOnlyBooleanWrapper;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Control;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
 
 public class AssumptionsView extends VBox {
 
@@ -72,6 +73,10 @@ public class AssumptionsView extends VBox {
     private final Label statusLabel;
     private final Button openingRmdButton;
 
+    private final Button applyButton = new Button("Apply");
+    private final Button cancelButton = new Button("Cancel");
+    private final ReadOnlyBooleanWrapper dirty = new ReadOnlyBooleanWrapper();
+    private boolean loading;
     private RetirementPlan currentPlan;
 
     /*
@@ -172,11 +177,10 @@ public class AssumptionsView extends VBox {
         statusLabel =
                 new Label();
 
-        Button applyButton =
-                new Button("Apply");
-
-        applyButton.setOnAction(
-                e -> applyChanges());
+        applyButton.setOnAction(e -> applyChanges());
+        cancelButton.setOnAction(e -> cancelChanges());
+        applyButton.disableProperty().bind(dirty.not());
+        cancelButton.disableProperty().bind(dirty.not());
 
         openingRmdButton =
                 new Button("Opening RMD Information...");
@@ -507,14 +511,21 @@ public class AssumptionsView extends VBox {
                 row++);
 
 
-        grid.add(
-                applyButton,
-                1,
-                row);
+        HBox buttonBar = new HBox(10, applyButton, cancelButton);
+        buttonBar.setPadding(new Insets(10));
+        getChildren().addAll(grid, buttonBar, statusLabel);
 
-        getChildren().addAll(
-                grid,
-                statusLabel);
+        for (TextField field : textFields()) {
+            field.textProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        }
+        projectionStartDatePicker.valueProperty().addListener((observable, oldValue, newValue) -> {
+            projectionStartDatePicker.getEditor().setText(
+                    projectionStartDatePicker.getConverter().toString(newValue));
+            updateDirty();
+        });
+        projectionStartDatePicker.getEditor().textProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        deathScenarioComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        survivorClaimingAgeComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
 
         /*
          * Establish the initial disabled state.
@@ -525,7 +536,8 @@ public class AssumptionsView extends VBox {
     public void load(
             RetirementPlan plan) {
 
-        currentPlan = plan;
+        currentPlan = Objects.requireNonNull(plan);
+        loading = true;
 
         PlanningAssumptions assumptions =
                 plan.getPlanningAssumptions();
@@ -585,6 +597,8 @@ public class AssumptionsView extends VBox {
                         .stripTrailingZeros()
                         .toPlainString());
 
+        projectionStartDatePicker.getEditor().setText(
+                projectionStartDatePicker.getConverter().toString(assumptions.getProjectionStartDate()));
         updateDeathScenarioFields();
 
         /*
@@ -660,233 +674,235 @@ public class AssumptionsView extends VBox {
         statusLabel.setText("");
 
         updateOpeningRmdButtonVisibility();
+        loading = false;
+        updateDirty();
     }
 
-    public void save(
-            RetirementPlan plan) {
+    public boolean save(RetirementPlan plan) {
+        return plan == currentPlan && applyChanges();
+    }
 
-        /*
-         * Make sure values currently displayed
-         * in the view are copied into the plan
-         * before JSON persistence.
-         */
-        if (plan == currentPlan) {
-            applyChangesToModel();
+    public void refresh(RetirementPlan plan) {
+        if (plan != currentPlan || !isDirty()) {
+            load(plan);
+        }
+        else {
+            updateDirty();
+            updateOpeningRmdButtonVisibility();
         }
     }
 
-    private void applyChangesToModel() {
+    public ReadOnlyBooleanProperty dirtyProperty() {
+        return dirty.getReadOnlyProperty();
+    }
 
+    public boolean isDirty() {
+        return dirty.get();
+    }
+
+    public void cancelChanges() {
+        if (currentPlan != null) {
+            load(currentPlan);
+        }
+    }
+
+    public boolean validateChanges() {
         if (currentPlan == null) {
+            return false;
+        }
+        try {
+            readValidated();
+            return true;
+        }
+        catch (InputException exception) {
+            statusLabel.setText(exception.getMessage());
+            exception.control.requestFocus();
+            return false;
+        }
+    }
+
+    public boolean applyChanges() {
+        if (currentPlan == null) {
+            return false;
+        }
+        PlanningAssumptions updated;
+        try {
+            updated = readValidated();
+        }
+        catch (InputException exception) {
+            statusLabel.setText(exception.getMessage());
+            exception.control.requestFocus();
+            updateDirty();
+            return false;
+        }
+        boolean changed = !values(updated).equals(values(currentPlan.getPlanningAssumptions()));
+        if (changed) {
+            // All parsing and domain validation completes before the single model write.
+            currentPlan.setPlanningAssumptions(updated);
+        }
+        load(currentPlan);
+        statusLabel.setText("Assumptions applied.");
+        if (changed) {
+            notifyPlanChanged();
+        }
+        return true;
+    }
+
+    private void updateDirty() {
+        if (loading) {
             return;
         }
-
         try {
-
-            if (projectionStartDatePicker.getValue() == null) {
-
-                throw new IllegalArgumentException(
-                        "Projection start date is required.");
-            }
-
-            /*
-             * Projection.
-             */
-            int projectionLength =
-                    Integer.parseInt(
-                            projectionLengthField
-                                    .getText()
-                                    .trim());
-
-            /*
-             * Death scenario.
-             */
-            DeathScenario deathScenario =
-                    deathScenarioComboBox.getValue();
-
-            if (deathScenario == null) {
-
-                throw new IllegalArgumentException(
-                        "Death scenario is required.");
-            }
-
-            Integer deathYear = null;
-            Integer survivorClaimingAge = null;
-
-            BigDecimal postDeathExpenseFactor =
-                    parsePercent(
-                            postDeathExpenseFactorField
-                                    .getText());
-
-            if (deathScenario != DeathScenario.BOTH_SURVIVE) {
-
-                String deathYearText =
-                        deathYearField
-                                .getText()
-                                .trim();
-
-                if (deathYearText.isEmpty()) {
-
-                    throw new IllegalArgumentException(
-                            "Death year is required.");
-                }
-
-                deathYear =
-                        Integer.parseInt(
-                                deathYearText);
-
-                survivorClaimingAge =
-                        survivorClaimingAgeComboBox
-                                .getValue();
-
-                if (survivorClaimingAge == null) {
-
-                    throw new IllegalArgumentException(
-                            "Survivor claiming age is required.");
-                }
-            }
-
-            DeathScenarioAssumptions
-                    deathScenarioAssumptions =
-                    new DeathScenarioAssumptions(
-                            deathScenario,
-                            deathYear,
-                            survivorClaimingAge,
-                            postDeathExpenseFactor);
-
-            /*
-             * Economic assumptions.
-             */
-            BigDecimal investmentReturn =
-                    parsePercent(
-                            investmentReturnField
-                                    .getText());
-
-            BigDecimal inflationRate =
-                    parsePercent(
-                            inflationRateField
-                                    .getText());
-
-            BigDecimal healthcareInflationRate =
-                    parsePercent(
-                            healthcareInflationField
-                                    .getText());
-
-            BigDecimal socialSecurityColaRate =
-                    parsePercent(
-                            socialSecurityColaField
-                                    .getText());
-
-            /*
-             * Tax assumptions.
-             */
-            BigDecimal federalBracketGrowth =
-                    parsePercent(
-                            federalBracketGrowthField
-                                    .getText());
-
-            BigDecimal standardDeductionGrowth =
-                    parsePercent(
-                            standardDeductionGrowthField
-                                    .getText());
-
-            FutureFederalTaxRateChangeInput futureFederalRateChange =
-                    FutureFederalTaxRateChangeInput.parse(
-                            futureFederalMarginalRateAdjustmentField
-                                    .getText(),
-                            futureFederalMarginalRateEffectiveYearField
-                                    .getText());
-
-            BigDecimal stateIncomeTaxRate =
-                    parsePercent(
-                            stateIncomeTaxRateField
-                                    .getText());
-
-            BigDecimal localIncomeTaxRate =
-                    parsePercent(
-                            localIncomeTaxRateField
-                                    .getText());
-
-            BigDecimal estimatedHeirTaxRate =
-                    parsePercent(
-                            estimatedHeirTaxRateField
-                                    .getText());
-
-            EconomicAssumptions
-                    economicAssumptions =
-                    new EconomicAssumptions(
-                            investmentReturn,
-                            inflationRate,
-                            healthcareInflationRate,
-                            socialSecurityColaRate);
-
-            /*
-             * Preserve the existing filing status.
-             */
-            FilingStatus
-                    filingStatus =
-                    currentPlan
-                            .getPlanningAssumptions()
-                            .getTaxAssumptions()
-                            .getFilingStatus();
-
-            TaxAssumptions taxAssumptions =
-                    new TaxAssumptions(
-                            federalBracketGrowth,
-                            standardDeductionGrowth,
-                            stateIncomeTaxRate,
-                            localIncomeTaxRate,
-                            filingStatus,
-                            estimatedHeirTaxRate,
-                            futureFederalRateChange.adjustment(),
-                            futureFederalRateChange.effectiveYear());
-
-            /*
-             * Preserve the existing withdrawal assumptions.
-             */
-            WithdrawalAssumptions
-                    withdrawalAssumptions =
-                    currentPlan
-                            .getPlanningAssumptions()
-                            .getWithdrawalAssumptions();
-
-            /*
-             * Rebuild PlanningAssumptions while
-             * preserving all current assumption groups.
-             */
-            PlanningAssumptions updated =
-                    new PlanningAssumptions(
-                            economicAssumptions,
-                            taxAssumptions,
-                            withdrawalAssumptions,
-                            deathScenarioAssumptions,
-                            projectionLength,
-                            projectionStartDatePicker
-                                    .getValue());
-
-            currentPlan.setPlanningAssumptions(
-                    updated);
-
-            updateOpeningRmdButtonVisibility();
-
-            statusLabel.setText(
-                    "Assumptions applied.");
-
+            dirty.set(currentPlan != null
+                    && !values(readValidated()).equals(values(currentPlan.getPlanningAssumptions())));
         }
-        catch (Exception ex) {
-
-            statusLabel.setText(
-                    ex.getMessage() != null
-                            ? ex.getMessage()
-                            : "Please enter valid assumption values.");
+        catch (InputException exception) {
+            dirty.set(currentPlan != null);
         }
     }
 
-    private void applyChanges() {
+    private List<TextField> textFields() {
+        return List.of(projectionLengthField, deathYearField, postDeathExpenseFactorField,
+                investmentReturnField, inflationRateField, healthcareInflationField,
+                socialSecurityColaField, federalBracketGrowthField, standardDeductionGrowthField,
+                futureFederalMarginalRateAdjustmentField, futureFederalMarginalRateEffectiveYearField,
+                stateIncomeTaxRateField, localIncomeTaxRateField, estimatedHeirTaxRateField);
+    }
 
-        applyChangesToModel();
+    private PlanningAssumptions readValidated() {
+        LocalDate start = read(projectionStartDatePicker, "Projection start date", () ->
+                Objects.requireNonNull(projectionStartDatePicker.getConverter().fromString(
+                        projectionStartDatePicker.getEditor().getText()), "A date is required."));
+        int length = read(projectionLengthField, "Projection length", () -> {
+            int value = Integer.parseInt(projectionLengthField.getText().trim());
+            if (value <= 0) {
+                throw new IllegalArgumentException("Must be greater than zero.");
+            }
+            return value;
+        });
+        EconomicAssumptions economic = new EconomicAssumptions(
+                percent(investmentReturnField, "Annual investment return"),
+                percent(inflationRateField, "General inflation"),
+                percent(healthcareInflationField, "Healthcare inflation"),
+                percent(socialSecurityColaField, "Social Security COLA"));
+        BigDecimal bracket = percent(federalBracketGrowthField, "Federal tax bracket growth");
+        BigDecimal deduction = percent(standardDeductionGrowthField, "Standard deduction growth");
+        PlanningAssumptions applied = currentPlan.getPlanningAssumptions();
+        FutureFederalTaxRateChangeInput future =
+                readFutureFederalRateChange(applied.getTaxAssumptions());
+        BigDecimal state = percent(stateIncomeTaxRateField, "State income tax rate");
+        BigDecimal local = percent(localIncomeTaxRateField, "Local income tax rate");
+        BigDecimal heir = percent(estimatedHeirTaxRateField, "Estimated heir tax rate");
+        TaxAssumptions tax = read(estimatedHeirTaxRateField, "Estimated heir tax rate", () ->
+                new TaxAssumptions(bracket, deduction, state, local,
+                        applied.getTaxAssumptions().getFilingStatus(), heir,
+                        future.adjustment(), future.effectiveYear()));
+        DeathScenario scenario = read(deathScenarioComboBox, "Death scenario", () ->
+                Objects.requireNonNull(deathScenarioComboBox.getValue(), "A selection is required."));
+        DeathScenarioAssumptions appliedDeath = applied.getDeathScenarioAssumptions();
+        boolean active = scenario != DeathScenario.BOTH_SURVIVE;
+        // Preserve stored dormant policy on an unrelated edit, but retain the existing
+        // clear-year/age behavior when explicitly switching an active scenario off.
+        Integer dormantYear = appliedDeath.getDeathScenario() == DeathScenario.BOTH_SURVIVE
+                ? appliedDeath.getDeathYear() : null;
+        Integer dormantAge = appliedDeath.getDeathScenario() == DeathScenario.BOTH_SURVIVE
+                ? appliedDeath.getSurvivorClaimingAge() : null;
+        Integer year = !active ? dormantYear : read(deathYearField, "Death year", () -> {
+            String text = deathYearField.getText().trim();
+            Integer value = text.isEmpty() ? null : Integer.valueOf(text);
+            if (value == null) {
+                throw new IllegalArgumentException("A year is required.");
+            }
+            if (value != null && value <= 0) {
+                throw new IllegalArgumentException("Must be greater than zero.");
+            }
+            return value;
+        });
+        Integer age = !active ? dormantAge : read(survivorClaimingAgeComboBox, "Survivor claiming age", () -> {
+            Integer value = survivorClaimingAgeComboBox.getValue();
+            if (value == null) {
+                throw new IllegalArgumentException("An age is required.");
+            }
+            if (value != null && (value < 62 || value > 70)) {
+                throw new IllegalArgumentException("Must be between 62 and 70.");
+            }
+            return value;
+        });
+        BigDecimal factor = percent(postDeathExpenseFactorField, "Post-death expense factor");
+        DeathScenarioAssumptions death = read(postDeathExpenseFactorField, "Post-death expense factor", () ->
+                new DeathScenarioAssumptions(scenario, year, age, factor));
+        return new PlanningAssumptions(economic, tax, applied.getWithdrawalAssumptions(), death, length, start);
+    }
 
-        notifyPlanChanged();
+    private FutureFederalTaxRateChangeInput readFutureFederalRateChange(TaxAssumptions applied) {
+        String adjustmentText = futureFederalMarginalRateAdjustmentField.getText().trim();
+        String yearText = futureFederalMarginalRateEffectiveYearField.getText().trim();
+        BigDecimal exactAdjustment = adjustmentText.replace("%", "").isBlank()
+                ? null
+                : read(futureFederalMarginalRateAdjustmentField, "Future federal tax rate change",
+                        () -> parsePercent(adjustmentText.replace("%", "")));
+        if (!yearText.isEmpty()) {
+            read(futureFederalMarginalRateEffectiveYearField, "Effective year", () -> {
+                int year = Integer.parseInt(yearText);
+                if (year <= 0) {
+                    throw new IllegalArgumentException("Must be positive.");
+                }
+                return year;
+            });
+        }
+        Control missingField = exactAdjustment == null
+                ? futureFederalMarginalRateAdjustmentField
+                : futureFederalMarginalRateEffectiveYearField;
+        FutureFederalTaxRateChangeInput parsed = read(missingField, "Future federal tax rate change",
+                () -> FutureFederalTaxRateChangeInput.parse(adjustmentText, yearText));
+        BigDecimal appliedAdjustment = applied.getFutureFederalMarginalRateAdjustment();
+        // An untouched persisted rate must not be rounded by the shared input parser.
+        if (exactAdjustment != null && appliedAdjustment != null
+                && exactAdjustment.compareTo(appliedAdjustment) == 0) {
+            return new FutureFederalTaxRateChangeInput(appliedAdjustment, parsed.effectiveYear());
+        }
+        return parsed;
+    }
+
+    // Only editable values participate. Normalize BigDecimals without losing numeric precision.
+    private static List<Object> values(PlanningAssumptions assumptions) {
+        EconomicAssumptions economic = assumptions.getEconomicAssumptions();
+        TaxAssumptions tax = assumptions.getTaxAssumptions();
+        DeathScenarioAssumptions death = assumptions.getDeathScenarioAssumptions();
+        return Arrays.<Object>asList(assumptions.getProjectionStartDate(), assumptions.getProjectionLengthYears(),
+                economic.getExpectedAnnualInvestmentReturn(), economic.getGeneralInflationRate(),
+                economic.getHealthcareInflationRate(), economic.getSocialSecurityColaRate(),
+                tax.getFederalTaxBracketGrowthRate(), tax.getStandardDeductionGrowthRate(),
+                tax.getFutureFederalMarginalRateAdjustment(), tax.getFutureFederalMarginalRateEffectiveYear(),
+                tax.getStateIncomeTaxRate(), tax.getLocalIncomeTaxRate(), tax.getEstimatedHeirTaxRateOnTaxDeferredAssets(),
+                death.getDeathScenario(), death.getDeathYear(), death.getSurvivorClaimingAge(),
+                death.getPostDeathExpenseFactor()).stream()
+                .map(value -> value instanceof BigDecimal decimal ? decimal.stripTrailingZeros() : value)
+                .toList();
+    }
+
+    private BigDecimal percent(TextField field, String name) {
+        return read(field, name, () -> parsePercent(field.getText()));
+    }
+
+    private static <T> T read(Control control, String name, Supplier<T> parser) {
+        try {
+            return parser.get();
+        }
+        catch (RuntimeException exception) {
+            throw new InputException(control, name + ": "
+                    + (exception instanceof NumberFormatException ? "Enter a valid number."
+                    : exception.getMessage() == null ? "Enter a valid value." : exception.getMessage()));
+        }
+    }
+
+    private static final class InputException extends IllegalArgumentException {
+        private final Control control;
+
+        private InputException(Control control, String message) {
+            super(message);
+            this.control = control;
+        }
     }
 
     private void updateDeathScenarioFields() {

@@ -17,7 +17,8 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
 
     public enum Mode { SOCIAL_SECURITY, QUICK, EXHAUSTIVE, WEIGHTED }
     public enum State { IDLE, RUNNING, CANCELLING, CLOSED }
-    public enum Change { PLAN, ASSUMPTIONS, QUICK_CANDIDATES, SOCIAL_SECURITY_RESULT, WEIGHTED_SETTINGS }
+    public enum Change { PLAN, ASSUMPTIONS, MORTALITY_CONDITIONING_DATE, VALUATION_DATE,
+        QUICK_CANDIDATES, SOCIAL_SECURITY_RESULT, WEIGHTED_SETTINGS }
 
     @FunctionalInterface
     public interface Work<T> {
@@ -28,6 +29,8 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
     private final SocialSecurityAnalysisJobCoordinator coordinator;
     private final Consumer<Runnable> dispatcher;
     private final EnumMap<Mode, Long> revisions = new EnumMap<>(Mode.class);
+    private long mortalityConditioningRevision;
+    private long valuationRevision;
     private long generation;
     private Job<?> current;
     private State state = State.IDLE;
@@ -50,6 +53,8 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
 
     public UUID session() { return session; }
     public long generation() { return generation; }
+    public long mortalityConditioningRevision() { return mortalityConditioningRevision; }
+    public long valuationRevision() { return valuationRevision; }
     public State state() { return state; }
     public String status() { return status; }
     public SocialSecurityAnalysisProgressModel progress() { return progress; }
@@ -109,10 +114,12 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
         if (state == State.CLOSED) {
             return;
         }
+        if (change == Change.MORTALITY_CONDITIONING_DATE) mortalityConditioningRevision++;
+        if (change == Change.VALUATION_DATE) valuationRevision++;
         for (Mode mode : Mode.values()) {
             boolean affected = switch (change) {
                 case PLAN -> true;
-                case ASSUMPTIONS -> mode != Mode.EXHAUSTIVE;
+                case ASSUMPTIONS, MORTALITY_CONDITIONING_DATE, VALUATION_DATE -> mode != Mode.EXHAUSTIVE;
                 case QUICK_CANDIDATES, SOCIAL_SECURITY_RESULT -> mode == Mode.QUICK;
                 case WEIGHTED_SETTINGS -> mode == Mode.WEIGHTED;
             };

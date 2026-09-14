@@ -57,6 +57,7 @@ public class MainWindow {
     private final NonInvestableAssetsView nonInvestableAssetsView;
 
     private Stage stage;
+    private boolean collectingViewEdits;
     private final Label statusLabel;
 
     public MainWindow() {
@@ -97,6 +98,17 @@ public class MainWindow {
 
     private void wireEvents() {
 
+        householdView.setOnPlanChanged(() -> {
+            if (collectingViewEdits) {
+                controller.markModified();
+                controller.invalidateProjection();
+                updateWindowTitle();
+            }
+            else {
+                onPlanChanged();
+            }
+        });
+
         expensesView.setOnPlanChanged(
                 this::onPlanChanged);
 
@@ -106,8 +118,16 @@ public class MainWindow {
         accountsView.setOnPlanChanged(
                 this::onPlanChanged);
 
-        assumptionsView.setOnPlanChanged(
-                this::onPlanChanged);
+        assumptionsView.setOnPlanChanged(() -> {
+            if (collectingViewEdits) {
+                controller.markModified();
+                controller.invalidateProjection();
+                updateWindowTitle();
+            }
+            else {
+                onPlanChanged();
+            }
+        });
 
         assumptionsView.setOnOpeningRmdRequested(
                 this::showOpeningRmdDialog);
@@ -115,8 +135,16 @@ public class MainWindow {
         resultsView.setOnYearDoubleClick(
                 this::showProjectionYearSummary);
 
-        rothConversionView.setOnPlanChanged(
-                this::onPlanChanged);
+        rothConversionView.setOnPlanChanged(() -> {
+            if (collectingViewEdits) {
+                controller.markModified();
+                controller.invalidateProjection();
+                updateWindowTitle();
+            }
+            else {
+                onPlanChanged();
+            }
+        });
 
         resultsSummaryView.setOnYearDoubleClick(
                 this::showProjectionYearSummary);
@@ -373,27 +401,60 @@ public class MainWindow {
         refreshAllViews();
     }
 
-    private void saveCurrentPlan() {
+    private boolean saveCurrentPlan() {
 
         RetirementPlan plan = controller.getCurrentPlan();
 
-        householdView.save(plan);
+        // Validate Assumptions and Roth before Household's atomic validation/apply.
+        if (!assumptionsView.validateChanges()) {
+            statusLabel.setText("Please correct the Assumptions edits before saving.");
+            return false;
+        }
+        if (!rothConversionView.validateChanges()) {
+            statusLabel.setText("Please correct the Roth Conversion edits before saving.");
+            return false;
+        }
+        boolean viewsHadEdits = householdView.isDirty() || assumptionsView.isDirty()
+                || rothConversionView.isDirty();
+        boolean householdApplied;
+        collectingViewEdits = true;
+        try {
+            householdApplied = householdView.save(plan);
+            if (householdApplied && !assumptionsView.save(plan)) {
+                statusLabel.setText("Please correct the Assumptions edits before saving.");
+                return false;
+            }
+            if (householdApplied && !rothConversionView.save(plan)) {
+                statusLabel.setText("Please correct the Roth Conversion edits before saving.");
+                return false;
+            }
+        }
+        finally {
+            collectingViewEdits = false;
+        }
+        if (!householdApplied) {
+            statusLabel.setText("Please correct the Household edits before saving.");
+            return false;
+        }
         accountsView.save(plan);
         incomeSourcesView.save(plan);
         expensesView.save(plan);
-        assumptionsView.save(plan);
-        rothConversionView.save(plan);
+        if (viewsHadEdits) {
+            refreshProjectionViews();
+        }
+        return true;
 
     }
 
-    private void onSave() {
+    private boolean onSave() {
 
         if (!controller.hasCurrentFile()) {
-            onSaveAs();
-            return;
+            return onSaveAs();
         }
 
-        saveCurrentPlan();
+        if (!saveCurrentPlan()) {
+            return false;
+        }
 
         try {
 
@@ -410,10 +471,23 @@ public class MainWindow {
                     "Save failed.");
 
             ex.printStackTrace();
+            return false;
         }
+        return true;
     }
 
-    private void onSaveAs() {
+    private boolean onSaveAs() {
+
+        // Invalid drafts must also block Save before an untitled plan opens the file chooser.
+        if (!assumptionsView.validateChanges()) {
+            statusLabel.setText("Please correct the Assumptions edits before saving.");
+            return false;
+        }
+
+        if (!rothConversionView.validateChanges()) {
+            statusLabel.setText("Please correct the Roth Conversion edits before saving.");
+            return false;
+        }
 
         FileChooser fileChooser = new FileChooser();
 
@@ -429,10 +503,12 @@ public class MainWindow {
         File file = fileChooser.showSaveDialog(root.getScene().getWindow());
 
         if (file == null) {
-            return;
+            return false;
         }
 
-        saveCurrentPlan();
+        if (!saveCurrentPlan()) {
+            return false;
+        }
 
         try {
             controller.saveAs(file.toPath());
@@ -446,10 +522,16 @@ public class MainWindow {
             statusLabel.setText("Save failed.");
 
             ex.printStackTrace();
+            return false;
         }
+        return true;
     }
 
     private void onOpen() {
+
+        if (!confirmPlanDeparture()) {
+            return;
+        }
 
         FileChooser fileChooser = new FileChooser();
 
@@ -483,9 +565,36 @@ public class MainWindow {
         }
     }
 
+    private boolean confirmPlanDeparture() {
+
+        if (!controller.isModified() && !householdView.isDirty()
+                && !assumptionsView.isDirty() && !rothConversionView.isDirty()) {
+            return true;
+        }
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Unsaved Changes");
+        alert.setHeaderText("Save changes before continuing?");
+        alert.setContentText("The plan has unsaved changes or unapplied Household, Assumptions, or Roth Conversion edits.");
+        ButtonType save = new ButtonType("Save");
+        ButtonType discard = new ButtonType("Discard");
+        alert.getButtonTypes().setAll(save, discard, ButtonType.CANCEL);
+        ButtonType choice = alert.showAndWait().orElse(ButtonType.CANCEL);
+        if (choice == discard) {
+            householdView.cancelChanges();
+            assumptionsView.cancelChanges();
+            rothConversionView.cancelChanges();
+            return true;
+        }
+        if (choice == save) {
+            return onSave();
+        }
+        return false;
+    }
     private void onExit() {
 
-        // Later we'll ask to save unsaved changes.
+        if (!confirmPlanDeparture()) {
+            return;
+        }
 
         root.getScene().getWindow().hide();
     }
@@ -558,7 +667,7 @@ public class MainWindow {
             resultsView.load(
                     projection,
                     controller.getCurrentNonInvestableAssetProjections());
-            assumptionsView.load(
+            assumptionsView.refresh(
                     controller.getCurrentPlan());
 
             resultsSummaryView.load(
@@ -580,6 +689,11 @@ public class MainWindow {
     public void setStage(Stage stage) {
 
         this.stage = stage;
+        stage.setOnCloseRequest(event -> {
+            if (!confirmPlanDeparture()) {
+                event.consume();
+            }
+        });
 
         updateWindowTitle();
     }
@@ -618,6 +732,10 @@ public class MainWindow {
 
     private void onNew() {
 
+        if (!confirmPlanDeparture()) {
+            return;
+        }
+
         controller.newPlan();
 
         loadCurrentPlan();
@@ -635,12 +753,12 @@ public class MainWindow {
         RetirementPlan plan =
                 controller.getCurrentPlan();
 
-        householdView.load(plan);
+        householdView.refresh(plan);
         accountsView.load(plan);
         incomeSourcesView.load(plan);
         expensesView.load(plan);
-        assumptionsView.load(plan);
-        rothConversionView.load(plan);
+        assumptionsView.refresh(plan);
+        rothConversionView.refresh(plan);
 
         refreshProjectionViews();
 

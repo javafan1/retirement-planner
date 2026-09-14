@@ -6,6 +6,10 @@ import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
 
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.ReadOnlyBooleanWrapper;
+import javafx.scene.control.Control;
+import javafx.scene.layout.HBox;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
@@ -18,6 +22,10 @@ import javafx.scene.layout.VBox;
 import javafx.util.StringConverter;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
 
 public class RothConversionView extends VBox {
 
@@ -45,6 +53,11 @@ public class RothConversionView extends VBox {
             stopRuleComboBox;
 
     private final Label statusLabel;
+
+    private final Button applyButton = new Button("Apply");
+    private final Button cancelButton = new Button("Cancel");
+    private final ReadOnlyBooleanWrapper dirty = new ReadOnlyBooleanWrapper();
+    private boolean loading;
 
     private RetirementPlan currentPlan;
 
@@ -315,27 +328,31 @@ public class RothConversionView extends VBox {
          * Apply button.
          */
 
-        Button applyButton =
-                new Button(
-                        "Apply");
-
-        applyButton.setOnAction(
-                e -> applyChanges());
-
-
-        grid.add(
-                applyButton,
-                1,
-                row++);
-
-
+        applyButton.disableProperty().bind(dirty.not());
+        cancelButton.disableProperty().bind(dirty.not());
+        applyButton.setOnAction(event -> applyChanges());
+        cancelButton.setOnAction(event -> cancelChanges());
+        HBox buttonBar = new HBox(10, applyButton, cancelButton);
+        buttonBar.setPadding(new Insets(10));
         statusLabel =
                 new Label();
 
 
         getChildren().addAll(
                 grid,
+                buttonBar,
                 statusLabel);
+
+        for (TextField field : List.of(conversionYearField, conversionAmountField, targetTaxableIncomeField)) {
+            field.textProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        }
+        enabledCheckBox.selectedProperty().addListener((observable, oldValue, newValue) -> {
+            updateStrategyFields();
+            updateDirty();
+        });
+        strategyComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        frequencyComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        stopRuleComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
 
 
         /*
@@ -347,6 +364,12 @@ public class RothConversionView extends VBox {
 
 
     private void updateStrategyFields() {
+
+        boolean disabled = !enabledCheckBox.isSelected();
+        for (Control control : List.of(strategyComboBox, conversionYearField, conversionAmountField,
+                targetTaxableIncomeField, frequencyComboBox, stopRuleComboBox)) {
+            control.setDisable(disabled);
+        }
 
         boolean fixedAmount =
                 strategyComboBox.getValue()
@@ -392,8 +415,8 @@ public class RothConversionView extends VBox {
     public void load(
             RetirementPlan plan) {
 
-        currentPlan =
-                plan;
+        currentPlan = Objects.requireNonNull(plan);
+        loading = true;
 
         RothConversionRequest request =
                 plan.getRothConversionRequest();
@@ -431,6 +454,8 @@ public class RothConversionView extends VBox {
             statusLabel.setText("");
 
             updateStrategyFields();
+            loading = false;
+            updateDirty();
 
             return;
         }
@@ -496,248 +521,167 @@ public class RothConversionView extends VBox {
         updateStrategyFields();
 
         statusLabel.setText("");
+        loading = false;
+        updateDirty();
     }
 
 
-    public void save(
-            RetirementPlan plan) {
+    public boolean save(RetirementPlan plan) {
+        return plan == currentPlan && applyChanges();
+    }
 
-        /*
-         * Match the existing AssumptionsView
-         * persistence pattern.
-         */
-
-        if (plan == currentPlan) {
-
-            applyChangesToModel();
+    public void refresh(RetirementPlan plan) {
+        if (plan != currentPlan || !isDirty()) {
+            load(plan);
+        }
+        else {
+            updateDirty();
         }
     }
 
+    public ReadOnlyBooleanProperty dirtyProperty() {
+        return dirty.getReadOnlyProperty();
+    }
 
-    private void applyChangesToModel() {
+    public boolean isDirty() {
+        return dirty.get();
+    }
 
+    public void cancelChanges() {
+        if (currentPlan != null) {
+            load(currentPlan);
+        }
+    }
+
+    public boolean validateChanges() {
         if (currentPlan == null) {
-            return;
+            return false;
         }
-
-
-        /*
-         * If the user disabled the feature,
-         * remove the request from the plan.
-         */
-
-        if (!enabledCheckBox.isSelected()) {
-
-            currentPlan.setRothConversionRequest(
-                    null);
-
-            statusLabel.setText(
-                    "Roth conversion disabled.");
-
-            return;
-        }
-
-
         try {
-
-            /*
-             * Conversion year.
-             */
-
-            String yearText =
-                    conversionYearField
-                            .getText()
-                            .trim();
-
-
-            if (yearText.isEmpty()) {
-
-                throw new IllegalArgumentException(
-                        "Conversion year is required.");
-            }
-
-
-            int conversionYear =
-                    Integer.parseInt(
-                            yearText);
-
-
-            if (conversionYear < 1900) {
-
-                throw new IllegalArgumentException(
-                        "Conversion year is invalid.");
-            }
-
-
-            /*
-             * Strategy.
-             */
-
-            RothConversionStrategy strategy =
-                    strategyComboBox.getValue();
-
-
-            if (strategy == null) {
-
-                throw new IllegalArgumentException(
-                        "Conversion strategy is required.");
-            }
-
-
-            /*
-             * Conversion amount.
-             *
-             * Fixed-dollar conversions require
-             * a user-entered amount.
-             *
-             * Bracket-fill conversions calculate
-             * the amount automatically.
-             */
-
-            BigDecimal conversionAmount =
-                    BigDecimal.ZERO;
-
-
-            if (strategy ==
-                    RothConversionStrategy.FIXED_AMOUNT) {
-
-                String amountText =
-                        conversionAmountField
-                                .getText()
-                                .trim();
-
-
-                if (amountText.isEmpty()) {
-
-                    throw new IllegalArgumentException(
-                            "Conversion amount is required.");
-                }
-
-
-                conversionAmount =
-                        new BigDecimal(
-                                amountText);
-
-
-                if (conversionAmount.signum() < 0) {
-
-                    throw new IllegalArgumentException(
-                            "Conversion amount cannot be negative.");
-                }
-            }
-
-
-            RothConversionFrequency frequency =
-                    frequencyComboBox.getValue();
-
-            if (frequency == null) {
-
-                throw new IllegalArgumentException(
-                        "Conversion frequency is required.");
-            }
-
-            BigDecimal customTargetTaxableIncome =
-                    null;
-
-            if (strategy ==
-                    RothConversionStrategy
-                            .CUSTOM_TAXABLE_INCOME_TARGET) {
-
-                String targetText =
-                        targetTaxableIncomeField
-                                .getText()
-                                .trim();
-
-                if (targetText.isEmpty()) {
-
-                    throw new IllegalArgumentException(
-                            "Target taxable income is required.");
-                }
-
-                customTargetTaxableIncome =
-                        new BigDecimal(targetText);
-
-                if (customTargetTaxableIncome.signum() < 0) {
-
-                    throw new IllegalArgumentException(
-                            "Target taxable income cannot be negative.");
-                }
-            }
-
-
-            /*
-             * Stop rule.
-             */
-
-            RothConversionStopRule stopRule =
-                    stopRuleComboBox.getValue();
-
-
-            if (stopRule == null) {
-
-                throw new IllegalArgumentException(
-                        "Stop rule is required.");
-            }
-
-
-            /*
-             * Create the domain request.
-             */
-
-            RothConversionRequest request =
-                    new RothConversionRequest(
-                            true,
-                            conversionYear,
-                            conversionAmount,
-                            stopRule,
-                            strategy,
-                            frequency,
-                            customTargetTaxableIncome);
-
-
-            currentPlan.setRothConversionRequest(
-                    request);
-
-
-            statusLabel.setText(
-                    "Roth conversion applied.");
-
+            readValidated();
+            return true;
         }
-        catch (NumberFormatException ex) {
-
-            statusLabel.setText(
-                    "Conversion year, amount, and target taxable income must be valid.");
-
-        }
-        catch (IllegalArgumentException ex) {
-
-            statusLabel.setText(
-                    ex.getMessage());
+        catch (InputException exception) {
+            showValidation(exception);
+            return false;
         }
     }
 
-
-    private void applyChanges() {
-
-        applyChangesToModel();
-
-        notifyPlanChanged();
-    }
-
-
-    public void setOnPlanChanged(
-            Runnable onPlanChanged) {
-
-        this.onPlanChanged =
-                onPlanChanged;
-    }
-
-
-    private void notifyPlanChanged() {
-
-        if (onPlanChanged != null) {
-
+    public boolean applyChanges() {
+        if (currentPlan == null) {
+            return false;
+        }
+        RothConversionRequest updated;
+        try {
+            updated = readValidated();
+        }
+        catch (InputException exception) {
+            showValidation(exception);
+            updateDirty();
+            return false;
+        }
+        boolean changed = !values(updated).equals(values(currentPlan.getRothConversionRequest()));
+        if (changed) {
+            // The immutable request is fully validated before the only model write.
+            currentPlan.setRothConversionRequest(updated);
+        }
+        load(currentPlan);
+        statusLabel.setText("Roth conversion applied.");
+        if (changed && onPlanChanged != null) {
             onPlanChanged.run();
         }
+        return true;
+    }
+
+    private void updateDirty() {
+        if (loading) {
+            return;
+        }
+        try {
+            dirty.set(currentPlan != null
+                    && !values(readValidated()).equals(values(currentPlan.getRothConversionRequest())));
+        }
+        catch (InputException exception) {
+            dirty.set(currentPlan != null);
+        }
+    }
+
+    private RothConversionRequest readValidated() {
+        RothConversionRequest applied = currentPlan.getRothConversionRequest();
+        if (!enabledCheckBox.isSelected()) {
+            // Explicit disable still removes the request. Preserve an already disabled
+            // persisted configuration during an unrelated Save.
+            return applied != null && !applied.isEnabled() ? applied : null;
+        }
+        RothConversionStrategy strategy = read(strategyComboBox, "Conversion strategy", () ->
+                Objects.requireNonNull(strategyComboBox.getValue(), "A selection is required."));
+        int year = read(conversionYearField, "Conversion year", () -> {
+            int value = Integer.parseInt(conversionYearField.getText().trim());
+            if (value < 1900) {
+                throw new IllegalArgumentException("Must be at least 1900.");
+            }
+            return value;
+        });
+        // Non-fixed amounts are dormant persisted data; keep them on unrelated edits.
+        BigDecimal amount = strategy == RothConversionStrategy.FIXED_AMOUNT
+                ? nonNegative(conversionAmountField, "Conversion amount")
+                : applied == null ? BigDecimal.ZERO : applied.getAnnualAmount();
+        BigDecimal target = strategy == RothConversionStrategy.CUSTOM_TAXABLE_INCOME_TARGET
+                ? nonNegative(targetTaxableIncomeField, "Target taxable income") : null;
+        RothConversionFrequency frequency = read(frequencyComboBox, "Conversion frequency", () ->
+                Objects.requireNonNull(frequencyComboBox.getValue(), "A selection is required."));
+        RothConversionStopRule stop = read(stopRuleComboBox, "Stop rule", () ->
+                Objects.requireNonNull(stopRuleComboBox.getValue(), "A selection is required."));
+        return new RothConversionRequest(true, year, amount, stop, strategy, frequency, target);
+    }
+
+    private static List<Object> values(RothConversionRequest request) {
+        if (request == null) {
+            return List.of();
+        }
+        return Arrays.<Object>asList(request.isEnabled(), request.getStartYear(), request.getAnnualAmount(),
+                request.getStrategy(), request.getCustomTargetTaxableIncome(), request.getFrequency(),
+                request.getStopRule()).stream()
+                .map(value -> value instanceof BigDecimal decimal ? decimal.stripTrailingZeros() : value)
+                .toList();
+    }
+
+    private BigDecimal nonNegative(TextField field, String name) {
+        return read(field, name, () -> {
+            BigDecimal value = new BigDecimal(field.getText().trim());
+            if (value.signum() < 0) {
+                throw new IllegalArgumentException("Cannot be negative.");
+            }
+            return value;
+        });
+    }
+
+    private static <T> T read(Control control, String name, Supplier<T> parser) {
+        try {
+            return parser.get();
+        }
+        catch (RuntimeException exception) {
+            throw new InputException(control, name + ": "
+                    + (exception instanceof NumberFormatException ? "Enter a valid number."
+                    : exception.getMessage()));
+        }
+    }
+
+    private void showValidation(InputException exception) {
+        statusLabel.setText(exception.getMessage());
+        exception.control.requestFocus();
+    }
+
+    private static final class InputException extends IllegalArgumentException {
+        private final Control control;
+
+        private InputException(Control control, String message) {
+            super(message);
+            this.control = control;
+        }
+    }
+
+    public void setOnPlanChanged(Runnable onPlanChanged) {
+        this.onPlanChanged = onPlanChanged;
     }
 }

@@ -68,15 +68,7 @@ class SocialSecurityStrategyAnalysisRequestFactoryTest {
         assertEquals("Spouse Social Security source is required.",
                 missingSource.getMessage());
 
-        IllegalArgumentException missingCategory = assertThrows(
-                IllegalArgumentException.class,
-                () -> new SocialSecurityStrategyAnalysisRequestFactory().create(
-                        plan(true), null,
-                        SocialSecurityMortalityCategory.FEMALE,
-                        new BigDecimal("0.01"),
-                        LocalDate.of(2026, 7, 1)));
-        assertEquals("Primary mortality category is required.",
-                missingCategory.getMessage());
+
     }
 
     @Test
@@ -115,6 +107,8 @@ class SocialSecurityStrategyAnalysisRequestFactoryTest {
     private RetirementPlan plan(boolean includeSpouseSource) {
         Person primary = new Person("Primary", "Planner", LocalDate.of(1963, 6, 4));
         Person spouse = new Person("Spouse", "Planner", LocalDate.of(1965, 2, 28));
+        primary.setMortalityCategory(MortalityCategory.MALE);
+        spouse.setMortalityCategory(MortalityCategory.FEMALE);
         primary.addIncomeSource(source(
                 AccountOwnership.PRIMARY, LocalDate.of(2030, 6, 4), "3000"));
         if (includeSpouseSource) {

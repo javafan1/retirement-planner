@@ -7,6 +7,8 @@ import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -18,6 +20,8 @@ public class Person {
     private String firstName;
     private String lastName;
     private LocalDate birthDate;
+    // Null represents unresolved legacy data, never an inferred category.
+    private MortalityCategory mortalityCategory;
     private final List<Account> accounts = new ArrayList<>();
 
     public Person() {
@@ -39,6 +43,16 @@ public class Person {
 
     public LocalDate getBirthDate() {
         return birthDate;
+    }
+
+    public MortalityCategory getMortalityCategory() {
+        return mortalityCategory;
+    }
+
+    @JsonSetter(nulls = Nulls.SKIP)
+    public void setMortalityCategory(MortalityCategory mortalityCategory) {
+        this.mortalityCategory = Objects.requireNonNull(
+                mortalityCategory, "Mortality category is required.");
     }
 
     @JsonIgnore

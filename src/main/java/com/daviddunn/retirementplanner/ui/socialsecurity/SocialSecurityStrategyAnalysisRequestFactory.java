@@ -19,6 +19,17 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
 
     public SocialSecurityStrategyAnalysisContext create(
             RetirementPlan plan,
+            SocialSecurityMortalityAdjustment primaryAdjustment,
+            SocialSecurityMortalityAdjustment spouseAdjustment,
+            BigDecimal realDiscountRate,
+            LocalDate mortalityConditioningDate,
+            LocalDate presentValueBaseDate) {
+        return create(plan, null, null, primaryAdjustment, spouseAdjustment,
+                realDiscountRate, mortalityConditioningDate, presentValueBaseDate);
+    }
+
+    public SocialSecurityStrategyAnalysisContext create(
+            RetirementPlan plan,
             SocialSecurityMortalityCategory primaryCategory,
             SocialSecurityMortalityCategory spouseCategory,
             BigDecimal realDiscountRate,
@@ -37,17 +48,29 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
             SocialSecurityMortalityAdjustment spouseAdjustment,
             BigDecimal realDiscountRate,
             LocalDate presentValueBaseDate) {
+        return create(plan, primaryCategory, spouseCategory, primaryAdjustment, spouseAdjustment,
+                realDiscountRate, presentValueBaseDate, presentValueBaseDate);
+    }
+
+    public SocialSecurityStrategyAnalysisContext create(
+            RetirementPlan plan,
+            SocialSecurityMortalityCategory primaryCategory,
+            SocialSecurityMortalityCategory spouseCategory,
+            SocialSecurityMortalityAdjustment primaryAdjustment,
+            SocialSecurityMortalityAdjustment spouseAdjustment,
+            BigDecimal realDiscountRate,
+            LocalDate mortalityConditioningDate,
+            LocalDate presentValueBaseDate) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
-        if (primaryCategory == null) {
-            throw new IllegalArgumentException("Primary mortality category is required.");
-        }
-        if (spouseCategory == null) {
-            throw new IllegalArgumentException("Spouse mortality category is required.");
-        }
+        // Compatibility arguments cannot override the authoritative Person values.
+        var categories = PersonMortalityCategories.from(plan.getHousehold());
+        primaryCategory = categories.primary();
+        spouseCategory = categories.spouse();
         Objects.requireNonNull(primaryAdjustment, "Primary mortality adjustment is required.");
         Objects.requireNonNull(spouseAdjustment, "Spouse mortality adjustment is required.");
         Objects.requireNonNull(realDiscountRate, "Real discount rate is required.");
         Objects.requireNonNull(presentValueBaseDate, "PV base date is required.");
+        Objects.requireNonNull(mortalityConditioningDate, "Mortality conditioning date is required.");
 
         Person primary = requirePerson(
                 plan.getHousehold().getPrimaryPerson(), "Primary");
@@ -58,10 +81,9 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
         requireBenefit(spouseSource, "Spouse");
 
         SocialSecurityMortalityTable table = SocialSecurityMortalityTables.ssaPeriod2022();
-        // The compatibility UI supplies one date, but conditioning is a separate concept.
         AnalyzerLongevityAssumptions longevity = new AnalyzerLongevityAssumptions(
                 primaryCategory, primaryAdjustment, spouseCategory, spouseAdjustment,
-                presentValueBaseDate, table.metadata(),
+                mortalityConditioningDate, table.metadata(),
                 SocialSecurityMortalityPartialYearConvention.NEXT_COMPLETE_BIRTHDAY_INTERVAL);
         HouseholdLongevityScenarios prepared = new HouseholdLongevityScenarioFactory(table)
                 .create(primary.getBirthDate(), spouse.getBirthDate(), longevity);
@@ -73,7 +95,7 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
                 spouse.getBirthDate(), spouseMortality.deathAges().getLast());
 
         SocialSecurityStrategyRequest base = new SocialSecurityStrategyRequest(
-                presentValueBaseDate,
+                mortalityConditioningDate,
                 null,
                 election(primarySource, primary, AccountOwnership.PRIMARY),
                 election(spouseSource, spouse, AccountOwnership.SPOUSE),
@@ -91,7 +113,7 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
                         RETIREMENT_AGES,
                         primaryMortality,
                         spouseMortality,
-                        presentValueBaseDate,
+                        mortalityConditioningDate,
                         presentValueBaseDate,
                         realDiscountRate);
         return new SocialSecurityStrategyAnalysisContext(

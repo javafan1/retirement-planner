@@ -32,6 +32,10 @@ class LongevityWeightedIntegratedStrategyEvaluatorTest {
                 result.actualProjectionRunCount());
         assertEquals(BigDecimal.ONE, result.totalEvaluatedProbability());
         var outcome = result.scenarioOutcomes().getFirst();
+        assertEquals(0, outcome.estateSnapshot().nominalInvestableAssets()
+                .compareTo(result.expectedInvestableAssetsAtSecondDeath()));
+        assertEquals(result.expectedInvestableAssetsAtSecondDeath(),
+                LongevityWeightedStrategyAggregate.from(result).expectedInvestableAssetsAtSecondDeath());
         assertEquals(1960 + primaryAge, outcome.primaryDeathYear());
         assertEquals(1962 + spouseAge, outcome.spouseDeathYear());
         var death = LocalDate.of(Math.max(1960 + primaryAge, 1962 + spouseAge), 1, 1);
@@ -63,6 +67,9 @@ class LongevityWeightedIntegratedStrategyEvaluatorTest {
                 result.expectedNominalEstateAtSecondDeath());
         assertEquals(a.pvEstate().multiply(new BigDecimal("0.250"))
                 .add(b.pvEstate().multiply(new BigDecimal("0.750"))), result.expectedPvAfterTaxEstate());
+        assertEquals(a.estateSnapshot().nominalInvestableAssets().multiply(new BigDecimal("0.250"))
+                .add(b.estateSnapshot().nominalInvestableAssets().multiply(new BigDecimal("0.750"))),
+                result.expectedInvestableAssetsAtSecondDeath());
         assertEquals(a.estateSnapshot().nominalAfterTaxEstate().min(b.estateSnapshot().nominalAfterTaxEstate()),
                 result.minimumNominalScenarioEstate());
         assertEquals(a.estateSnapshot().nominalAfterTaxEstate().max(b.estateSnapshot().nominalAfterTaxEstate()),
@@ -98,6 +105,36 @@ class LongevityWeightedIntegratedStrategyEvaluatorTest {
         assertEquals(0, new BigDecimal("695250").compareTo(result.maximumNominalScenarioEstate()));
         assertEquals(0, new BigDecimal("690187.50").compareTo(result.expectedNominalEstateAtSecondDeath()));
         assertEquals(0, new BigDecimal("690187.50").compareTo(result.expectedPvAfterTaxEstate()));
+        // 25% opening 800,000 + 75% next-January 824,000, before the existing heir haircut.
+        assertEquals(0, new BigDecimal("818000.00").compareTo(result.expectedInvestableAssetsAtSecondDeath()));
+    }
+
+    @Test
+    void investableExpectationKeepsSubCentPrecisionAndDoesNotRenormalizeOrIncludeZeroMass() {
+        var plan = Stage4TestPlans.plan();
+        var base = evaluator.evaluate(request(plan, prepared(plan,
+                List.of(prob(70, "1")), List.of(prob(68, "1")))));
+        var date = LocalDate.of(2030, 1, 1);
+        var outcomes = List.of(
+                new LongevityWeightedIntegratedScenarioOutcome(2030, 2030, new BigDecimal("0.2"),
+                        new EstateAtSecondDeathSnapshot(date, date, new BigDecimal("100.001"),
+                                BigDecimal.TEN, new BigDecimal("90.001")), new BigDecimal("90.001")),
+                new LongevityWeightedIntegratedScenarioOutcome(2031, 2031, new BigDecimal("0.3"),
+                        new EstateAtSecondDeathSnapshot(date.plusYears(1), date.plusYears(1).minusDays(1),
+                                new BigDecimal("200.009"), new BigDecimal("50"), new BigDecimal("150.009")), new BigDecimal("140")),
+                new LongevityWeightedIntegratedScenarioOutcome(2040, 2040, BigDecimal.ZERO,
+                        new EstateAtSecondDeathSnapshot(date.plusYears(10), date.plusYears(10).minusDays(1),
+                                new BigDecimal("999999999999"), BigDecimal.ZERO, new BigDecimal("999999999999")), BigDecimal.ZERO));
+        var result = new LongevityWeightedIntegratedStrategyResult(base.evaluatedStrategy(),
+                new BigDecimal("60.0002"), new BigDecimal("63.0029"), new BigDecimal("0.5"), 3, 1,
+                new BigDecimal("90.001"), new BigDecimal("150.009"), base.valuationDate(),
+                base.generalInflationRate(), base.realDiscountRate(), base.longevityAssumptions(),
+                base.methodology(), base.financialLimitations(), outcomes);
+        var aggregate = LongevityWeightedStrategyAggregate.from(result);
+        assertEquals(new BigDecimal("80.0029"), aggregate.expectedInvestableAssetsAtSecondDeath());
+        assertEquals(result.expectedNominalEstateAtSecondDeath(), aggregate.expectedNominalEstateAtSecondDeath());
+        assertEquals(result.expectedPvAfterTaxEstate(), aggregate.expectedPvAfterTaxEstate());
+        assertEquals(new BigDecimal("0.5"), aggregate.totalEvaluatedProbability());
     }
 
     @Test
