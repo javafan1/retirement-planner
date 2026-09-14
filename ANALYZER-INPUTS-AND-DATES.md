@@ -180,3 +180,21 @@ Modified for this task:
 
 Earlier uncommitted SS precision and weighted sizing files remain in the working
 tree. They were not discarded or reimplemented. No commit was made.
+
+## Integrated analysis PDF reports
+
+Use **Export PDF** above either integrated exhaustive result view to save a
+structured landscape report. It includes the analysis assumptions, selected
+strategy, colored claiming-age heat map and legend, ranked strategies, and
+relevant analyzer results. The metric and selection are captured from the active
+result view, and table rows include the entire current table rather than only
+its visible viewport. See [the heat-map export documentation](CLAIMING-STRATEGY-HEAT-MAP.md#export-pdf)
+for grouping, selection, and pagination details.
+
+Report assumptions are captured with the successful analysis run. Weighted
+reports use result-time mortality categories originally read from Person,
+mortality factors, conditioning date, valuation date, and model metadata.
+Deterministic reports describe the configured horizon and future-dollar estate
+objective; a valuation-date change does not introduce discounting into those
+results. Stale/incompatible results cannot be exported. Export is read-only and
+never invokes analysis, projection, or persistence services.

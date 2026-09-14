@@ -23,6 +23,7 @@ final class LongevityWeightedIntegratedView extends VBox {
     static final String MISSING_BASELINE = "Current-strategy comparison unavailable. Configure a complete survivor claiming "
             + "policy to compare against the current strategy. No survivor age has been assumed.";
     final Button run = new Button("Run Longevity-Weighted Exhaustive Search");
+    final Button exportPdf = new Button("Export PDF");
     final Label stale = label("");
     final Label status = label("Choose longevity assumptions, then run analysis. No Social Security-only run is required.");
     final TableView<LongevityWeightedIntegratedStrategyComparisonEntry> table = new TableView<>();
@@ -39,6 +40,7 @@ final class LongevityWeightedIntegratedView extends VBox {
     private final VBox comparison = new VBox(6);
     private final Label methodology = label(METHODOLOGY);
     private LongevityWeightedIntegratedPresentation model;
+    private LongevityWeightedIntegratedStrategyComparisonEntry selectedEntry;
     private IntegratedSocialSecurityCompleteStrategySearchResult deterministicReference;
 
     LongevityWeightedIntegratedView() {
@@ -53,7 +55,8 @@ final class LongevityWeightedIntegratedView extends VBox {
         rankedContent.getChildren().add(table);
         VBox.setVgrow(table, Priority.NEVER);
         table.setMinHeight(110);
-        getChildren().add(resultTabs);
+        exportPdf.setDisable(true);
+        getChildren().addAll(new HBox(10, label("Completed Analysis"), exportPdf), resultTabs);
         heatMap.resultNotice.textProperty().bind(stale.textProperty());
         rankedContent.getChildren().addAll(fold("Compare Analysis Outcomes", comparison, false),
                 detailSection,
@@ -232,6 +235,7 @@ final class LongevityWeightedIntegratedView extends VBox {
 
     private void showDetail(LongevityWeightedIntegratedStrategyComparisonEntry entry) {
         if (entry == null || model == null) return;
+        selectedEntry = entry;
         var result = model.result();
         technical.setText("Reported job work: " + result.work() + "\nEquivalence groups: "
                 + result.equivalencePlan().map(plan -> Integer.toString(plan.equivalenceGroupCount())).orElse("Unavailable")
@@ -265,6 +269,8 @@ final class LongevityWeightedIntegratedView extends VBox {
                 + "\nExpected After-Tax Heir Value: " + money(aggregate.expectedNominalEstateAtSecondDeath())
                 + "\nExpected PV After-Tax Estate (ranking objective; valuation-date dollars): " + money(aggregate.expectedPvAfterTaxEstate());
     }
+
+    LongevityWeightedIntegratedStrategyComparisonEntry reportSelection() { return selectedEntry; }
 
     static String elections(SocialSecurityHouseholdClaimingStrategy strategy) {
         return "Primary retirement: Age " + strategy.primaryRetirementAge() + " — " + strategy.primaryRetirementClaimDate()

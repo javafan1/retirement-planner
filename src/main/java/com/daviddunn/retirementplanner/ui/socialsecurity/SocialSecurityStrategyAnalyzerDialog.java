@@ -32,6 +32,11 @@ import java.util.List;
 
 /** Resizable, read-only Social Security strategy analysis window. */
 public final class SocialSecurityStrategyAnalyzerDialog {
+    private final Button deterministicExportPdf = new Button("Export PDF");
+    private IntegratedReportContext deterministicReportContext;
+    private IntegratedReportContext weightedReportContext;
+    private IntegratedSocialSecurityCompleteStrategySearchEntry deterministicSelectedEntry;
+    private boolean exportBusy;
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMM d, uuuu");
 
@@ -163,6 +168,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         integratedRunButton.setOnAction(event -> runIntegratedAnalysis());
         exhaustiveRunButton.setOnAction(event -> runExhaustiveSearch());
         weightedView.run.setOnAction(event -> runWeightedAnalysis());
+        deterministicExportPdf.setDisable(true);
+        deterministicExportPdf.setOnAction(event -> exportPdf(false));
+        weightedView.exportPdf.setOnAction(event -> exportPdf(true));
+        exhaustiveStale.textProperty().addListener((o, before, after) -> refreshExportActions());
+        weightedView.stale.textProperty().addListener((o, before, after) -> refreshExportActions());
         sharedCancel.setOnAction(event -> jobs.cancel());
         exhaustiveCancelButton.setOnAction(event -> jobs.cancel());
         socialSecurityCancelButton.setOnAction(event -> jobs.cancel());
@@ -342,7 +352,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         details.setDividerPositions(0.45);
         deterministicRankedContent.getChildren().setAll(details, tableBox, heading("Methodology"), methodology);
         deterministicHeatMap.resultNotice.textProperty().bind(exhaustiveStale.textProperty());
-        VBox content = new VBox(10, explanation, actions, exhaustiveProgress, exhaustiveStale, deterministicResultTabs);
+        VBox content = new VBox(10, explanation, actions, exhaustiveProgress, exhaustiveStale,
+                new HBox(10, heading("Completed Analysis"), deterministicExportPdf), deterministicResultTabs);
         VBox.setVgrow(tableBox, Priority.NEVER);
         return content;
     }
@@ -558,14 +569,17 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     adjustment(spouseMortalityAdjustment.getText(), "Spouse"), mortalityDate.getValue(), pvDate.getValue(),
                     new BigDecimal(discountRate.getText().trim()).movePointLeft(2), planRevision, assumptionsRevision,
                     baselineInputs.snapshot());
+            var reportContext = captureReportContext(true);
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
                     (progress, cancellation) -> new com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedIntegratedStrategyComparisonService()
                             .compare(factory.create(snapshot, progress, cancellation)), result -> {
                         weightedPresentation = new LongevityWeightedIntegratedPresentation(result,
                                 snapshot.planRevision, snapshot.assumptionsRevision);
                         weightedCurrent = true;
+                        weightedReportContext = reportContext;
                         weightedView.render(weightedPresentation, snapshot.baseline);
                         refreshWeightedComparison();
+                        refreshExportActions();
                     }, failure -> weightedView.status.setText(SocialSecurityAnalysisFailurePresentation.message(failure)));
             if (!accepted) {
                 weightedView.status.setText("Another Social Security analysis is running or cleaning up.");
@@ -592,6 +606,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         try {
             var request = SocialSecurityAnalyzerInputs.exhaustive(plan);
             long capturedRevision = planRevision;
+            var reportContext = captureReportContext(false);
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
                     (progress, cancellation) -> {
                         long started = System.nanoTime();
@@ -602,11 +617,13 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     }, model -> {
                 exhaustivePresentation = model;
                 exhaustiveRevision = capturedRevision;
+                deterministicReportContext = reportContext;
                 renderExhaustive(model);
                 refreshWeightedComparison();
                 exhaustiveStale.setText("");
                 exhaustiveStatus.setText("Exhaustive integrated search complete - "
                         + model.result().totalStrategyCount() + " strategies evaluated; " + model.result().failedStrategyCount() + " unavailable.");
+                refreshExportActions();
             }, this::showError);
             if (!accepted) {
                 exhaustiveStatus.setText("Another Social Security analysis is running or cleaning up.");
@@ -650,6 +667,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         exhaustiveTable.setPlaceholder(new Label("Run exhaustive search to display tested outcomes."));
         exhaustiveTable.getSelectionModel().selectedItemProperty().addListener((o, a, group) -> {
             if (group != null) {
+                deterministicSelectedEntry = group.representative();
                 exhaustiveDetails.setText(exhaustiveDetail(group));
             }
         });
@@ -683,6 +701,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void renderExhaustive(ExhaustiveIntegratedSearchPresentation model) {
+        deterministicSelectedEntry = null;
         deterministicHeatMapSource = model;
         deterministicHeatMap.render(DeterministicHeatMapAdapter.from(model));
         var result = model.result();
@@ -740,6 +759,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         exhaustiveTable.getSelectionModel().clearSelection();
                     }
                     exhaustiveDetails.setText(exhaustiveDetail(entry, "\nOriginal strategy occurrence: " + generationOrder));
+                    deterministicSelectedEntry = entry;
                     exhaustiveDetails.requestFocus();
                     javafx.application.Platform.runLater(() -> IntegratedAnalysisResultTabs.reveal(exhaustiveDetails));
                 });
@@ -1105,6 +1125,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void setAnalysisBusy(boolean disabled) {
+        refreshExportActions();
+        if (disabled) {
+            deterministicExportPdf.setDisable(true);
+            weightedView.exportPdf.setDisable(true);
+        }
         runButton.setDisable(disabled);
         integratedRunButton.setDisable(disabled || !socialSecurityResultCurrent);
         exhaustiveRunButton.setDisable(disabled);
@@ -1130,6 +1155,106 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         } catch (RuntimeException invalid) {
             return false;
         }
+    }
+
+    private IntegratedReportContext captureReportContext(boolean weighted) {
+        return IntegratedReportContext.capture(plan, weighted,
+                new SocialSecurityAnalyzerInputSummary.AnalyzerValues(
+                        validAdjustment(primaryMortalityAdjustment.getText()), validAdjustment(spouseMortalityAdjustment.getText()),
+                        mortalityDate.getValue(), pvDate.getValue(), validDiscountRate(discountRate.getText())), baselineInputs.snapshot());
+    }
+
+    private boolean canExportPdf(boolean weighted) {
+        if (exportBusy || jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE) return false;
+        return weighted ? weightedCurrent && weightedPresentation != null && weightedReportContext != null
+                && weightedPresentation.planRevision() == planRevision && weightedView.stale.getText().isEmpty()
+                && weightedPresentation.assumptionsRevision() == assumptionsRevision
+                && !weightedPresentation.result().rankedSuccessfulEntries().isEmpty()
+                : exhaustivePresentation != null && deterministicReportContext != null
+                && exhaustiveRevision == planRevision && exhaustiveStale.getText().isEmpty()
+                && !exhaustivePresentation.result().rankedSuccessfulEntries().isEmpty();
+    }
+
+    private void refreshExportActions() {
+        deterministicExportPdf.setDisable(!canExportPdf(false));
+        weightedView.exportPdf.setDisable(!canExportPdf(true));
+    }
+
+    private com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport capturePdfReport(boolean weighted) {
+        if (!canExportPdf(weighted)) throw new IllegalStateException("Run a current, successful analysis before exporting PDF.");
+        if (weighted) {
+            var heatMap = weightedView.heatMap;
+            var selectedCell = heatMap.reportSelection();
+            var selected = weightedView.resultTabs.getSelectionModel().getSelectedItem() == weightedView.heatMapTab
+                    ? selectedCell.strategy().flatMap(cell -> weightedPresentation.result().orderedEntries().stream()
+                            .filter(entry -> entry.inputOrder() == cell.inputOrder()).findFirst()).orElse(null)
+                    : weightedView.reportSelection();
+            var deterministic = exhaustivePresentation == null ? null : exhaustivePresentation.result();
+            boolean compatible = IntegratedAnalysisComparisonPresentation.compatible(weightedPresentation,
+                    deterministic, exhaustiveRevision, planRevision, weightedCurrent);
+            return IntegratedAnalyzerReportAdapter.weighted(weightedReportContext, weightedPresentation,
+                    heatMap.reportModel(), heatMap.metric.getValue(), selectedCell, selected,
+                    List.copyOf(weightedView.table.getItems()), IntegratedAnalysisComparisonPresentation.create(weightedPresentation,
+                            deterministic, exhaustiveRevision, planRevision, weightedCurrent), compatible ? deterministic : null);
+        }
+        var selectedCell = deterministicHeatMap.reportSelection();
+        var selected = deterministicResultTabs.getSelectionModel().getSelectedItem() == deterministicHeatMapTab
+                ? selectedCell.strategy().flatMap(cell -> exhaustivePresentation.result().entries().stream()
+                        .filter(entry -> entry.generationOrder() == cell.inputOrder()).findFirst()).orElse(null)
+                : deterministicSelectedEntry;
+        return IntegratedAnalyzerReportAdapter.deterministic(deterministicReportContext, exhaustivePresentation,
+                deterministicHeatMap.reportModel(), deterministicHeatMap.metric.getValue(), selectedCell, selected,
+                List.copyOf(exhaustiveTable.getItems()), socialSecurityCrossReference(exhaustivePresentation));
+    }
+
+    private void exportPdf(boolean weighted) {
+        if (!canExportPdf(weighted)) return;
+        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+        chooser.setTitle("Export Integrated Analysis PDF");
+        chooser.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
+        chooser.setInitialFileName(weighted ? "Social-Security-Integrated-Longevity-Weighted-Analysis.pdf"
+                : "Social-Security-Integrated-Deterministic-Analysis.pdf");
+        java.io.File file = chooser.showSaveDialog(stage);
+        if (file == null || !canExportPdf(weighted)) return;
+        try {
+            var report = capturePdfReport(weighted);
+            exportBusy = true;
+            refreshExportActions();
+            javafx.concurrent.Task<Void> task = new javafx.concurrent.Task<>() {
+                @Override protected Void call() throws Exception {
+                    new com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerPdfExporter().export(report, file.toPath());
+                    return null;
+                }
+            };
+            task.setOnSucceeded(event -> {
+                exportBusy = false;
+                refreshExportActions();
+                Alert alert = new Alert(Alert.AlertType.INFORMATION, "Analysis report saved to " + file.getAbsolutePath());
+                alert.initOwner(stage);
+                alert.setTitle("Export PDF");
+                alert.setHeaderText("PDF export complete");
+                alert.show();
+            });
+            task.setOnFailed(event -> {
+                exportBusy = false;
+                refreshExportActions();
+                showPdfError(task.getException());
+            });
+            Thread.ofVirtual().name("integrated-analysis-pdf").start(task);
+        } catch (RuntimeException failure) {
+            exportBusy = false;
+            refreshExportActions();
+            showPdfError(failure);
+        }
+    }
+
+    private void showPdfError(Throwable failure) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.initOwner(stage);
+        alert.setTitle("Export PDF");
+        alert.setHeaderText("Unable to export analysis report");
+        alert.setContentText(SocialSecurityAnalysisFailurePresentation.message(failure));
+        alert.show();
     }
 
     private void refreshInputSummary() {
