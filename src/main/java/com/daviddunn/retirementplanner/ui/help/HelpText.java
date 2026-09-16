@@ -2,6 +2,12 @@ package com.daviddunn.retirementplanner.ui.help;
 
 public final class HelpText {
 
+    public static final String PLANNING_HORIZON =
+            "Defines the end of the household retirement projection, generally representing "
+                    + "the assumed death of the surviving household member. This planning horizon "
+                    + "can materially affect Social Security claiming comparisons, taxes, portfolio "
+                    + "values, and estate results. Enter calendar years, including the opening year, "
+                    + "which may be partial.";
     private HelpText() {
         // Utility class
     }

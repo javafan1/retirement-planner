@@ -51,7 +51,7 @@ class SocialSecurityAnalyzerInputPresentationTest {
             assertEquals(deterministic,
                     row.deterministic(), row.input());
             var expected = switch (row.input()) {
-                case "Configured projection end date", "Configured projection length" -> REFERENCE_ONLY;
+                case "Planning Horizon - end date", "Planning Horizon - calendar years" -> REFERENCE_ONLY;
                 case "Configured plan death scenario", "Configured-horizon estate" -> NOT_USED;
                 default -> USED;
             };
@@ -67,8 +67,8 @@ class SocialSecurityAnalyzerInputPresentationTest {
         var rows = SocialSecurityAnalyzerInputSummary.from(plan, values()).rows().stream()
                 .collect(Collectors.toMap(SocialSecurityAnalyzerInputSummary.Row::input, row -> row));
         assertEquals("2026-07-01", rows.get("Projection start date").value());
-        assertEquals("2027-12-31", rows.get("Configured projection end date").value());
-        assertEquals("2 calendar years (2026-2027, inclusive; opening year may be partial)", rows.get("Configured projection length").value());
+        assertEquals("2027-12-31", rows.get("Planning Horizon - end date").value());
+        assertEquals("2 calendar years (2026-2027, inclusive; opening year may be partial)", rows.get("Planning Horizon - calendar years").value());
         assertEquals("2026-01-01", rows.get("Mortality conditioning date").value());
         assertEquals("2025-01-01", rows.get("Valuation date").value());
         assertEquals("1%", rows.get("Real discount rate").value());

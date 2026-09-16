@@ -22,6 +22,7 @@ import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitCalcul
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitStartDateCalculator;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
+import com.daviddunn.retirementplanner.ui.help.HelpText;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 import com.daviddunn.retirementplanner.domain.baseline.ProjectionComparison;
 
@@ -82,7 +83,7 @@ public class ResultsSummaryView extends BorderPane {
             new Button("Apply Roth Conversion");
 
     private final Button applyDeathButton =
-            new Button("Apply Death Scenario");
+            new Button("Apply Planning Horizon");
 
     private final Button applySocialSecurityButton =
             new Button("Apply Social Security");
@@ -126,6 +127,9 @@ public class ResultsSummaryView extends BorderPane {
 
     private final ComboBox<String> deathScenarioComboBox =
             new ComboBox<>();
+
+    private final TextField projectionLengthField = new TextField();
+    private final Label planningHorizonValue = new Label();
 
     private final TextField deathYearField =
             new TextField();
@@ -600,8 +604,7 @@ public class ResultsSummaryView extends BorderPane {
                             current
                                     .getWithdrawalAssumptions(),
                             updatedDeath,
-                            current
-                                    .getProjectionLengthYears(),
+                            Integer.parseInt(projectionLengthField.getText().trim()),
                             current
                                     .getProjectionStartDate());
 
@@ -611,7 +614,7 @@ public class ResultsSummaryView extends BorderPane {
         } catch (Exception ex) {
 
             showError(
-                    "Please enter valid death scenario values.");
+                    "Please enter valid planning horizon values (projection years must be a positive whole number).");
         }
     }
 
@@ -1377,10 +1380,10 @@ public class ResultsSummaryView extends BorderPane {
                 new VBox(12);
 
         assumptionContent.getChildren().addAll(
-                createEconomicPanel(),
-                createRothPanel(),
+                createDeathPanel(),
                 createSocialSecurityPanel(),
-                createDeathPanel());
+                createEconomicPanel(),
+                createRothPanel());
 
         Label note =
                 new Label(
@@ -1550,7 +1553,7 @@ public class ResultsSummaryView extends BorderPane {
 
         Label heading =
                 createPanelHeading(
-                        "ROTH CONVERSION",
+                        "ROTH CONVERSIONS",
                         FontAwesomeSolid.PERCENT,
                         "assumption-title-green");
 
@@ -1712,7 +1715,7 @@ public class ResultsSummaryView extends BorderPane {
 
         Label heading =
                 createPanelHeading(
-                        "DEATH SCENARIO",
+                        "Planning Horizon",
                         FontAwesomeSolid.USERS,
                         "assumption-title-purple");
 
@@ -1778,6 +1781,21 @@ public class ResultsSummaryView extends BorderPane {
         survivorAgeComboBox.setMaxWidth(
                 Double.MAX_VALUE);
 
+        Label horizonLabel = new Label("Assumed second death / end of household projection");
+        horizonLabel.setWrapText(true);
+        horizonLabel.getStyleClass().add("assumption-label");
+        horizonLabel.setTooltip(new Tooltip(HelpText.PLANNING_HORIZON));
+        projectionLengthField.setTooltip(new Tooltip(HelpText.PLANNING_HORIZON));
+        projectionLengthField.getStyleClass().add("assumption-field");
+        projectionLengthField.setPrefColumnCount(4);
+        planningHorizonValue.getStyleClass().add("assumption-value");
+        planningHorizonValue.setTooltip(new Tooltip("Assumed second death / end of household projection"));
+        VBox horizon = new VBox(8, planningHorizonValue, horizonLabel,
+                new HBox(8, projectionLengthField, new Label("years")));
+        for (Node child : grid.getChildren()) {
+            GridPane.setRowIndex(child, GridPane.getRowIndex(child) + 1);
+        }
+        grid.add(horizon, 0, 0, 2, 1);
         return createPanel(
                 heading,
                 grid,
@@ -2490,6 +2508,10 @@ public class ResultsSummaryView extends BorderPane {
         PlanningAssumptions assumptions =
                 plan.getPlanningAssumptions();
 
+        int length = assumptions.getProjectionLengthYears();
+        int endYear = Math.addExact(assumptions.getProjectionStartDate().getYear(), length - 1);
+        projectionLengthField.setText(Integer.toString(length));
+        planningHorizonValue.setText(endYear + " (" + length + (length == 1 ? " year)" : " years)"));
         EconomicAssumptions economic =
                 assumptions
                         .getEconomicAssumptions();

@@ -203,7 +203,7 @@ public class AssumptionsView extends VBox {
          */
 
         Label projectionHeading =
-                new Label("Projection");
+                new Label("Planning Horizon");
 
         projectionHeading.setStyle(
                 "-fx-font-weight: bold;");
@@ -233,17 +233,56 @@ public class AssumptionsView extends VBox {
                 row++);
 
         grid.add(
-                new Label("Projection Length (Years):"),
+                new Label("Assumed second death / end of household projection:"),
+                0,
+                row);
+
+        grid.add(new HelpIcon(HelpText.PLANNING_HORIZON), 1, row);
+        grid.add(new HBox(8, projectionLengthField, new Label("years")), 2, row++);
+
+        grid.add(
+                openingRmdButton,
+                1,
+                row++);
+
+
+        grid.add(
+                new Label("Household survival scenario:"),
                 0,
                 row);
 
         grid.add(
-                projectionLengthField,
+                deathScenarioComboBox,
                 1,
                 row++);
 
         grid.add(
-                openingRmdButton,
+                new Label("Death Year:"),
+                0,
+                row);
+
+        grid.add(
+                deathYearField,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Survivor SSC Claiming Age:"),
+                0,
+                row);
+
+        grid.add(
+                survivorClaimingAgeComboBox,
+                1,
+                row++);
+
+        grid.add(
+                new Label("Post-Death Expense Factor (%):"),
+                0,
+                row);
+
+        grid.add(
+                postDeathExpenseFactorField,
                 1,
                 row++);
 
@@ -443,73 +482,6 @@ public class AssumptionsView extends VBox {
                 estimatedHeirTaxRateField,
                 1,
                 row++);
-
-        /*
-         * =================================================
-         * Death Scenario
-         * =================================================
-         */
-
-        Label deathScenarioHeading =
-                new Label("Death Scenario");
-
-        deathScenarioHeading.setStyle(
-                "-fx-font-weight: bold;");
-
-        grid.add(
-                deathScenarioHeading,
-                0,
-                row++,
-                3,
-                1);
-
-        grid.add(
-                new Separator(),
-                0,
-                row++,
-                3,
-                1);
-
-        grid.add(
-                new Label("Death Scenario:"),
-                0,
-                row);
-
-        grid.add(
-                deathScenarioComboBox,
-                1,
-                row++);
-
-        grid.add(
-                new Label("Death Year:"),
-                0,
-                row);
-
-        grid.add(
-                deathYearField,
-                1,
-                row++);
-
-        grid.add(
-                new Label("Survivor SSC Claiming Age:"),
-                0,
-                row);
-
-        grid.add(
-                survivorClaimingAgeComboBox,
-                1,
-                row++);
-
-        grid.add(
-                new Label("Post-Death Expense Factor (%):"),
-                0,
-                row);
-
-        grid.add(
-                postDeathExpenseFactorField,
-                1,
-                row++);
-
 
         HBox buttonBar = new HBox(10, applyButton, cancelButton);
         buttonBar.setPadding(new Insets(10));
@@ -773,7 +745,7 @@ public class AssumptionsView extends VBox {
         LocalDate start = read(projectionStartDatePicker, "Projection start date", () ->
                 Objects.requireNonNull(projectionStartDatePicker.getConverter().fromString(
                         projectionStartDatePicker.getEditor().getText()), "A date is required."));
-        int length = read(projectionLengthField, "Projection length", () -> {
+        int length = read(projectionLengthField, "Planning horizon (years)", () -> {
             int value = Integer.parseInt(projectionLengthField.getText().trim());
             if (value <= 0) {
                 throw new IllegalArgumentException("Must be greater than zero.");

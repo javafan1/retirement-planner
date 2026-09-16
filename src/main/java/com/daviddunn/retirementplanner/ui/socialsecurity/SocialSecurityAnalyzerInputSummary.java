@@ -18,7 +18,7 @@ import java.util.stream.Stream;
 /** Immutable display snapshot from current authoritative values; no projection or mortality calculation. */
 record SocialSecurityAnalyzerInputSummary(List<Row> rows) {
     static final String WEIGHTED_HORIZON = "Through household second death. January 1 second death uses the prior December 31 snapshot (secondDeathYear - 1); second death on the projection opening date uses the opening snapshot.";
-    static final String DATE_EXPLANATION = "Projection start date: financial projection begins. Configured projection end/length: deterministic horizon and configured duration. Mortality conditioning date: assumes both people survive through this date and conditions remaining mortality; SS-only remaining benefits start here. Valuation date: common date for PV dollars, independent of survival and projection start. Plan death scenario: deterministic analysis only.";
+    static final String DATE_EXPLANATION = "Projection start date: financial projection begins. Planning Horizon (assumed second death / end of household projection): deterministic horizon and configured duration. Mortality conditioning date: assumes both people survive through this date and conditions remaining mortality; SS-only remaining benefits start here. Valuation date: common date for PV dollars, independent of survival and projection start. Plan death scenario: deterministic analysis only.";
 
     record Row(String input, String value, String source) { }
     /** Null editable values represent missing/invalid input, not an invented default. */
@@ -46,8 +46,8 @@ record SocialSecurityAnalyzerInputSummary(List<Row> rows) {
         // ProjectionEngine models N calendar years, including a possibly partial opening year.
         int endYear = Math.addExact(start.getYear(), assumptions.getProjectionLengthYears() - 1);
         rows.add(new Row("Projection start date", date(start), "Retirement Plan"));
-        rows.add(new Row("Configured projection end date", LocalDate.of(endYear, 12, 31).toString(), "Retirement Plan"));
-        rows.add(new Row("Configured projection length", assumptions.getProjectionLengthYears()
+        rows.add(new Row("Planning Horizon - end date", LocalDate.of(endYear, 12, 31).toString(), "Retirement Plan"));
+        rows.add(new Row("Planning Horizon - calendar years", assumptions.getProjectionLengthYears()
                 + " calendar years (" + start.getYear() + "-" + endYear + ", inclusive; opening year may be partial)", "Retirement Plan"));
         rows.add(new Row("Weighted scenario horizon", WEIGHTED_HORIZON, "Mortality scenarios; configured end/length are reference only"));
         rows.add(new Row("Mortality conditioning date", date(analyzer.conditioningDate()), "Analyzer"));
