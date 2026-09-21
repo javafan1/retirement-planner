@@ -165,8 +165,10 @@ public final class HouseholdSocialSecurityIncomeCalculator {
             DeathScenarioAssumptions deathAssumptions,
             BigDecimal socialSecurityColaRate) {
 
-        if (survivor.getAge(projectionDate)
-                < deathAssumptions.getSurvivorClaimingAge()) {
+        LocalDate entitlementDate = SurvivorBenefitClaimingPolicy.claimDate(
+                survivor.getBirthDate(), modeledDeathDate(deathAssumptions),
+                deathAssumptions.getSurvivorClaimingAge());
+        if (projectionDate.isBefore(entitlementDate)) {
             return BigDecimal.ZERO;
         }
 
@@ -182,8 +184,7 @@ public final class HouseholdSocialSecurityIncomeCalculator {
                                         projectionDate,
                                         socialSecurityColaRate),
                                 survivor.getBirthDate(),
-                                deathAssumptions
-                                        .getSurvivorClaimingAge()))
+                                entitlementDate))
                 .reduce(BigDecimal.ZERO, BigDecimal::max);
 
         return monthlyBenefit

@@ -208,9 +208,9 @@ class HouseholdSocialSecurityIncomeCalculatorTest {
                         2030,
                         62);
 
-        assertEquals(new BigDecimal("19114.32"), calculator.calculateAnnualIncome(
+        assertEquals(new BigDecimal("21964.32"), calculator.calculateAnnualIncome(
                 household, LocalDate.of(2030, 12, 31), death, BigDecimal.ZERO));
-        assertEquals(new BigDecimal("19114.32"), calculator.calculateAnnualIncome(
+        assertEquals(new BigDecimal("21964.32"), calculator.calculateAnnualIncome(
                 household, LocalDate.of(2031, 12, 31), death, BigDecimal.ZERO));
         assertEquals(new BigDecimal("36000.00"), calculator.calculateAnnualIncome(
                 household, LocalDate.of(2032, 12, 31), death, BigDecimal.ZERO));
@@ -280,7 +280,7 @@ class HouseholdSocialSecurityIncomeCalculatorTest {
                         2030,
                         62);
 
-        BigDecimal expected = new BigDecimal("28671.48");
+        BigDecimal expected = new BigDecimal("32946.48");
 
         for (int year : new int[]{2030, 2031, 2034, 2035, 2036}) {
             assertEquals(expected, calculator.calculateAnnualIncome(
@@ -304,8 +304,8 @@ class HouseholdSocialSecurityIncomeCalculatorTest {
         BigDecimal laterYear = calculator.calculateAnnualIncome(
                 household, LocalDate.of(2036, 12, 31), death, cola);
 
-        assertEquals(new BigDecimal("28671.48"), deathYear);
-        assertEquals(new BigDecimal("34235.16"), laterYear);
+        assertEquals(new BigDecimal("32946.48"), deathYear);
+        assertEquals(new BigDecimal("39339.84"), laterYear);
     }
 
     @Test
@@ -318,7 +318,7 @@ class HouseholdSocialSecurityIncomeCalculatorTest {
                         2030,
                         62);
 
-        BigDecimal expected = new BigDecimal("20070.00");
+        BigDecimal expected = new BigDecimal("23062.56");
 
         assertEquals(expected, calculator.calculateAnnualIncome(
                 household, LocalDate.of(2030, 12, 31), death, BigDecimal.ZERO));
@@ -381,9 +381,12 @@ class HouseholdSocialSecurityIncomeCalculatorTest {
                         2030,
                         62);
 
-        assertEquals(new BigDecimal("19114.32"), calculator.calculateAnnualIncome(
+        assertEquals(new BigDecimal("21964.32"), calculator.calculateAnnualIncome(
                 household, LocalDate.of(2031, 12, 31), death, BigDecimal.ZERO));
-        assertEquals(new BigDecimal("21000.00"), calculator.calculateAnnualIncome(
+        // Actual entitlement is January 2030, 25 months before Survivor FRA:
+        // 2000 * (1 - 0.285 * 25 / 84), rounded monthly, then annualized.
+        // This survivor amount now exceeds the six-month own-retirement amount.
+        assertEquals(new BigDecimal("21964.32"), calculator.calculateAnnualIncome(
                 household, LocalDate.of(2032, 12, 31), death, BigDecimal.ZERO));
         assertEquals(new BigDecimal("36000.00"), calculator.calculateAnnualIncome(
                 household, LocalDate.of(2033, 12, 31), death, BigDecimal.ZERO));

@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResu
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitSelection;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityRetirementDateCalculator;
+import com.daviddunn.retirementplanner.domain.income.SurvivorBenefitClaimingPolicy;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
@@ -192,11 +193,11 @@ public final class SocialSecurityProjectionIncomeProvider {
                     death.getSurvivorClaimingAge(), firstCalendarYear, lastCalendarYear);
         } else {
             primarySurvivorClaim = override != null
-                    ? applicableSurvivorClaim(primaryDeath, spouseDeath,
+                    ? applicableSurvivorClaim(primary, primaryDeath, spouseDeath,
                             override.primarySurvivorElection().claimDate(), true)
                     : survivorClaimDate(death, DeathScenario.SPOUSE_DIES, primary);
             spouseSurvivorClaim = override != null
-                    ? applicableSurvivorClaim(primaryDeath, spouseDeath,
+                    ? applicableSurvivorClaim(spouse, primaryDeath, spouseDeath,
                             override.spouseSurvivorElection().claimDate(), false)
                     : survivorClaimDate(death, DeathScenario.PRIMARY_DIES, spouse);
         }
@@ -295,12 +296,14 @@ public final class SocialSecurityProjectionIncomeProvider {
     }
 
     private static LocalDate applicableSurvivorClaim(
+            Person survivor,
             LocalDate primaryDeath,
             LocalDate spouseDeath,
             LocalDate candidateDate,
             boolean primaryIsSurvivor) {
         LocalDate otherDeath = primaryIsSurvivor ? spouseDeath : primaryDeath;
-        return otherDeath == null ? null : candidateDate;
+        return otherDeath == null ? null : SurvivorBenefitClaimingPolicy.claimDate(
+                survivor.getBirthDate(), otherDeath, candidateDate);
     }
 
     private static void validateOverride(
@@ -364,17 +367,19 @@ public final class SocialSecurityProjectionIncomeProvider {
                             + "or a complete Social Security strategy override.");
         }
         LocalDate claim = explicitClaim != null
-                ? explicitClaim : claimant.getBirthDate().plusYears(persistedAge);
+                ? SurvivorBenefitClaimingPolicy.claimDate(claimant.getBirthDate(), otherDeath, explicitClaim)
+                : SurvivorBenefitClaimingPolicy.claimDate(
+                        claimant.getBirthDate(), otherDeath, persistedAge);
         return claimantDeath != null && !claim.isBefore(claimantDeath) ? null : claim;
     }
-    /** Persisted integer survivor age maps to that survivor's exact birthday. */
+    /** Persisted whole-year election is conditional on death; late deaths are immediate. */
     private static LocalDate survivorClaimDate(
             DeathScenarioAssumptions assumptions,
             DeathScenario otherOwnerDeathScenario,
             Person survivor) {
         return assumptions.getDeathScenario() == otherOwnerDeathScenario
-                ? survivor.getBirthDate().plusYears(
-                        assumptions.getSurvivorClaimingAge())
+                ? SurvivorBenefitClaimingPolicy.claimDate(survivor.getBirthDate(),
+                        LocalDate.of(assumptions.getDeathYear(), 1, 1), assumptions.getSurvivorClaimingAge())
                 : null;
     }
 

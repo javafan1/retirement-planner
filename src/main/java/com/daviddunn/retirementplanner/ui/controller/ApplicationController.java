@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.ui.controller;
 
 import com.daviddunn.retirementplanner.application.settings.ApplicationSettings;
 import com.daviddunn.retirementplanner.domain.baseline.*;
+import com.daviddunn.retirementplanner.domain.breakeven.*;
 import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
@@ -49,6 +50,31 @@ public class ApplicationController {
     private Path currentFile;
     private Projection currentProjection;
     private Projection baselineProjection;
+    private ProjectionBaseline cachedBaselineIdentity;
+    private BreakEvenPlanSummary baselineProjectionAssumptions;
+    private BreakEvenPlanSummary currentProjectionAssumptions;
+    private List<NonInvestableAssetProjection> currentNonInvestableAssetProjections;
+    private RetirementPlan longevitySettingsOwner;
+    private com.daviddunn.retirementplanner.domain.socialsecurity.analysis.LongevitySessionSettings longevitySettings;
+
+    public com.daviddunn.retirementplanner.domain.socialsecurity.analysis.LongevitySessionSettings getLongevitySessionSettings() {
+        if (longevitySettingsOwner != currentPlan || longevitySettings == null) {
+            longevitySettingsOwner = currentPlan;
+            longevitySettings = com.daviddunn.retirementplanner.domain.socialsecurity.analysis.LongevitySessionSettings
+                    .defaults(currentPlan.getPlanningAssumptions().getProjectionStartDate());
+        }
+        return longevitySettings;
+    }
+
+    public void setLongevitySessionSettings(com.daviddunn.retirementplanner.domain.socialsecurity.analysis.LongevitySessionSettings settings) {
+        longevitySettingsOwner = currentPlan;
+        longevitySettings = java.util.Objects.requireNonNull(settings);
+    }
+
+    public BreakEvenContext prepareBreakEvenContext(BreakEvenAnalysisResult result) {
+        return new com.daviddunn.retirementplanner.app.breakeven.BreakEvenContextFactory()
+                .create(result, getLongevitySessionSettings());
+    }
 
     private List<NonInvestableAssetProjection>
             baselineNonInvestableAssetProjections;
@@ -108,6 +134,10 @@ public class ApplicationController {
     public List<NonInvestableAssetProjection>
     getCurrentNonInvestableAssetProjections() {
 
+        if (currentNonInvestableAssetProjections != null) {
+            return currentNonInvestableAssetProjections;
+        }
+
         RetirementPlan plan =
                 getCurrentPlan();
 
@@ -135,11 +165,12 @@ public class ApplicationController {
                 years.get(years.size() - 1)
                         .getCalendarYear();
 
-        return nonInvestableAssetProjectionService
+        currentNonInvestableAssetProjections = nonInvestableAssetProjectionService
                 .project(
                         plan.getNonInvestableAssets(),
                         firstYear,
                         lastYear);
+        return currentNonInvestableAssetProjections;
     }
 
     public RetirementPlan getCurrentPlan() {
@@ -160,6 +191,7 @@ public class ApplicationController {
             currentProjection =
                     projectionEngine.project(
                             currentPlan);
+            currentProjectionAssumptions = BreakEvenPlanSummary.from(currentPlan.getHousehold());
         }
 
         return currentProjection;
@@ -173,6 +205,14 @@ public class ApplicationController {
 
     public Projection getBaselineProjection() {
 
+        ProjectionBaseline selectedBaseline = currentPlan == null ? null : currentPlan.getBaseline();
+        if (cachedBaselineIdentity != selectedBaseline) {
+            baselineProjection = null;
+            baselineNonInvestableAssetProjections = null;
+            baselineProjectionAssumptions = null;
+            cachedBaselineIdentity = selectedBaseline;
+        }
+
         if (baselineProjection == null
                 && currentPlan != null
                 && currentPlan.getBaseline() != null) {
@@ -181,6 +221,8 @@ public class ApplicationController {
                     baselineProjectionService
                             .projectBaseline(
                                     currentPlan.getBaseline());
+            baselineProjectionAssumptions = BreakEvenPlanSummary.from(
+                    selectedBaseline.getSnapshot().getHousehold());
         }
 
         return baselineProjection;
@@ -189,12 +231,11 @@ public class ApplicationController {
     public List<NonInvestableAssetProjection>
     getBaselineNonInvestableAssetProjections() {
 
+        Projection projection = getBaselineProjection();
+
         if (baselineNonInvestableAssetProjections != null) {
             return baselineNonInvestableAssetProjections;
         }
-
-        Projection projection =
-                getBaselineProjection();
 
         if (projection == null) {
             return List.of();
@@ -226,6 +267,35 @@ public class ApplicationController {
                                 lastYear);
 
         return baselineNonInvestableAssetProjections;
+    }
+
+    private BreakEvenAnalysisResult insightSourceResult;
+    private com.daviddunn.retirementplanner.domain.breakeven.BreakEvenInsight cachedBreakEvenInsight;
+
+    /** Reads only populated result caches. Opening an analysis never projects a plan. */
+    public BreakEvenAnalysisResult getCachedBreakEvenAnalysis() {
+        if (currentPlan == null || currentPlan.getBaseline() == null
+                || cachedBaselineIdentity != currentPlan.getBaseline()
+                || baselineProjection == null || currentProjection == null
+                || baselineProjectionAssumptions == null || currentProjectionAssumptions == null
+                || baselineNonInvestableAssetProjections == null || currentNonInvestableAssetProjections == null) {
+            return null;
+        }
+        var result = new BreakEvenAnalyzer().analyze(
+                new BreakEvenProjectionSnapshot(baselineProjection.getYears(),
+                        baselineNonInvestableAssetProjections, baselineProjectionAssumptions),
+                new BreakEvenProjectionSnapshot(currentProjection.getYears(),
+                        currentNonInvestableAssetProjections, currentProjectionAssumptions));
+        insightSourceResult = result;
+        cachedBreakEvenInsight = new com.daviddunn.retirementplanner.domain.breakeven.BreakEvenInsightService()
+                .prepare(result, baselineProjection.getYears(), currentProjection.getYears());
+        return result;
+    }
+
+    /** Observes the same populated projection caches; never invokes lazy projection getters. */
+    public com.daviddunn.retirementplanner.domain.breakeven.BreakEvenInsight prepareBreakEvenInsight(BreakEvenAnalysisResult result) {
+        return result == insightSourceResult ? cachedBreakEvenInsight
+                : new com.daviddunn.retirementplanner.domain.breakeven.BreakEvenInsightService().prepare(result);
     }
 
     public ProjectionComparison compareProjections() {
@@ -473,6 +543,8 @@ public class ApplicationController {
 
         currentProjection = null;
         currentProjectionSummary = null;
+        currentProjectionAssumptions = null;
+        currentNonInvestableAssetProjections = null;
     }
 
     public String getCurrentPlanName() {

@@ -24,7 +24,7 @@ import java.util.function.Function;
 public class ProjectionYearDetailsPane
         extends BorderPane {
 
-    private final ProjectionYear year;
+    private ProjectionYear year;
 
     /*
      * The baseline is optional.
@@ -32,13 +32,16 @@ public class ProjectionYearDetailsPane
      * null means that the user has not created
      * a baseline projection yet.
      */
-    private final ProjectionYear baselineYear;
+    private ProjectionYear baselineYear;
 
-    private final BigDecimal
+    private BigDecimal
             nonInvestableAssetValue;
 
-    private final BigDecimal
+    private BigDecimal
             baselineNonInvestableAssetValue;
+
+    private final VBox content = new VBox(15);
+    private final ScrollPane scrollPane = new ScrollPane(content);
 
 
     public ProjectionYearDetailsPane(
@@ -47,18 +50,30 @@ public class ProjectionYearDetailsPane
             BigDecimal nonInvestableAssetValue,
             BigDecimal baselineNonInvestableAssetValue) {
 
-        this.year =
-                Objects.requireNonNull(
-                        year,
-                        "Current projection year is required.");
+        content.setPadding(new Insets(15));
+        content.setMinWidth(1000);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(false);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        setCenter(scrollPane);
+        setProjectionYear(year, baselineYear, nonInvestableAssetValue, baselineNonInvestableAssetValue);
+    }
+
+    /** Rebuild every year-dependent section while retaining the pane and its scroll position. */
+    public void setProjectionYear(
+            ProjectionYear year,
+            ProjectionYear baselineYear,
+            BigDecimal nonInvestableAssetValue,
+            BigDecimal baselineNonInvestableAssetValue) {
+
+        this.year = year;
 
         this.baselineYear =
                 baselineYear;
 
         this.nonInvestableAssetValue =
-                Objects.requireNonNull(
-                        nonInvestableAssetValue,
-                        "Non-investable asset value is required.");
+                Objects.requireNonNullElse(nonInvestableAssetValue, BigDecimal.ZERO);
 
         /*
          * This is intentionally allowed to be null.
@@ -69,14 +84,13 @@ public class ProjectionYearDetailsPane
                 baselineNonInvestableAssetValue;
 
 
-        VBox content =
-                new VBox(15);
-
-        content.setPadding(
-                new Insets(15));
-
-        content.setMinWidth(
-                1000);
+        double verticalPosition = scrollPane.getVvalue();
+        double horizontalPosition = scrollPane.getHvalue();
+        content.getChildren().clear();
+        if (year == null) {
+            content.getChildren().add(new Label("No projection year selected."));
+            return;
+        }
 
 
         content.getChildren().add(
@@ -128,25 +142,8 @@ public class ProjectionYearDetailsPane
                 grid);
 
 
-        ScrollPane scrollPane =
-                new ScrollPane(
-                        content);
-
-        scrollPane.setFitToWidth(
-                true);
-
-        scrollPane.setFitToHeight(
-                false);
-
-        scrollPane.setHbarPolicy(
-                ScrollPane.ScrollBarPolicy.NEVER);
-
-        scrollPane.setVbarPolicy(
-                ScrollPane.ScrollBarPolicy.AS_NEEDED);
-
-
-        setCenter(
-                scrollPane);
+        scrollPane.setVvalue(verticalPosition);
+        scrollPane.setHvalue(horizontalPosition);
     }
 
 

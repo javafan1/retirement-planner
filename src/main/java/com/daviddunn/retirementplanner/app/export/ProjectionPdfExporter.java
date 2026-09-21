@@ -440,12 +440,16 @@ public class ProjectionPdfExporter {
                     GRAY);
         }
 
-        if (death.getSurvivorClaimingAge() != null) {
+        if (death.getDeathScenario() != com.daviddunn.retirementplanner.domain.model.DeathScenario.BOTH_SURVIVE
+                && death.getSurvivorClaimingAge() != null) {
+
+            var choices = com.daviddunn.retirementplanner.domain.income.SurvivorBenefitClaimingPolicy.choices(
+                    plan.getHousehold(), death.getDeathScenario(), death.getDeathYear());
 
             writeKeyValue(
-                    "Survivor Claiming Age",
-                    death.getSurvivorClaimingAge()
-                            .toString(),
+                    "Survivor Benefit Claiming Age",
+                    choices.immediateAtDeath() ? "Immediate at death (Age " + choices.ages().getFirst() + ")"
+                            : death.getSurvivorClaimingAge().toString(),
                     GRAY);
         }
 

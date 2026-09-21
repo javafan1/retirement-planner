@@ -79,9 +79,9 @@ final class LongevityWeightedIntegratedView extends VBox {
         });
         column("Primary Retirement", 100, entry -> entry.strategy().primaryRetirementAge(), value -> "Age " + value);
         column("Spouse Retirement", 100, entry -> entry.strategy().spouseRetirementAge(), value -> "Age " + value);
-        column("Primary Survivor", 110, entry -> entry.strategy().primarySurvivorElection().ageYears() * 12
+        column("Primary Survivor Benefit Claiming Age", 110, entry -> entry.strategy().primarySurvivorElection().ageYears() * 12
                 + entry.strategy().primarySurvivorElection().ageMonths(), LongevityWeightedIntegratedView::age);
-        column("Spouse Survivor", 110, entry -> entry.strategy().spouseSurvivorElection().ageYears() * 12
+        column("Spouse Survivor Benefit Claiming Age", 110, entry -> entry.strategy().spouseSurvivorElection().ageYears() * 12
                 + entry.strategy().spouseSurvivorElection().ageMonths(), LongevityWeightedIntegratedView::age);
         column("Expected Investable Assets at Second Death", 165, entry -> entry.aggregate()
                 .map(LongevityWeightedStrategyAggregate::expectedInvestableAssetsAtSecondDeath).orElse(null), LongevityWeightedIntegratedView::money);
@@ -275,8 +275,8 @@ final class LongevityWeightedIntegratedView extends VBox {
     static String elections(SocialSecurityHouseholdClaimingStrategy strategy) {
         return "Primary retirement: Age " + strategy.primaryRetirementAge() + " — " + strategy.primaryRetirementClaimDate()
                 + "\nSpouse retirement: Age " + strategy.spouseRetirementAge() + " — " + strategy.spouseRetirementClaimDate()
-                + "\nPrimary survivor: " + strategy.primarySurvivorElection().label() + " — " + strategy.primarySurvivorElection().claimDate()
-                + "\nSpouse survivor: " + strategy.spouseSurvivorElection().label() + " — " + strategy.spouseSurvivorElection().claimDate();
+                + "\nPrimary Survivor Benefit Claiming Age: " + strategy.primarySurvivorElection().label() + " — " + strategy.primarySurvivorElection().claimDate()
+                + "\nSpouse Survivor Benefit Claiming Age: " + strategy.spouseSurvivorElection().label() + " — " + strategy.spouseSurvivorElection().claimDate();
     }
     private static String optionalMoney(Optional<BigDecimal> value) { return value.map(LongevityWeightedIntegratedView::money).orElse("Unavailable"); }
     private static String rank(OptionalInt rank) { return rank.isPresent() ? Integer.toString(rank.getAsInt()) : "Unavailable"; }

@@ -72,17 +72,15 @@ public final class DeathScenarioAssumptions {
                 && survivorClaimingAge == null) {
 
             throw new IllegalArgumentException(
-                    "Survivor claiming age is required "
+                    "Survivor Benefit Claiming Age is required "
                             + "for a death scenario.");
         }
 
         if (survivorClaimingAge != null
-                && (survivorClaimingAge < 62
-                || survivorClaimingAge > 70)) {
+                && survivorClaimingAge < 60) {
 
             throw new IllegalArgumentException(
-                    "Survivor claiming age must be "
-                            + "between 62 and 70.");
+                    "Survivor Benefit Claiming Age must be at least 60.");
         }
 
         if (this.postDeathExpenseFactor.compareTo(
@@ -142,6 +140,8 @@ public final class DeathScenarioAssumptions {
         return deathYear;
     }
 
+    /** Whole-year survivor-benefit election for whichever person survives this scenario.
+     * Independent of both retirement elections; ages over 70 can represent late death. */
     public Integer getSurvivorClaimingAge() {
         return survivorClaimingAge;
     }

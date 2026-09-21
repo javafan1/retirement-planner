@@ -144,8 +144,8 @@ class AssumptionsViewTest {
             assertRate("0.01", a.getTaxAssumptions().getLocalIncomeTaxRate());
             assertRate("0.30", a.getTaxAssumptions().getEstimatedHeirTaxRateOnTaxDeferredAssets());
             assertEquals(DeathScenario.SPOUSE_DIES, a.getDeathScenarioAssumptions().getDeathScenario());
-            assertEquals(2045, a.getDeathScenarioAssumptions().getDeathYear());
-            assertEquals(68, a.getDeathScenarioAssumptions().getSurvivorClaimingAge());
+            assertEquals(2031, a.getDeathScenarioAssumptions().getDeathYear());
+            assertEquals(67, a.getDeathScenarioAssumptions().getSurvivorClaimingAge());
             assertRate("0.75", a.getDeathScenarioAssumptions().getPostDeathExpenseFactor());
             assertSame(before.getWithdrawalAssumptions(), a.getWithdrawalAssumptions());
             assertEquals(before.getTaxAssumptions().getFilingStatus(), a.getTaxAssumptions().getFilingStatus());
@@ -382,7 +382,7 @@ class AssumptionsViewTest {
             Fixture f = new Fixture();
             ComboBox<DeathScenario> scenario = control(f.view, "deathScenarioComboBox");
             scenario.setValue(DeathScenario.BOTH_SURVIVE);
-            assertEquals(2040, f.assumptions().getDeathScenarioAssumptions().getDeathYear());
+            assertEquals(2030, f.assumptions().getDeathScenarioAssumptions().getDeathYear());
             dirty(f.view);
             scenario.setValue(DeathScenario.PRIMARY_DIES);
             clean(f.view);
@@ -398,7 +398,7 @@ class AssumptionsViewTest {
         DatePicker date = control(view, "projectionStartDatePicker");
         date.getEditor().setText(date.getConverter().toString(LocalDate.of(2027, 2, 3)));
         String[][] edits = {
-                {"projectionLengthField", "31"}, {"deathYearField", "2045"},
+                {"projectionLengthField", "31"}, {"deathYearField", "2031"},
                 {"postDeathExpenseFactorField", "75"}, {"investmentReturnField", "6.25"},
                 {"inflationRateField", "3.75"}, {"healthcareInflationField", "4.25"},
                 {"socialSecurityColaField", "2.75"}, {"federalBracketGrowthField", "3.25"},
@@ -412,7 +412,7 @@ class AssumptionsViewTest {
         ComboBox<DeathScenario> scenario = control(view, "deathScenarioComboBox");
         scenario.setValue(DeathScenario.SPOUSE_DIES);
         ComboBox<Integer> age = control(view, "survivorClaimingAgeComboBox");
-        age.setValue(68);
+        age.setValue(67);
     }
 
     static TextField field(Object view, String name) throws Exception {
@@ -477,10 +477,12 @@ class AssumptionsViewTest {
         final AtomicInteger revisions = new AtomicInteger();
 
         Fixture() {
+            plan().getHousehold().getPrimaryPerson().setBirthDate(LocalDate.of(1963, 6, 4));
+            plan().getHousehold().getSpouse().setBirthDate(LocalDate.of(1965, 2, 28));
             PlanningAssumptions a = assumptions();
             plan().setPlanningAssumptions(new PlanningAssumptions(
                     a.getEconomicAssumptions(), a.getTaxAssumptions(), a.getWithdrawalAssumptions(),
-                    new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2040, 67, BigDecimal.ONE),
+                    new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2030, 67, BigDecimal.ONE),
                     a.getProjectionLengthYears(), a.getProjectionStartDate()));
             controller.addSourcePlanRevisionListener(revisions::incrementAndGet);
             view.setOnPlanChanged(() -> {

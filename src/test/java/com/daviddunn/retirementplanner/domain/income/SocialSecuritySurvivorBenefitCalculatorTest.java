@@ -10,6 +10,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SocialSecuritySurvivorBenefitCalculatorTest {
 
+    @Test void survivorAt60ReceivesMaximumAgeReductionAndLateDeathHasNoReduction() {
+        assertEquals(new BigDecimal("2145.00"), SocialSecuritySurvivorBenefitCalculator.calculateMonthlyBenefit(
+                new BigDecimal("3000"), LocalDate.of(1965, 2, 28), 60));
+        assertEquals(new BigDecimal("3000.00"), SocialSecuritySurvivorBenefitCalculator.calculateMonthlyBenefit(
+                new BigDecimal("3000"), LocalDate.of(1965, 2, 28), 71));
+        assertEquals(new BigDecimal("2745.54"), SocialSecuritySurvivorBenefitCalculator.calculateMonthlyBenefit(
+                new BigDecimal("3000"), LocalDate.of(1965, 2, 28), LocalDate.of(2030, 1, 1)));
+    }
+
     @Test
     void survivorAtFraReceives100Percent() {
 
@@ -113,7 +122,7 @@ class SocialSecuritySurvivorBenefitCalculatorTest {
     }
 
     @Test
-    void survivorClaimingBelow62IsRejected() {
+    void survivorClaimingBelow60IsRejected() {
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -122,7 +131,7 @@ class SocialSecuritySurvivorBenefitCalculatorTest {
                                 .calculateMonthlyBenefit(
                                         new BigDecimal("4554"),
                                         LocalDate.of(1965, 2, 28),
-                                        61));
+                                        59));
     }
 
     @Test

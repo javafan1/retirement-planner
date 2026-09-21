@@ -4,7 +4,7 @@ import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
-import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
+import com.daviddunn.retirementplanner.ui.summary.ProjectionYearDetailsRequest;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionSummary;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.ui.charts.PortfolioChartView;
@@ -32,6 +32,7 @@ import javafx.stage.Stage;
 import java.io.File;
 import java.math.BigDecimal;
 import java.util.function.Consumer;
+import java.util.List;
 
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
@@ -134,6 +135,8 @@ public class MainWindow {
 
         resultsView.setOnYearDoubleClick(
                 this::showProjectionYearSummary);
+        resultsView.setOnBreakEvenAnalysis(this::showBreakEvenAnalysis);
+        resultsSummaryView.setOnBreakEvenAnalysis(this::showBreakEvenAnalysis);
 
         rothConversionView.setOnPlanChanged(() -> {
             if (collectingViewEdits) {
@@ -599,58 +602,30 @@ public class MainWindow {
         root.getScene().getWindow().hide();
     }
     private void showProjectionYearSummary(
-            ProjectionYear currentYear) {
+            ProjectionYearDetailsRequest request) {
 
-        ProjectionYear baselineYear =
-                null;
+        Projection baseline = controller.getCurrentPlan().getBaseline() == null
+                ? null : controller.getBaselineProjection();
 
-        BigDecimal baselineNonInvestableValue =
-                null;
-
-        if (controller.getCurrentPlan()
-                .getBaseline() != null) {
-
-            Projection baselineProjection =
-                    controller.getBaselineProjection();
-
-            if (baselineProjection != null) {
-
-                baselineYear =
-                        baselineProjection.getYears()
-                                .stream()
-                                .filter(year ->
-                                        year.getCalendarYear()
-                                                == currentYear
-                                                .getCalendarYear())
-                                .findFirst()
-                                .orElse(null);
-
-                if (baselineYear != null) {
-
-                    baselineNonInvestableValue =
-                            controller
-                                    .getBaselineNonInvestableAssetValue(
-                                            currentYear
-                                                    .getCalendarYear());
-                }
-            }
-        }
-
-        BigDecimal currentNonInvestableValue =
-                controller.getNonInvestableAssetValue(
-                        currentYear.getCalendarYear());
-
-        ProjectionYearDetailsDialog dialog =
-                new ProjectionYearDetailsDialog(
-                        currentYear,
-                        baselineYear,
-                        currentNonInvestableValue,
-                        baselineNonInvestableValue);
-
+        ProjectionYearDetailsDialog dialog = new ProjectionYearDetailsDialog(
+                request,
+                baseline == null ? List.of() : baseline.getYears(),
+                baseline == null ? List.of()
+                        : controller.getBaselineNonInvestableAssetProjections());
         dialog.show();
     }
 
+    private void showBreakEvenAnalysis(com.daviddunn.retirementplanner.domain.breakeven.BreakEvenAnalysisResult result) {
+        var context = controller.prepareBreakEvenContext(result);
+        var dialog = new com.daviddunn.retirementplanner.ui.breakeven.BreakEvenAnalysisDialog(
+                result, context, controller.prepareBreakEvenInsight(result));
+        if (stage != null) dialog.initOwner(stage);
+        dialog.showAndWait();
+    }
     private void refreshProjectionViews() {
+
+        resultsView.setBreakEvenAnalysis(null);
+        resultsSummaryView.setBreakEvenAnalysis(null);
 
         controller.invalidateProjection();
 
@@ -674,6 +649,10 @@ public class MainWindow {
                     controller.getCurrentPlan(),
                     projection,
                     controller.getCurrentNonInvestableAssetProjections());
+
+            var breakEven = controller.getCachedBreakEvenAnalysis();
+            resultsView.setBreakEvenAnalysis(breakEven);
+            resultsSummaryView.setBreakEvenAnalysis(breakEven);
 
             statusLabel.setText(
                     projection == null

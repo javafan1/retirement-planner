@@ -29,6 +29,32 @@ import static org.junit.jupiter.api.Assertions.*;
 class SocialSecurityStrategyAnalyzerDialogStateTest {
 
     @Test
+    void longevitySessionSettingsAreSharedWithoutPlanWritesOrAnalysisJobs() throws Exception {
+        onFx(unused -> {
+            var source = new com.daviddunn.retirementplanner.ui.controller.ApplicationController();
+            set(source, "currentPlan", new RetirementPlanScenarioCopyService().copy(plan));
+            source.setLongevitySessionSettings(new LongevitySessionSettings(LocalDate.of(2027, 3, 1),
+                    SocialSecurityMortalityAdjustment.of(new BigDecimal("0.8")), SocialSecurityMortalityAdjustment.standard()));
+            long revision = source.getSourcePlanRevision();
+            var dialog = new SocialSecurityStrategyAnalyzerDialog(null, source);
+            try {
+                assertEquals(LocalDate.of(2027, 3, 1), field(dialog, "mortalityDate", DatePicker.class).getValue());
+                assertEquals("0.8", field(dialog, "primaryMortalityAdjustment", TextField.class).getText());
+                field(dialog, "spouseMortalityAdjustment", TextField.class).setText("1.2");
+                field(dialog, "mortalityDate", DatePicker.class).setValue(LocalDate.of(2028, 2, 1));
+                assertEquals(new BigDecimal("1.2"), source.getLongevitySessionSettings().spouseAdjustment().factor());
+                assertEquals(LocalDate.of(2028, 2, 1), source.getLongevitySessionSettings().conditioningDate());
+                assertEquals(revision, source.getSourcePlanRevision());
+                assertFalse(source.isModified());
+                assertEquals(SocialSecurityAnalyzerJobController.State.IDLE, field(dialog, "jobs", SocialSecurityAnalyzerJobController.class).state());
+            } finally {
+                var close = dialog.getClass().getDeclaredMethod("close");
+                close.setAccessible(true); close.invoke(dialog);
+            }
+        });
+    }
+
+    @Test
     void deterministicHeatMapInteractionsUseFrozenResultsAndExactUnlistedStrategyDetails() throws Exception {
         onFx(dialog -> {
             installResults(dialog);
@@ -51,7 +77,7 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
             tabs.getSelectionModel().selectLast();
             cell.fire();
             assertTrue(text(heatMap).contains("Deterministic estate rank: 2"));
-            assertTrue(text(heatMap).contains("Primary survivor age: 67 years 4 months"));
+            assertTrue(text(heatMap).contains("Primary Survivor Benefit Claiming Age: 67 years 4 months"));
             for (var metric : heatMap.metric.getItems()) {
                 heatMap.metric.setValue(metric);
                 assertTrue(text(heatMap).contains(metric + ": " + ClaimingStrategyHeatMapView.format(metric, model.cell(62, 70).value(metric))));
@@ -292,8 +318,8 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
             set(dialog, "weightedCurrent", true);
             view.render(previous, baseline.snapshot());
             String frozen = field(view, "current", Label.class).getText();
-            assertTrue(frozen.contains("Primary survivor claiming age: Not specified"));
-            assertTrue(frozen.contains("Spouse survivor claiming age: Not specified"));
+            assertTrue(frozen.contains("Primary Survivor Benefit Claiming Age: Not specified"));
+            assertTrue(frozen.contains("Spouse Survivor Benefit Claiming Age: Not specified"));
             long revision = field(dialog, "assumptionsRevision", Long.class);
             baseline.primarySurvivor.setText("66");
             baseline.spouseSurvivor.setText("67");

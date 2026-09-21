@@ -141,8 +141,30 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     public SocialSecurityStrategyAnalyzerDialog(Window owner,
             com.daviddunn.retirementplanner.ui.controller.ApplicationController source) {
         this(owner, source.getCurrentPlan());
+        var sharedLongevity = source.getLongevitySessionSettings();
+        mortalityDate.setValue(sharedLongevity.conditioningDate());
+        primaryMortalityAdjustment.setText(sharedLongevity.primaryAdjustment().factor().toPlainString());
+        spouseMortalityAdjustment.setText(sharedLongevity.spouseAdjustment().factor().toPlainString());
+        Runnable shareLongevity = () -> {
+            try {
+                source.setLongevitySessionSettings(new LongevitySessionSettings(mortalityDate.getValue(),
+                        adjustment(primaryMortalityAdjustment.getText(), "Primary"), adjustment(spouseMortalityAdjustment.getText(), "Spouse")));
+            } catch (IllegalArgumentException | NullPointerException incompleteInput) {
+                // Keep the last valid session selection while a field is being edited.
+            }
+        };
+        observe(mortalityDate.valueProperty(), shareLongevity);
+        observe(primaryMortalityAdjustment.textProperty(), shareLongevity);
+        observe(spouseMortalityAdjustment.textProperty(), shareLongevity);
         detachPlanListener = source.addSourcePlanRevisionListener(() -> {
+            boolean differentPlan = plan != source.getCurrentPlan();
             plan = source.getCurrentPlan();
+            if (differentPlan) {
+                var defaults = source.getLongevitySessionSettings();
+                mortalityDate.setValue(defaults.conditioningDate());
+                primaryMortalityAdjustment.setText(defaults.primaryAdjustment().factor().toPlainString());
+                spouseMortalityAdjustment.setText(defaults.spouseAdjustment().factor().toPlainString());
+            }
             baselineInputs.load(plan);
             if (weightedPresentation == null) weightedView.initialCurrent(baselineInputs.snapshot());
             planRevision++;
@@ -641,9 +663,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         exhaustiveTable.getColumns().add(exhaustiveColumn("Spouse Retirement", group ->
                 retirementElection(group.representative().strategy().spouseRetirementAge(),
                         group.representative().strategy().spouseRetirementClaimDate()), 165));
-        exhaustiveTable.getColumns().add(exhaustiveColumn("Primary Survivor", group ->
+        exhaustiveTable.getColumns().add(exhaustiveColumn("Primary Survivor Benefit Claiming Age", group ->
                 survivorElection(group.representative().strategy().primarySurvivorElection()), 180));
-        exhaustiveTable.getColumns().add(exhaustiveColumn("Spouse Survivor", group ->
+        exhaustiveTable.getColumns().add(exhaustiveColumn("Spouse Survivor Benefit Claiming Age", group ->
                 survivorElection(group.representative().strategy().spouseSurvivorElection()), 180));
         exhaustiveTable.getColumns().add(exhaustiveColumn("Lifetime SS", group ->
                 money(group.representative().metrics().orElseThrow()
@@ -831,9 +853,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         integratedTable.getColumns().add(integratedColumn("Spouse Retirement", row ->
                 retirementElection(row.entry().strategy().spouseRetirementAge(),
                         row.entry().strategy().spouseRetirementClaimDate()), 165));
-        integratedTable.getColumns().add(integratedColumn("Primary Survivor", row ->
+        integratedTable.getColumns().add(integratedColumn("Primary Survivor Benefit Claiming Age", row ->
                 survivorElection(row.entry().strategy().primarySurvivorElection()), 180));
-        integratedTable.getColumns().add(integratedColumn("Spouse Survivor", row ->
+        integratedTable.getColumns().add(integratedColumn("Spouse Survivor Benefit Claiming Age", row ->
                 survivorElection(row.entry().strategy().spouseSurvivorElection()), 180));
         integratedTable.getColumns().add(integratedColumn("SS Expected PV", row ->
                 row.entry().socialSecurityOnlyExpectedValue()
@@ -945,9 +967,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 "Age " + row.cell().strategy().primaryRetirementAge()));
         strategies.getColumns().add(column("Spouse Ret.", row ->
                 "Age " + row.cell().strategy().spouseRetirementAge()));
-        strategies.getColumns().add(column("Primary Survivor", row ->
+        strategies.getColumns().add(column("Primary Survivor Benefit Claiming Age", row ->
                 row.cell().strategy().primarySurvivorElection().label()));
-        strategies.getColumns().add(column("Spouse Survivor", row ->
+        strategies.getColumns().add(column("Spouse Survivor Benefit Claiming Age", row ->
                 row.cell().strategy().spouseSurvivorElection().label()));
         strategies.getColumns().add(column("Expected PV", row ->
                 money(row.cell().expectedPresentValue())));
@@ -980,11 +1002,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         SocialSecurityHouseholdClaimingStrategy strategy = cell.strategy();
         return "Primary retirement: Age " + strategy.primaryRetirementAge()
                 + " — " + DATE.format(strategy.primaryRetirementClaimDate())
-                + "\nPrimary survivor: " + strategy.primarySurvivorElection().label()
+                + "\nPrimary Survivor Benefit Claiming Age: " + strategy.primarySurvivorElection().label()
                 + " — " + DATE.format(strategy.primarySurvivorElection().claimDate())
                 + "\nSpouse retirement: Age " + strategy.spouseRetirementAge()
                 + " — " + DATE.format(strategy.spouseRetirementClaimDate())
-                + "\nSpouse survivor: " + strategy.spouseSurvivorElection().label()
+                + "\nSpouse Survivor Benefit Claiming Age: " + strategy.spouseSurvivorElection().label()
                 + " — " + DATE.format(strategy.spouseSurvivorElection().claimDate());
     }
 
@@ -1003,9 +1025,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 + "\nSpouse retirement: "
                 + retirementElection(strategy.spouseRetirementAge(),
                         strategy.spouseRetirementClaimDate())
-                + "\nPrimary survivor: "
+                + "\nPrimary Survivor Benefit Claiming Age: "
                 + survivorElection(strategy.primarySurvivorElection())
-                + "\nSpouse survivor: "
+                + "\nSpouse Survivor Benefit Claiming Age: "
                 + survivorElection(strategy.spouseSurvivorElection());
     }
 

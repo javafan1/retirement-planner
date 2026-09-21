@@ -85,6 +85,88 @@ class SocialSecurityProjectionIncomeProviderTest {
         assertMoney(BigDecimal.ZERO, results.get(2031).spouseOwnBenefit());
     }
 
+    @Test
+    void retirementAt62ContinuesAfterDeathAt64WhileSurvivorElectionWaitsUntil67() {
+        RetirementPlan plan = plan(new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2030, 67), true);
+        Person primary = plan.getHousehold().getPrimaryPerson();
+        SocialSecurityIncome primaryIncome = source(AccountOwnership.PRIMARY,
+                LocalDate.of(2033, 6, 4), "3000", 70);
+        primary.replaceIncomeSource(primary.getIncomeSources().getFirst(), primaryIncome);
+        SocialSecurityIncome spouseIncome = (SocialSecurityIncome) plan.getHousehold().getSpouse().getIncomeSources().getFirst();
+        var results = new SocialSecurityProjectionIncomeProvider().calculate(plan, 2027, 2033);
+        for (int year = 2027; year <= 2031; year++) {
+            assertTrue(results.get(year).spouseOwnBenefit().signum() > 0);
+            assertMoney(BigDecimal.ZERO, results.get(year).spouseSurvivorCandidate());
+        }
+        assertTrue(results.get(2032).spouseSurvivorCandidate().signum() > 0);
+        assertMoney(BigDecimal.ZERO, results.get(2033).primaryOwnBenefit());
+        assertEquals(62, spouseIncome.getClaimingAge());
+        assertEquals(LocalDate.of(2027, 2, 28), spouseIncome.getStartDate());
+        assertEquals(70, primaryIncome.getClaimingAge());
+        assertEquals(LocalDate.of(2033, 6, 4), primaryIncome.getStartDate());
+    }
+
+    @Test
+    void deathAfterFraUsesImmediateElectionEvenWhenStoredAgeWouldDelayIt() {
+        RetirementPlan immediate = plan(new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2033, 67), true);
+        RetirementPlan late = plan(new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2033, 70), true);
+        var provider = new SocialSecurityProjectionIncomeProvider();
+        assertEquals(provider.calculate(immediate, 2033, 2034), provider.calculate(late, 2033, 2034));
+        assertTrue(provider.calculate(late, 2033, 2033).get(2033).spouseSurvivorCandidate().signum() > 0);
+    }
+
+    @Test
+    void bothSurviveIgnoresDormantSurvivorElection() {
+        var provider = new SocialSecurityProjectionIncomeProvider();
+        assertEquals(provider.calculate(plan(new DeathScenarioAssumptions(DeathScenario.BOTH_SURVIVE, null), true), 2030, 2033),
+                provider.calculate(plan(new DeathScenarioAssumptions(DeathScenario.BOTH_SURVIVE, 2030, 60), true), 2030, 2033));
+    }
+
+    @Test
+    void deterministicAndLifetimeOverridesKeepCandidateRetirementIndependentOfSurvivorElection() {
+        RetirementPlan plan = plan(new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2030, 67), true);
+        Person primary = plan.getHousehold().getPrimaryPerson();
+        Person spouse = plan.getHousehold().getSpouse();
+        var strategy = new SocialSecurityHouseholdClaimingStrategy(70, 62,
+                LocalDate.of(2033, 6, 4), LocalDate.of(2027, 2, 28),
+                new SocialSecuritySurvivorClaimingCandidate(primary.getBirthDate().plusYears(67), 67, 0, "Age 67"),
+                new SocialSecuritySurvivorClaimingCandidate(spouse.getBirthDate().plusYears(67), 67, 0, "Age 67"));
+        var lifetime = new HouseholdLifetimeScenario(java.util.Optional.of(java.time.Year.of(2030)),
+                java.util.Optional.of(java.time.Year.of(2034)));
+        var provider = new SocialSecurityProjectionIncomeProvider();
+        for (var context : java.util.List.of(ProjectionEvaluationContext.withSocialSecurityStrategy(strategy),
+                ProjectionEvaluationContext.withSocialSecurityStrategy(strategy, lifetime))) {
+            var result = provider.calculate(plan, 2027, 2033, context);
+            assertTrue(result.get(2029).spouseOwnBenefit().signum() > 0);
+            assertTrue(result.get(2030).spouseOwnBenefit().signum() > 0);
+            assertMoney(BigDecimal.ZERO, result.get(2030).spouseSurvivorCandidate());
+            assertMoney(BigDecimal.ZERO, result.get(2031).spouseSurvivorCandidate());
+            assertTrue(result.get(2032).spouseSurvivorCandidate().signum() > 0);
+            assertMoney(BigDecimal.ZERO, result.get(2033).primaryOwnBenefit());
+        }
+        assertEquals(70, strategy.primaryRetirementAge());
+        assertEquals(62, strategy.spouseRetirementAge());
+        assertEquals(67, ((SocialSecurityIncome) primary.getIncomeSources().getFirst()).getClaimingAge());
+    }
+
+    @Test
+    void lateDeathInLifetimeScenarioIsImmediateEvenWhenIntendedElectionIsAfterSecondDeath() {
+        RetirementPlan plan = plan(new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2033, 70), true);
+        Person primary = plan.getHousehold().getPrimaryPerson();
+        Person spouse = plan.getHousehold().getSpouse();
+        var strategy = new SocialSecurityHouseholdClaimingStrategy(67, 62,
+                LocalDate.of(2030, 6, 4), LocalDate.of(2027, 2, 28),
+                new SocialSecuritySurvivorClaimingCandidate(primary.getBirthDate().plusYears(70), 70, 0, "Age 70"),
+                new SocialSecuritySurvivorClaimingCandidate(spouse.getBirthDate().plusYears(70), 70, 0, "Age 70"));
+        var lifetime = new HouseholdLifetimeScenario(java.util.Optional.of(java.time.Year.of(2033)),
+                java.util.Optional.of(java.time.Year.of(2034)));
+        var provider = new SocialSecurityProjectionIncomeProvider();
+        for (var context : java.util.List.of(ProjectionEvaluationContext.withSocialSecurityStrategy(strategy),
+                ProjectionEvaluationContext.withSocialSecurityStrategy(strategy, lifetime))) {
+            assertTrue(provider.calculate(plan, 2033, 2034, context).get(2033).spouseSurvivorCandidate().signum() > 0);
+        }
+    }
+
     private RetirementPlan plan(
             DeathScenarioAssumptions death,
             boolean includeSpouseSource) {

@@ -170,12 +170,13 @@ class HouseholdLifetimeProjectionTest {
     }
 
     @Test
-    void explicitAndPersistedSurvivorElectionsAfterClaimantDeathAreOmitted() {
+    void deathAfterSurvivorFraMakesLateExplicitAndPersistedElectionsImmediate() {
         var plan = LifetimeProjectionTestSupport.plan(new DeathScenarioAssumptions(DeathScenario.BOTH_SURVIVE, null, 70));
         var result = engine.project(plan, ProjectionEvaluationContext.withSocialSecurityStrategy(
                 strategy(plan, 70), lifetime(2030, 2032)));
-        money("0", result.getYearAt(1).getSocialSecurityResult().spouseSurvivorCandidate());
-        assertDoesNotThrow(() -> run(plan, 2030, 2032));
+        // Spouse is already 67 at the January 2030 death: do not defer to age 70 in 2032.
+        money("36000.00", result.getYearAt(1).getSocialSecurityResult().spouseSurvivorCandidate());
+        money("36000.00", run(plan, 2030, 2032).getYearAt(1).getSocialSecurityResult().spouseSurvivorCandidate());
     }
 
     @Test

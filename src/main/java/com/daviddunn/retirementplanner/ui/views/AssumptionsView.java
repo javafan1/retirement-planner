@@ -45,6 +45,7 @@ public class AssumptionsView extends VBox {
             deathScenarioComboBox;
 
     private final TextField deathYearField;
+    private final Label survivorAgeLabel = new Label("Survivor Benefit Claiming Age");
 
     private final ComboBox<Integer>
             survivorClaimingAgeComboBox;
@@ -117,12 +118,6 @@ public class AssumptionsView extends VBox {
 
         survivorClaimingAgeComboBox =
                 new ComboBox<>();
-
-        for (int age = 62; age <= 70; age++) {
-            survivorClaimingAgeComboBox
-                    .getItems()
-                    .add(age);
-        }
 
         deathScenarioComboBox
                 .valueProperty()
@@ -267,7 +262,7 @@ public class AssumptionsView extends VBox {
                 row++);
 
         grid.add(
-                new Label("Survivor SSC Claiming Age:"),
+                survivorAgeLabel,
                 0,
                 row);
 
@@ -497,6 +492,10 @@ public class AssumptionsView extends VBox {
         });
         projectionStartDatePicker.getEditor().textProperty().addListener((observable, oldValue, newValue) -> updateDirty());
         deathScenarioComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        deathYearField.textProperty().addListener((observable, oldValue, newValue) -> {
+            updateDeathScenarioFields();
+            updateDirty();
+        });
         survivorClaimingAgeComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
 
         /*
@@ -647,6 +646,7 @@ public class AssumptionsView extends VBox {
 
         updateOpeningRmdButtonVisibility();
         loading = false;
+        updateDeathScenarioFields();
         updateDirty();
     }
 
@@ -790,13 +790,14 @@ public class AssumptionsView extends VBox {
             }
             return value;
         });
-        Integer age = !active ? dormantAge : read(survivorClaimingAgeComboBox, "Survivor claiming age", () -> {
+        Integer age = !active ? dormantAge : read(survivorClaimingAgeComboBox, "Survivor Benefit Claiming Age", () -> {
             Integer value = survivorClaimingAgeComboBox.getValue();
             if (value == null) {
                 throw new IllegalArgumentException("An age is required.");
             }
-            if (value != null && (value < 62 || value > 70)) {
-                throw new IllegalArgumentException("Must be between 62 and 70.");
+            if (!com.daviddunn.retirementplanner.domain.income.SurvivorBenefitClaimingPolicy
+                    .choices(currentPlan.getHousehold(), scenario, year).ages().contains(value)) {
+                throw new IllegalArgumentException("Choose a valid age for the selected death scenario and year.");
             }
             return value;
         });
@@ -879,6 +880,10 @@ public class AssumptionsView extends VBox {
 
     private void updateDeathScenarioFields() {
 
+        if (loading) {
+            return;
+        }
+
         boolean deathScenarioActive =
                 deathScenarioComboBox.getValue()
                         != null
@@ -888,8 +893,8 @@ public class AssumptionsView extends VBox {
         deathYearField.setDisable(
                 !deathScenarioActive);
 
-        survivorClaimingAgeComboBox.setDisable(
-                !deathScenarioActive);
+        SurvivorBenefitClaimingControls.update(currentPlan, deathScenarioComboBox.getValue(),
+                deathYearField.getText(), survivorClaimingAgeComboBox, survivorAgeLabel);
 
         postDeathExpenseFactorField.setDisable(
                 !deathScenarioActive);

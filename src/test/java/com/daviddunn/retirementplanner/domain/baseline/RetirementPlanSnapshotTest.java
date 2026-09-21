@@ -10,6 +10,16 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class RetirementPlanSnapshotTest {
 
     @Test
+    void savedSnapshotDoesNotShareMutableHouseholdWithCurrent() {
+        RetirementPlan plan = RetirementPlanFactory.createEmptyPlan();
+        RetirementPlanSnapshot snapshot = RetirementPlanSnapshot.fromRetirementPlan(plan);
+        org.junit.jupiter.api.Assertions.assertNotSame(plan.getHousehold(), snapshot.getHousehold());
+        org.junit.jupiter.api.Assertions.assertNotSame(plan.getHousehold().getPrimaryPerson(),
+                snapshot.getHousehold().getPrimaryPerson());
+        org.junit.jupiter.api.Assertions.assertNotSame(plan.getAccountPortfolio(), snapshot.getAccountPortfolio());
+    }
+
+    @Test
     void snapshotPreservesPlanData() {
 
         RetirementPlan plan =

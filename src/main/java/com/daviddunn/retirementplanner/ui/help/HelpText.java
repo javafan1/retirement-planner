@@ -2,6 +2,11 @@ package com.daviddunn.retirementplanner.ui.help;
 
 public final class HelpText {
 
+    public static final String SURVIVOR_BENEFIT_CLAIMING_AGE =
+            "When the surviving household member elects Social Security survivor benefits after the other's death. "
+                    + "Separate from their own retirement-benefit claiming age. Choices depend on age at death "
+                    + "and Survivor Full Retirement Age (FRA); death at or after Survivor FRA means immediate election.";
+
     public static final String PLANNING_HORIZON =
             "Defines the end of the household retirement projection, generally representing "
                     + "the assumed death of the surviving household member. This planning horizon "

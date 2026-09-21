@@ -53,7 +53,7 @@ class DeathScenarioAssumptionsTest {
     }
 
     @Test
-    void survivorClaimingAgeMustBeAtLeast62() {
+    void survivorClaimingAgeMustBeAtLeast60() {
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -61,20 +61,20 @@ class DeathScenarioAssumptionsTest {
                         new DeathScenarioAssumptions(
                                 DeathScenario.PRIMARY_DIES,
                                 2035,
-                                61));
+                                59));
     }
 
     @Test
-    void survivorClaimingAgeMayBe62() {
+    void survivorClaimingAgeMayBe60() {
 
         DeathScenarioAssumptions assumptions =
                 new DeathScenarioAssumptions(
                         DeathScenario.PRIMARY_DIES,
                         2035,
-                        62);
+                        60);
 
         assertEquals(
-                Integer.valueOf(62),
+                Integer.valueOf(60),
                 assumptions.getSurvivorClaimingAge());
     }
 
@@ -93,15 +93,9 @@ class DeathScenarioAssumptionsTest {
     }
 
     @Test
-    void survivorClaimingAgeMustNotExceed70() {
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () ->
-                        new DeathScenarioAssumptions(
-                                DeathScenario.PRIMARY_DIES,
-                                2035,
-                                71));
+    void survivorClaimingAgeMayExceed70ForLateDeath() {
+        assertEquals(71, new DeathScenarioAssumptions(
+                DeathScenario.PRIMARY_DIES, 2035, 71).getSurvivorClaimingAge());
     }
 
     @Test

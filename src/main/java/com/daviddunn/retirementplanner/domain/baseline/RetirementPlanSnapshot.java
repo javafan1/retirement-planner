@@ -100,12 +100,21 @@ public class RetirementPlanSnapshot {
                 plan,
                 "Retirement plan is required.");
 
-        return new RetirementPlanSnapshot(
+        RetirementPlanSnapshot snapshot = new RetirementPlanSnapshot(
                 plan.getHousehold(),
                 plan.getAccountPortfolio(),
                 plan.getPlanningAssumptions(),
                 plan.getRothConversionRequest(),
                 plan.getNonInvestableAssets());
+        // Preserve the existing JSON shape while isolating mutable household/accounts.
+        // Copy only the snapshot, never the plan's previous baseline recursively.
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        try {
+            return mapper.readValue(mapper.writeValueAsBytes(snapshot), RetirementPlanSnapshot.class);
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException("Unable to freeze baseline snapshot.", exception);
+        }
     }
 
 

@@ -18,15 +18,15 @@ final class SocialSecurityAnalyzerInputMatrix {
     static final String DETERMINISTIC_OBJECTIVE = "Deterministic Integrated: After-tax estate under the configured plan death scenario and configured projection horizon. Quick Comparison retains SS candidate order; only Exhaustive Search ranks by estate.";
     static final String WEIGHTED_OBJECTIVE = "Longevity-Weighted Integrated: Expected present-value after-tax investable estate across modeled household lifespans, measured at household second death. This excludes non-investable assets.";
     static final String QUICK_NOTE = "Quick Comparison uses SS-only mortality and valuation inputs for candidate selection and its SS expected-PV column. Its full-plan outcomes remain deterministic. Claim ages in all searches are candidate elections; persisted elections identify the current-plan reference/baseline.";
-    static final String BASELINE_NOTE = "Survivor elections in SS-only analysis are candidate elections. Deterministic analysis uses only the surviving person's election under the configured death scenario; Both Survive uses neither. The analyzer's two survivor baseline inputs are used only for the longevity-weighted Current Strategy comparison, not SS-only requests or candidate generation.";
+    static final String BASELINE_NOTE = "Survivor Benefit Claiming Age is separate from retirement claiming age; benefits cannot begin before the other person's death. Survivor elections in SS-only analysis are candidate elections. Deterministic analysis uses only the surviving person's election under the configured death scenario; Both Survive uses neither. The analyzer's two survivor baseline inputs are used only for the longevity-weighted Current Strategy comparison, not SS-only requests or candidate generation.";
 
     static List<Row> rows() {
         return List.of(
                 all("Primary DOB"), all("Spouse DOB"),
                 all("Primary FRA benefit"), all("Spouse FRA benefit"),
                 all("Primary retirement claim age"), all("Spouse retirement claim age"),
-                new Row("Primary survivor claim age", Use.USED, Use.PRIMARY_SURVIVES, Use.USED),
-                new Row("Spouse survivor claim age", Use.USED, Use.SPOUSE_SURVIVES, Use.USED),
+                new Row("Primary Survivor Benefit Claiming Age", Use.USED, Use.PRIMARY_SURVIVES, Use.USED),
+                new Row("Spouse Survivor Benefit Claiming Age", Use.USED, Use.SPOUSE_SURVIVES, Use.USED),
                 new Row("Current Strategy Baseline (analyzer survivor inputs)", Use.NOT_USED, Use.NOT_USED, Use.USED),
                 all("Social Security COLA"),
                 longevity("Primary mortality category"), longevity("Spouse mortality category"),

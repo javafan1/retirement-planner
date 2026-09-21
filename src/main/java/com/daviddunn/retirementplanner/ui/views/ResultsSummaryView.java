@@ -25,6 +25,8 @@ import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import com.daviddunn.retirementplanner.ui.help.HelpText;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 import com.daviddunn.retirementplanner.domain.baseline.ProjectionComparison;
+import com.daviddunn.retirementplanner.domain.breakeven.BreakEvenAnalysisResult;
+import com.daviddunn.retirementplanner.ui.breakeven.BreakEvenAnalysisDialog;
 
 import javafx.geometry.HPos;
 import javafx.geometry.Side;
@@ -45,6 +47,8 @@ import javafx.scene.control.*;
 import javafx.util.StringConverter;
 
 import java.io.IOException;
+import com.daviddunn.retirementplanner.ui.summary.ProjectionYearDetailsRequest;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -133,6 +137,7 @@ public class ResultsSummaryView extends BorderPane {
 
     private final TextField deathYearField =
             new TextField();
+    private final Label survivorAgeLabel = new Label("Survivor Benefit Claiming Age");
 
     private final ComboBox<Integer> survivorAgeComboBox =
             new ComboBox<>();
@@ -200,7 +205,9 @@ public class ResultsSummaryView extends BorderPane {
     private Consumer<List<SocialSecurityUpdate>>
             socialSecurityHandler;
 
-    private Consumer<ProjectionYear>
+    private List<ProjectionYear> detailsYears = List.of();
+
+    private Consumer<ProjectionYearDetailsRequest>
             yearDoubleClickHandler;
 
     private List<NonInvestableAssetProjection>
@@ -216,6 +223,13 @@ public class ResultsSummaryView extends BorderPane {
     private Projection currentProjection;
 
     private VBox baselineComparisonBox;
+    private final Button breakEvenButton = new Button("Break-Even Analysis");
+    private BreakEvenAnalysisResult breakEvenAnalysis;
+    private Consumer<BreakEvenAnalysisResult> breakEvenHandler;
+
+    public void setOnBreakEvenAnalysis(Consumer<BreakEvenAnalysisResult> handler) {
+        breakEvenHandler = handler;
+    }
 
     private final Label baselineComparisonYear =
             new Label();
@@ -358,6 +372,7 @@ public class ResultsSummaryView extends BorderPane {
                 Pos.CENTER_RIGHT);
 
         configurePlaceholderControls();
+        deathYearField.textProperty().addListener((observable, oldValue, newValue) -> updateSurvivorAgeChoices());
 
         deathScenarioComboBox
                 .valueProperty()
@@ -449,7 +464,10 @@ public class ResultsSummaryView extends BorderPane {
                         && yearDoubleClickHandler != null) {
 
                     yearDoubleClickHandler.accept(
-                            row.getItem());
+                            new ProjectionYearDetailsRequest(
+                                    detailsYears,
+                                    row.getItem(),
+                                    nonInvestableAssetProjections));
                 }
             });
 
@@ -583,7 +601,11 @@ public class ResultsSummaryView extends BorderPane {
                 if (survivorClaimingAge == null) {
 
                     throw new IllegalArgumentException(
-                            "Survivor claiming age is required.");
+                            "Survivor Benefit Claiming Age is required.");
+                }
+                if (!com.daviddunn.retirementplanner.domain.income.SurvivorBenefitClaimingPolicy
+                        .choices(currentPlan.getHousehold(), deathScenario, deathYear).ages().contains(survivorClaimingAge)) {
+                    throw new IllegalArgumentException("Choose a valid Survivor Benefit Claiming Age for the death scenario and year.");
                 }
             }
 
@@ -646,6 +668,14 @@ public class ResultsSummaryView extends BorderPane {
          */
         applyDeathButton.setDisable(
                 deathScenarioComboBox.getValue() == null);
+        updateSurvivorAgeChoices();
+    }
+
+    private void updateSurvivorAgeChoices() {
+        String selected = deathScenarioComboBox.getValue();
+        SurvivorBenefitClaimingControls.update(currentPlan,
+                selected == null ? null : parseDeathScenario(selected), deathYearField.getText(),
+                survivorAgeComboBox, survivorAgeLabel);
     }
 
 
@@ -806,19 +836,6 @@ public class ResultsSummaryView extends BorderPane {
 
         deathYearField.setPromptText(
                 "YYYY");
-
-        survivorAgeComboBox
-                .getItems()
-                .addAll(
-                        62,
-                        63,
-                        64,
-                        65,
-                        66,
-                        67,
-                        68,
-                        69,
-                        70);
 
         survivorAgeComboBox.setPromptText(
                 "Age");
@@ -1088,7 +1105,21 @@ public class ResultsSummaryView extends BorderPane {
 
         section.getChildren().addAll(
                 baselineComparisonYear,
+                breakEvenButton,
                 cards);
+
+        breakEvenButton.setId("break-even-action");
+        breakEvenButton.setDisable(true);
+        breakEvenButton.setOnAction(event -> {
+            if (breakEvenAnalysis == null || breakEvenAnalysis.comparableYearCount() == 0) return;
+            if (breakEvenHandler != null) {
+                breakEvenHandler.accept(breakEvenAnalysis);
+                return;
+            }
+            var dialog = new BreakEvenAnalysisDialog(breakEvenAnalysis);
+            if (getScene() != null) dialog.initOwner(getScene().getWindow());
+            dialog.showAndWait();
+        });
 
         return section;
     }
@@ -1378,6 +1409,8 @@ public class ResultsSummaryView extends BorderPane {
          */
         VBox assumptionContent =
                 new VBox(12);
+        // Let fitToWidth size the content to the viewport even at the sidebar's minimum width.
+        assumptionContent.setMinWidth(0);
 
         assumptionContent.getChildren().addAll(
                 createDeathPanel(),
@@ -1722,6 +1755,8 @@ public class ResultsSummaryView extends BorderPane {
 
         GridPane grid =
                 createTwoColumnGrid();
+        // Only the compact Scenario/Death Year labels occupy the first column.
+        grid.getColumnConstraints().getFirst().setMinWidth(javafx.scene.layout.Region.USE_COMPUTED_SIZE);
 
         Label scenarioLabel =
                 new Label("Scenario");
@@ -1758,22 +1793,28 @@ public class ResultsSummaryView extends BorderPane {
                 1,
                 1);
 
-        Label survivorAgeLabel =
-                new Label(
-                        "Survivor Claiming Age");
-
         survivorAgeLabel.getStyleClass().add(
                 "assumption-label");
+        survivorAgeLabel.setWrapText(true);
+        survivorAgeLabel.setMinWidth(0);
+        survivorAgeLabel.setMaxWidth(Double.MAX_VALUE);
+        survivorAgeLabel.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
 
         grid.add(
                 survivorAgeLabel,
                 0,
-                2);
+                2,
+                2,
+                1);
 
         grid.add(
                 survivorAgeComboBox,
-                1,
-                2);
+                0,
+                3,
+                2,
+                1);
+        GridPane.setHgrow(survivorAgeComboBox, Priority.ALWAYS);
+        survivorAgeComboBox.setMinWidth(0);
 
         deathScenarioComboBox.setMaxWidth(
                 Double.MAX_VALUE);
@@ -2173,6 +2214,8 @@ public class ResultsSummaryView extends BorderPane {
     }
     private void updateBaselineComparison() {
 
+        setBreakEvenAnalysis(null);
+
         if (currentPlan == null
                 || currentProjection == null
                 || currentPlan.getBaseline() == null) {
@@ -2185,6 +2228,7 @@ public class ResultsSummaryView extends BorderPane {
 
         ProjectionComparison comparison =
                 controller.compareProjections();
+        setBreakEvenAnalysis(controller.getCachedBreakEvenAnalysis());
 
         baselineComparisonBox.setVisible(true);
         baselineComparisonBox.setManaged(true);
@@ -2435,6 +2479,8 @@ public class ResultsSummaryView extends BorderPane {
             List<NonInvestableAssetProjection>
                     nonInvestableAssetProjections) {
 
+        setBreakEvenAnalysis(null);
+
         currentPlan = plan;
         currentProjection = projection;
 
@@ -2444,9 +2490,11 @@ public class ResultsSummaryView extends BorderPane {
 
         loadSocialSecurity(plan);
 
+        detailsYears = projection == null ? List.of() : projection.getYears();
+
         this.nonInvestableAssetProjections =
                 nonInvestableAssetProjections != null
-                        ? nonInvestableAssetProjections
+                        ? List.copyOf(nonInvestableAssetProjections)
                         : List.of();
 
 
@@ -2501,6 +2549,11 @@ public class ResultsSummaryView extends BorderPane {
                 .selectLast();
     }
 
+    public void setBreakEvenAnalysis(BreakEvenAnalysisResult analysis) {
+        breakEvenAnalysis = analysis;
+        breakEvenButton.setDisable(analysis == null || analysis.comparableYearCount() == 0);
+    }
+
 
     private void loadAssumptions(
             RetirementPlan plan) {
@@ -2511,7 +2564,7 @@ public class ResultsSummaryView extends BorderPane {
         int length = assumptions.getProjectionLengthYears();
         int endYear = Math.addExact(assumptions.getProjectionStartDate().getYear(), length - 1);
         projectionLengthField.setText(Integer.toString(length));
-        planningHorizonValue.setText(endYear + " (" + length + (length == 1 ? " year)" : " years)"));
+        planningHorizonValue.setText("Through " + endYear + " · " + length + (length == 1 ? " year" : " years"));
         EconomicAssumptions economic =
                 assumptions
                         .getEconomicAssumptions();
@@ -3225,7 +3278,7 @@ public class ResultsSummaryView extends BorderPane {
     }
 
     public void setOnYearDoubleClick(
-            Consumer<ProjectionYear> handler) {
+            Consumer<ProjectionYearDetailsRequest> handler) {
 
         this.yearDoubleClickHandler =
                 handler;

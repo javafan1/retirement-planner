@@ -28,12 +28,10 @@ public final class SocialSecuritySurvivorBenefitCalculator {
                     "Deceased monthly benefit cannot be negative.");
         }
 
-        if (survivorClaimingAge < 62
-                || survivorClaimingAge > 70) {
+        if (survivorClaimingAge < 60) {
 
             throw new IllegalArgumentException(
-                    "Survivor claiming age must be between "
-                            + "62 and 70.");
+                    "Survivor Benefit Claiming Age must be at least 60.");
         }
 
         FullRetirementAge survivorFra =
@@ -50,6 +48,22 @@ public final class SocialSecuritySurvivorBenefitCalculator {
                 .setScale(
                         2,
                         RoundingMode.HALF_UP);
+    }
+
+    /** Reduction is fixed at actual entitlement, never at an election preceding death. */
+    public static BigDecimal calculateMonthlyBenefit(
+            BigDecimal deceasedMonthlyBenefit,
+            LocalDate survivorBirthDate,
+            LocalDate entitlementDate) {
+        Objects.requireNonNull(deceasedMonthlyBenefit);
+        Objects.requireNonNull(entitlementDate);
+        if (deceasedMonthlyBenefit.signum() < 0) {
+            throw new IllegalArgumentException("Deceased monthly benefit cannot be negative.");
+        }
+        BigDecimal factor = com.daviddunn.retirementplanner.domain.socialsecurity.analysis
+                .SocialSecuritySurvivorBenefitCalculator.calculateReductionFactor(
+                        survivorBirthDate, java.time.YearMonth.from(entitlementDate));
+        return deceasedMonthlyBenefit.multiply(factor).setScale(2, RoundingMode.HALF_UP);
     }
 
     private static BigDecimal calculateSurvivorBenefitFactor(

@@ -39,8 +39,9 @@ public final class IntegratedRetirementClaimingGridCalculator {
         return new IntegratedRetirementClaimingGridSurvivorPolicy(
                 current.primarySurvivorElection(),
                 current.spouseSurvivorElection(),
-                "Current persisted shared survivor claiming age converted to each "
-                        + "person's exact birthday at that age.");
+                "Current persisted Survivor Benefit Claiming Age converted to each "
+                        + "person's exact birthday at that age, conditional on the other person's death. "
+                        + "Death at or after Survivor FRA means immediate election.");
     }
 
     public IntegratedRetirementClaimingGridResult calculate(

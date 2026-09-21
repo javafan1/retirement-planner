@@ -35,16 +35,16 @@ class SocialSecurityAnalyzerInputPresentationTest {
         assertEquals(35, rows.size());
         assertEquals(35, rows.stream().map(SocialSecurityAnalyzerInputMatrix.Row::input).distinct().count());
         var common = Set.of("Primary DOB", "Spouse DOB", "Primary FRA benefit", "Spouse FRA benefit",
-                "Primary retirement claim age", "Spouse retirement claim age", "Primary survivor claim age",
-                "Spouse survivor claim age", "Social Security COLA", "Ranking objective");
+                "Primary retirement claim age", "Spouse retirement claim age", "Primary Survivor Benefit Claiming Age",
+                "Spouse Survivor Benefit Claiming Age", "Social Security COLA", "Ranking objective");
         var longevity = Set.of("Primary mortality category", "Spouse mortality category", "Primary mortality adjustment",
                 "Spouse mortality adjustment", "Mortality conditioning date", "Valuation date", "Real discount rate",
                 "Mortality probability distribution");
         for (var row : rows) {
             assertEquals(common.contains(row.input()) || longevity.contains(row.input()) ? USED : NOT_USED, row.socialSecurity(), row.input());
             var deterministic = switch (row.input()) {
-                case "Primary survivor claim age" -> PRIMARY_SURVIVES;
-                case "Spouse survivor claim age" -> SPOUSE_SURVIVES;
+                case "Primary Survivor Benefit Claiming Age" -> PRIMARY_SURVIVES;
+                case "Spouse Survivor Benefit Claiming Age" -> SPOUSE_SURVIVES;
                 case "Current Strategy Baseline (analyzer survivor inputs)", "Estate at household second death" -> NOT_USED;
                 default -> longevity.contains(row.input()) ? NOT_USED : USED;
             };

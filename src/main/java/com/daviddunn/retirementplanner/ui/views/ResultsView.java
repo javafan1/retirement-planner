@@ -7,6 +7,10 @@ import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
 import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjection;
 
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
+import com.daviddunn.retirementplanner.domain.breakeven.BreakEvenAnalysisResult;
+import com.daviddunn.retirementplanner.ui.breakeven.BreakEvenAnalysisDialog;
+import javafx.scene.control.Button;
+import javafx.scene.layout.HBox;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
@@ -18,6 +22,8 @@ import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.layout.BorderPane;
 
+import com.daviddunn.retirementplanner.ui.summary.ProjectionYearDetailsRequest;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.function.Consumer;
@@ -28,6 +34,13 @@ public class ResultsView extends BorderPane {
     private final TableView<ProjectionYear> table;
 
     private final Label summaryLabel;
+    private final Button breakEvenButton = new Button("Break-Even Analysis");
+    private BreakEvenAnalysisResult breakEvenAnalysis;
+    private Consumer<BreakEvenAnalysisResult> breakEvenHandler;
+
+    public void setOnBreakEvenAnalysis(Consumer<BreakEvenAnalysisResult> handler) {
+        breakEvenHandler = handler;
+    }
 
     private List<NonInvestableAssetProjection>
             nonInvestableAssetProjections =
@@ -36,7 +49,9 @@ public class ResultsView extends BorderPane {
     /**
      * Invoked when the user double-clicks a projection year.
      */
-    private Consumer<ProjectionYear> yearDoubleClickHandler;
+    private List<ProjectionYear> detailsYears = List.of();
+
+    private Consumer<ProjectionYearDetailsRequest> yearDoubleClickHandler;
 
     public ResultsView() {
 
@@ -55,7 +70,19 @@ public class ResultsView extends BorderPane {
         setPadding(
                 new Insets(10));
 
-        setTop(summaryLabel);
+        breakEvenButton.setId("break-even-action");
+        breakEvenButton.setDisable(true);
+        breakEvenButton.setOnAction(event -> {
+            if (breakEvenAnalysis == null || breakEvenAnalysis.comparableYearCount() == 0) return;
+            if (breakEvenHandler != null) {
+                breakEvenHandler.accept(breakEvenAnalysis);
+                return;
+            }
+            var dialog = new BreakEvenAnalysisDialog(breakEvenAnalysis);
+            if (getScene() != null) dialog.initOwner(getScene().getWindow());
+            dialog.showAndWait();
+        });
+        setTop(new HBox(18, summaryLabel, breakEvenButton));
         setCenter(table);
 
         BorderPane.setMargin(
@@ -251,7 +278,10 @@ public class ResultsView extends BorderPane {
                         && yearDoubleClickHandler != null) {
 
                     yearDoubleClickHandler.accept(
-                            row.getItem());
+                            new ProjectionYearDetailsRequest(
+                                    detailsYears,
+                                    row.getItem(),
+                                    nonInvestableAssetProjections));
                 }
             });
 
@@ -297,9 +327,13 @@ public class ResultsView extends BorderPane {
             List<NonInvestableAssetProjection>
                     nonInvestableAssetProjections) {
 
+        setBreakEvenAnalysis(null);
+
+        detailsYears = projection == null ? List.of() : projection.getYears();
+
         this.nonInvestableAssetProjections =
                 nonInvestableAssetProjections != null
-                        ? nonInvestableAssetProjections
+                        ? List.copyOf(nonInvestableAssetProjections)
                         : List.of();
 
         if (projection == null) {
@@ -346,13 +380,18 @@ public class ResultsView extends BorderPane {
      * double-clicks a projection year.
      */
     public void setOnYearDoubleClick(
-            Consumer<ProjectionYear> handler) {
+            Consumer<ProjectionYearDetailsRequest> handler) {
 
         this.yearDoubleClickHandler = handler;
     }
 
     public TableView<ProjectionYear> getTable() {
         return table;
+    }
+
+    public void setBreakEvenAnalysis(BreakEvenAnalysisResult analysis) {
+        breakEvenAnalysis = analysis;
+        breakEvenButton.setDisable(analysis == null || analysis.comparableYearCount() == 0);
     }
 
     private TableColumn<ProjectionYear, Integer> createIntegerColumn(
