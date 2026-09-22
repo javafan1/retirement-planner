@@ -26,10 +26,10 @@ import java.util.List;
 public class ProjectionPdfExporter {
 
     private static final float PAGE_WIDTH =
-            PDRectangle.LETTER.getWidth();
+            PDRectangle.LETTER.getHeight();
 
     private static final float PAGE_HEIGHT =
-            PDRectangle.LETTER.getHeight();
+            PDRectangle.LETTER.getWidth();
 
     private static final float MARGIN = 36;
 
@@ -110,6 +110,7 @@ public class ProjectionPdfExporter {
             new PDType1Font(
                     Standard14Fonts.FontName.HELVETICA_BOLD);
 
+    private ProjectionPdfReport report;
     private PDDocument document;
 
     private PDPage page;
@@ -124,6 +125,7 @@ public class ProjectionPdfExporter {
             Projection projection,
             List<NonInvestableAssetProjection>
                     nonInvestableProjections,
+            ProjectionPdfReport report,
             Path file)
             throws IOException {
 
@@ -144,8 +146,9 @@ public class ProjectionPdfExporter {
                     List.of();
         }
 
-        document =
-                new PDDocument();
+        this.report = java.util.Objects.requireNonNull(report);
+        if (report.charts().years().isEmpty()) throw new IllegalArgumentException("Chart data is required.");
+        document = new PDDocument();
 
         try {
 
@@ -159,15 +162,16 @@ public class ProjectionPdfExporter {
                     projection,
                     nonInvestableProjections);
 
-            writeKeyAssumptions(
-                    plan);
-
-            writeProjectionTable(
-                    projection,
-                    nonInvestableProjections);
-
+            writeBaselineComparison();
             finishPage();
-
+            new ProjectionPdfCharts(report).appendTo(document);
+            startPage();
+            writeProjectionTable(projection, nonInvestableProjections);
+            finishPage();
+            startPage();
+            writeKeyAssumptions(plan);
+            finishPage();
+            addPageNumbers();
             document.save(
                     file.toFile());
 
@@ -183,7 +187,7 @@ public class ProjectionPdfExporter {
 
         page =
                 new PDPage(
-                        PDRectangle.LETTER);
+                        new PDRectangle(PAGE_WIDTH, PAGE_HEIGHT));
 
         document.addPage(page);
 
@@ -207,6 +211,30 @@ public class ProjectionPdfExporter {
     }
 
 
+    private void ensureSpace(float height) throws IOException {
+        if (currentY < MARGIN + height) { finishPage(); startPage(); }
+    }
+
+    private void addPageNumbers() throws IOException { PdfReportSupport.pageNumbers(document); }
+
+    private void writeBaselineComparison() throws IOException {
+        var baseline = report.baselineComparison();
+        if (baseline == null) return;
+        writeSectionHeading("BASELINE COMPARISON - " + baseline.getCalendarYear(), BLUE);
+        String[] titles = {"Investment Growth", "Total Income", "Total Taxes", "Peak Annual Tax",
+                "Investable Assets", "Total Net Worth", "Investable After-Tax Estate"};
+        BigDecimal[] old = {baseline.getBaselineInvestmentGrowth(), baseline.getBaselineTotalIncome(),
+                baseline.getBaselineTotalTaxes(), baseline.getBaselinePeakAnnualTax(), baseline.getBaselineEndingInvestableAssets(),
+                baseline.getBaselineNetWorth(), baseline.getBaselineAfterTaxEstate()};
+        BigDecimal[] current = {baseline.getCurrentInvestmentGrowth(), baseline.getCurrentTotalIncome(),
+                baseline.getCurrentTotalTaxes(), baseline.getCurrentPeakAnnualTax(), baseline.getCurrentEndingInvestableAssets(),
+                baseline.getCurrentNetWorth(), baseline.getCurrentAfterTaxEstate()};
+        BigDecimal[] changes = {baseline.getInvestmentGrowthChange(), baseline.getTotalIncomeChange(), baseline.getTotalTaxesChange(),
+                baseline.getPeakAnnualTaxChange(), baseline.getEndingInvestableAssetsChange(), baseline.getNetWorthChange(), baseline.getAfterTaxEstateChange()};
+        float[] widths = {240, 160, 160, 160};
+        writeTableHeader(new String[]{"Metric", "Baseline", "Current", "Change"}, widths);
+        for (int i = 0; i < titles.length; i++) writeTableRow(new String[]{titles[i], money(old[i]), money(current[i]), money(changes[i])}, widths);
+    }
     // ============================================================
     // Title
     // ============================================================
@@ -217,7 +245,7 @@ public class ProjectionPdfExporter {
             throws IOException {
 
         writeText(
-                "RETIREMENT PROJECTION",
+                "RETIREMENT PLAN PROJECTION REPORT",
                 MARGIN,
                 currentY,
                 FONT_BOLD,
@@ -225,6 +253,8 @@ public class ProjectionPdfExporter {
                 BLUE);
 
         currentY -= 25;
+        writeText("Plan: " + report.planName(), MARGIN, currentY, FONT_NORMAL, 10, GRAY);
+        currentY -= 16;
 
         String period =
                 projection.getYears()
@@ -276,7 +306,7 @@ public class ProjectionPdfExporter {
         currentY -= 16;
 
         writeSectionHeading(
-                "KEY RESULTS",
+                "EXECUTIVE RESULTS SUMMARY",
                 BLUE);
 
         ProjectionYear last =
@@ -294,83 +324,24 @@ public class ProjectionPdfExporter {
                                 BigDecimal::compareTo)
                         .orElse(BigDecimal.ZERO);
 
-        BigDecimal endingNonInvestable =
-                getNonInvestableAssetValue(
-                        last.getCalendarYear(),
-                        nonInvestableProjections);
-
-        BigDecimal netWorth =
-                last.getEndingInvestableAssets()
-                        .add(endingNonInvestable);
-
-        float gap = 8;
-
-        float cardWidth =
-                (CONTENT_WIDTH - gap * 4) / 5;
-
-        float cardHeight = 58;
-
-        writeMetricCard(
-                MARGIN,
-                currentY - cardHeight,
-                cardWidth,
-                cardHeight,
-                "ENDING INVESTABLE ASSETS",
-                compactMoney(
-                        last.getEndingInvestableAssets()),
-                LIGHT_BLUE,
-                BLUE);
-
-        writeMetricCard(
-                MARGIN + (cardWidth + gap),
-                currentY - cardHeight,
-                cardWidth,
-                cardHeight,
-                "PEAK INVESTABLE ASSETS",
-                compactMoney(peakAssets),
-                LIGHT_GREEN,
-                GREEN);
-
-        writeMetricCard(
-                MARGIN + (cardWidth + gap) * 2,
-                currentY - cardHeight,
-                cardWidth,
-                cardHeight,
-                "NON-INVESTABLE ASSETS",
-                compactMoney(endingNonInvestable),
-                LIGHT_ORANGE,
-                ORANGE);
-
-        writeMetricCard(
-                MARGIN + (cardWidth + gap) * 3,
-                currentY - cardHeight,
-                cardWidth,
-                cardHeight,
-                "TOTAL NET WORTH",
-                compactMoney(netWorth),
-                LIGHT_BLUE,
-                BLUE);
-
-        writeMetricCard(
-                MARGIN + (cardWidth + gap) * 4,
-                currentY - cardHeight,
-                cardWidth,
-                cardHeight,
-                "AFTER-TAX ESTATE",
-                compactMoney(
-                        last.getAfterTaxEstateValue()),
-                LIGHT_PURPLE,
-                PURPLE);
-
-        currentY -= cardHeight + 18;
-
-        writeKeyValue(
-                "Effective Tax Rate",
-                percent(
-                        last.getCombinedEffectiveTaxRate()),
-                ORANGE);
-
-        currentY -= 8;
+        var endingPoint = report.charts().years().getLast();
+        BigDecimal endingNonInvestable = endingPoint.values().get(com.daviddunn.retirementplanner.ui.charts.ProjectionChartMetric.NON_INVESTABLE_ASSETS);
+        BigDecimal netWorth = endingPoint.values().get(com.daviddunn.retirementplanner.ui.charts.ProjectionChartMetric.TOTAL_NET_WORTH);
+        float gap = 12;
+        float cardWidth = (CONTENT_WIDTH - gap * 2) / 3;
+        float cardHeight = 80;
+        String[] titles = {"AVERAGE EFFECTIVE TAX RATE", "ENDING INVESTABLE ASSETS", "HOME EQUITY / OTHER ASSETS",
+                "TOTAL NET WORTH", "AFTER-TAX ESTATE HEIR VALUE", "PEAK INVESTABLE ASSETS"};
+        String[] values = {percent(report.averageEffectiveTaxRate()), compactMoney(last.getEndingInvestableAssets()),
+                compactMoney(endingNonInvestable), compactMoney(netWorth), compactMoney(report.afterTaxEstateHeirValue()), compactMoney(peakAssets)};
+        PDColor[] backgrounds = {LIGHT_ORANGE, LIGHT_BLUE, LIGHT_ORANGE, LIGHT_BLUE, LIGHT_PURPLE, LIGHT_GREEN};
+        PDColor[] accents = {ORANGE, BLUE, ORANGE, BLUE, PURPLE, GREEN};
+        for (int i = 0; i < titles.length; i++) writeMetricCard(MARGIN + (i % 3) * (cardWidth + gap),
+                currentY - cardHeight - (i / 3) * (cardHeight + gap), cardWidth, cardHeight,
+                titles[i], values[i], backgrounds[i], accents[i]);
+        currentY -= cardHeight * 2 + gap + 20;
+        writeKeyValue("Final-Year Effective Tax Rate", percent(last.getCombinedEffectiveTaxRate()), ORANGE);
+        writeKeyValue("After-Tax Estate Heir Value", "Includes home equity / other assets; chart estate values are investable only.", GRAY);        currentY -= 8;
     }
 
 
@@ -500,6 +471,25 @@ public class ProjectionPdfExporter {
             }
         }
 
+        var tax = assumptions.getTaxAssumptions();
+        writeKeyValue("Filing Status", tax.getFilingStatus().toString(), GRAY);
+        writeKeyValue("Federal Bracket Growth", percent(tax.getFederalTaxBracketGrowthRate()), GRAY);
+        writeKeyValue("Standard Deduction Growth", percent(tax.getStandardDeductionGrowthRate()), GRAY);
+        writeKeyValue("State / Local Income Tax Rates", percent(tax.getStateIncomeTaxRate()) + " / " + percent(tax.getLocalIncomeTaxRate()), GRAY);
+        writeKeyValue("Estimated Heir Tax Rate", percent(tax.getEstimatedHeirTaxRateOnTaxDeferredAssets()), GRAY);
+        writeKeyValue("Future Federal Marginal Adjustment", percent(tax.getFutureFederalMarginalRateAdjustment())
+                + (tax.getFutureFederalMarginalRateEffectiveYear() == null ? " / not scheduled" : " / effective " + tax.getFutureFederalMarginalRateEffectiveYear()), GRAY);
+        if (roth != null) writeKeyValue("Roth Stop Rule", roth.getStopRule().toString(), GRAY);
+        for (var person : java.util.stream.Stream.of(plan.getHousehold().getPrimaryPerson(), plan.getHousehold().getSpouse()).filter(java.util.Objects::nonNull).toList()) {
+            writeKeyValue("Household Member", person.getFullName() + " / born " + person.getBirthDate(), GRAY);
+            for (var income : person.getIncomeSources()) {
+                if (income instanceof com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome ss) {
+                    writeKeyValue(person.getFirstName() + " - Social Security Claiming Age", Integer.toString(ss.getClaimingAge()), GRAY);
+                    writeKeyValue("Full Retirement Monthly Benefit", money(ss.getFullRetirementMonthlyBenefit()), GRAY);
+                    writeKeyValue("Social Security Start / Benefit Valuation Year", ss.getStartDate() + " / " + ss.getBenefitValuationYear(), GRAY);
+                }
+            }
+        }
         currentY -= 10;
     }
 
@@ -548,6 +538,9 @@ public class ProjectionPdfExporter {
                 "Net Worth"
         };
 
+        float tableWidth = 0;
+        for (float width : widths) tableWidth += width;
+        for (int i = 0; i < widths.length; i++) widths[i] *= CONTENT_WIDTH / tableWidth;
         writeTableHeader(
                 headers,
                 widths);
@@ -563,7 +556,7 @@ public class ProjectionPdfExporter {
                 startPage();
 
                 writeText(
-                        "RETIREMENT PROJECTION",
+                        "RETIREMENT PLAN PROJECTION REPORT",
                         MARGIN,
                         currentY,
                         FONT_BOLD,
@@ -577,15 +570,9 @@ public class ProjectionPdfExporter {
                         widths);
             }
 
-            BigDecimal nonInvestable =
-                    getNonInvestableAssetValue(
-                            year.getCalendarYear(),
-                            nonInvestableProjections);
-
-            BigDecimal netWorth =
-                    year.getEndingInvestableAssets()
-                            .add(nonInvestable);
-
+            var point = report.charts().years().stream().filter(p -> p.year() == year.getCalendarYear()).findFirst().orElseThrow();
+            BigDecimal nonInvestable = point.values().get(com.daviddunn.retirementplanner.ui.charts.ProjectionChartMetric.NON_INVESTABLE_ASSETS);
+            BigDecimal netWorth = point.values().get(com.daviddunn.retirementplanner.ui.charts.ProjectionChartMetric.TOTAL_NET_WORTH);
             String[] values = {
 
                     Integer.toString(
@@ -757,7 +744,7 @@ public class ProjectionPdfExporter {
                 x + 10,
                 y + height - 17,
                 FONT_BOLD,
-                6.5f,
+                9,
                 accent);
 
         writeText(
@@ -765,7 +752,7 @@ public class ProjectionPdfExporter {
                 x + 10,
                 y + 17,
                 FONT_BOLD,
-                13,
+                20,
                 accent);
     }
 
@@ -804,26 +791,14 @@ public class ProjectionPdfExporter {
             PDColor color)
             throws IOException {
 
-        writeText(
-                label,
-                MARGIN,
-                currentY,
-                FONT_NORMAL,
-                9,
-                GRAY);
-
-        writeText(
-                value,
-                MARGIN + 180,
-                currentY,
-                FONT_BOLD,
-                9,
-                color);
-
-        currentY -= 14;
+        var labels = PdfReportSupport.wrap(label, 268, 9);
+        var values = PdfReportSupport.wrap(value, CONTENT_WIDTH - 280, 9);
+        int lines = Math.max(labels.size(), values.size());
+        ensureSpace(lines * 12 + 6);
+        for (int i = 0; i < labels.size(); i++) writeText(labels.get(i), MARGIN, currentY - 12 * i, FONT_NORMAL, 9, GRAY);
+        for (int i = 0; i < values.size(); i++) writeText(values.get(i), MARGIN + 280, currentY - 12 * i, FONT_BOLD, 9, color);
+        currentY -= lines * 12 + 4;
     }
-
-
     private void writeText(
             String text,
             float x,
@@ -985,7 +960,7 @@ public class ProjectionPdfExporter {
     private String sanitize(
             String text) {
 
-        return text
+        return PdfReportSupport.safe(text)
                 .replace("–", "-")
                 .replace("—", "-")
                 .replace("’", "'")

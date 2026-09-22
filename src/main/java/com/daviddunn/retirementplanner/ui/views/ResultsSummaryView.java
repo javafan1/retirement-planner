@@ -29,7 +29,6 @@ import com.daviddunn.retirementplanner.domain.breakeven.BreakEvenAnalysisResult;
 import com.daviddunn.retirementplanner.ui.breakeven.BreakEvenAnalysisDialog;
 
 import javafx.geometry.HPos;
-import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.layout.*;
 import javafx.util.converter.NumberStringConverter;
@@ -39,10 +38,6 @@ import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.chart.LineChart;
-import javafx.scene.chart.NumberAxis;
-import javafx.scene.chart.StackedAreaChart;
-import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.util.StringConverter;
 
@@ -186,10 +181,7 @@ public class ResultsSummaryView extends BorderPane {
     private final Label netWorthDetail =
             new Label();
 
-    private final LineChart<Number, Number> assetChart;
-
-    private final StackedAreaChart<Number, Number>
-            compositionChart;
+    private final com.daviddunn.retirementplanner.ui.charts.ProjectionChartView projectionChart = new com.daviddunn.retirementplanner.ui.charts.ProjectionChartView();
 
     private Consumer<PlanningAssumptions>
             economicAssumptionsHandler;
@@ -216,6 +208,20 @@ public class ResultsSummaryView extends BorderPane {
 
     private final ProjectionCsvExporter projectionCsvExporter =
             new ProjectionCsvExporter();
+
+    private com.daviddunn.retirementplanner.ui.charts.ProjectionChartModel pdfChartModel =
+            com.daviddunn.retirementplanner.ui.charts.ProjectionChartModel.empty();
+    private BigDecimal pdfAverageTaxRate = BigDecimal.ZERO;
+    private BigDecimal pdfHeirValue = BigDecimal.ZERO;
+    private ProjectionComparison pdfBaselineComparison;
+
+    /** Prepared export values; independent of chart selection, viewport and hover state. */
+    public com.daviddunn.retirementplanner.app.export.ProjectionPdfReport prepareProjectionPdfReport() {
+        String name = controller.getCurrentFile() == null ? "Unsaved retirement plan"
+                : controller.getCurrentFile().getFileName().toString();
+        return new com.daviddunn.retirementplanner.app.export.ProjectionPdfReport(
+                name, pdfChartModel, pdfAverageTaxRate, pdfHeirValue, pdfBaselineComparison);
+    }
 
     private final ProjectionPdfExporter projectionPdfExporter =
             new ProjectionPdfExporter();
@@ -380,58 +386,6 @@ public class ResultsSummaryView extends BorderPane {
                         (observable, oldValue, newValue) ->
                                 updateDeathScenarioControls());
 
-        NumberAxis assetXAxis =
-                new NumberAxis();
-
-        NumberAxis assetYAxis =
-                new NumberAxis();
-
-        assetXAxis.setLabel("Year");
-        assetYAxis.setLabel("Portfolio Value");
-
-        assetChart =
-                new LineChart<>(
-                        assetXAxis,
-                        assetYAxis);
-
-        assetChart.setAnimated(false);
-        assetChart.setCreateSymbols(false);
-        assetChart.setLegendVisible(false);
-        assetChart.setTitle(
-                "Total Investable Assets");
-
-        assetChart.getStyleClass().add(
-                "results-chart");
-
-        NumberAxis compositionXAxis =
-                new NumberAxis();
-
-        NumberAxis compositionYAxis =
-                new NumberAxis();
-
-        compositionXAxis.setLabel("Year");
-        compositionYAxis.setLabel("Balance");
-
-        compositionChart =
-                new StackedAreaChart<>(
-                        compositionXAxis,
-                        compositionYAxis);
-
-        compositionChart.setAnimated(false);
-        compositionChart.setCreateSymbols(false);
-        compositionChart.setTitle(
-                "Investable Asset Composition");
-
-        compositionChart.getStyleClass().add(
-                "results-chart");
-
-        compositionChart.setLegendVisible(true);
-        compositionChart.setLegendSide(Side.RIGHT);
-        //compositionChart.setLegend(legend);
-
-        compositionChart.setPrefHeight(190);
-        compositionChart.setMinHeight(170);
-
         baselineComparisonBox =
                 createBaselineComparisonSection();
 
@@ -520,8 +474,10 @@ public class ResultsSummaryView extends BorderPane {
         setTop(
                 createHeader());
 
-        setCenter(
-                createMainContent());
+        ScrollPane resultsScroll = new ScrollPane(createMainContent());
+        resultsScroll.setFitToWidth(true);
+        resultsScroll.setId("results-content-scroll");
+        setCenter(resultsScroll);
 
         VBox assumptionsPanel =
                 createAssumptionPanel();
@@ -999,25 +955,9 @@ public class ResultsSummaryView extends BorderPane {
         VBox projectionSection =
                 createProjectionSection();
 
+        content.getChildren().add(projectionChart);
         content.getChildren().add(
                 projectionSection);
-
-        HBox charts =
-                new HBox(
-                        10,
-                        createChartCard(assetChart),
-                        createChartCard(compositionChart));
-
-        HBox.setHgrow(
-                charts.getChildren().get(0),
-                Priority.ALWAYS);
-
-        HBox.setHgrow(
-                charts.getChildren().get(1),
-                Priority.ALWAYS);
-
-        content.getChildren().add(
-                charts);
 
         return content;
     }
@@ -1959,30 +1899,6 @@ public class ResultsSummaryView extends BorderPane {
 
         return label;
     }
-    private VBox createChartCard(
-            javafx.scene.Node chart) {
-
-        VBox box =
-                new VBox(chart);
-
-        box.getStyleClass().add(
-                "chart-card");
-
-        box.setPadding(
-                new Insets(8));
-
-        box.setPrefHeight(210);
-        box.setMinHeight(180);
-        box.setMaxHeight(240);
-
-        VBox.setVgrow(
-                chart,
-                Priority.ALWAYS);
-
-        return box;
-    }
-
-
     private void createProjectionColumns() {
 
 
@@ -2214,6 +2130,7 @@ public class ResultsSummaryView extends BorderPane {
     }
     private void updateBaselineComparison() {
 
+        pdfBaselineComparison = null;
         setBreakEvenAnalysis(null);
 
         if (currentPlan == null
@@ -2240,6 +2157,7 @@ public class ResultsSummaryView extends BorderPane {
     private void updateBaselineComparisonValues(
             ProjectionComparison comparison) {
 
+        pdfBaselineComparison = comparison;
         baselineComparisonYear.setText(
                 "Baseline Comparison — "
                         + comparison.getCalendarYear());
@@ -2479,6 +2397,7 @@ public class ResultsSummaryView extends BorderPane {
             List<NonInvestableAssetProjection>
                     nonInvestableAssetProjections) {
 
+        pdfBaselineComparison = null;
         setBreakEvenAnalysis(null);
 
         currentPlan = plan;
@@ -2702,6 +2621,8 @@ public class ResultsSummaryView extends BorderPane {
                 UIFormatters.percent(
                         averageTaxRate));
 
+        pdfAverageTaxRate = averageTaxRate;
+        pdfHeirValue = getTotalEstateValue(last);
         taxRateDetail.setText(
                 "Average over projection");
 
@@ -2744,147 +2665,12 @@ public class ResultsSummaryView extends BorderPane {
     }
 
 
-    private void updateCharts(
-            List<ProjectionYear> years) {
-
-        assetChart.getData().clear();
-        compositionChart.getData().clear();
-
-        int firstYear =
-                years.get(0)
-                        .getCalendarYear();
-
-        int lastYear =
-                years.get(years.size() - 1)
-                        .getCalendarYear();
-
-        NumberAxis assetXAxis =
-                (NumberAxis) assetChart.getXAxis();
-
-        NumberAxis compositionXAxis =
-                (NumberAxis) compositionChart.getXAxis();
-
-        assetXAxis.setAutoRanging(false);
-        assetXAxis.setLowerBound(firstYear);
-        assetXAxis.setUpperBound(lastYear);
-        assetXAxis.setTickUnit(5);
-        assetXAxis.setTickLabelFormatter(
-                createYearAxisFormatter());
-
-        compositionXAxis.setAutoRanging(false);
-        compositionXAxis.setLowerBound(firstYear);
-        compositionXAxis.setUpperBound(lastYear);
-        compositionXAxis.setTickUnit(5);
-        compositionXAxis.setTickLabelFormatter(
-                createYearAxisFormatter());
-
-        XYChart.Series<Number, Number>
-                assetSeries =
-                new XYChart.Series<>();
-
-        assetSeries.setName(
-                "Total Investable Assets");
-
-        XYChart.Series<Number, Number>
-                taxDeferredSeries =
-                new XYChart.Series<>();
-
-        taxDeferredSeries.setName(
-                "Tax Deferred");
-
-        XYChart.Series<Number, Number>
-                rothSeries =
-                new XYChart.Series<>();
-
-        rothSeries.setName(
-                "Roth");
-
-        XYChart.Series<Number, Number>
-                taxableSeries =
-                new XYChart.Series<>();
-
-        taxableSeries.setName(
-                "Taxable / Cash");
-
-        for (ProjectionYear year : years) {
-
-            int calendarYear =
-                    year.getCalendarYear();
-
-            assetSeries.getData().add(
-                    new XYChart.Data<>(
-                            calendarYear,
-                            year
-                                    .getEndingInvestableAssets()
-                                    .doubleValue()));
-
-            taxDeferredSeries.getData().add(
-                    new XYChart.Data<>(
-                            calendarYear,
-                            getEndingBalanceByAssetType(
-                                    year,
-                                    ProjectionAssetType
-                                            .TAX_DEFERRED)
-                                    .doubleValue()));
-
-            rothSeries.getData().add(
-                    new XYChart.Data<>(
-                            calendarYear,
-                            getEndingBalanceByAssetType(
-                                    year,
-                                    ProjectionAssetType
-                                            .ROTH)
-                                    .doubleValue()));
-
-            BigDecimal taxableCash =
-                    getEndingBalanceByAssetType(
-                            year,
-                            ProjectionAssetType
-                                    .TAXABLE)
-                            .add(
-                                    year
-                                            .getEndingRetainedNonQualifiedAssets());
-
-            taxableSeries.getData().add(
-                    new XYChart.Data<>(
-                            calendarYear,
-                            taxableCash.doubleValue()));
-        }
-
-        assetChart.getData().add(
-                assetSeries);
-
-        compositionChart.getData().addAll(
-                taxableSeries,
-                rothSeries,
-                taxDeferredSeries);
+    private void updateCharts(List<ProjectionYear> years) {
+        pdfChartModel = com.daviddunn.retirementplanner.ui.charts.ProjectionChartModel.from(
+                years, nonInvestableAssetProjections,
+                com.daviddunn.retirementplanner.domain.breakeven.BreakEvenPlanSummary.from(currentPlan.getHousehold()), currentPlan.getAccountPortfolio().getAccounts());
+        projectionChart.load(pdfChartModel);
     }
-
-    private StringConverter<Number> createYearAxisFormatter() {
-
-        return new StringConverter<Number>() {
-
-            @Override
-            public String toString(Number value) {
-
-                if (value == null) {
-                    return "";
-                }
-
-                return String.valueOf(
-                        value.intValue());
-            }
-
-            @Override
-            public Number fromString(String string) {
-
-                return Integer.parseInt(
-                        string);
-            }
-        };
-    }
-
-
     private BigDecimal getEndingBalanceByAssetType(
             ProjectionYear year,
             ProjectionAssetType assetType) {
@@ -2928,8 +2714,7 @@ public class ResultsSummaryView extends BorderPane {
 
     private void clearCharts() {
 
-        assetChart.getData().clear();
-        compositionChart.getData().clear();
+        projectionChart.load(com.daviddunn.retirementplanner.ui.charts.ProjectionChartModel.empty());
     }
 
 
@@ -3490,6 +3275,7 @@ public class ResultsSummaryView extends BorderPane {
                     currentPlan,
                     currentProjection,
                     nonInvestableAssetProjections,
+                    prepareProjectionPdfReport(),
                     file);
 
             showInformation(
