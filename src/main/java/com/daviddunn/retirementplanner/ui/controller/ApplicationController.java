@@ -197,6 +197,11 @@ public class ApplicationController {
         return currentProjection;
     }
 
+    /** Read-only cache lookup; never starts financial work on the JavaFX thread. */
+    public Projection peekCurrentProjection() {
+        return currentProjection;
+    }
+
     public boolean isCurrentPlanReadyForProjection() {
 
         return ProjectionReadiness.isReady(

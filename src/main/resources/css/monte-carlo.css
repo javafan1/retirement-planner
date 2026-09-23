@@ -1,0 +1,28 @@
+.mc-view {
+    -fx-background-color: #f7f9fc;
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+}
+.mc-title { -fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #17213d; }
+.mc-section { -fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: #34445f; }
+.mc-muted { -fx-text-fill: #526079; }
+.mc-status { -fx-text-fill: #34445f; -fx-font-weight: bold; }
+.mc-validation { -fx-text-fill: #a12b32; }
+.mc-probability { -fx-font-size: 36px; -fx-font-weight: bold; -fx-text-fill: #17213d; }
+.mc-run { -fx-background-color: #235dc4; -fx-text-fill: white; -fx-background-radius: 5; -fx-padding: 7 15; }
+.mc-fan-chart { -fx-background-color: white; -fx-padding: 5; }
+.mc-fan-chart .chart-horizontal-grid-lines, .mc-fan-chart .chart-vertical-grid-lines { -fx-stroke: #e6ebf3; }
+.mc-fan-chart .default-color0.chart-series-line, .mc-fan-chart .default-color1.chart-series-line { -fx-stroke: transparent; }
+.mc-fan-chart .default-color2.chart-series-line, .mc-median-sample { -fx-stroke: #235dc4; -fx-stroke-width: 3.3; }
+.mc-reference-sample { -fx-stroke: #a96506; -fx-stroke-width: 2.8; -fx-stroke-dash-array: 9 5; }
+.mc-active-year { -fx-stroke: #526079; -fx-stroke-width: 1; -fx-stroke-dash-array: 3 4; }
+.mc-fan-chart:focused { -fx-background-insets: 0; -fx-border-color: #526e9e; -fx-border-width: 1; }
+.mc-fan-chart { -fx-border-color: transparent; -fx-border-width: 1; }
+.mc-fan-chart .default-color3.chart-series-line { -fx-stroke: #a96506; -fx-stroke-width: 2.8; -fx-stroke-dash-array: 9 5; }
+.mc-outer-band { -fx-fill: rgba(66,125,220,0.17); -fx-stroke: transparent; }
+.mc-inner-band { -fx-fill: rgba(66,125,220,0.29); -fx-stroke: transparent; }
+.mc-outer-legend { -fx-text-fill: #526e9e; }
+.mc-inner-legend { -fx-text-fill: #3b65a8; }
+.mc-median-legend { -fx-text-fill: #235dc4; -fx-font-weight: bold; }
+.mc-reference-legend { -fx-text-fill: #a96506; -fx-font-weight: bold; }
+.mc-view .table-view { -fx-font-size: 12px; }

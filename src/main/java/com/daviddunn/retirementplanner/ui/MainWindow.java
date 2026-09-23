@@ -289,6 +289,12 @@ public class MainWindow {
                         stage,
                         controller).show());
         analysisMenu.getItems().add(socialSecurityAnalyzerItem);
+        MenuItem monteCarloItem = new MenuItem("Monte Carlo Retirement Analysis...");
+        monteCarloItem.setId("monte-carlo-analysis-menu");
+        monteCarloItem.setOnAction(event ->
+                new com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloAnalysisDialog(
+                        stage, controller).show());
+        analysisMenu.getItems().add(monteCarloItem);
 
         Menu helpMenu = new Menu("Help");
 
