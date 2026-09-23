@@ -22,6 +22,10 @@ public class IrmaaBracketBuilder {
     private BigDecimal monthlyPartDPremium =
             BigDecimal.ZERO;
 
+    private boolean minimumIncomeInclusive = true;
+
+    private boolean maximumIncomeInclusive = true;
+
     public static IrmaaBracketBuilder anIrmaaBracket() {
         return new IrmaaBracketBuilder();
     }
@@ -57,6 +61,17 @@ public class IrmaaBracketBuilder {
     public IrmaaBracketBuilder withNoMaximumIncome() {
 
         this.maximumModifiedAdjustedGrossIncome = null;
+        this.maximumIncomeInclusive = false;
+        return this;
+    }
+
+    public IrmaaBracketBuilder withMinimumIncomeInclusive(boolean inclusive) {
+        this.minimumIncomeInclusive = inclusive;
+        return this;
+    }
+
+    public IrmaaBracketBuilder withMaximumIncomeInclusive(boolean inclusive) {
+        this.maximumIncomeInclusive = inclusive;
         return this;
     }
 
@@ -84,6 +99,8 @@ public class IrmaaBracketBuilder {
                 filingStatus,
                 minimumModifiedAdjustedGrossIncome,
                 maximumModifiedAdjustedGrossIncome,
+                minimumIncomeInclusive,
+                maximumIncomeInclusive,
                 monthlyPartBPremium,
                 monthlyPartDPremium);
     }

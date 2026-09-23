@@ -83,6 +83,9 @@ public final class IrmaaRuleProjectionService {
                                     0,
                                     RoundingMode.HALF_UP);
 
+            // Shared source thresholds use the same multiplier and rounding, so
+            // adjoining endpoints remain numerically identical after projection.
+
             BigDecimal projectedMaximumIncome =
                     null;
 
@@ -119,6 +122,8 @@ public final class IrmaaRuleProjectionService {
                             bracket.getFilingStatus(),
                             projectedMinimumIncome,
                             projectedMaximumIncome,
+                            bracket.isMinimumIncomeInclusive(),
+                            bracket.isMaximumIncomeInclusive(),
                             projectedMonthlyPartBPremium,
                             projectedMonthlyPartDPremium));
         }

@@ -92,41 +92,53 @@
         "filingStatus": "SINGLE",
         "minimumModifiedAdjustedGrossIncome": 0,
         "maximumModifiedAdjustedGrossIncome": 109000,
+        "minimumIncomeInclusive": true,
+        "maximumIncomeInclusive": true,
         "monthlyPartBPremium": 202.90,
         "monthlyPartDPremium": 0.00
       },
       {
         "filingStatus": "SINGLE",
-        "minimumModifiedAdjustedGrossIncome": 109001,
+        "minimumModifiedAdjustedGrossIncome": 109000,
         "maximumModifiedAdjustedGrossIncome": 137000,
+        "minimumIncomeInclusive": false,
+        "maximumIncomeInclusive": true,
         "monthlyPartBPremium": 284.10,
         "monthlyPartDPremium": 14.50
       },
       {
         "filingStatus": "SINGLE",
-        "minimumModifiedAdjustedGrossIncome": 137001,
+        "minimumModifiedAdjustedGrossIncome": 137000,
         "maximumModifiedAdjustedGrossIncome": 171000,
+        "minimumIncomeInclusive": false,
+        "maximumIncomeInclusive": true,
         "monthlyPartBPremium": 405.80,
         "monthlyPartDPremium": 37.50
       },
       {
         "filingStatus": "SINGLE",
-        "minimumModifiedAdjustedGrossIncome": 171001,
+        "minimumModifiedAdjustedGrossIncome": 171000,
         "maximumModifiedAdjustedGrossIncome": 205000,
+        "minimumIncomeInclusive": false,
+        "maximumIncomeInclusive": true,
         "monthlyPartBPremium": 527.50,
         "monthlyPartDPremium": 60.40
       },
       {
         "filingStatus": "SINGLE",
-        "minimumModifiedAdjustedGrossIncome": 205001,
+        "minimumModifiedAdjustedGrossIncome": 205000,
         "maximumModifiedAdjustedGrossIncome": 500000,
+        "minimumIncomeInclusive": false,
+        "maximumIncomeInclusive": false,
         "monthlyPartBPremium": 649.20,
         "monthlyPartDPremium": 83.30
       },
       {
         "filingStatus": "SINGLE",
-        "minimumModifiedAdjustedGrossIncome": 500001,
+        "minimumModifiedAdjustedGrossIncome": 500000,
         "maximumModifiedAdjustedGrossIncome": null,
+        "minimumIncomeInclusive": true,
+        "maximumIncomeInclusive": false,
         "monthlyPartBPremium": 689.90,
         "monthlyPartDPremium": 91.00
       },
@@ -135,41 +147,53 @@
         "filingStatus": "MARRIED_FILING_JOINTLY",
         "minimumModifiedAdjustedGrossIncome": 0,
         "maximumModifiedAdjustedGrossIncome": 218000,
+        "minimumIncomeInclusive": true,
+        "maximumIncomeInclusive": true,
         "monthlyPartBPremium": 202.90,
         "monthlyPartDPremium": 0.00
       },
       {
         "filingStatus": "MARRIED_FILING_JOINTLY",
-        "minimumModifiedAdjustedGrossIncome": 218001,
+        "minimumModifiedAdjustedGrossIncome": 218000,
         "maximumModifiedAdjustedGrossIncome": 274000,
+        "minimumIncomeInclusive": false,
+        "maximumIncomeInclusive": true,
         "monthlyPartBPremium": 284.10,
         "monthlyPartDPremium": 14.50
       },
       {
         "filingStatus": "MARRIED_FILING_JOINTLY",
-        "minimumModifiedAdjustedGrossIncome": 274001,
+        "minimumModifiedAdjustedGrossIncome": 274000,
         "maximumModifiedAdjustedGrossIncome": 342000,
+        "minimumIncomeInclusive": false,
+        "maximumIncomeInclusive": true,
         "monthlyPartBPremium": 405.80,
         "monthlyPartDPremium": 37.50
       },
       {
         "filingStatus": "MARRIED_FILING_JOINTLY",
-        "minimumModifiedAdjustedGrossIncome": 342001,
+        "minimumModifiedAdjustedGrossIncome": 342000,
         "maximumModifiedAdjustedGrossIncome": 410000,
+        "minimumIncomeInclusive": false,
+        "maximumIncomeInclusive": true,
         "monthlyPartBPremium": 527.50,
         "monthlyPartDPremium": 60.40
       },
       {
         "filingStatus": "MARRIED_FILING_JOINTLY",
-        "minimumModifiedAdjustedGrossIncome": 410001,
+        "minimumModifiedAdjustedGrossIncome": 410000,
         "maximumModifiedAdjustedGrossIncome": 750000,
+        "minimumIncomeInclusive": false,
+        "maximumIncomeInclusive": false,
         "monthlyPartBPremium": 649.20,
         "monthlyPartDPremium": 83.30
       },
       {
         "filingStatus": "MARRIED_FILING_JOINTLY",
-        "minimumModifiedAdjustedGrossIncome": 750001,
+        "minimumModifiedAdjustedGrossIncome": 750000,
         "maximumModifiedAdjustedGrossIncome": null,
+        "minimumIncomeInclusive": true,
+        "maximumIncomeInclusive": false,
         "monthlyPartBPremium": 689.90,
         "monthlyPartDPremium": 91.00
       }

@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.domain.rules;
 
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
@@ -14,6 +15,10 @@ public final class IrmaaBracket {
     private final BigDecimal minimumModifiedAdjustedGrossIncome;
 
     private final BigDecimal maximumModifiedAdjustedGrossIncome;
+
+    private final boolean minimumIncomeInclusive;
+
+    private final boolean maximumIncomeInclusive;
 
     private final BigDecimal monthlyPartBPremium;
 
@@ -30,6 +35,12 @@ public final class IrmaaBracket {
 
             @JsonProperty("maximumModifiedAdjustedGrossIncome")
             BigDecimal maximumModifiedAdjustedGrossIncome,
+
+            @JsonProperty("minimumIncomeInclusive")
+            Boolean minimumIncomeInclusive,
+
+            @JsonProperty("maximumIncomeInclusive")
+            Boolean maximumIncomeInclusive,
 
             @JsonProperty("monthlyPartBPremium")
             BigDecimal monthlyPartBPremium,
@@ -50,6 +61,16 @@ public final class IrmaaBracket {
         this.maximumModifiedAdjustedGrossIncome =
                 maximumModifiedAdjustedGrossIncome;
 
+        this.minimumIncomeInclusive =
+                Objects.requireNonNull(
+                        minimumIncomeInclusive,
+                        "Minimum income inclusion is required.");
+
+        this.maximumIncomeInclusive =
+                Objects.requireNonNull(
+                        maximumIncomeInclusive,
+                        "Maximum income inclusion is required.");
+
         this.monthlyPartBPremium =
                 Objects.requireNonNull(
                         monthlyPartBPremium,
@@ -67,10 +88,15 @@ public final class IrmaaBracket {
 
         if (maximumModifiedAdjustedGrossIncome != null
                 && maximumModifiedAdjustedGrossIncome.compareTo(
-                minimumModifiedAdjustedGrossIncome) < 0) {
+                minimumModifiedAdjustedGrossIncome) <= 0) {
 
             throw new IllegalArgumentException(
-                    "Maximum modified adjusted gross income cannot be less than the minimum.");
+                    "Maximum modified adjusted gross income must exceed the minimum.");
+        }
+
+        if (maximumModifiedAdjustedGrossIncome == null && maximumIncomeInclusive) {
+            throw new IllegalArgumentException(
+                    "An unbounded maximum cannot be inclusive.");
         }
     }
 
@@ -90,6 +116,14 @@ public final class IrmaaBracket {
         return monthlyPartBPremium;
     }
 
+    public boolean isMinimumIncomeInclusive() {
+        return minimumIncomeInclusive;
+    }
+
+    public boolean isMaximumIncomeInclusive() {
+        return maximumIncomeInclusive;
+    }
+
     public BigDecimal getMonthlyPartDPremium() {
         return monthlyPartDPremium;
     }
@@ -101,15 +135,22 @@ public final class IrmaaBracket {
                 modifiedAdjustedGrossIncome,
                 "Modified adjusted gross income is required.");
 
-        if (modifiedAdjustedGrossIncome.compareTo(
-                minimumModifiedAdjustedGrossIncome) < 0) {
+        int minimumComparison = modifiedAdjustedGrossIncome.compareTo(
+                minimumModifiedAdjustedGrossIncome);
+
+        if (minimumComparison < 0 || (minimumComparison == 0 && !minimumIncomeInclusive)) {
 
             return false;
         }
 
-        return maximumModifiedAdjustedGrossIncome == null
-                || modifiedAdjustedGrossIncome.compareTo(
-                maximumModifiedAdjustedGrossIncome) <= 0;
+        if (maximumModifiedAdjustedGrossIncome == null) {
+            return true;
+        }
+
+        int maximumComparison = modifiedAdjustedGrossIncome.compareTo(
+                maximumModifiedAdjustedGrossIncome);
+
+        return maximumComparison < 0 || (maximumComparison == 0 && maximumIncomeInclusive);
     }
 
     @Override
@@ -119,25 +160,29 @@ public final class IrmaaBracket {
                 "filingStatus=" + filingStatus +
                 ", minimumModifiedAdjustedGrossIncome=" + minimumModifiedAdjustedGrossIncome +
                 ", maximumModifiedAdjustedGrossIncome=" + maximumModifiedAdjustedGrossIncome +
+                ", minimumIncomeInclusive=" + minimumIncomeInclusive +
+                ", maximumIncomeInclusive=" + maximumIncomeInclusive +
                 ", monthlyPartBPremium=" + monthlyPartBPremium +
                 ", monthlyPartDPremium=" + monthlyPartDPremium +
                 '}';
     }
 
+    @JsonIgnore
     public String getDisplayRange() {
 
         if (maximumModifiedAdjustedGrossIncome == null) {
-            return "Over " + UIFormatters.money(
+            return (minimumIncomeInclusive ? "At least " : "Over ") + UIFormatters.money(
                     minimumModifiedAdjustedGrossIncome);
         }
 
-        if (minimumModifiedAdjustedGrossIncome.compareTo(BigDecimal.ZERO) == 0) {
-            return "Up to " + UIFormatters.money(
+        if (minimumModifiedAdjustedGrossIncome.signum() == 0 && minimumIncomeInclusive) {
+            return (maximumIncomeInclusive ? "Up to " : "Under ") + UIFormatters.money(
                     maximumModifiedAdjustedGrossIncome);
         }
 
-        return UIFormatters.money(minimumModifiedAdjustedGrossIncome)
-                + " - "
+        return (minimumIncomeInclusive ? "At least " : "Over ")
+                + UIFormatters.money(minimumModifiedAdjustedGrossIncome)
+                + (maximumIncomeInclusive ? " through " : " and under ")
                 + UIFormatters.money(maximumModifiedAdjustedGrossIncome);
     }
 }

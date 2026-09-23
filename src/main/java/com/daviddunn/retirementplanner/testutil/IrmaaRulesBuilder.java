@@ -28,6 +28,7 @@ public class IrmaaRulesBuilder {
         brackets.add(
                 IrmaaBracketBuilder
                         .anIrmaaBracket()
+                        .withNoMaximumIncome()
                         .build());
     }
 
@@ -90,7 +91,8 @@ public class IrmaaRulesBuilder {
         brackets.add(
                 IrmaaBracketBuilder
                         .anIrmaaBracket()
-                        .withMinimumIncome(212001)
+                        .withMinimumIncome(212000)
+                        .withMinimumIncomeInclusive(false)
                         .withMaximumIncome(266000)
                         .withMonthlyPartBPremium("259.00")
                         .withMonthlyPartDPremium("13.70")
@@ -99,7 +101,8 @@ public class IrmaaRulesBuilder {
         brackets.add(
                 IrmaaBracketBuilder
                         .anIrmaaBracket()
-                        .withMinimumIncome(266001)
+                        .withMinimumIncome(266000)
+                        .withMinimumIncomeInclusive(false)
                         .withMaximumIncome(334000)
                         .withMonthlyPartBPremium("370.00")
                         .withMonthlyPartDPremium("35.30")
@@ -108,7 +111,8 @@ public class IrmaaRulesBuilder {
         brackets.add(
                 IrmaaBracketBuilder
                         .anIrmaaBracket()
-                        .withMinimumIncome(334001)
+                        .withMinimumIncome(334000)
+                        .withMinimumIncomeInclusive(false)
                         .withMaximumIncome(400000)
                         .withMonthlyPartBPremium("480.90")
                         .withMonthlyPartDPremium("57.00")
@@ -117,8 +121,10 @@ public class IrmaaRulesBuilder {
         brackets.add(
                 IrmaaBracketBuilder
                         .anIrmaaBracket()
-                        .withMinimumIncome(400001)
+                        .withMinimumIncome(400000)
+                        .withMinimumIncomeInclusive(false)
                         .withMaximumIncome(750000)
+                        .withMaximumIncomeInclusive(false)
                         .withMonthlyPartBPremium("591.90")
                         .withMonthlyPartDPremium("78.60")
                         .build());
@@ -126,7 +132,7 @@ public class IrmaaRulesBuilder {
         brackets.add(
                 IrmaaBracketBuilder
                         .anIrmaaBracket()
-                        .withMinimumIncome(750001)
+                        .withMinimumIncome(750000)
                         .withNoMaximumIncome()
                         .withMonthlyPartBPremium("628.90")
                         .withMonthlyPartDPremium("85.80")

@@ -22,6 +22,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MedicareCashFlowProjectionTest {
 
     @Test
+    void deterministicPensionIncomeInFormerIrmaaGapCompletes() {
+        // Annual pension = 218000.04, inside the former (218000, 218001) gap.
+        ProjectionYear year = projectBrokeragePlan(1950, "18166.67", null);
+        assertMoney(new BigDecimal("218000.04"),
+                year.getMedicarePremiumCalculation().modifiedAdjustedGrossIncome());
+        assertMoney(new BigDecimal("284.10"),
+                year.getMedicarePremiumCalculation().irmaaBracket().getMonthlyPartBPremium());
+        assertEquals(1, year.getMedicarePremiumCalculation().coveredMedicareParticipants());
+    }
+
+    @Test
     void portfolioFundsTheSameMedicarePremiumReportedForTheYear() {
         ProjectionYear withoutMedicare = projectBrokeragePlan(1962, null, null);
         ProjectionYear withMedicare = projectBrokeragePlan(1950, null, null);
