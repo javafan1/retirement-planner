@@ -40,6 +40,15 @@ public final class ProjectedWithdrawalAllocator {
                 continue;
             }
 
+            BigDecimal available = updatedPortfolio.getBalance(accountRmd.getAccount());
+            if (amount.compareTo(available) > 0) {
+                throw new IllegalArgumentException(
+                        "Withdrawal cannot exceed projected account balance.",
+                        new FundingConstraint(
+                                FundingFailure.Stage.ACCOUNT_RMD, amount, available,
+                                accountRmd.getAccount().getOwnership()));
+            }
+
             updatedPortfolio =
                     updatedPortfolio.withWithdrawal(
                             accountRmd.getAccount(),
@@ -123,8 +132,9 @@ public final class ProjectedWithdrawalAllocator {
         }
 
         if (remaining.signum() > 0) {
-            throw new IllegalStateException(
-                    "Insufficient projected IRA balance to satisfy RMD.");
+            throw FundingConstraint.insufficient(
+                    "Insufficient projected IRA balance to satisfy RMD.",
+                    FundingFailure.Stage.IRA_RMD, iraRmd, remaining, ownership);
         }
 
         return updatedPortfolio;
@@ -290,8 +300,9 @@ public final class ProjectedWithdrawalAllocator {
         }
 
         if (remaining.signum() > 0) {
-            throw new IllegalStateException(
-                    "Insufficient projected assets to satisfy withdrawal.");
+            throw FundingConstraint.insufficient(
+                    "Insufficient projected assets to satisfy withdrawal.",
+                    FundingFailure.Stage.WITHDRAWAL_ALLOCATION, withdrawalAmount, remaining, null);
         }
 
         return updatedPortfolio;
@@ -426,8 +437,9 @@ public final class ProjectedWithdrawalAllocator {
         }
 
         if (remaining.signum() > 0) {
-            throw new IllegalStateException(
-                    "Insufficient projected assets to satisfy withdrawal.");
+            throw FundingConstraint.insufficient(
+                    "Insufficient projected assets to satisfy withdrawal.",
+                    FundingFailure.Stage.WITHDRAWAL_ALLOCATION, withdrawalAmount, remaining, null);
         }
 
         WithdrawalBreakdown withdrawalBreakdown =
@@ -643,8 +655,9 @@ public final class ProjectedWithdrawalAllocator {
         }
 
         if (remaining.signum() > 0) {
-            throw new IllegalStateException(
-                    "Insufficient projected assets to satisfy withdrawal.");
+            throw FundingConstraint.insufficient(
+                    "Insufficient projected assets to satisfy withdrawal.",
+                    FundingFailure.Stage.WITHDRAWAL_ESTIMATE, withdrawalAmount, remaining, null);
         }
 
         return new WithdrawalBreakdown(

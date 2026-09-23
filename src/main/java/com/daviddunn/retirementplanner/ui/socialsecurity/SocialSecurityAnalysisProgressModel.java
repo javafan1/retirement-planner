@@ -29,6 +29,7 @@ public final class SocialSecurityAnalysisProgressModel {
             case SOCIAL_SECURITY_RETIREMENT_GRID, CURRENT_PLAN_BASELINE,
                     LONGEVITY_INTEGRATED_SCENARIOS -> 0;
             case LONGEVITY_STRATEGY_EQUIVALENCE -> 1;
+            case MONTE_CARLO_SIMULATIONS -> throw new IllegalArgumentException("Not a Social Security analysis phase.");
             case SOCIAL_SECURITY_SURVIVOR_STRATEGIES, QUICK_COMPARISON_CANDIDATES,
                     EXHAUSTIVE_INTEGRATED_STRATEGIES, LONGEVITY_INTEGRATED_COMPARISON -> 2;
         };

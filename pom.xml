@@ -67,6 +67,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.3</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <user.home>${project.build.directory}/test-user-home</user.home>
+                    </systemPropertyVariables>
+                </configuration>
             </plugin>
 
             <plugin>

@@ -162,6 +162,40 @@ public class ProjectionEngine {
             ProjectionEvaluationContext evaluationContext) {
 
         java.util.Objects.requireNonNull(plan, "Retirement plan is required.");
+        return project(plan, evaluationContext, ProjectionEconomicPath.constant(
+                plan.getPlanningAssumptions().getExpectedAnnualInvestmentReturn()));
+    }
+
+    /** Same financial engine with caller-supplied, immutable annual investment returns. */
+    public Projection project(
+            RetirementPlan plan,
+            ProjectionEvaluationContext evaluationContext,
+            ProjectionEconomicPath economicPath) {
+
+        return ((ProjectionExecutionResult.Completed) executeInternal(
+                plan, evaluationContext, economicPath, false)).projection();
+    }
+
+    public ProjectionExecutionResult projectWithOutcome(RetirementPlan plan) {
+        return projectWithOutcome(plan, ProjectionEvaluationContext.empty(), ProjectionEconomicPath.constant(
+                plan.getPlanningAssumptions().getExpectedAnnualInvestmentReturn()));
+    }
+
+    /** Known funding constraints become outcomes; unrelated errors still throw. */
+    public ProjectionExecutionResult projectWithOutcome(
+            RetirementPlan plan,
+            ProjectionEvaluationContext context,
+            ProjectionEconomicPath economicPath) {
+        return executeInternal(plan, context, economicPath, true);
+    }
+
+    private ProjectionExecutionResult executeInternal(
+            RetirementPlan plan,
+            ProjectionEvaluationContext evaluationContext,
+            ProjectionEconomicPath economicPath,
+            boolean structured) {
+        java.util.Objects.requireNonNull(plan, "Retirement plan is required.");
+        java.util.Objects.requireNonNull(economicPath, "Economic path is required.");
         java.util.Objects.requireNonNull(
                 evaluationContext,
                 "Projection evaluation context is required.");
@@ -200,6 +234,7 @@ public class ProjectionEngine {
         int endingYear = evaluationContext.resolveEndingYear(startYear,
                 Math.addExact(startYear, assumptions.getProjectionLengthYears() - 1));
         int projectionLength = Math.addExact(Math.subtractExact(endingYear, startYear), 1);
+        economicPath.requireCoverage(startYear, endingYear);
 
         EffectiveHouseholdDeathView deathView = EffectiveHouseholdDeathView.resolve(
                 assumptions.getDeathScenarioAssumptions(), evaluationContext.householdLifetimeScenario());
@@ -232,8 +267,9 @@ public class ProjectionEngine {
             int calendarYear =
                     startYear + yearOffset;
 
-            ProjectionYearCalculation calculation =
-                    calculateProjectionYear(
+            ProjectionYearCalculation calculation;
+            try {
+                calculation = calculateProjectionYear(
                             plan,
                             yearOffset,
                             calendarYear,
@@ -245,7 +281,22 @@ public class ProjectionEngine {
                                     HouseholdSocialSecurityResult.zero()),
                             deathView,
                             lifetimeRun,
-                            householdRmdHasOccurred);
+                            householdRmdHasOccurred,
+                            economicPath.investmentReturnForYear(calendarYear));
+            } catch (RuntimeException exception) {
+                if (!structured || !(exception.getCause() instanceof FundingConstraint constraint)) {
+                    throw exception;
+                }
+                var household = plan.getHousehold();
+                var date = LocalDate.of(calendarYear, 12, 31);
+                var failure = new FundingFailure(
+                        calendarYear, yearOffset,
+                        reportingAge(household.getPrimaryPerson(), date),
+                        reportingAge(household.getSpouse(), date),
+                        constraint.stage, constraint.owner, constraint.required, constraint.available,
+                        constraint.required.subtract(constraint.available));
+                return new ProjectionExecutionResult.InsufficientFunds(projection.getYears(), failure);
+            }
 
             ProjectionYear projectionYear =
                     calculation.getProjectionYear();
@@ -278,7 +329,14 @@ public class ProjectionEngine {
                     endingPortfolio;
         }
 
-        return projection;
+        return new ProjectionExecutionResult.Completed(projection.getYears());
+    }
+
+    private static Optional<Integer> reportingAge(Person person, LocalDate date) {
+        if (person == null || person.getBirthDate() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(person.getAge(date));
     }
 
     private ProjectionYearCalculation calculateProjectionYear(
@@ -291,7 +349,8 @@ public class ProjectionEngine {
             HouseholdSocialSecurityResult socialSecurityResult,
             EffectiveHouseholdDeathView deathView,
             boolean lifetimeRun,
-            boolean householdRmdHasOccurred) {
+            boolean householdRmdHasOccurred,
+            BigDecimal annualInvestmentReturn) {
 
         return calculateProjectionYear(
                 plan,
@@ -304,6 +363,7 @@ public class ProjectionEngine {
                 deathView,
                 lifetimeRun,
                 householdRmdHasOccurred,
+                annualInvestmentReturn,
                 null);
     }
 
@@ -318,6 +378,7 @@ public class ProjectionEngine {
             EffectiveHouseholdDeathView deathView,
             boolean lifetimeRun,
             boolean householdRmdHasOccurred,
+            BigDecimal annualInvestmentReturn,
             MedicarePremiumCalculation authoritativeMedicarePremium) {
 
         BigDecimal beginningAssets =
@@ -339,7 +400,7 @@ public class ProjectionEngine {
         BigDecimal investmentGrowth =
                 calculateInvestmentGrowth(
                         beginningAssets,
-                        assumptions,
+                        annualInvestmentReturn,
                         yearOffset,
                         projectionStartDate);
 
@@ -699,6 +760,7 @@ public class ProjectionEngine {
                     deathView,
                     lifetimeRun,
                     householdRmdHasOccurred,
+                    annualInvestmentReturn,
                     medicarePremiumCalculation);
         }
 
@@ -848,14 +910,13 @@ public class ProjectionEngine {
 
     private BigDecimal calculateInvestmentGrowth(
             BigDecimal beginningAssets,
-            PlanningAssumptions assumptions,
+            BigDecimal annualInvestmentReturn,
             int yearOffset,
             LocalDate projectionStartDate) {
 
         BigDecimal investmentGrowth =
                 beginningAssets.multiply(
-                        assumptions
-                                .getExpectedAnnualInvestmentReturn());
+                        annualInvestmentReturn);
 
         /*
          * Prorate investment growth for the
