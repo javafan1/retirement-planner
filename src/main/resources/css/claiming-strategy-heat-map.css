@@ -1,0 +1,55 @@
+.claiming-heat-map {
+    -fx-padding: 12;
+    -fx-background-color: #f7f9fc;
+    -fx-border-color: #c4ccd7;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+.claiming-heat-map .heat-map-heading {
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+}
+
+.claiming-heat-map .heat-map-cell {
+    -fx-padding: 6 3;
+    -fx-background-insets: 0;
+    -fx-background-radius: 3;
+    -fx-border-radius: 3;
+    -fx-border-color: #79889a;
+    -fx-border-width: 1;
+    -fx-text-fill: #142536;
+    -fx-font-size: 12px;
+}
+
+.claiming-heat-map .heat-map-legend-item {
+    -fx-padding: 5 8;
+    -fx-background-radius: 3;
+    -fx-text-fill: #142536;
+}
+
+.claiming-heat-map .heat-map-tier-1 { -fx-background-color: -heat-map-tier-1; }
+.claiming-heat-map .heat-map-tier-2 { -fx-background-color: -heat-map-tier-2; }
+.claiming-heat-map .heat-map-tier-3 { -fx-background-color: -heat-map-tier-3; }
+.claiming-heat-map .heat-map-tier-4 { -fx-background-color: -heat-map-tier-4; }
+.claiming-heat-map .heat-map-tier-5 { -fx-background-color: -heat-map-tier-5; }
+.claiming-heat-map .heat-map-unavailable { -fx-background-color: -heat-map-unavailable; }
+
+.claiming-heat-map .heat-map-optimal {
+    -fx-font-weight: bold;
+    -fx-border-width: 2;
+    -fx-border-color: -heat-map-optimal-border;
+}
+
+.claiming-heat-map .heat-map-cell:selected {
+    -fx-border-width: 3;
+    -fx-border-color: -heat-map-selected-border;
+}
+
+.claiming-heat-map .heat-map-cell:focused {
+    -fx-effect: dropshadow(gaussian, #2466af, 4, 0.5, 0, 0);
+}
+
+.claiming-heat-map .heat-map-cell:hover { -fx-underline: true; }
+.claiming-heat-map .heat-map-details { -fx-padding: 4 0 0 0; }
+.claiming-heat-map .heat-map-axis { -fx-font-weight: bold; }

@@ -1,0 +1,53 @@
+/* Match the existing comparison positive/negative palette. */
+.break-even-view .baseline-ahead-point { -fx-background-color: #dc2626, white; }
+.break-even-view .current-ahead-point { -fx-background-color: #16a34a, white; }
+.break-even-view .default-color1.chart-series-line {
+    -fx-stroke: #64748b;
+    -fx-stroke-width: 2.5px;
+}
+.break-even-view .default-color1.chart-line-symbol { -fx-background-color: transparent; }
+.break-even-view .sustained-break-even-point {
+    -fx-background-color: #16a34a, white, #16a34a;
+    -fx-background-insets: 0, 2, 4;
+    -fx-padding: 9px;
+}
+.break-even-view .chart-horizontal-zero-line { -fx-stroke: #64748b; -fx-stroke-width: 2.5px; }
+.break-even-view .chart-horizontal-grid-lines,
+.break-even-view .chart-vertical-grid-lines { -fx-stroke: #e9edf2; }
+.break-even-card {
+    -fx-background-color: white;
+    -fx-border-color: #DCE3ED;
+    -fx-border-radius: 9px;
+    -fx-background-radius: 9px;
+    -fx-padding: 7px 9px;
+}
+.break-even-card-title { -fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #111B3A; }
+.break-even-card-year { -fx-font-size: 32px; -fx-font-weight: bold; -fx-text-fill: #111B3A; }
+.break-even-card-status { -fx-font-size: 19px; -fx-font-weight: bold; -fx-text-fill: #111B3A; }
+.break-even-card-detail { -fx-font-size: 12px; -fx-text-fill: #59657B; }
+.break-even-banner { -fx-background-color: #f1f5f9; -fx-padding: 5px 9px; -fx-background-radius: 6px; }
+.break-even-banner-title { -fx-font-weight: bold; -fx-text-fill: #111B3A; }
+.break-even-region { -fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 0 0 0 18px; }
+.break-even-annotation {
+    -fx-background-color: rgba(255, 255, 255, 0.96);
+    -fx-border-color: #16a34a;
+    -fx-border-radius: 5px;
+    -fx-background-radius: 5px;
+    -fx-padding: 7px;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #111B3A;
+}
+.break-even-connector { -fx-stroke: #16a34a; -fx-stroke-width: 1.5px; }
+.break-even-survival-heading { -fx-font-size: 11px; -fx-text-fill: #59657B; -fx-padding: 0 12px; }
+.break-even-probability { -fx-font-size: 11px; -fx-text-fill: #59657B; }
+.break-even-card-survival { -fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: #111B3A; }
+.break-even-view .table-row-cell:sustained-break-even { -fx-font-weight: bold; -fx-background-color: #e8f5ec; }
+.break-even-view .table-row-cell:sustained-break-even:selected { -fx-background-color: -fx-selection-bar; }
+
+/* Compact disclosure and section spacing; chart/marker sizes remain unchanged. */
+.break-even-view .section-title { -fx-font-size: 14px; }
+.break-even-plan-summary { -fx-font-size: 13px; -fx-padding: 3px 0; -fx-text-fill: #111B3A; }
+.break-even-view #break-even-insight-toggle { -fx-padding: 0 2px; }
+.break-even-view #break-even-insight-headline { -fx-font-weight: normal; }
+.break-even-view #break-even-selected-summary { -fx-font-weight: bold; -fx-text-fill: #111B3A; }

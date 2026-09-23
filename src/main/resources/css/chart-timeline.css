@@ -1,0 +1,15 @@
+.timeline-claim-line {
+    -fx-stroke: #59657B;
+    -fx-stroke-width: 1.25px;
+    -fx-stroke-dash-array: 4 5;
+}
+.timeline-claim-label {
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #111B3A;
+    -fx-background-color: rgba(255,255,255,0.96);
+    -fx-border-color: #DCE3ED;
+    -fx-border-radius: 3px;
+    -fx-background-radius: 3px;
+    -fx-padding: 3px;
+}
