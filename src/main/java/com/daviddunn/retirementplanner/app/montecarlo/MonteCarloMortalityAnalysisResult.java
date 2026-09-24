@@ -14,26 +14,39 @@ import java.util.Optional;
 import java.util.TreeMap;
 
 /**
- * Compact execution observations, without mortality percentile aggregation.
- * Values are nominal dollars at each world's own dates. Reproduction requires
+ * Authoritative mortality aggregates plus compact execution observations.
+ * All four terminal distributions are conditional on funding through second
+ * death. Values remain nominal future dollars at each world's own terminal
+ * balance date, not a common valuation date; no discount or inflation adjustment
+ * is applied. Lifetime taxes are the engine's nominal lifetime total. Reproduction requires
  * the same financial plan revision as well as these frozen generation inputs.
  * Caller-supplied worlds additionally require the caller's world source.
+ * No deterministic reference is embedded here. The fixed-mode configured-horizon,
+ * configured-death, expected-return reference remains a separate baseline; it is
+ * neither a mortality median nor a same-horizon comparator.
  *
  * Existing engine limitations apply: deceased-owner accounts remain household
  * assets available for funding, without retitling or beneficiary schedules.
  * Deceased owners generate neither their own RMDs nor Roth conversions.
  */
-public record MonteCarloMortalityAnalysisResult(
-        MonteCarloMortalityRequest request,
-        String returnModel,
-        String mortalityModel,
-        List<WorldOutcome> outcomes) {
+public final class MonteCarloMortalityAnalysisResult {
 
-    public MonteCarloMortalityAnalysisResult {
-        Objects.requireNonNull(request);
-        Objects.requireNonNull(returnModel);
-        Objects.requireNonNull(mortalityModel);
-        outcomes = List.copyOf(outcomes);
+    private final MonteCarloMortalityRequest request;
+    private final String returnModel;
+    private final String mortalityModel;
+    private final List<WorldOutcome> outcomes;
+    private final MonteCarloMortalityAccumulator.Aggregates aggregates;
+
+    public MonteCarloMortalityAnalysisResult(
+            MonteCarloMortalityRequest request,
+            String returnModel,
+            String mortalityModel,
+            List<WorldOutcome> outcomes) {
+        this.request = Objects.requireNonNull(request);
+        this.returnModel = Objects.requireNonNull(returnModel);
+        this.mortalityModel = Objects.requireNonNull(mortalityModel);
+        this.outcomes = List.copyOf(outcomes);
+        outcomes = this.outcomes;
         if (outcomes.size() != request.settings().simulationCount()) {
             throw new IllegalArgumentException("Every requested mortality world needs an outcome.");
         }
@@ -51,22 +64,85 @@ public record MonteCarloMortalityAnalysisResult(
                 throw new IllegalArgumentException("World must retain its complete annual prefix.");
             }
             for (int year = first; year <= lastCompleted; year++) {
-                Objects.requireNonNull(outcome.annualInvestableAssets().get(year),
-                        "Completed prefix years must be contiguous.");
+                if (!outcome.annualInvestableAssets().containsKey(year)) {
+                    throw new IllegalArgumentException("Completed prefix years must be contiguous.");
+                }
             }
         }
+        aggregates = MonteCarloMortalityAccumulator.reduce(first, outcomes);
+    }
+
+    public MonteCarloMortalityRequest request() {
+        return request;
+    }
+
+    public String returnModel() {
+        return returnModel;
+    }
+
+    public String mortalityModel() {
+        return mortalityModel;
+    }
+
+    public List<WorldOutcome> outcomes() {
+        return outcomes;
+    }
+
+    /** Projection start year; preparation requires mortality conditioning to match the plan start. */
+    public int firstReportingYear() {
+        return request.longevityAssumptions().mortalityBaseDate().getYear();
+    }
+
+    /** Latest sampled final living year, absent when every world ends at opening. No nominal-horizon cap. */
+    public Optional<Integer> lastReportingYear() {
+        return aggregates.annualResults().keySet().stream().max(Integer::compareTo);
+    }
+
+    /** Inclusive common reporting range, empty only when every world has opening-date second death. */
+    public Map<Integer, MonteCarloMortalityAnnualResult> annualResults() {
+        return aggregates.annualResults();
+    }
+
+    public Optional<MonteCarloPercentiles> endingInvestableAssets() {
+        return aggregates.endingInvestableAssets();
+    }
+
+    public Optional<MonteCarloPercentiles> endingNetWorth() {
+        return aggregates.endingNetWorth();
+    }
+
+    public Optional<MonteCarloPercentiles> afterTaxEstate() {
+        return aggregates.afterTaxEstate();
+    }
+
+    public Optional<MonteCarloPercentiles> lifetimeTaxes() {
+        return aggregates.lifetimeTaxes();
+    }
+
+    public Optional<LocalDate> earliestSuccessfulTerminalBalanceDate() {
+        return aggregates.earliestSuccessfulTerminalBalanceDate();
+    }
+
+    public Optional<LocalDate> latestSuccessfulTerminalBalanceDate() {
+        return aggregates.latestSuccessfulTerminalBalanceDate();
+    }
+
+    /** Counts by actual balance-date year, including the opening date for opening second death. */
+    public Map<Integer, Integer> successfulTerminalYearCounts() {
+        return aggregates.successfulTerminalYearCounts();
     }
 
     public int requestedSimulationCount() {
         return request.settings().simulationCount();
     }
 
+    /** Worlds that completed every modeled obligation through their final living financial year. */
     public long completedCount() {
-        return outcomes.stream().filter(outcome -> outcome.terminal().isPresent()).count();
+        return aggregates.completedCount();
     }
 
     public long fundingFailureCount() {
-        return outcomes.stream().filter(outcome -> outcome.fundingFailure().isPresent()).count();
+        return requestedSimulationCount() - completedCount();
     }
 
     /** Empirical lifetime funding fraction, not survival or positive-estate probability. */
@@ -76,8 +152,28 @@ public record MonteCarloMortalityAnalysisResult(
     }
 
     public Optional<FundingFailureStatistics> fundingFailureStatistics() {
-        return FundingFailureStatistics.from(outcomes.stream()
-                .flatMap(outcome -> outcome.fundingFailure().stream()).toList(), requestedSimulationCount());
+        return aggregates.fundingFailureStatistics();
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return this == other || other instanceof MonteCarloMortalityAnalysisResult that
+                && request.equals(that.request)
+                && returnModel.equals(that.returnModel)
+                && mortalityModel.equals(that.mortalityModel)
+                && outcomes.equals(that.outcomes)
+                && aggregates.equals(that.aggregates);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(request, returnModel, mortalityModel, outcomes, aggregates);
+    }
+
+    @Override
+    public String toString() {
+        return "MonteCarloMortalityAnalysisResult[request=" + request + ", returnModel=" + returnModel
+                + ", mortalityModel=" + mortalityModel + ", outcomes=" + outcomes + ", aggregates=" + aggregates + "]";
     }
 
     /** No terminal metric (including lifetime taxes) exists for a funding-failed world. */
