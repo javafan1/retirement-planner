@@ -14,8 +14,13 @@ import com.daviddunn.retirementplanner.domain.projection.ProjectionEvaluationCon
 import com.daviddunn.retirementplanner.domain.projection.ProjectionExecutionResult;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionMetricsCalculator;
+import com.daviddunn.retirementplanner.domain.projection.SocialSecurityProjectionIncomeProvider;
+import com.daviddunn.retirementplanner.domain.estate.EstateAtSecondDeathCalculator;
+import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjectionService;
+import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.PersonMortalityCategories;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +48,136 @@ public final class MonteCarloAnalyzer {
 
     public MonteCarloAnalyzer(ProjectionEngine engine) {
         this.engine = Objects.requireNonNull(engine);
+    }
+
+    public MonteCarloMortalityAnalysisResult analyzeMortality(
+            RetirementPlan source,
+            MonteCarloMortalityRequest request) {
+        return analyzeMortality(source, request, AnalysisProgressListener.none(), AnalysisCancellationToken.none());
+    }
+
+    public MonteCarloMortalityAnalysisResult analyzeMortality(
+            RetirementPlan source,
+            MonteCarloMortalityRequest request,
+            AnalysisProgressListener progress,
+            AnalysisCancellationToken cancellation) {
+        return analyzeMortality(source, request, null,
+                MonteCarloScenarioGenerator.MODEL_VERSION,
+                "HOUSEHOLD_MORTALITY_V" + MonteCarloRandomStreams.HOUSEHOLD_MORTALITY_V1, progress, cancellation);
+    }
+
+    /** Explicit indexed worlds support direct-engine oracles without changing fixed-mode APIs. */
+    public MonteCarloMortalityAnalysisResult analyzeMortality(
+            RetirementPlan source,
+            MonteCarloMortalityRequest request,
+            IntFunction<MonteCarloWorld> worlds,
+            AnalysisProgressListener progress,
+            AnalysisCancellationToken cancellation) {
+        return analyzeMortality(source, request, Objects.requireNonNull(worlds),
+                "CALLER_SUPPLIED_WORLDS", "CALLER_SUPPLIED_WORLDS", progress, cancellation);
+    }
+
+    private MonteCarloMortalityAnalysisResult analyzeMortality(
+            RetirementPlan source,
+            MonteCarloMortalityRequest request,
+            IntFunction<MonteCarloWorld> suppliedWorlds,
+            String returnModel,
+            String mortalityModel,
+            AnalysisProgressListener progress,
+            AnalysisCancellationToken cancellation) {
+        Objects.requireNonNull(request);
+        Objects.requireNonNull(progress);
+        Objects.requireNonNull(cancellation);
+        cancellation.throwIfCancellationRequested();
+        var plan = new RetirementPlanScenarioCopyService().copy(Objects.requireNonNull(source));
+        validateMortalityPreparation(plan, request);
+        IntFunction<MonteCarloWorld> worlds = suppliedWorlds != null
+                ? suppliedWorlds : new MonteCarloWorldGenerator(request)::generate;
+        var start = plan.getPlanningAssumptions().getProjectionStartDate();
+        var settings = request.settings();
+        var estate = new EstateAtSecondDeathCalculator();
+        var outcomes = new ArrayList<MonteCarloMortalityAnalysisResult.WorldOutcome>(settings.simulationCount());
+        cancellation.throwIfCancellationRequested();
+        report(progress, 0, settings.simulationCount());
+        int progressInterval = Math.max(1, (settings.simulationCount() + 99) / 100);
+        for (int index = 0; index < settings.simulationCount(); index++) {
+            cancellation.throwIfCancellationRequested();
+            try {
+                var world = Objects.requireNonNull(worlds.apply(index), "World is required.");
+                if (world.scenarioIndex() != index) {
+                    throw new IllegalArgumentException("World scenario index does not match requested index.");
+                }
+                var lifetime = world.lifetimeScenario();
+                int secondDeathYear = Math.max(lifetime.primaryDeathYear().orElseThrow().getValue(),
+                        lifetime.spouseDeathYear().orElseThrow().getValue());
+                var deathDate = LocalDate.of(secondDeathYear, 1, 1);
+                estate.validateCoverageStart(plan, deathDate);
+                if (deathDate.equals(start)) {
+                    var opening = estate.calculateOpening(plan, deathDate);
+                    var nonInvestable = new NonInvestableAssetProjectionService()
+                            .project(plan.getNonInvestableAssets(), start.getYear(), start.getYear())
+                            .getFirst().getTotalValue();
+                    outcomes.add(new MonteCarloMortalityAnalysisResult.WorldOutcome(index, lifetime, Map.of(),
+                            Optional.of(new MonteCarloMortalityAnalysisResult.TerminalOutcome(
+                                    opening.balanceDate(), opening.nominalInvestableAssets(),
+                                    opening.nominalInvestableAssets().add(nonInvestable),
+                                    opening.nominalAfterTaxEstate(), BigDecimal.ZERO)), Optional.empty()));
+                } else {
+                    int last = secondDeathYear - 1;
+                    var context = ProjectionEvaluationContext.withLifetimeScenario(lifetime).withExactEndingYear(last);
+                    var execution = engine.projectWithOutcome(plan, context, world.economicPath());
+                    if (execution instanceof ProjectionExecutionResult.InsufficientFunds failed) {
+                        outcomes.add(new MonteCarloMortalityAnalysisResult.WorldOutcome(index, lifetime,
+                                annual(failed.completedYears()), Optional.empty(), Optional.of(failed.fundingFailure())));
+                    } else {
+                        var projection = ((ProjectionExecutionResult.Completed) execution).projection();
+                        validateYears(projection, start.getYear(), last);
+                        var totals = metrics.calculate(plan, projection);
+                        outcomes.add(new MonteCarloMortalityAnalysisResult.WorldOutcome(index, lifetime,
+                                annual(projection.getYears()),
+                                Optional.of(new MonteCarloMortalityAnalysisResult.TerminalOutcome(
+                                        deathDate.minusDays(1), totals.endingInvestableAssets(), totals.endingNetWorth(),
+                                        totals.afterTaxEstate(), totals.totalTaxes())), Optional.empty()));
+                    }
+                }
+            } catch (AnalysisCancelledException exception) {
+                throw exception;
+            } catch (RuntimeException exception) {
+                throw new MonteCarloExecutionException(MonteCarloExecutionException.Phase.SIMULATION,
+                        OptionalInt.of(index), settings.seed(), returnModel, exception);
+            }
+            cancellation.throwIfCancellationRequested();
+            if ((index + 1) % progressInterval == 0 || index + 1 == settings.simulationCount()) {
+                report(progress, index + 1, settings.simulationCount());
+            }
+        }
+        cancellation.throwIfCancellationRequested();
+        var result = new MonteCarloMortalityAnalysisResult(request, returnModel, mortalityModel, outcomes);
+        cancellation.throwIfCancellationRequested();
+        return result;
+    }
+
+    private static void validateMortalityPreparation(RetirementPlan plan, MonteCarloMortalityRequest request) {
+        if (!new SocialSecurityProjectionIncomeProvider().supportsAdvancedPath(plan)) {
+            throw new IllegalArgumentException("Mortality execution requires the advanced two-person Social Security "
+                    + "path: modern-cohort people with one correctly owned Social Security source each.");
+        }
+        // The lifetime provider applies this shared persisted policy to either surviving person.
+        // Do not use extractCurrentStrategy: its absent-policy representation substitutes age 60.
+        if (plan.getPlanningAssumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge() == null) {
+            throw new IllegalArgumentException("Mortality execution requires a persisted survivor claiming age "
+                    + "for either first-death direction; no default survivor election is supplied.");
+        }
+        var household = plan.getHousehold();
+        var categories = PersonMortalityCategories.from(household);
+        var assumptions = request.longevityAssumptions();
+        if (!request.primaryBirthDate().equals(household.getPrimaryPerson().getBirthDate())
+                || !request.spouseBirthDate().equals(household.getSpouse().getBirthDate())
+                || categories.primary() != assumptions.primaryCategory()
+                || categories.spouse() != assumptions.spouseCategory()
+                || !plan.getPlanningAssumptions().getProjectionStartDate().equals(assumptions.mortalityBaseDate())) {
+            throw new IllegalArgumentException("Mortality request does not match the plan's people or projection start.");
+        }
     }
 
     public MonteCarloAnalysisResult analyze(RetirementPlan plan, MonteCarloSettings settings) {
