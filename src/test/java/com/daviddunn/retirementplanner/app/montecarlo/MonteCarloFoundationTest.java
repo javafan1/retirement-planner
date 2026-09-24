@@ -195,6 +195,34 @@ class MonteCarloFoundationTest {
         assertThrows(IllegalArgumentException.class, () -> generator.generate(2027, 2027, settings, () -> Double.NaN));
     }
 
+    @Test
+    void seed417MarketPathsRemainIdenticalToPreInfrastructureFixtures() {
+        // Captured from the existing generator before adding the new SHA-256 infrastructure.
+        String[][] expected = {
+                {"0.15085146371835517", "0.1365007093033292", "0.033680718208644295", "0.09708504094134222"},
+                {"0.11360171040519096", "0.09125443008279259", "-0.07245926469880565", "0.48162795400743846"},
+                {"0.07972939457357935", "-0.1817980115888209", "-0.05813922557512", "0.039723616247700155"}
+        };
+        int[] indices = {0, 1, 224};
+        var generator = new MonteCarloScenarioGenerator();
+        var settings = new MonteCarloSettings(1, 417, new BigDecimal("0.045"), new BigDecimal("0.12"));
+        for (int position : new int[] {2, 0, 1, 2}) {
+            MonteCarloRandomStreams.create(417, indices[position],
+                    MonteCarloRandomStreams.HOUSEHOLD_MORTALITY,
+                    MonteCarloRandomStreams.HOUSEHOLD_MORTALITY_V1).nextBytes(new byte[777]);
+            var path = generator.generate(2027, 2030, settings, indices[position]);
+            for (int year = 2027; year <= 2030; year++) {
+                assertEquals(new BigDecimal(expected[position][year - 2027]), path.investmentReturnForYear(year));
+            }
+            assertEquals(path.annualReturns(), generator.generate(2027, 2030,
+                    new MonteCarloSettings(5000, 417, settings.expectedReturn(), settings.returnVolatility()),
+                    indices[position]).annualReturns());
+            var zero = generator.generate(2027, 2030,
+                    new MonteCarloSettings(1, 417, settings.expectedReturn(), BigDecimal.ZERO), indices[position]);
+            assertTrue(zero.annualReturns().values().stream().allMatch(settings.expectedReturn()::equals));
+        }
+    }
+
     private static final class CountingEngine extends ProjectionEngine {
         int runs;
 
