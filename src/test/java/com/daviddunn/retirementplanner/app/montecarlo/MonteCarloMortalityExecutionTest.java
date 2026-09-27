@@ -120,7 +120,7 @@ class MonteCarloMortalityExecutionTest {
                     ProjectionEvaluationContext supplied, ProjectionEconomicPath path) {
                 calls.incrementAndGet();
                 assertNotSame(plan, isolated);
-                assertEquals(context(world), supplied);
+                assertEquals(context(world).withSurvivorClaimingAge(67), supplied);
                 assertTrue(supplied.socialSecurityStrategy().isEmpty());
                 var actual = super.projectWithOutcome(isolated, supplied, path);
                 // Full-row oracle covers SS, pension, expense factor, taxes, Medicare, RMD, Roth and account values.
@@ -319,7 +319,7 @@ class MonteCarloMortalityExecutionTest {
                     count.incrementAndGet();
                     throw new AssertionError();
                 }, AnalysisProgressListener.none(), AnalysisCancellationToken.none()));
-        assertTrue(error.getMessage().contains("persisted survivor claiming age"));
+        assertTrue(error.getMessage().contains("analysis survivor claiming age"));
         assertEquals(0, count.get());
         configure(plan, LocalDate.of(2027, 1, 1), 30, 67);
         var spouse = plan.getHousehold().getSpouse();

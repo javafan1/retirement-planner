@@ -45,10 +45,15 @@ public final class SurvivorBenefitClaimingPolicy {
     public static LocalDate claimDate(LocalDate birthDate, LocalDate deathDate, int claimingAge) {
         Objects.requireNonNull(birthDate);
         Objects.requireNonNull(deathDate);
+        validateClaimingAge(claimingAge);
+        return claimDate(birthDate, deathDate, birthDate.plusYears(claimingAge));
+    }
+
+    /** Whole-year elections may exceed FRA for late-death scenarios; no upper age is imposed. */
+    public static void validateClaimingAge(int claimingAge) {
         if (claimingAge < 60) {
             throw new IllegalArgumentException("Survivor Benefit Claiming Age must be at least 60.");
         }
-        return claimDate(birthDate, deathDate, birthDate.plusYears(claimingAge));
     }
 
     /** Exact analyzer elections retain their date precision and remain conditional on death. */

@@ -31,6 +31,7 @@ public final class MonteCarloFanChart extends LineChart<Number, Number> {
     private MonteCarloFanModel model;
     private int activeIndex = -1;
     private final ReadOnlyStringWrapper selectedDetail = new ReadOnlyStringWrapper("");
+    private final ReadOnlyStringWrapper selectedSummary = new ReadOnlyStringWrapper("");
     private final Line activeYear = new Line();
 
     public MonteCarloFanChart() {
@@ -111,10 +112,17 @@ public final class MonteCarloFanChart extends LineChart<Number, Number> {
         return selectedDetail.getReadOnlyProperty();
     }
 
+    public ReadOnlyStringProperty selectedSummaryProperty() {
+        return selectedSummary.getReadOnlyProperty();
+    }
+
     private void selectYear(int index) {
         activeIndex = Math.max(0, Math.min(index, model.years().size() - 1));
         String detail = MonteCarloPresentation.tooltip(model, model.years().get(activeIndex));
         selectedDetail.set(detail);
+        selectedSummary.set(model.mode() == MonteCarloMode.LONGEVITY_ADJUSTED
+                ? MonteCarloMortalityPresentation.selectedYear(model, model.years().get(activeIndex))
+                : detail.replace("\n", " · "));
         setAccessibleText("Investable Assets. " + detail);
         // Selection changes plot geometry without changing the outer chart's size.
         requestChartLayout();
@@ -167,10 +175,14 @@ public final class MonteCarloFanChart extends LineChart<Number, Number> {
         }
         decorations.load(model.context(), false, point -> {
         });
-        setAccessibleText("Investable Assets. P10–P90 outer range, P25–P75 inner range, median and deterministic projection. "
-                + "Each year includes simulations completing that year; hover for sample counts.");
+        setAccessibleText(model.mode() == MonteCarloMode.LONGEVITY_ADJUSTED
+                ? "Investable Assets. " + MonteCarloMortalityPresentation.ANNUAL_NOTICE
+                    + (model.years().isEmpty() ? " No annual financial rows: all sampled lifetimes end at opening." : "")
+                : "Investable Assets. P10–P90 outer range, P25–P75 inner range, median and deterministic projection. "
+                    + "Each year includes simulations completing that year; hover for sample counts.");
         activeIndex = -1;
         selectedDetail.set("");
+        selectedSummary.set("");
         if (!model.years().isEmpty()) {
             selectYear(0);
         }

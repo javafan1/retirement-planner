@@ -124,7 +124,8 @@ public final class MonteCarloAnalyzer {
                                     opening.nominalAfterTaxEstate(), BigDecimal.ZERO)), Optional.empty()));
                 } else {
                     int last = secondDeathYear - 1;
-                    var context = ProjectionEvaluationContext.withLifetimeScenario(lifetime).withExactEndingYear(last);
+                    var context = ProjectionEvaluationContext.withLifetimeScenario(lifetime)
+                            .withSurvivorClaimingAge(request.survivorClaimingAge().orElseThrow()).withExactEndingYear(last);
                     var execution = engine.projectWithOutcome(plan, context, world.economicPath());
                     if (execution instanceof ProjectionExecutionResult.InsufficientFunds failed) {
                         outcomes.add(new MonteCarloMortalityAnalysisResult.WorldOutcome(index, lifetime,
@@ -162,11 +163,9 @@ public final class MonteCarloAnalyzer {
             throw new IllegalArgumentException("Mortality execution requires the advanced two-person Social Security "
                     + "path: modern-cohort people with one correctly owned Social Security source each.");
         }
-        // The lifetime provider applies this shared persisted policy to either surviving person.
-        // Do not use extractCurrentStrategy: its absent-policy representation substitutes age 60.
-        if (plan.getPlanningAssumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge() == null) {
-            throw new IllegalArgumentException("Mortality execution requires a persisted survivor claiming age "
-                    + "for either first-death direction; no default survivor election is supplied.");
+        if (request.survivorClaimingAge().isEmpty()) {
+            throw new IllegalArgumentException("Mortality execution requires an analysis survivor claiming age "
+                    + "for either first-death direction; select an age before running analysis.");
         }
         var household = plan.getHousehold();
         var categories = PersonMortalityCategories.from(household);

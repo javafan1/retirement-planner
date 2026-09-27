@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.ui.montecarlo;
 
 import com.daviddunn.retirementplanner.app.montecarlo.MonteCarloAnalyzer;
 import com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSettings;
+import com.daviddunn.retirementplanner.app.montecarlo.MonteCarloMortalityRequest;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisProgressListener;
 import com.daviddunn.retirementplanner.domain.breakeven.BreakEvenPlanSummary;
@@ -15,6 +16,19 @@ import java.util.List;
  * Worker-only adapter: one normal reference and one sequential analysis of a captured plan.
  */
 public final class MonteCarloRunService {
+    public MonteCarloRun runMortality(RetirementPlan frozenPlan, MonteCarloMortalityRequest request,
+                                     AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
+        long started = System.nanoTime();
+        cancellation.throwIfCancellationRequested();
+        var result = new MonteCarloAnalyzer().analyzeMortality(frozenPlan, request, progress, cancellation);
+        cancellation.throwIfCancellationRequested();
+        var people = BreakEvenPlanSummary.from(frozenPlan.getHousehold());
+        return new MonteCarloRun(new MonteCarloRun.Mortality(result),
+                MonteCarloFanModel.from(result, people), people,
+                result.firstReportingYear(), result.lastReportingYear().orElse(result.firstReportingYear() - 1),
+                false, System.nanoTime() - started);
+    }
+
     public MonteCarloRun run(RetirementPlan frozenPlan, MonteCarloSettings settings, Projection cachedReference,
                              AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
         long started = System.nanoTime();

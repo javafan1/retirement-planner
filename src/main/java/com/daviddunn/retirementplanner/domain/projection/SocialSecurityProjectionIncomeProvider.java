@@ -185,12 +185,13 @@ public final class SocialSecurityProjectionIncomeProvider {
         LocalDate primarySurvivorClaim;
         LocalDate spouseSurvivorClaim;
         if (lifetimeOverride) {
+            Integer survivorAge = evaluationContext.survivorClaimingAge().orElse(death.getSurvivorClaimingAge());
             primarySurvivorClaim = lifetimeSurvivorClaim(primary, primaryDeath, spouseDeath,
                     override == null ? null : override.primarySurvivorElection().claimDate(),
-                    death.getSurvivorClaimingAge(), firstCalendarYear, lastCalendarYear);
+                    survivorAge, firstCalendarYear, lastCalendarYear);
             spouseSurvivorClaim = lifetimeSurvivorClaim(spouse, spouseDeath, primaryDeath,
                     override == null ? null : override.spouseSurvivorElection().claimDate(),
-                    death.getSurvivorClaimingAge(), firstCalendarYear, lastCalendarYear);
+                    survivorAge, firstCalendarYear, lastCalendarYear);
         } else {
             primarySurvivorClaim = override != null
                     ? applicableSurvivorClaim(primary, primaryDeath, spouseDeath,
@@ -342,7 +343,7 @@ public final class SocialSecurityProjectionIncomeProvider {
             LocalDate claimantDeath,
             LocalDate otherDeath,
             LocalDate explicitClaim,
-            Integer persistedAge,
+            Integer sharedAge,
             int firstYear,
             int lastYear) {
         LocalDate earliest = com.daviddunn.retirementplanner.domain.socialsecurity.analysis.
@@ -361,15 +362,15 @@ public final class SocialSecurityProjectionIncomeProvider {
                 || (claimantDeath != null && !firstPossible.isBefore(claimantDeath))) {
             return null;
         }
-        if (explicitClaim == null && persistedAge == null) {
+        if (explicitClaim == null && sharedAge == null) {
             throw new IllegalArgumentException(
-                    "Lifetime scenario survivor behavior requires a persisted survivor claiming age "
+                    "Lifetime scenario survivor behavior requires a shared survivor claiming age "
                             + "or a complete Social Security strategy override.");
         }
         LocalDate claim = explicitClaim != null
                 ? SurvivorBenefitClaimingPolicy.claimDate(claimant.getBirthDate(), otherDeath, explicitClaim)
                 : SurvivorBenefitClaimingPolicy.claimDate(
-                        claimant.getBirthDate(), otherDeath, persistedAge);
+                        claimant.getBirthDate(), otherDeath, sharedAge);
         return claimantDeath != null && !claim.isBefore(claimantDeath) ? null : claim;
     }
     /** Persisted whole-year election is conditional on death; late deaths are immediate. */

@@ -26,11 +26,15 @@ public final class MonteCarloPresentation {
     }
 
     public static String fundingPercent(MonteCarloAnalysisResult result) {
-        BigDecimal percent = result.fundingProbability().movePointRight(2);
+        return fundingPercent(result.fundingProbability(), result.fundingFailureCount(), result.completedCount());
+    }
+
+    public static String fundingPercent(BigDecimal probability, long failed, long completed) {
+        BigDecimal percent = probability.movePointRight(2);
         BigDecimal rounded = percent.setScale(1, RoundingMode.HALF_UP);
         // Do not display 100% with failures, or 0% with a small positive completed count.
-        if ((rounded.compareTo(new BigDecimal("100")) == 0 && result.fundingFailureCount() > 0)
-                || (rounded.signum() == 0 && result.completedCount() > 0)) {
+        if ((rounded.compareTo(new BigDecimal("100")) == 0 && failed > 0)
+                || (rounded.signum() == 0 && completed > 0)) {
             rounded = percent.setScale(2, RoundingMode.HALF_UP);
         }
         return rounded + "%";
@@ -84,6 +88,11 @@ public final class MonteCarloPresentation {
     }
 
     public static String tooltip(MonteCarloFanModel model, MonteCarloFanModel.Year year) {
+        if (year.population().isPresent()) {
+            return MonteCarloMortalityPresentation.selectedYear(model, year)
+                    + year.percentiles().map(p -> "\nP25: " + UIFormatters.money(p.p25())
+                            + " · P75: " + UIFormatters.money(p.p75())).orElse("");
+        }
         StringBuilder text = new StringBuilder("Calendar Year: " + year.calendarYear());
         if (year.percentiles().isPresent()) {
             var values = year.percentiles().orElseThrow();
