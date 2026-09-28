@@ -47,7 +47,8 @@ public final class MonteCarloWorldGenerator {
         int lastLivingYear = Math.max(lifetime.primaryDeathYear().orElseThrow().getValue(),
                 lifetime.spouseDeathYear().orElseThrow().getValue()) - 1;
         var economicPath = marketGenerator.generate(firstYear, lastLivingYear, settings, scenarioIndex);
-        return new MonteCarloWorld(scenarioIndex, economicPath, lifetime);
+        var inflationPath = new MonteCarloInflationGenerator().generate(firstYear, lastLivingYear, settings, scenarioIndex);
+        return new MonteCarloWorld(scenarioIndex, economicPath, lifetime, inflationPath);
     }
 
     public HouseholdLongevityScenarios mortalityScenarios() {

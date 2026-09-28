@@ -26,10 +26,11 @@ public final class MonteCarloRandomStreams {
     public static final int HOUSEHOLD_MORTALITY = 1;
     public static final int HOUSEHOLD_MORTALITY_V1 = 1;
 
-    // Reserved identifiers only: no sampling or stochastic models implemented here.
+    // Dimension IDs are frozen, including unused reserved dimensions.
     public static final int PRIMARY_MORTALITY = 2;
     public static final int SPOUSE_MORTALITY = 3;
     public static final int GENERAL_INFLATION = 4;
+    public static final int GENERAL_INFLATION_V1 = 1;
     public static final int HEALTHCARE_INFLATION = 5;
 
     private MonteCarloRandomStreams() {

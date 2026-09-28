@@ -32,6 +32,90 @@ class MonteCarloPreviewTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"fixed-deterministic", "fixed-stochastic", "longevity-stochastic"})
+    void phaseThreePreviews(String kind) throws Exception {
+        var finished = new CompletableFuture<MonteCarloRun>();
+        var stage = new Stage[1];
+        var view = fx(() -> {
+            var created = new MonteCarloAnalysisView(new Controller(MonteCarloMortalityUiFixtures.plan()));
+            var scroll = new ScrollPane(created);
+            scroll.setFitToWidth(true);
+            var root = new BorderPane(scroll);
+            root.setBottom(new Button("Close"));
+            stage[0] = new Stage();
+            stage[0].setScene(new Scene(root, 1900, 1040));
+            stage[0].show();
+            if (kind.startsWith("longevity")) MonteCarloMortalityViewTest.mode(created).setValue(MonteCarloMode.LONGEVITY_ADJUSTED);
+            if (kind.endsWith("stochastic")) MonteCarloInflationViewTest.inflationMode(created).setValue("Stochastic");
+            ((Label) created.lookup("#mc-status")).textProperty().addListener((o, a, b) -> {
+                if (created.session().state() == MonteCarloSession.State.COMPLETED) finished.complete(created.session().result());
+                if (created.session().state() == MonteCarloSession.State.FAILED) finished.completeExceptionally(created.session().failure());
+            });
+            button(created, "#mc-run").fire();
+            return created;
+        });
+        try {
+            var result = finished.get(120, TimeUnit.SECONDS);
+            assertEquals(5000, result.settings().simulationCount());
+            fx(() -> {
+                var chart = (MonteCarloFanChart) view.lookup("#monte-carlo-fan");
+                chart.requestFocus();
+                key(chart, javafx.scene.input.KeyCode.HOME);
+                for (int i = result.firstYear(); i < 2042; i++) key(chart, javafx.scene.input.KeyCode.RIGHT);
+                return null;
+            });
+            awaitLayoutPulses(stage[0].getScene());
+            fx(() -> {
+                for (String id : new String[]{"#mc-run", "#mc-inflation-mode", "#mc-selected-year", "#mc-analysis-details"}) {
+                    var node = view.lookup(id);
+                    var bounds = node.localToScene(node.getBoundsInLocal());
+                    assertTrue(bounds.getMinY() >= 0 && bounds.getMaxY() <= 1015, id + " " + bounds);
+                    assertTrue(bounds.getMinX() >= 0 && bounds.getMaxX() <= 1900, id + " " + bounds);
+                }
+                assertFalse(((Label) view.lookup("#mc-selected-year")).isTextTruncated());
+                snapshot(stage[0].getScene(), "target/inflation-" + kind + ".png");
+                var details = (TitledPane) view.lookup("#mc-analysis-details");
+                details.setAnimated(false);
+                details.setExpanded(true);
+                return null;
+            });
+            awaitLayoutPulses(stage[0].getScene());
+            fx(() -> {
+                ((ScrollPane) ((BorderPane) stage[0].getScene().getRoot()).getCenter()).setVvalue(1);
+                return null;
+            });
+            awaitLayoutPulses(stage[0].getScene());
+            fx(() -> {
+                var details = (TitledPane) view.lookup("#mc-analysis-details");
+                var bounds = details.getContent().localToScene(details.getContent().getBoundsInLocal());
+                assertTrue(bounds.getMinY() >= 0 && bounds.getMaxY() <= 1015, "Expanded details fully visible: " + bounds);
+                snapshot(stage[0].getScene(), "target/inflation-" + kind + "-details.png");
+                if (kind.startsWith("longevity")) {
+                    details.setExpanded(false);
+                    var scroll = (ScrollPane) ((BorderPane) stage[0].getScene().getRoot()).getCenter();
+                    scroll.setVvalue(0);
+                    var chart = (MonteCarloFanChart) view.lookup("#monte-carlo-fan");
+                    key(chart, javafx.scene.input.KeyCode.HOME);
+                    for (int y = result.firstYear(); y < 2070; y++) key(chart, javafx.scene.input.KeyCode.RIGHT);
+                }
+                return null;
+            });
+            if (kind.startsWith("longevity")) {
+                awaitLayoutPulses(stage[0].getScene());
+                fx(() -> {
+                    var summary = (Label) view.lookup("#mc-selected-year");
+                    assertTrue(summary.getText().contains("Small surviving sample"));
+                    assertFalse(summary.isTextTruncated());
+                    snapshot(stage[0].getScene(), "target/inflation-longevity-stochastic-tail.png");
+                    return null;
+                });
+            }
+        } finally {
+            fx(() -> { view.close(); stage[0].close(); return null; });
+        }
+    }
+
+    @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void longevityAdjustedFiveThousandRunAndLateSurvivorScreenshot(boolean persistedAge) throws Exception {
         var plan = MonteCarloMortalityUiFixtures.plan();

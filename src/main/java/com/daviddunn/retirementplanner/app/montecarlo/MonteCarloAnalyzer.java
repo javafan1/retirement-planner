@@ -126,6 +126,9 @@ public final class MonteCarloAnalyzer {
                     int last = secondDeathYear - 1;
                     var context = ProjectionEvaluationContext.withLifetimeScenario(lifetime)
                             .withSurvivorClaimingAge(request.survivorClaimingAge().orElseThrow()).withExactEndingYear(last);
+                    if (world.inflationPath().isPresent()) {
+                        context = context.withInflationPath(world.inflationPath().orElseThrow());
+                    }
                     var execution = engine.projectWithOutcome(plan, context, world.economicPath());
                     if (execution instanceof ProjectionExecutionResult.InsufficientFunds failed) {
                         outcomes.add(new MonteCarloMortalityAnalysisResult.WorldOutcome(index, lifetime,
@@ -281,11 +284,16 @@ public final class MonteCarloAnalyzer {
         List<BigDecimal> worth = new ArrayList<>();
         List<BigDecimal> estate = new ArrayList<>();
         List<BigDecimal> taxes = new ArrayList<>();
+        var inflationGenerator = new MonteCarloInflationGenerator();
         for (int index = 0; index < settings.simulationCount(); index++) {
             cancellation.throwIfCancellationRequested();
             try {
+                var economicPath = paths.apply(index);
+                var inflationPath = inflationGenerator.generate(first, last, settings, index);
+                var context = inflationPath.map(path -> ProjectionEvaluationContext.empty().withInflationPath(path))
+                        .orElseGet(ProjectionEvaluationContext::empty);
                 var execution = engine.projectWithOutcome(
-                        plan, ProjectionEvaluationContext.empty(), paths.apply(index));
+                        plan, context, economicPath);
                 if (execution instanceof ProjectionExecutionResult.InsufficientFunds failed) {
                     addAnnualSamples(samples, failed.completedYears());
                     outcomes.add(new RunOutcome(

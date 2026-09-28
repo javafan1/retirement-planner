@@ -11,7 +11,8 @@ public record ProjectionEvaluationContext(
         Optional<HouseholdLifetimeScenario> householdLifetimeScenario,
         Optional<Integer> endingYearOverride,
         HorizonPolicy horizonPolicy,
-        Optional<Integer> survivorClaimingAge) {
+        Optional<Integer> survivorClaimingAge,
+        Optional<ProjectionInflationPath> inflationPath) {
 
     public enum HorizonPolicy {
         CONFIGURED,
@@ -20,6 +21,7 @@ public record ProjectionEvaluationContext(
     }
 
     public ProjectionEvaluationContext {
+        inflationPath = Objects.requireNonNull(inflationPath, "Inflation path optional is required.");
         socialSecurityStrategy = Objects.requireNonNull(
                 socialSecurityStrategy,
                 "Social Security strategy override is required.");
@@ -42,6 +44,22 @@ public record ProjectionEvaluationContext(
             Optional<SocialSecurityHouseholdClaimingStrategy> socialSecurityStrategy,
             Optional<HouseholdLifetimeScenario> householdLifetimeScenario,
             Optional<Integer> endingYearOverride,
+            HorizonPolicy horizonPolicy,
+            Optional<Integer> survivorClaimingAge) {
+        this(socialSecurityStrategy, householdLifetimeScenario, endingYearOverride,
+                horizonPolicy, survivorClaimingAge, Optional.empty());
+    }
+
+    public ProjectionEvaluationContext withInflationPath(ProjectionInflationPath path) {
+        return new ProjectionEvaluationContext(socialSecurityStrategy, householdLifetimeScenario,
+                endingYearOverride, horizonPolicy, survivorClaimingAge,
+                Optional.of(Objects.requireNonNull(path, "Inflation path is required.")));
+    }
+
+    public ProjectionEvaluationContext(
+            Optional<SocialSecurityHouseholdClaimingStrategy> socialSecurityStrategy,
+            Optional<HouseholdLifetimeScenario> householdLifetimeScenario,
+            Optional<Integer> endingYearOverride,
             HorizonPolicy horizonPolicy) {
         this(socialSecurityStrategy, householdLifetimeScenario, endingYearOverride, horizonPolicy, Optional.empty());
     }
@@ -49,7 +67,7 @@ public record ProjectionEvaluationContext(
     /** Shared analysis election for either survivor, without overriding either own-retirement election. */
     public ProjectionEvaluationContext withSurvivorClaimingAge(int age) {
         return new ProjectionEvaluationContext(socialSecurityStrategy, householdLifetimeScenario,
-                endingYearOverride, horizonPolicy, Optional.of(age));
+                endingYearOverride, horizonPolicy, Optional.of(age), inflationPath);
     }
 
     /** Existing three-argument callers retain extension-only behavior. */
@@ -63,7 +81,7 @@ public record ProjectionEvaluationContext(
 
     public ProjectionEvaluationContext withExactEndingYear(int endingYear) {
         return new ProjectionEvaluationContext(socialSecurityStrategy,
-                householdLifetimeScenario, Optional.of(endingYear), HorizonPolicy.EXACT_REQUESTED, survivorClaimingAge);
+                householdLifetimeScenario, Optional.of(endingYear), HorizonPolicy.EXACT_REQUESTED, survivorClaimingAge, inflationPath);
     }
 
     /** Resolve once for both financial iteration and finite Social Security preparation. */
@@ -88,7 +106,7 @@ public record ProjectionEvaluationContext(
     /** Extension only: the engine retains at least the configured horizon. */
     public ProjectionEvaluationContext withEndingYear(int endingYear) {
         return new ProjectionEvaluationContext(socialSecurityStrategy,
-                householdLifetimeScenario, Optional.of(endingYear), HorizonPolicy.EXTEND_TO_REQUESTED, survivorClaimingAge);
+                householdLifetimeScenario, Optional.of(endingYear), HorizonPolicy.EXTEND_TO_REQUESTED, survivorClaimingAge, inflationPath);
     }
 
     public ProjectionEvaluationContext(

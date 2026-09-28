@@ -157,7 +157,7 @@ class MonteCarloMortalityViewTest {
                 assertTrue(queue.isEmpty());
                 assertTrue(text(view, "#mc-validation").contains("Person information"));
                 assertTrue(text(view, "#mc-mortality-context").contains("Sam mortality: Not set"));
-                assertEquals(2, view.lookupAll(".combo-box").size(), "Only mode and simulations are selectable lists");
+                assertEquals(3, view.lookupAll(".combo-box").size(), "Only analysis mode, inflation mode and simulations are selectable lists");
             } finally {
                 view.close();
             }
@@ -353,7 +353,7 @@ class MonteCarloMortalityViewTest {
                 var details = (TitledPane) view.lookup("#mc-analysis-details");
                 assertFalse(details.isExpanded());
                 String disclosure = MonteCarloMortalityPresentation.details(completed).toString();
-                for (String required : List.of("January 1", "independent", "retitling", "No stochastic inflation",
+                for (String required : List.of("January 1", "independent", "retitling", "General spending inflation uses the selected mode",
                         "not inserted as zeros", "not measured in one common year", "SS claiming markers", "hidden", "Conditioning date")) {
                     assertTrue(disclosure.contains(required), required);
                 }

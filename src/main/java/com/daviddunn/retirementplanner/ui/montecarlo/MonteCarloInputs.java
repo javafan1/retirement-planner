@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.montecarlo;
 
 import com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSettings;
+import com.daviddunn.retirementplanner.app.montecarlo.MonteCarloInflationSettings;
 
 import java.math.BigDecimal;
 
@@ -9,6 +10,17 @@ import java.math.BigDecimal;
  */
 public record MonteCarloInputs(int simulations, String expectedReturn, String volatility, String seed) {
     public static final int MAX_SIMULATIONS = 10_000;
+
+    public MonteCarloSettings settings(boolean stochasticInflation, String mean, String deviation, String floor) {
+        var settings = settings();
+        if (!stochasticInflation) {
+            return settings;
+        }
+        return settings.withInflation(new MonteCarloInflationSettings(
+                percentage(mean, "Expected inflation", new BigDecimal("-99"), new BigDecimal("100")),
+                percentage(deviation, "Inflation volatility", BigDecimal.ZERO, new BigDecimal("100")),
+                percentage(floor, "Inflation floor", new BigDecimal("-99"), new BigDecimal("100"))));
+    }
 
     public MonteCarloSettings settings() {
         if (simulations < 1 || simulations > MAX_SIMULATIONS) {

@@ -152,7 +152,7 @@ public final class MonteCarloMortalityPresentation {
                         + "After-Tax Estate excludes non-investable assets. Lifetime Taxes includes federal and Michigan income taxes."),
                 new Detail("Model limitations", "Market returns and mortality are independent in this version. Primary/spouse mortality "
                         + "uses the existing independent household mortality model. Deceased-owner accounts remain household assets; "
-                        + "there is no inherited-account retitling or beneficiary distribution model. No stochastic inflation; "
-                        + "inflation and Social Security COLA remain deterministic."));
+                        + "there is no inherited-account retitling or beneficiary distribution model. "
+                        + "General spending inflation uses the selected mode; Social Security COLA remains deterministic."));
     }
 }

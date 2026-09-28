@@ -47,6 +47,11 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     private final Runnable detach;
     private final ComboBox<Integer> simulations = new ComboBox<>();
     private final ComboBox<MonteCarloMode> mode = new ComboBox<>();
+    private final ComboBox<String> inflationMode = new ComboBox<>();
+    private final TextField inflationMean = new TextField();
+    private final TextField inflationVolatility = new TextField("1.75");
+    private final TextField inflationFloor = new TextField("-2.00");
+    private final HBox inflationInputs = new HBox(10);
     private final TextField primaryAdjustment = new TextField();
     private final TextField spouseAdjustment = new TextField();
     private final TextField survivorAge = new TextField();
@@ -79,7 +84,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     private final Label chartNotice = label("Annual bands include simulations completing each year. Hover or focus the chart and use Left/Right, Home/End to inspect years. Roth/RMD periods use the deterministic reference.", "mc-muted");
     private final Label referenceLegend = legend("Deterministic Projection", "mc-reference-legend", "mc-reference-sample", true);
     private final TitledPane details = new TitledPane();
-    private javafx.scene.Node fixedDetails;
+    private Label fixedDetails;
     private final VBox results = new VBox(5);
     private MonteCarloRun displayed;
     private Throwable logged;
@@ -119,6 +124,20 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                 + "Longevity-Adjusted: stochastic investment returns with sampled household longevity."));
         mode.setAccessibleText("Analysis mode");
         mode.setPrefWidth(200);
+        inflationMode.getItems().setAll("Deterministic", "Stochastic");
+        inflationMode.setValue("Deterministic");
+        inflationMode.setId("mc-inflation-mode");
+        inflationMode.setPrefWidth(140);
+        inflationMode.setAccessibleText("Inflation mode");
+        inflationMode.setTooltip(new Tooltip("Session-only general spending inflation. Specialized assumptions remain separate."));
+        inflationMean.setId("mc-inflation-mean");
+        inflationVolatility.setId("mc-inflation-volatility");
+        inflationFloor.setId("mc-inflation-floor");
+        inflationInputs.setId("mc-inflation-inputs");
+        inflationInputs.getChildren().addAll(
+                inlineInput("Expected inflation (%)", inflationMean, "Mean of the underlying normal annual spending inflation distribution; initialized from the plan."),
+                inlineInput("Volatility (%)", inflationVolatility, "Annual inflation standard deviation. V1 default 1.75% is an editable modeling assumption."),
+                inlineInput("Floor (%)", inflationFloor, "Minimum annual inflation. V1 default -2% permits mild deflation. Must not exceed the mean and must exceed -100%."));
         primaryAdjustment.setId("mc-primary-adjustment");
         spouseAdjustment.setId("mc-spouse-adjustment");
         survivorAge.setId("mc-survivor-age");
@@ -203,7 +222,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                 chartNotice, referenceNotice, new FlowPane(18, 2, outcomesTitle, terminalDates), table, mortalityTable, notice);
         fixedDetails = label(
                 "Annual returns use independent lognormal gross returns matched to the selected arithmetic expected return and volatility.\n"
-                        + "Investment returns are randomized; inflation and Social Security COLA remain deterministic.\n"
+                        + "Investment returns are randomized; general spending inflation uses the selected mode. Social Security COLA remains deterministic.\n"
                         + "Mortality/death assumptions, claiming elections, Roth strategy and all other plan settings remain those of the current plan.\n"
                         + "Monte Carlo settings are session-only and are not saved into the retirement plan.\n"
                         + "Funding probability measures whether the modeled plan completed the planning horizon without an authoritative funding constraint.\n"
@@ -217,7 +236,10 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         details.setId("mc-analysis-details");
         var modeLabel = new Label("Analysis mode");
         modeLabel.setLabelFor(mode);
-        var heading = new HBox(16, label("Monte Carlo Retirement Analysis", "mc-title"), modeLabel, mode);
+        var inflationLabel = new Label("Inflation");
+        inflationLabel.setLabelFor(inflationMode);
+        var heading = new FlowPane(16, 5, label("Monte Carlo Retirement Analysis", "mc-title"), modeLabel, mode,
+                inflationLabel, inflationMode, inflationInputs);
         heading.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         getChildren().addAll(heading,
                 label("Tests the current retirement plan across simulated investment-return paths.", "mc-muted"),
@@ -226,8 +248,9 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         cancel.setOnAction(event -> session.cancel());
         simulations.valueProperty().addListener((observable, previous, value) -> inputsChanged());
         mode.valueProperty().addListener((observable, previous, value) -> inputsChanged());
+        inflationMode.valueProperty().addListener((observable, previous, value) -> inputsChanged());
         survivorAge.textProperty().addListener((observable, previous, value) -> inputsChanged());
-        for (var field : List.of(expected, volatility, seed)) {
+        for (var field : List.of(expected, volatility, seed, inflationMean, inflationVolatility, inflationFloor)) {
             field.textProperty().addListener((observable, previous, value) -> inputsChanged());
         }
         for (var field : List.of(primaryAdjustment, spouseAdjustment)) {
@@ -258,7 +281,9 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             return;
         }
         try {
-            var settings = new MonteCarloInputs(simulations.getValue(), expected.getText(), volatility.getText(), seed.getText()).settings();
+            var settings = new MonteCarloInputs(simulations.getValue(), expected.getText(), volatility.getText(), seed.getText())
+                    .settings("Stochastic".equals(inflationMode.getValue()), inflationMean.getText(),
+                            inflationVolatility.getText(), inflationFloor.getText());
             if (!ProjectionReadiness.isReady(controller.getCurrentPlan())) {
                 throw new IllegalArgumentException("Set both birth dates and a projection start date before running analysis.");
             }
@@ -298,6 +323,9 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         volatility.setDisable(busy);
         seed.setDisable(busy);
         mode.setDisable(busy);
+        inflationMode.setDisable(busy);
+        inflationInputs.setDisable(busy);
+        show(inflationInputs, "Stochastic".equals(inflationMode.getValue()));
         primaryAdjustment.setDisable(busy);
         spouseAdjustment.setDisable(busy);
         survivorAge.setDisable(busy);
@@ -371,6 +399,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     private void renderFixed(MonteCarloRun completed) {
         var result = completed.result();
+        details.setContent(label(fixedDetails.getText() + "\n"
+                + MonteCarloPresentation.inflationDetails(completed.settings()), "mc-muted"));
         funding.setText(MonteCarloPresentation.fundingPercent(result));
         fundingDetail.setText(MonteCarloPresentation.fundingDetail(result));
         failures.setText(MonteCarloPresentation.failureDetail(result));
@@ -383,7 +413,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         var settings = result.settings();
         frozenInputs.setText("Run inputs: " + settings.simulationCount() + " simulations · arithmetic mean "
                 + UIFormatters.percent(settings.expectedReturn()) + " · volatility "
-                + UIFormatters.percent(settings.returnVolatility()) + " · seed " + settings.seed());
+                + UIFormatters.percent(settings.returnVolatility()) + " · seed " + settings.seed() + " · " + MonteCarloPresentation.inflationSummary(settings));
         referenceNotice.setText(completed.referenceIncomplete()
                 ? "Deterministic projection encountered a funding constraint; its line and Roth/RMD periods show only completed reference years."
                 : "");
@@ -393,6 +423,11 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     private void restoreLongevitySettings() {
         settingsOwner = controller.getCurrentPlan();
+        inflationMean.setText(settingsOwner.getPlanningAssumptions().getGeneralInflationRate()
+                .movePointRight(2).stripTrailingZeros().toPlainString());
+        inflationMode.setValue("Deterministic");
+        inflationVolatility.setText("1.75");
+        inflationFloor.setText("-2.00");
         var settings = controller.getLongevitySessionSettings();
         primaryAdjustment.setText(settings.primaryAdjustment().factor().toPlainString());
         spouseAdjustment.setText(settings.spouseAdjustment().factor().toPlainString());
@@ -487,13 +522,14 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         var settings = completed.settings();
         frozenInputs.setText("Run inputs: " + settings.simulationCount() + " simulations · arithmetic mean "
                 + UIFormatters.percent(settings.expectedReturn()) + " · volatility "
-                + UIFormatters.percent(settings.returnVolatility()) + " · seed " + settings.seed());
+                + UIFormatters.percent(settings.returnVolatility()) + " · seed " + settings.seed() + " · " + MonteCarloPresentation.inflationSummary(settings));
         referenceNotice.setText(result.annualResults().isEmpty() ? "No annual financial rows: all sampled lifetimes end at opening." : "");
         show(referenceNotice, result.annualResults().isEmpty());
         var content = new VBox(6);
         for (var section : MonteCarloMortalityPresentation.details(completed)) {
             content.getChildren().add(new VBox(2, label(section.title(), "mc-section"), label(section.text(), "mc-muted")));
         }
+        content.getChildren().add(label(MonteCarloPresentation.inflationDetails(completed.settings()), "mc-muted"));
         details.setContent(content);
     }
 
@@ -513,6 +549,17 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         control.setAccessibleText(name);
         control.setPrefWidth(name.equals("Random seed") ? 175 : 150);
         return new VBox(3, label, control);
+    }
+
+    private static HBox inlineInput(String name, TextField control, String help) {
+        var label = new Label(name);
+        label.setLabelFor(control);
+        control.setAccessibleText(name);
+        control.setTooltip(new Tooltip(help));
+        control.setPrefWidth(66);
+        var row = new HBox(5, label, control);
+        row.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        return row;
     }
 
     private static Label label(String text, String style) {

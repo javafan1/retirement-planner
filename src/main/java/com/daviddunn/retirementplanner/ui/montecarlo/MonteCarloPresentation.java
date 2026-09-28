@@ -19,6 +19,29 @@ public final class MonteCarloPresentation {
     public static final String CONDITIONAL_NOTICE =
             "Ending financial distributions include only simulations that funded the complete planning horizon.";
 
+    public static String inflationSummary(MonteCarloSettings settings) {
+        return settings.inflation().map(value -> "Inflation: stochastic · mean "
+                + UIFormatters.percent(value.expectedInflationRate()) + " · volatility "
+                + UIFormatters.percent(value.inflationVolatility()) + " · floor "
+                + UIFormatters.percent(value.minimumInflationRate())).orElse("Inflation: deterministic");
+    }
+
+    public static String inflationDetails(MonteCarloSettings settings) {
+        return inflationSummary(settings) + "\n"
+                + (settings.inflation().isEmpty() ? "General spending inflation uses the plan assumption.\n" : "")
+                + "Stochastic inflation varies annual general spending inflation independently across simulations. "
+                + "It does not change the Social Security COLA, mortality tables, investment return generator, or specialized inflation assumptions.\n"
+                + "V1 samples independent normal annual rates, floored at the configured minimum (not truncated/resampled). "
+                + "Mean and volatility describe the underlying normal distribution; flooring can change realized moments. "
+                + "General recurring and one-time expenses compound from the opening-year base; opening spending is unchanged.\n"
+                + "Market, mortality and inflation streams are independently reproducible. Inflation uses SHA-256 protocol 1, "
+                + "dimension 4/version 1 (floored normal). The seed, scenario index, calendar origin and frozen assumptions reproduce each path. "
+                + "Annual percentiles retain their existing conditional population interpretation.\n"
+                + "V1 limitations: no inflation/market correlation, persistence/autocorrelation, regime switching or fat tails. "
+                + "Healthcare inflation remains deterministic. Social Security COLA, pension COLAs, tax indexation, "
+                + "Medicare/IRMAA assumptions and asset appreciation remain separate and deterministic.";
+    }
+
     public record Outcome(String name, Optional<MonteCarloPercentiles> percentiles) {
     }
 

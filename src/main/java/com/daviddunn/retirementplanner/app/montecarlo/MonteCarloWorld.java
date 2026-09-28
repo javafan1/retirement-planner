@@ -2,8 +2,10 @@ package com.daviddunn.retirementplanner.app.montecarlo;
 
 import com.daviddunn.retirementplanner.domain.projection.HouseholdLifetimeScenario;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEconomicPath;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionInflationPath;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Immutable exogenous outcomes, reusable across financial strategies.
@@ -13,9 +15,16 @@ import java.util.Objects;
 public record MonteCarloWorld(
         int scenarioIndex,
         ProjectionEconomicPath economicPath,
-        HouseholdLifetimeScenario lifetimeScenario) {
+        HouseholdLifetimeScenario lifetimeScenario,
+        Optional<ProjectionInflationPath> inflationPath) {
+
+    public MonteCarloWorld(int scenarioIndex, ProjectionEconomicPath economicPath,
+            HouseholdLifetimeScenario lifetimeScenario) {
+        this(scenarioIndex, economicPath, lifetimeScenario, Optional.empty());
+    }
 
     public MonteCarloWorld {
+        Objects.requireNonNull(inflationPath, "Inflation path optional is required.");
         if (scenarioIndex < 0) {
             throw new IllegalArgumentException("Scenario index cannot be negative.");
         }

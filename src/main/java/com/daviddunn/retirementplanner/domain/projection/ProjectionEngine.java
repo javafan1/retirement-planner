@@ -235,6 +235,7 @@ public class ProjectionEngine {
                 Math.addExact(startYear, assumptions.getProjectionLengthYears() - 1));
         int projectionLength = Math.addExact(Math.subtractExact(endingYear, startYear), 1);
         economicPath.requireCoverage(startYear, endingYear);
+        evaluationContext.inflationPath().ifPresent(path -> path.requireCoverage(startYear, endingYear));
 
         EffectiveHouseholdDeathView deathView = EffectiveHouseholdDeathView.resolve(
                 assumptions.getDeathScenarioAssumptions(), evaluationContext.householdLifetimeScenario());
@@ -260,12 +261,18 @@ public class ProjectionEngine {
 
         boolean lifetimeRun = evaluationContext.householdLifetimeScenario().isPresent();
         boolean householdRmdHasOccurred = false;
+        BigDecimal generalExpenseMultiplier = BigDecimal.ONE;
         for (int yearOffset = 0;
              yearOffset < projectionLength;
              yearOffset++) {
 
             int calendarYear =
                     startYear + yearOffset;
+
+            if (yearOffset > 0 && evaluationContext.inflationPath().isPresent()) {
+                generalExpenseMultiplier = generalExpenseMultiplier.multiply(BigDecimal.ONE.add(
+                        evaluationContext.inflationPath().orElseThrow().inflationForYear(calendarYear)));
+            }
 
             ProjectionYearCalculation calculation;
             try {
@@ -282,7 +289,8 @@ public class ProjectionEngine {
                             deathView,
                             lifetimeRun,
                             householdRmdHasOccurred,
-                            economicPath.investmentReturnForYear(calendarYear));
+                            economicPath.investmentReturnForYear(calendarYear),
+                            evaluationContext.inflationPath().isPresent() ? generalExpenseMultiplier : null);
             } catch (RuntimeException exception) {
                 if (!structured || !(exception.getCause() instanceof FundingConstraint constraint)) {
                     throw exception;
@@ -350,7 +358,8 @@ public class ProjectionEngine {
             EffectiveHouseholdDeathView deathView,
             boolean lifetimeRun,
             boolean householdRmdHasOccurred,
-            BigDecimal annualInvestmentReturn) {
+            BigDecimal annualInvestmentReturn,
+            BigDecimal generalExpenseMultiplier) {
 
         return calculateProjectionYear(
                 plan,
@@ -364,6 +373,7 @@ public class ProjectionEngine {
                 lifetimeRun,
                 householdRmdHasOccurred,
                 annualInvestmentReturn,
+                generalExpenseMultiplier,
                 null);
     }
 
@@ -379,6 +389,7 @@ public class ProjectionEngine {
             boolean lifetimeRun,
             boolean householdRmdHasOccurred,
             BigDecimal annualInvestmentReturn,
+            BigDecimal generalExpenseMultiplier,
             MedicarePremiumCalculation authoritativeMedicarePremium) {
 
         BigDecimal beginningAssets =
@@ -451,7 +462,8 @@ public class ProjectionEngine {
                         assumptions,
                         yearOffset,
                         projectionDate,
-                        deathView);
+                        deathView,
+                        generalExpenseMultiplier);
 
         BigDecimal cashFlowExpenses =
                 annualExpenses.add(
@@ -761,6 +773,7 @@ public class ProjectionEngine {
                     lifetimeRun,
                     householdRmdHasOccurred,
                     annualInvestmentReturn,
+                    generalExpenseMultiplier,
                     medicarePremiumCalculation);
         }
 
@@ -1069,7 +1082,8 @@ public class ProjectionEngine {
             PlanningAssumptions assumptions,
             int yearOffset,
             LocalDate projectionDate,
-            EffectiveHouseholdDeathView deathView) {
+            EffectiveHouseholdDeathView deathView,
+            BigDecimal generalExpenseMultiplier) {
 
         BigDecimal totalExpenses =
                 BigDecimal.ZERO;
@@ -1093,7 +1107,8 @@ public class ProjectionEngine {
                     calculateProjectedExpense(
                             expense,
                             assumptions,
-                            yearOffset);
+                            yearOffset,
+                            generalExpenseMultiplier);
 
             /*
              * Only the first projection year may
@@ -1165,9 +1180,12 @@ public class ProjectionEngine {
     private BigDecimal calculateProjectedExpense(
             Expense expense,
             PlanningAssumptions assumptions,
-            int yearOffset) {
+            int yearOffset,
+            BigDecimal generalExpenseMultiplier) {
 
-
+        if (generalExpenseMultiplier != null && !expense.isHealthcareExpense()) {
+            return expense.getAnnualAmount().multiply(generalExpenseMultiplier);
+        }
 
         BigDecimal growthRate =
                 getExpenseGrowthRate(
