@@ -21,6 +21,8 @@ class MonteCarloPairedBenchmarkTest {
     void fiveThousandPairedWorldsInEachMode() throws Exception {
         var file = Path.of("target/phase4a-benchmark.txt");
         Files.writeString(file, "Sequential seed 417, volatility 0.12, stochastic inflation 0.0175, 5000 worlds.\n");
+        var reductionFile = Path.of("target/phase4b-reduction-benchmark.txt");
+        Files.writeString(reductionFile, "Reduction of existing pairs only; no projection execution in timed reduction.\n");
         var plan = MonteCarloMortalityExecutionTest.plan();
         for (boolean mortality : new boolean[]{false, true}) {
             for (int count : new int[]{30, 5000}) {
@@ -34,7 +36,17 @@ class MonteCarloPairedBenchmarkTest {
                 var request = request(plan, plan, assumptions);
                 var single = measure(() -> mortality ? new MonteCarloAnalyzer().analyzeMortality(plan, mortalityRequest)
                         : new MonteCarloAnalyzer().analyze(plan, settings));
-                var paired = measure(() -> run(request));
+                var captured = new MonteCarloStrategyComparisonResult[1];
+                var paired = measure(() -> {
+                    captured[0] = run(request);
+                    return captured[0];
+                });
+                var result = captured[0];
+                // Warm reduction independently; all measurements reuse the same authoritative observations.
+                assertEquals(result.summary(), MonteCarloStrategyComparisonAccumulator.reduce(
+                        request.assumptions(), result.outcomes()));
+                var reduction = measure(() -> MonteCarloStrategyComparisonAccumulator.reduce(
+                        request.assumptions(), result.outcomes()));
                 if (count == 5000) {
                     var row = String.format(Locale.ROOT,
                             "%s: single %.3f s, paired %.3f s, ratio %.3f, single retained %.2f MiB, paired retained %.2f MiB%n",
@@ -43,6 +55,12 @@ class MonteCarloPairedBenchmarkTest {
                             paired.retainedBytes() / 1048576.0);
                     Files.writeString(file, row, StandardOpenOption.APPEND);
                     System.out.print(row);
+                    var reductionRow = String.format(Locale.ROOT,
+                            "%s: reduction %.6f s, approximate retained summary %.4f MiB, annual rows %d%n",
+                            mortality ? "longevity" : "fixed", reduction.seconds(),
+                            reduction.retainedBytes() / 1048576.0, result.summary().annualResults().size());
+                    Files.writeString(reductionFile, reductionRow, StandardOpenOption.APPEND);
+                    System.out.print(reductionRow);
                 }
             }
         }
