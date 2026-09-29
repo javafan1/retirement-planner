@@ -295,6 +295,22 @@ public class MainWindow {
                 new com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloAnalysisDialog(
                         stage, controller).show());
         analysisMenu.getItems().add(monteCarloItem);
+        MenuItem comparisonItem = new MenuItem("Monte Carlo Strategy Comparison...");
+        comparisonItem.setId("monte-carlo-comparison-menu");
+        MenuItem comparisonNotice = new MenuItem(
+                com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyComparisonRunService.MISSING_BASELINE);
+        comparisonNotice.setDisable(true);
+        Runnable updateComparison = () -> {
+            boolean available = com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyComparisonRunService
+                    .available(controller.getCurrentPlan());
+            comparisonItem.setDisable(!available);
+            comparisonNotice.setVisible(!available);
+        };
+        updateComparison.run();
+        analysisMenu.setOnShowing(event -> updateComparison.run());
+        comparisonItem.setOnAction(event -> new com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyComparisonDialog(
+                stage, controller).show());
+        analysisMenu.getItems().addAll(comparisonItem, comparisonNotice);
 
         Menu helpMenu = new Menu("Help");
 

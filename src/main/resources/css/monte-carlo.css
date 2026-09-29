@@ -26,3 +26,13 @@
 .mc-median-legend { -fx-text-fill: #235dc4; -fx-font-weight: bold; }
 .mc-reference-legend { -fx-text-fill: #a96506; -fx-font-weight: bold; }
 .mc-view .table-view { -fx-font-size: 12px; }
+.mcc-funding { -fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #17213d; }
+.mc-difference-chart { -fx-background-color: white; -fx-border-color: transparent; -fx-border-width: 1; }
+.mc-difference-chart:focused { -fx-border-color: #526e9e; }
+.mc-comparison-zero { -fx-stroke: #17213d; -fx-stroke-width: 2.8; -fx-stroke-dash-array: 12 5; }
+.mc-difference-median { -fx-fill: transparent; -fx-stroke: #235dc4; -fx-stroke-width: 3; }
+.mc-difference-percentile { -fx-fill: transparent; -fx-stroke: #7895c5; -fx-stroke-width: 1; }
+.mc-difference-chart .axis { -fx-tick-label-fill: #526079; }
+
+.mcc-section { -fx-padding: 4 0 2 0; -fx-border-color: #dce2eb transparent transparent transparent; }
+.mcc-funding-column { -fx-padding: 2 18 2 0; }
