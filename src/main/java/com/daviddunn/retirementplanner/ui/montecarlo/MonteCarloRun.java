@@ -15,7 +15,8 @@ public record MonteCarloRun(
         int firstYear,
         int lastYear,
         boolean referenceIncomplete,
-        long elapsedNanos) {
+        long elapsedNanos,
+        String planDetails) {
     public sealed interface Result permits Fixed, Mortality {
     }
 
@@ -33,6 +34,17 @@ public record MonteCarloRun(
 
     public MonteCarloRun {
         java.util.Objects.requireNonNull(analysis);
+        java.util.Objects.requireNonNull(planDetails);
+    }
+
+    public MonteCarloRun(Result analysis, MonteCarloFanModel fan, BreakEvenPlanSummary people,
+            int firstYear, int lastYear, boolean referenceIncomplete, long elapsedNanos) {
+        this(analysis, fan, people, firstYear, lastYear, referenceIncomplete, elapsedNanos,
+                "Additional plan metadata was not captured by this run.");
+    }
+
+    public MonteCarloRun withPlanDetails(String details) {
+        return new MonteCarloRun(analysis, fan, people, firstYear, lastYear, referenceIncomplete, elapsedNanos, details);
     }
 
     public MonteCarloRun(MonteCarloAnalysisResult result, MonteCarloFanModel fan,

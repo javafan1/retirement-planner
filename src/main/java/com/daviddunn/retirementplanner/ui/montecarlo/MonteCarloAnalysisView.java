@@ -27,6 +27,7 @@ import java.util.logging.Logger;
  * Controls collect inputs and render frozen results; financial work belongs to the worker service.
  */
 public final class MonteCarloAnalysisView extends VBox implements AutoCloseable {
+    private final MonteCarloPdfExportAction pdf = new MonteCarloPdfExportAction("mc-export-pdf", this::canExportPdf, this::preparePdfReport);
     @FunctionalInterface
     public interface RunWork {
         MonteCarloRun run(RetirementPlan plan, MonteCarloSettings settings, Projection reference,
@@ -181,7 +182,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                 input("Return volatility (%)", volatility, "Measures year-to-year variation in simulated investment returns. Higher values create a wider range of possible outcomes. Range: 0% to 100%."),
                 input("Random seed", seed, "Controls the generated scenarios. Using the same plan, assumptions and seed reproduces the same simulation paths."),
                 longevityInputs,
-                new VBox(3, new Label(" "), new HBox(8, run, cancel)));
+                new VBox(3, new Label(" "), new HBox(8, run, cancel, pdf.button())));
         progress.setPrefWidth(230);
         var progressRow = new HBox(12, progress, status);
         HBox.setHgrow(status, Priority.ALWAYS);
@@ -315,6 +316,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     }
 
     private void refresh() {
+        pdf.refresh();
         boolean busy = session.busy();
         run.setDisable(busy);
         cancel.setDisable(session.state() != MonteCarloSession.State.RUNNING);
@@ -540,6 +542,19 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     public MonteCarloSession session() {
         return session;
+    }
+
+    public boolean canExportPdf() {
+        return session != null && session.state() == MonteCarloSession.State.COMPLETED && !session.stale() && session.result() != null;
+    }
+
+    public com.daviddunn.retirementplanner.app.export.MonteCarloPdfReport preparePdfReport() {
+        if (!canExportPdf()) throw new IllegalStateException("A current completed Monte Carlo result is required for PDF export.");
+        return MonteCarloPdfReportAdapter.from(session.result());
+    }
+
+    public void exportPdf(java.nio.file.Path destination) throws java.io.IOException {
+        new com.daviddunn.retirementplanner.app.export.MonteCarloPdfExporter().export(preparePdfReport(), destination);
     }
 
     private static VBox input(String name, Control control, String help) {

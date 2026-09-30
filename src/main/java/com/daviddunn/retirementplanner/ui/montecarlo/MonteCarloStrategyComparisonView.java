@@ -16,6 +16,7 @@ import static com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyCo
 
 /** Session-only controls and rendering; captures on FX and runs the existing analyzer on a worker. */
 public final class MonteCarloStrategyComparisonView extends VBox implements AutoCloseable {
+    private final MonteCarloPdfExportAction pdf = new MonteCarloPdfExportAction("mcc-export-pdf", this::canExportPdf, this::preparePdfReport);
     @FunctionalInterface
     public interface Work {
         MonteCarloStrategyComparisonRun run(MonteCarloStrategyComparisonRunService.Prepared input,
@@ -108,7 +109,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
                 input("Baseline survivor SS age", survivorB, "survivor-b", "Session-only survivor age for Saved Baseline; initialized from its saved election."));
         run.setId("mcc-run"); run.getStyleClass().add("mc-run");
         cancel.setId("mcc-cancel"); progress.setId("mcc-progress"); progress.setPrefWidth(160);
-        var actions = new FlowPane(12, 4, run, cancel, progress, status, context);
+        var actions = new FlowPane(12, 4, run, cancel, pdf.button(), progress, status, context);
         actions.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         table.setId("mcc-metrics");
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
@@ -181,6 +182,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     }
 
     private void refresh() {
+        pdf.refresh();
         boolean busy = session.busy();
         controls.setDisable(busy); inflationControls.setDisable(busy); longevityControls.setDisable(busy);
         boolean available = MonteCarloStrategyComparisonRunService.available(controller.getCurrentPlan());
@@ -262,6 +264,16 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     }
     private static void show(Node node, boolean value) { node.setVisible(value); node.setManaged(value); }
     public MonteCarloStrategyComparisonSession session() { return session; }
+    public boolean canExportPdf() {
+        return session != null && session.state() == MonteCarloStrategyComparisonSession.State.COMPLETED && !session.stale() && session.result() != null;
+    }
+    public com.daviddunn.retirementplanner.app.export.MonteCarloPdfReport preparePdfReport() {
+        if (!canExportPdf()) throw new IllegalStateException("A current completed paired result is required for PDF export.");
+        return MonteCarloPdfReportAdapter.from(session.result());
+    }
+    public void exportPdf(java.nio.file.Path destination) throws java.io.IOException {
+        new com.daviddunn.retirementplanner.app.export.MonteCarloPdfExporter().export(preparePdfReport(), destination);
+    }
     @Override public void close() {
         session.close(); detach.run(); if (worker instanceof ExecutorService service) service.shutdown();
     }

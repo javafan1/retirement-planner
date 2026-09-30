@@ -26,7 +26,7 @@ public final class MonteCarloRunService {
         return new MonteCarloRun(new MonteCarloRun.Mortality(result),
                 MonteCarloFanModel.from(result, people), people,
                 result.firstReportingYear(), result.lastReportingYear().orElse(result.firstReportingYear() - 1),
-                false, System.nanoTime() - started);
+                false, System.nanoTime() - started).withPlanDetails(planDetails(frozenPlan));
     }
 
     public MonteCarloRun run(RetirementPlan frozenPlan, MonteCarloSettings settings, Projection cachedReference,
@@ -49,6 +49,20 @@ public final class MonteCarloRunService {
                 frozenPlan, settings, reference, progress, cancellation);
         cancellation.throwIfCancellationRequested();
         return new MonteCarloRun(result, MonteCarloFanModel.from(result, context), people, first, last,
-                reference instanceof ProjectionExecutionResult.InsufficientFunds, System.nanoTime() - started);
+                reference instanceof ProjectionExecutionResult.InsufficientFunds, System.nanoTime() - started)
+                .withPlanDetails(planDetails(frozenPlan));
+    }
+
+    private static String planDetails(RetirementPlan plan) {
+        var p = plan.getPlanningAssumptions();
+        return "Projection start: " + p.getProjectionStartDate()
+                + "\nConfigured planning horizon: " + (p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1)
+                + "\nPlan general inflation: " + percent(p.getGeneralInflationRate())
+                + "\nHealthcare inflation (deterministic): " + percent(p.getHealthcareInflationRate())
+                + "\nConfigured deterministic reference return: " + percent(p.getExpectedAnnualInvestmentReturn());
+    }
+
+    private static String percent(java.math.BigDecimal value) {
+        return value.movePointRight(2).stripTrailingZeros().toPlainString() + "%";
     }
 }
