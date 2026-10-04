@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.components;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.MortalityCategory;
 import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
@@ -71,7 +72,9 @@ public class PersonCard extends GridPane {
         add(new Label("Birth Date:"), 0, 2);
         add(birthDatePicker, 1, 2);
         add(new Label("Mortality category:"), 0, 3);
+        InputHelp.install(birthDatePicker, "This person's birth date. Used to determine ages, Social Security eligibility and start dates, Medicare eligibility, RMD timing and longevity-model ages.");
         add(mortalityCategory, 1, 3);
+        InputHelp.linkGridLabels(this);
     }
 
     public void load(Person person) {

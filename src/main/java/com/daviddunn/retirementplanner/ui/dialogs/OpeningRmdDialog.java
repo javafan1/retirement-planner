@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
@@ -165,6 +166,7 @@ public final class OpeningRmdDialog extends Dialog<Boolean> {
                 .getDayOfMonth() == 1) {
             Button useCurrentBalanceButton = new Button(
                     "Use current account balance as Dec. 31 balance");
+            InputHelp.install(useCurrentBalanceButton, "Copies the current account balance into the historical balance field for a January 1 projection start. Use only when it represents the prior December 31 value; review before saving.");
             useCurrentBalanceButton.setOnAction(event -> {
                 priorBalanceField.setText(
                         account.getCurrentBalance().toPlainString());
@@ -194,6 +196,9 @@ public final class OpeningRmdDialog extends Dialog<Boolean> {
         distributedField.textProperty().addListener(
                 (observable, oldValue, newValue) -> refreshCalculation());
 
+        InputHelp.install(priorBalanceField, "This account's actual prior December 31 balance in dollars, used to calculate the opening-year RMD. This is a historical balance, separate from the current account balance.");
+        InputHelp.install(distributedField, "RMD dollars already distributed from this account in the opening year before the projection start. Reduces the remaining RMD; do not include planned future withdrawals. Enter 0 if none.");
+        InputHelp.linkGridLabels(grid);
         pane.getChildren().addAll(accountHeading, grid);
         return pane;
     }

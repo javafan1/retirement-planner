@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.socialsecurity;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityStrategyComparisonEntry;
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityStrategyComparisonService;
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityStrategyResult;
@@ -325,9 +326,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 "Compares top Social Security-only strategies using deterministic full-plan outcomes. "
                         + "Rows remain in Social Security analyzer order; no integrated winner is selected.");
         explanation.setWrapText(true);
+        InputHelp.install(integratedCandidateCount, "Number of top Social Security-only strategies to evaluate through the deterministic retirement plan, from 1 to 20. This affects Quick Comparison only; it does not limit Exhaustive Search or change the saved plan.");
         HBox actions = new HBox(10,
                 new Label("Integrated candidates (1-20):"), integratedCandidateCount,
                 integratedRunButton, integratedCancelButton, integratedStatus);
+        InputHelp.link((Label) actions.getChildren().getFirst(), integratedCandidateCount);
         VBox tableBox = new VBox(8, heading("Candidate Comparison"), integratedTable);
         VBox.setVgrow(integratedTable, Priority.ALWAYS);
         SplitPane details = new SplitPane(
@@ -415,7 +418,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         String adjustmentHelp = "Mortality risk multiplier: 1.00 means standard table mortality; 0.75 means 75% "
                 + "and 1.25 means 125% of the table's underlying mortality hazard. Annual death probabilities "
                 + "are adjusted through survival probabilities, not multiplied directly. This does not shorten "
-                + "or lengthen remaining life by that percentage.";
+                + "or lengthen remaining life by that percentage. Above 1.00 increases modeled mortality; below 1.00 decreases it.";
         primaryMortalityAdjustment.setTooltip(HelpIcon.createTooltip(adjustmentHelp));
         spouseMortalityAdjustment.setTooltip(HelpIcon.createTooltip(adjustmentHelp));
         mortalityDate.setTooltip(HelpIcon.createTooltip(
@@ -427,7 +430,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         + "are translated to this date for comparison. Changing this date does not change the mortality "
                         + "conditioning date or the retirement projection start date."));
         discountRate.setTooltip(HelpIcon.createTooltip(
-                "The real rate used to discount inflation-adjusted future values back to the valuation date. "
+                "Annual real discount percentage (enter 1 for 1%) used to discount inflation-adjusted future values back to the valuation date. "
                         + "It represents time preference after removing general inflation. Higher values place less "
                         + "present value on more distant future amounts."));
         GridPane grid = new GridPane();
@@ -445,6 +448,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 new Label("Real discount rate (%):"), discountRate,
                 new Label("Valuation date:"), pvDate);
         grid.addRow(3, new Label("Mortality conditioning date:"), mortalityDate);
+        InputHelp.linkGridLabels(grid);
         return grid;
     }
 

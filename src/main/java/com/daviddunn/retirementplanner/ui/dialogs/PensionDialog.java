@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import javafx.geometry.Insets;
@@ -189,6 +190,13 @@ public class PensionDialog extends Dialog<Pension> {
                         ButtonType.OK,
                         ButtonType.CANCEL);
 
+        InputHelp.install(ownershipCombo, "Person whose pension this is. Their death determines when the separate survivor benefit, if provided, replaces the owner's benefit.");
+        InputHelp.install(startDatePicker, "Date pension payments begin. Income is counted for active calendar months; this date also establishes the base year for this pension's COLA.");
+        InputHelp.install(endDatePicker, "Optional last date of pension payments. Leave blank for no scheduled termination; death and any survivor benefit still affect modeled income.");
+        InputHelp.install(monthlyBenefitField, "Gross monthly pension benefit in dollars at the pension start, before income taxes. The projection applies this pension's COLA and counts active months.");
+        InputHelp.install(survivorMonthlyBenefitField, "Monthly dollar benefit payable to the surviving spouse after the pension owner's death, before COLA. Enter an amount, not a percentage; blank means no survivor benefit.");
+        InputHelp.install(colaRateField, "Annual pension COLA as a decimal: enter 0.02 for 2%, or 0 for no increase. Compounded from the pension start year for both owner and survivor benefits; independent of General Inflation.");
+        InputHelp.linkGridLabels(grid);
         setResultConverter(button -> {
 
             if (button != ButtonType.OK) {

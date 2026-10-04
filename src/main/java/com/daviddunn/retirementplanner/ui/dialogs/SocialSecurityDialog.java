@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.help.PlanningInputHelp;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitStartDateCalculator;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
@@ -156,6 +158,11 @@ public class SocialSecurityDialog
                     1);
         }
 
+        InputHelp.install(ownershipCombo, "Person whose Social Security earnings record supplies this benefit. Their birth date determines the derived benefit start date and age-based claiming adjustments.");
+        InputHelp.install(fraBenefitField, "Monthly retirement benefit at Full Retirement Age (FRA), in dollars for the displayed benefit valuation year. Enter the FRA amount before early/delayed claiming adjustments; the model applies those adjustments and the plan's Social Security COLA.");
+        InputHelp.install(claimingAgeCombo, PlanningInputHelp.CLAIMING_AGE);
+        InputHelp.install(useTodaysDollarConventionCheckBox, "For this legacy source, interpret the entered FRA benefit in the plan's projection-start-year dollars. Selecting this updates the valuation year on save; it does not convert the entered dollar amount.");
+        InputHelp.linkGridLabels(grid);
         getDialogPane().setContent(grid);
 
         getDialogPane().getButtonTypes().addAll(

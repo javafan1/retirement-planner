@@ -41,6 +41,8 @@ class BreakEvenAnalysisViewTest {
                 assertTrue(text.contains("David 70"));
                 assertTrue(text.contains("No Difference")); // SS zero in both fixtures.
                 ComboBox<BreakEvenMetric> selector = lookup(view, "#break-even-metric");
+                assertTrue(selector.getTooltip().getText().contains("does not rerun projections"));
+                assertTrue(selector.getTooltip().isWrapText());
                 assertEquals(BreakEvenMetric.TOTAL_NET_WORTH, selector.getValue());
                 assertTrue(((LineChart<?, ?>) view.lookup("#break-even-chart")).getTitle().contains("Total Net Worth"));
                 selector.setValue(BreakEvenMetric.INVESTABLE_ASSETS);

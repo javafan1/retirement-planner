@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
 import com.daviddunn.retirementplanner.domain.financial.GrowthCategory;
@@ -181,6 +182,12 @@ public class ExpenseDialog extends Dialog<Expense> {
                 1,
                 row++);
 
+        InputHelp.install(expenseTypeComboBox, "Recurring expenses repeat in active calendar years. One Time records a purchase in its purchase year, uses General Inflation, and is not reduced by the post-death expense factor.");
+        InputHelp.install(annualAmountField, "Dollars in the projection's opening-year spending base: annual spending for Recurring, or the single purchase amount for One Time. Future amounts grow from that base using the applicable inflation assumption.");
+        InputHelp.install(growthCategoryComboBox, "Select General or Healthcare Inflation for a recurring expense. One-time purchases always use General Inflation, so this choice is hidden for them.");
+        InputHelp.install(effectiveDatePicker, "First active date for recurring spending; blank means no start restriction. For a one-time expense, a purchase date is required. Recurring expenses are included by calendar-year overlap, with opening-year proration from the projection start.");
+        InputHelp.install(endDatePicker, "Optional last active date for a recurring expense; blank means no scheduled end. A calendar year is included when the expense overlaps it. One-time expenses instead use their purchase date.");
+        InputHelp.linkGridLabels(grid);
         getDialogPane().setContent(grid);
 
         updateExpenseTypeControls(

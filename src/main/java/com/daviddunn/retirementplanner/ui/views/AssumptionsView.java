@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.ui.views;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.help.PlanningInputHelp;
 import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
@@ -227,8 +229,9 @@ public class AssumptionsView extends VBox {
                 1,
                 row++);
 
+        Label horizonLabel = new Label("Assumed second death / end of household projection:");
         grid.add(
-                new Label("Assumed second death / end of household projection:"),
+                horizonLabel,
                 0,
                 row);
 
@@ -478,6 +481,25 @@ public class AssumptionsView extends VBox {
                 1,
                 row++);
 
+        InputHelp.install(projectionStartDatePicker, PlanningInputHelp.START);
+        InputHelp.install(projectionLengthField, HelpText.PLANNING_HORIZON);
+        InputHelp.link(horizonLabel, projectionLengthField);
+        InputHelp.install(deathScenarioComboBox, PlanningInputHelp.DEATH_SCENARIO);
+        InputHelp.install(deathYearField, PlanningInputHelp.DEATH_YEAR);
+        InputHelp.install(postDeathExpenseFactorField, PlanningInputHelp.EXPENSE_FACTOR);
+        InputHelp.install(investmentReturnField, HelpText.INVESTMENT_RETURN);
+        InputHelp.install(inflationRateField, HelpText.GENERAL_INFLATION);
+        InputHelp.install(healthcareInflationField, HelpText.HEALTHCARE_INFLATION);
+        InputHelp.install(socialSecurityColaField, HelpText.SOCIAL_SECURITY_COLA);
+        InputHelp.install(federalBracketGrowthField, PlanningInputHelp.BRACKET_GROWTH);
+        InputHelp.install(standardDeductionGrowthField, PlanningInputHelp.DEDUCTION_GROWTH);
+        InputHelp.install(futureFederalMarginalRateAdjustmentField, PlanningInputHelp.RATE_CHANGE);
+        InputHelp.install(futureFederalMarginalRateEffectiveYearField, PlanningInputHelp.RATE_YEAR);
+        InputHelp.install(stateIncomeTaxRateField, PlanningInputHelp.STATE_RATE);
+        InputHelp.install(localIncomeTaxRateField, PlanningInputHelp.LOCAL_RATE);
+        InputHelp.install(estimatedHeirTaxRateField, PlanningInputHelp.HEIR_RATE);
+        InputHelp.install(openingRmdButton, PlanningInputHelp.OPENING_RMD);
+        InputHelp.linkGridLabels(grid);
         HBox buttonBar = new HBox(10, applyButton, cancelButton);
         buttonBar.setPadding(new Insets(10));
         getChildren().addAll(grid, buttonBar, statusLabel);

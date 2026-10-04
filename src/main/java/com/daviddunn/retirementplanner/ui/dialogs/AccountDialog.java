@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.financial.AccountFactory;
 import com.daviddunn.retirementplanner.domain.financial.InheritedAccountInformation;
@@ -212,6 +213,13 @@ public class AccountDialog extends Dialog<Account> {
 
         updateForAccountTypeChange();
 
+        InputHelp.install(typeCombo, "Account category determines modeled tax treatment, RMD rules and eligibility for withdrawals or Roth conversions. Inherited IRAs require original-owner and beneficiary information.");
+        InputHelp.install(ownershipCombo, "Person who owns the account. Retirement accounts require Primary or Spouse ownership; only eligible non-retirement accounts allow Joint. RMDs and Roth transfers follow the individual owner.");
+        InputHelp.install(balanceField, "Current account value in dollars used as the opening investable balance. Enter the balance at the projection start; prior December 31 RMD balances are entered separately.");
+        InputHelp.install(originalOwnerDobPicker, "Original deceased owner's birth date, not the beneficiary's. Required for inherited IRAs and used with death date and relationship to determine inherited-account RMD treatment.");
+        InputHelp.install(originalOwnerDeathPicker, "Original owner's date of death. Required for inherited IRAs; its year helps determine the applicable inherited distribution rules and deadlines.");
+        InputHelp.install(beneficiaryRelationshipCombo, "Beneficiary's relationship to the original owner. Used with inherited IRA dates to select the modeled distribution treatment; it does not designate a new beneficiary for this account.");
+        InputHelp.linkGridLabels(grid);
         getDialogPane().setContent(grid);
 
         getDialogPane().getButtonTypes().addAll(

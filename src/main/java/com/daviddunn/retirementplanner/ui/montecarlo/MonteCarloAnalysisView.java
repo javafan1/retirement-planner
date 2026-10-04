@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.montecarlo;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSettings;
 import com.daviddunn.retirementplanner.app.montecarlo.MonteCarloMortalityRequest;
 import com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService;
@@ -121,8 +122,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         mode.getItems().setAll(MonteCarloMode.values());
         mode.setValue(MonteCarloMode.FIXED_LIFESPAN);
         mode.setId("mc-mode");
-        mode.setTooltip(new Tooltip("Fixed Lifespan: stochastic investment returns with the configured plan lifetime and horizon. "
-                + "Longevity-Adjusted: stochastic investment returns with sampled household longevity."));
+        InputHelp.install(mode, "Fixed Lifespan: stochastic investment returns with the configured plan lifetime and horizon. "
+                + "Longevity-Adjusted: stochastic investment returns with sampled household longevity. These settings are session-only.");
         mode.setAccessibleText("Analysis mode");
         mode.setPrefWidth(200);
         inflationMode.getItems().setAll("Deterministic", "Stochastic");
@@ -130,7 +131,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         inflationMode.setId("mc-inflation-mode");
         inflationMode.setPrefWidth(140);
         inflationMode.setAccessibleText("Inflation mode");
-        inflationMode.setTooltip(new Tooltip("Session-only general spending inflation. Specialized assumptions remain separate."));
+        InputHelp.install(inflationMode, "Deterministic uses the plan's General Inflation; Stochastic samples annual general spending inflation using the inputs below. Healthcare Inflation, Social Security COLA and other specialized assumptions remain deterministic. Session-only; does not change the saved plan.");
         inflationMean.setId("mc-inflation-mean");
         inflationVolatility.setId("mc-inflation-volatility");
         inflationFloor.setId("mc-inflation-floor");
@@ -179,7 +180,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         inputs.getChildren().addAll(
                 input("Simulations", simulations, "Number of independent investment-return paths tested. More simulations produce more stable estimates but require more processing time. V1 maximum: 10,000."),
                 input("Expected return (%)", expected, "Expected return is the arithmetic mean annual return used to generate simulated yearly returns. With volatility, the median compounded outcome will generally differ from a deterministic projection using the same percentage. Range: -99% to 100%."),
-                input("Return volatility (%)", volatility, "Measures year-to-year variation in simulated investment returns. Higher values create a wider range of possible outcomes. Range: 0% to 100%."),
+                input("Return volatility (%)", volatility, "Annual standard deviation of simulated investment returns, entered as a percentage. Higher values create a wider range of yearly returns. Range: 0% to 100%."),
                 input("Random seed", seed, "Controls the generated scenarios. Using the same plan, assumptions and seed reproduces the same simulation paths."),
                 longevityInputs,
                 new VBox(3, new Label(" "), new HBox(8, run, cancel, pdf.button())));
@@ -239,6 +240,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         modeLabel.setLabelFor(mode);
         var inflationLabel = new Label("Inflation");
         inflationLabel.setLabelFor(inflationMode);
+        InputHelp.link(modeLabel, mode);
+        InputHelp.link(inflationLabel, inflationMode);
         var heading = new FlowPane(16, 5, label("Monte Carlo Retirement Analysis", "mc-title"), modeLabel, mode,
                 inflationLabel, inflationMode, inflationInputs);
         heading.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
@@ -559,8 +562,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     private static VBox input(String name, Control control, String help) {
         var label = new Label(name);
-        label.setLabelFor(control);
-        control.setTooltip(new Tooltip(help));
+        InputHelp.install(control, help);
+        InputHelp.link(label, control);
         control.setAccessibleText(name);
         control.setPrefWidth(name.equals("Random seed") ? 175 : 150);
         return new VBox(3, label, control);
@@ -568,9 +571,9 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     private static HBox inlineInput(String name, TextField control, String help) {
         var label = new Label(name);
-        label.setLabelFor(control);
         control.setAccessibleText(name);
-        control.setTooltip(new Tooltip(help));
+        InputHelp.install(control, help);
+        InputHelp.link(label, control);
         control.setPrefWidth(66);
         var row = new HBox(5, label, control);
         row.setAlignment(javafx.geometry.Pos.CENTER_LEFT);

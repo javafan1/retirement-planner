@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.socialsecurity;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
 import javafx.scene.control.*;
@@ -37,6 +38,7 @@ final class CurrentStrategyBaselineView extends VBox {
         spouseSurvivor.setTooltip(HelpIcon.createTooltip("Used when the primary dies first. This is the age at which "
                 + "the spouse would claim a survivor benefit if eligible. It completes the Current Strategy "
                 + "baseline for longevity-weighted analysis and does not change the deterministic plan's death scenario."));
+        InputHelp.linkGridLabels(grid);
         var help = new Label("Comparison baseline only; candidate strategies are unchanged. Survivor ages are whole years "
                 + "60 or older, kept only while this analyzer is open. Benefits cannot begin before death. "
                 + "This election is separate from retirement claiming; waiting past Survivor FRA adds no benefit increase.");

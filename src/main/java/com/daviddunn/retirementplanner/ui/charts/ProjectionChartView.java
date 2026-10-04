@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.charts;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
 import javafx.geometry.Insets;
@@ -29,6 +30,7 @@ public final class ProjectionChartView extends VBox {
         getStylesheets().add(getClass().getResource("/css/projection-chart.css").toExternalForm());
         Label title = new Label("Projection Chart");
         title.getStyleClass().add("chart-title");
+        InputHelp.install(selector, "Choose the metric shown from the completed projection. Switching the chart does not change planning assumptions or rerun the projection.");
         selector.setId("projection-chart-metric");
         selector.setAccessibleText("Projection Chart Metric");
         selectedYear.setId("projection-chart-selected-year");

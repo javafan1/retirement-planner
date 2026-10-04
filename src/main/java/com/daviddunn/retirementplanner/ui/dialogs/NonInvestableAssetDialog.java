@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAsset;
 
 import javafx.geometry.Insets;
@@ -117,6 +118,9 @@ public class NonInvestableAssetDialog
         getDialogPane()
                 .setContent(grid);
 
+        InputHelp.install(valueField, "Current value in dollars of property or another non-investable asset. Included in Total Net Worth, but not available for portfolio withdrawals or included in after-tax investable estate.");
+        InputHelp.install(growthRateField, "Annual appreciation percentage for this asset; enter 3 for 3%. Its projected value grows separately from investment accounts and does not fund spending.");
+        InputHelp.linkGridLabels(grid);
         Node saveButton =
                 getDialogPane()
                         .lookupButton(

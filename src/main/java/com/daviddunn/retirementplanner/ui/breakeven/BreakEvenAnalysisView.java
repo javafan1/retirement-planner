@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.breakeven;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.domain.breakeven.*;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.css.PseudoClass;
@@ -70,6 +71,7 @@ public final class BreakEvenAnalysisView extends VBox {
         period.setAccessibleHelp(BreakEvenPresentation.periodHelp());
 
 
+        InputHelp.install(metricSelector, "Choose which existing Current Plan minus Baseline metric to display. This changes the chart and selected-year details only; it does not rerun projections or change the plan.");
         metricSelector.setId("break-even-metric");
         metricSelector.getItems().setAll(BreakEvenMetric.values());
         metricSelector.setConverter(new StringConverter<>() {
@@ -92,6 +94,7 @@ public final class BreakEvenAnalysisView extends VBox {
         controls.setVgap(4);
         controls.setMinWidth(0);
         var selectorBox = new HBox(6, label("Chart:"), metricSelector);
+        InputHelp.link((Label) selectorBox.getChildren().getFirst(), metricSelector);
         selectorBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         selectorBox.setMinWidth(0);
         HBox.setHgrow(metricSelector, Priority.ALWAYS);

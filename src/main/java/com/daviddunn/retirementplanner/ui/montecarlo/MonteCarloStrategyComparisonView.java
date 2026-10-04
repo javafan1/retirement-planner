@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.montecarlo;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.domain.analysis.*;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 import javafx.application.Platform;
@@ -95,18 +96,18 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         survivorA.setText(age(p));
         survivorB.setText(plan.getBaseline() == null ? "" : age(plan.getBaseline().getSnapshot().getPlanningAssumptions()));
         controls.getChildren().addAll(input("Simulations", count, "count", "One paired world is one simulation. Maximum 10,000."),
-                input("Expected return (%)", expected, "return", "Arithmetic mean annual return; same assumption for both strategies."),
+                input("Expected return (%)", expected, "return", "Arithmetic mean annual return, entered as a percentage and shared by both strategies. With volatility, median compounded outcomes generally differ from a deterministic projection using the same percentage. Session-only assumption."),
                 input("Return volatility (%)", volatility, "volatility", "Annual return standard deviation."),
                 input("Seed", seed, "seed", "Same seed and captured inputs reproduce the same worlds."),
                 input("Mode", mode, "mode", "Fixed uses the Current Plan horizon and shared configured deaths; longevity samples shared lifetimes."),
                 input("General inflation", inflation, "inflation", "Stochastic inflation uses the same annual path for both strategies; deterministic uses each plan's assumption."));
         inflationControls.getChildren().addAll(input("Inflation mean (%)", inflationMean, "inflation-mean", "Underlying normal mean; initialized from Current Plan."),
-                input("Inflation volatility (%)", inflationVolatility, "inflation-volatility", "Default 1.75%, matching existing Monte Carlo analysis."),
-                input("Inflation floor (%)", inflationFloor, "inflation-floor", "Default -2%, matching existing Monte Carlo analysis."));
+                input("Inflation volatility (%)", inflationVolatility, "inflation-volatility", "Annual standard deviation of the underlying normal general spending inflation distribution, entered as a percentage. Used only for Stochastic inflation; healthcare inflation remains deterministic."),
+                input("Inflation floor (%)", inflationFloor, "inflation-floor", "Minimum annual general spending inflation percentage. Draws below this floor are raised to it, which can change the realized mean. Used only for Stochastic inflation; must exceed -100% and not exceed the mean."));
         longevityControls.getChildren().addAll(input("Primary mortality factor", primary, "primary", MonteCarloMortalityPresentation.ADJUSTMENT_HELP),
                 input("Spouse mortality factor", spouse, "spouse", MonteCarloMortalityPresentation.ADJUSTMENT_HELP),
-                input("Current survivor SS age", survivorA, "survivor-a", "Session-only survivor age for Current Plan; initialized from its saved election."),
-                input("Baseline survivor SS age", survivorB, "survivor-b", "Session-only survivor age for Saved Baseline; initialized from its saved election."));
+                input("Current survivor SS age", survivorA, "survivor-a", "Whole-year survivor-benefit claiming age, at least 60, for either surviving person in Current Plan longevity simulations. Separate from retirement claiming age; initialized from its saved election and kept only for this analysis."),
+                input("Baseline survivor SS age", survivorB, "survivor-b", "Whole-year survivor-benefit claiming age, at least 60, for either surviving person in Saved Baseline longevity simulations. Separate from retirement claiming age; initialized from its saved election and kept only for this analysis."));
         run.setId("mcc-run"); run.getStyleClass().add("mc-run");
         cancel.setId("mcc-cancel"); progress.setId("mcc-progress"); progress.setPrefWidth(160);
         var actions = new FlowPane(12, 4, run, cancel, pdf.button(), progress, status, context);
@@ -244,9 +245,9 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     }
 
     private static VBox input(String name, Control control, String id, String help) {
-        control.setId("mcc-" + id); control.setAccessibleText(name); control.setTooltip(new Tooltip(help));
+        control.setId("mcc-" + id); control.setAccessibleText(name); InputHelp.install(control, help);
         control.setPrefWidth(control instanceof ComboBox ? 180 : 150);
-        var label = new Label(name); label.setLabelFor(control); return new VBox(2, label, control);
+        var label = new Label(name); InputHelp.link(label, control); return new VBox(2, label, control);
     }
     private static VBox fundingColumn(String title, Label value) {
         var column = new VBox(1, label(title, "mc-muted", null), value);

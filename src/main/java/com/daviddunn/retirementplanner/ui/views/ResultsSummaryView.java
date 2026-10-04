@@ -1,5 +1,8 @@
 package com.daviddunn.retirementplanner.ui.views;
 
+import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.help.PlanningInputHelp;
+import com.daviddunn.retirementplanner.ui.help.RothInputHelp;
 import com.daviddunn.retirementplanner.app.export.ProjectionPdfExporter;
 import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
@@ -377,6 +380,19 @@ public class ResultsSummaryView extends BorderPane {
         inflationField.setAlignment(
                 Pos.CENTER_RIGHT);
 
+        InputHelp.install(investmentReturnField, HelpText.INVESTMENT_RETURN);
+        InputHelp.install(inflationField, HelpText.GENERAL_INFLATION);
+        InputHelp.install(futureFederalMarginalRateChangeField, PlanningInputHelp.RATE_CHANGE);
+        InputHelp.install(futureFederalMarginalRateEffectiveYearField, PlanningInputHelp.RATE_YEAR);
+        InputHelp.install(rothEnabledCheckBox, RothInputHelp.ENABLE);
+        InputHelp.install(rothStrategyComboBox, RothInputHelp.STRATEGY);
+        InputHelp.install(rothStartYearField, RothInputHelp.YEAR);
+        InputHelp.install(rothAmountField, RothInputHelp.AMOUNT);
+        InputHelp.install(rothTargetTaxableIncomeField, RothInputHelp.TARGET);
+        InputHelp.install(rothFrequencyComboBox, RothInputHelp.FREQUENCY);
+        InputHelp.install(rothStopRuleComboBox, RothInputHelp.STOP);
+        InputHelp.install(deathScenarioComboBox, PlanningInputHelp.DEATH_SCENARIO);
+        InputHelp.install(deathYearField, PlanningInputHelp.DEATH_YEAR);
         configurePlaceholderControls();
         deathYearField.textProperty().addListener((observable, oldValue, newValue) -> updateSurvivorAgeChoices());
 
@@ -1765,8 +1781,8 @@ public class ResultsSummaryView extends BorderPane {
         Label horizonLabel = new Label("Assumed second death / end of household projection");
         horizonLabel.setWrapText(true);
         horizonLabel.getStyleClass().add("assumption-label");
-        horizonLabel.setTooltip(new Tooltip(HelpText.PLANNING_HORIZON));
-        projectionLengthField.setTooltip(new Tooltip(HelpText.PLANNING_HORIZON));
+        InputHelp.install(projectionLengthField, HelpText.PLANNING_HORIZON);
+        InputHelp.link(horizonLabel, projectionLengthField);
         projectionLengthField.getStyleClass().add("assumption-field");
         projectionLengthField.setPrefColumnCount(4);
         planningHorizonValue.getStyleClass().add("assumption-value");
@@ -1790,6 +1806,8 @@ public class ResultsSummaryView extends BorderPane {
             GridPane grid,
             Button button,
             String styleClass) {
+
+        InputHelp.linkGridLabels(grid);
 
         VBox box =
                 new VBox(
@@ -3535,6 +3553,9 @@ public class ResultsSummaryView extends BorderPane {
 
         ageCombo.setValue(
                 socialSecurity.getClaimingAge());
+
+        InputHelp.install(ageCombo, PlanningInputHelp.CLAIMING_AGE);
+        InputHelp.link(personLabel, ageCombo);
 
         Label benefitLabel =
                 new Label();
