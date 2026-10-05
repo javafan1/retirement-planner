@@ -155,24 +155,9 @@ public final class ProjectedWithdrawalAllocator {
         ProjectedPortfolio updatedPortfolio =
                 portfolio;
 
-        /*
-         * Apply the primary owner's RMDs.
-         */
-        updatedPortfolio =
-                applyOwnerRmds(
-                        updatedPortfolio,
-                        AccountOwnership.PRIMARY,
-                        householdRmdResult.getPrimaryRmd());
-
-        /*
-         * Apply the spouse's RMDs.
-         */
-        updatedPortfolio =
-                applyOwnerRmds(
-                        updatedPortfolio,
-                        AccountOwnership.SPOUSE,
-                        householdRmdResult.getSpouseRmd());
-
+        for (var entry : householdRmdResult.ownerResults().entrySet()) {
+            updatedPortfolio = applyOwnerRmds(updatedPortfolio, entry.getKey(), entry.getValue());
+        }
         return updatedPortfolio;
     }
 

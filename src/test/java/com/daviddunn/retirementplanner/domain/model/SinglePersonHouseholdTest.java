@@ -104,24 +104,27 @@ class SinglePersonHouseholdTest {
     }
 
     @Test
-    void downstreamMortalityAndSocialSecurityRejectBeforeComputation() {
+    void downstreamMortalityAndSocialSecurityStrategyAnalysisRejectBeforeComputation() {
         var household = new Household(primary());
         var plan = new RetirementPlan(household, new AccountPortfolio(), TestDataFactory.planningAssumptions());
         var mortality = assertThrows(UnsupportedOperationException.class, () -> PersonMortalityCategories.from(household));
         assertTrue(mortality.getMessage().contains("PersonMortalityCategories"));
         var socialSecurity = assertThrows(UnsupportedOperationException.class,
-                () -> new SocialSecurityProjectionIncomeProvider().calculate(plan, 2026, 2030));
-        assertTrue(socialSecurity.getMessage().contains("SocialSecurityProjectionIncomeProvider"));
+                () -> new SocialSecurityProjectionIncomeProvider().calculate(plan, 2026, 2030,
+                        ProjectionEvaluationContext.withLifetimeScenario(HouseholdLifetimeScenario.bothSurvive())));
+        assertTrue(socialSecurity.getMessage().contains("deferred"));
     }
 
     @Test
-    void projectionAndMonteCarloMortalityRemainExplicitlyUnsupported() {
+    void lifetimeProjectionAndMonteCarloMortalityRemainExplicitlyUnsupported() {
         var plan = new RetirementPlan(new Household(primary()), new AccountPortfolio(), TestDataFactory.planningAssumptions());
         var engine = new ProjectionEngine();
-        assertTrue(assertThrows(UnsupportedOperationException.class, () -> engine.project(plan))
-                .getMessage().contains("ProjectionEngine"));
-        assertTrue(assertThrows(UnsupportedOperationException.class, () -> engine.projectWithOutcome(plan))
-                .getMessage().contains("ProjectionEngine"));
+        var context = ProjectionEvaluationContext.withLifetimeScenario(HouseholdLifetimeScenario.bothSurvive());
+        assertTrue(assertThrows(UnsupportedOperationException.class, () -> engine.project(plan, context))
+                .getMessage().contains("deferred"));
+        assertTrue(assertThrows(UnsupportedOperationException.class, () -> engine.projectWithOutcome(plan, context,
+                        ProjectionEconomicPath.constant(BigDecimal.ZERO)))
+                .getMessage().contains("deferred"));
         var settings = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSettings(
                 1, 417, BigDecimal.ZERO, BigDecimal.ZERO);
         var session = com.daviddunn.retirementplanner.domain.socialsecurity.analysis.LongevitySessionSettings

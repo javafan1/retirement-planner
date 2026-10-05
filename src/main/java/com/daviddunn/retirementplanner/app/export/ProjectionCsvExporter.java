@@ -27,6 +27,9 @@ public class ProjectionCsvExporter {
                     "Projection cannot be empty.");
         }
 
+        if (projection.getYears().stream().anyMatch(year -> !year.getSocialSecurityResult().hasSpouse())) {
+            throw new UnsupportedOperationException("Single-person projection CSV export is deferred to the reporting stage.");
+        }
         if (nonInvestableProjections == null) {
             nonInvestableProjections =
                     List.of();

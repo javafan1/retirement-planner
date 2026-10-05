@@ -147,7 +147,24 @@ public final class SocialSecurityProjectionIncomeProvider {
         }
 
         Household household = plan.getHousehold();
-        household.requireSpouse("SocialSecurityProjectionIncomeProvider");
+        if (!household.hasSpouse()) {
+            if (evaluationContext.householdLifetimeScenario().isPresent() || evaluationContext.socialSecurityStrategy().isPresent()
+                    || validationOnly || cache != null || evaluationContext.survivorClaimingAge().isPresent()) {
+                throw new UnsupportedOperationException("Single-person Social Security strategy/lifetime analysis is deferred.");
+            }
+            plan.validateHouseholdReferences();
+            var ownSources = sources(household.getPrimaryPerson(), AccountOwnership.PRIMARY);
+            if (ownSources.size() > 1) throw new IllegalArgumentException("Single-person projection supports one own Social Security record.");
+            Map<Integer, BigDecimal> amounts = ownSources.isEmpty() ? Map.of()
+                    : strategyCalculator.calculateOwnRetirement(election(household.getPrimaryPerson(), ownSources.getFirst(),
+                            AccountOwnership.PRIMARY, ownSources.getFirst().getStartDate()), firstCalendarYear, lastCalendarYear,
+                            plan.getPlanningAssumptions().getSocialSecurityColaRate());
+            Map<Integer, HouseholdSocialSecurityResult> results = new LinkedHashMap<>();
+            for (int year = firstCalendarYear; year <= lastCalendarYear; year++) {
+                results.put(year, HouseholdSocialSecurityResult.primaryOnly(amounts.getOrDefault(year, BigDecimal.ZERO)));
+            }
+            return Map.copyOf(results);
+        }
         Person primary = household.getPrimaryPerson();
         Person spouse = household.getSpouse();
         List<SocialSecurityIncome> primarySources = sources(primary, AccountOwnership.PRIMARY);

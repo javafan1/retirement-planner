@@ -24,7 +24,7 @@ public final class ProjectionMetricsCalculator {
         Objects.requireNonNull(projection, "Projection is required.");
         List<ProjectionYear> years = projection.getYears();
         if (years.isEmpty()) {
-            return zero();
+            return zero(plan.getHousehold().hasSpouse());
         }
 
         ProjectionYear last = years.getLast();
@@ -54,8 +54,8 @@ public final class ProjectionMetricsCalculator {
                         .reduce(BigDecimal.ZERO, BigDecimal::add),
                 years.stream().map(year -> year.getSocialSecurityResult().primarySelectedBenefit())
                         .reduce(BigDecimal.ZERO, BigDecimal::add),
-                years.stream().map(year -> year.getSocialSecurityResult().spouseSelectedBenefit())
-                        .reduce(BigDecimal.ZERO, BigDecimal::add));
+                plan.getHousehold().hasSpouse() ? years.stream().map(year -> year.getSocialSecurityResult().spouseSelectedBenefit())
+                        .reduce(BigDecimal.ZERO, BigDecimal::add) : null);
     }
 
     private static BigDecimal sum(
@@ -64,11 +64,11 @@ public final class ProjectionMetricsCalculator {
         return years.stream().map(value).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private static ProjectionMetrics zero() {
+    private static ProjectionMetrics zero(boolean hasSpouse) {
         return new ProjectionMetrics(
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                BigDecimal.ZERO, BigDecimal.ZERO);
+                BigDecimal.ZERO, hasSpouse ? BigDecimal.ZERO : null);
     }
 }

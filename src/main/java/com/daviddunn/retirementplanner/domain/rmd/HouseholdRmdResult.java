@@ -2,6 +2,10 @@ package com.daviddunn.retirementplanner.domain.rmd;
 
 import java.math.BigDecimal;
 import java.util.Objects;
+import java.util.Map;
+import java.util.EnumMap;
+import java.util.Collections;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 /*
 HouseholdRmdResult
 │
@@ -24,6 +28,22 @@ public final class HouseholdRmdResult {
     private final OwnerRmdResult primaryRmd;
     private final OwnerRmdResult spouseRmd;
 
+    public HouseholdRmdResult(Map<AccountOwnership, OwnerRmdResult> owners) {
+        owners = Map.copyOf(owners);
+        this.primaryRmd = Objects.requireNonNull(owners.get(AccountOwnership.PRIMARY));
+        this.spouseRmd = owners.get(AccountOwnership.SPOUSE);
+        if (owners.containsKey(AccountOwnership.JOINT)) {
+            throw new IllegalArgumentException("Joint ownership has no owner RMD.");
+        }
+    }
+
+    public Map<AccountOwnership, OwnerRmdResult> ownerResults() {
+        var results = new EnumMap<AccountOwnership, OwnerRmdResult>(AccountOwnership.class);
+        results.put(AccountOwnership.PRIMARY, primaryRmd);
+        if (spouseRmd != null) results.put(AccountOwnership.SPOUSE, spouseRmd);
+        return Collections.unmodifiableMap(results);
+    }
+
     public HouseholdRmdResult(
             OwnerRmdResult primaryRmd,
             OwnerRmdResult spouseRmd) {
@@ -44,6 +64,7 @@ public final class HouseholdRmdResult {
     }
 
     public OwnerRmdResult getSpouseRmd() {
+        if (spouseRmd == null) throw new IllegalStateException("No spouse RMD result exists.");
         return spouseRmd;
     }
 
@@ -52,8 +73,7 @@ public final class HouseholdRmdResult {
         return primaryRmd
                 .getTotalRmd()
                 .add(
-                        spouseRmd
-                                .getTotalRmd());
+                        spouseRmd == null ? BigDecimal.ZERO : spouseRmd.getTotalRmd());
     }
 
     public static HouseholdRmdResult zero() {

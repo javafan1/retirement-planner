@@ -13,16 +13,20 @@ public final class HouseholdPensionIncomeCalculator {
         Objects.requireNonNull(household);
         Objects.requireNonNull(date);
         Objects.requireNonNull(deathView);
-        if (deathView.areBothDeceased(date.getYear())) {
+        if (deathView.isHouseholdDeceased(date.getYear())) {
             return BigDecimal.ZERO;
         }
         BigDecimal total = BigDecimal.ZERO;
-        for (Person person : List.of(household.getPrimaryPerson(), household.getSpouse())) {
+        for (Person person : household.members()) {
             for (IncomeSource source : person.getIncomeSources()) {
                 if (!(source instanceof Pension pension)) {
                     continue;
                 }
                 AccountOwnership owner = pension.getOwnership();
+                if (!household.hasSpouse() && (owner != AccountOwnership.PRIMARY
+                        || pension.getSurvivorMonthlyBenefit() != null && pension.getSurvivorMonthlyBenefit().signum() > 0)) {
+                    throw new IllegalArgumentException("Single-person pension cannot require a spouse.");
+                }
                 if (deathView.isAlive(owner, date.getYear())) {
                     total = total.add(pension.getAnnualIncome(person, date));
                 } else if (owner != AccountOwnership.JOINT) {

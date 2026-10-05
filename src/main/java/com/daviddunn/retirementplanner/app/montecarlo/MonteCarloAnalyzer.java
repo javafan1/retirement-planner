@@ -89,7 +89,8 @@ public final class MonteCarloAnalyzer {
         Objects.requireNonNull(progress);
         Objects.requireNonNull(cancellation);
         cancellation.throwIfCancellationRequested();
-        var plan = new RetirementPlanScenarioCopyService().copy(Objects.requireNonNull(source));
+        Objects.requireNonNull(source).getHousehold().requireSpouse("MonteCarloAnalyzer");
+        var plan = new RetirementPlanScenarioCopyService().copy(source);
         validateMortalityPreparation(plan, request);
         IntFunction<MonteCarloWorld> worlds = suppliedWorlds != null
                 ? suppliedWorlds : new MonteCarloWorldGenerator(request)::generate;
@@ -265,7 +266,8 @@ public final class MonteCarloAnalyzer {
         Objects.requireNonNull(progress);
         Objects.requireNonNull(cancellation);
         cancellation.throwIfCancellationRequested();
-        var plan = new RetirementPlanScenarioCopyService().copy(Objects.requireNonNull(source));
+        Objects.requireNonNull(source).getHousehold().requireSpouse("MonteCarloAnalyzer");
+        var plan = new RetirementPlanScenarioCopyService().copy(source);
         int first = plan.getPlanningAssumptions().getProjectionStartDate().getYear();
         int last = Math.addExact(first, plan.getPlanningAssumptions().getProjectionLengthYears() - 1);
         if (reference instanceof ProjectionExecutionResult.Completed completed) {

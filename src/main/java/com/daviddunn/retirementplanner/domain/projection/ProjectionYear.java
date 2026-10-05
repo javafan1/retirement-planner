@@ -605,12 +605,14 @@ public class ProjectionYear {
                 primaryRothConversion,
                 "primaryRothConversion");
 
-        this.spouseRothConversion = requireNonNegative(
-                spouseRothConversion,
-                "spouseRothConversion");
+        if ((spouseRothConversion == null) != !socialSecurityResult.hasSpouse()) {
+            throw new IllegalArgumentException("Roth and Social Security results must agree on spouse presence.");
+        }
+        this.spouseRothConversion = spouseRothConversion == null ? null : requireNonNegative(
+                spouseRothConversion, "spouseRothConversion");
 
         if (rothConversion.compareTo(
-                this.primaryRothConversion.add(this.spouseRothConversion)) != 0) {
+                this.primaryRothConversion.add(spouseRothConversion == null ? BigDecimal.ZERO : spouseRothConversion)) != 0) {
             throw new IllegalArgumentException(
                     "Household Roth conversion must equal owner conversions.");
         }
@@ -717,7 +719,13 @@ public class ProjectionYear {
     }
 
     public BigDecimal getSpouseRothConversion() {
+        if (spouseRothConversion == null) throw new IllegalStateException("No spouse Roth conversion result exists.");
         return spouseRothConversion;
+    }
+
+    @JsonIgnore
+    public java.util.Optional<BigDecimal> spouseRothConversion() {
+        return java.util.Optional.ofNullable(spouseRothConversion);
     }
 
     @JsonIgnore

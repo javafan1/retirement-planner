@@ -69,6 +69,14 @@ public class Household {
         return hasSpouse() ? List.of(primaryPerson, spouse) : List.of(primaryPerson);
     }
 
+    @JsonIgnore
+    public java.util.Map<AccountOwnership, Person> peopleByOwner() {
+        var people = new java.util.EnumMap<AccountOwnership, Person>(AccountOwnership.class);
+        people.put(AccountOwnership.PRIMARY, primaryPerson);
+        spouse().ifPresent(person -> people.put(AccountOwnership.SPOUSE, person));
+        return Collections.unmodifiableMap(people);
+    }
+
     /** Compatibility boundary for consumers not yet adapted to optional membership. */
     @JsonIgnore
     public Person getSpouse() {

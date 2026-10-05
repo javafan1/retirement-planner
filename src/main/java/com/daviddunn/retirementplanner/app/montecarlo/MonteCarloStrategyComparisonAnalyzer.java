@@ -51,6 +51,8 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         Objects.requireNonNull(cancellation).throwIfCancellationRequested();
         var a = request.strategyA().copyForRun();
         var b = request.strategyB().copyForRun();
+        a.getHousehold().requireSpouse("MonteCarloStrategyComparisonAnalyzer");
+        b.getHousehold().requireSpouse("MonteCarloStrategyComparisonAnalyzer");
         validate(a, request.assumptions());
         validate(b, request.assumptions());
         validateSamePeople(a, b);

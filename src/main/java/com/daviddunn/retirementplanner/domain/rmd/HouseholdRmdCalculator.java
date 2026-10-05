@@ -54,31 +54,10 @@ public final class HouseholdRmdCalculator {
         AccountPortfolio portfolio =
                 plan.getAccountPortfolio();
 
-        Person primary =
-                household.getPrimaryPerson();
-
-        Person spouse =
-                household.getSpouse();
-
-        OwnerRmdResult primaryResult =
-                calculateOwnerRmd(
-                        portfolio,
-                        primary,
-                        AccountOwnership.PRIMARY,
-                        projectionYear,
-                        governmentRules);
-
-        OwnerRmdResult spouseResult =
-                calculateOwnerRmd(
-                        portfolio,
-                        spouse,
-                        AccountOwnership.SPOUSE,
-                        projectionYear,
-                        governmentRules);
-
-        return new HouseholdRmdResult(
-                primaryResult,
-                spouseResult);
+        var results = new java.util.EnumMap<AccountOwnership, OwnerRmdResult>(AccountOwnership.class);
+        household.peopleByOwner().forEach((owner, person) -> results.put(owner,
+                calculateOwnerRmd(portfolio, person, owner, projectionYear, governmentRules)));
+        return new HouseholdRmdResult(results);
     }
 
     /*
@@ -94,7 +73,7 @@ public final class HouseholdRmdCalculator {
             GovernmentRules governmentRules) {
 
         return calculate(plan, balanceSnapshot, projectionYear, governmentRules,
-                Set.of(AccountOwnership.PRIMARY, AccountOwnership.SPOUSE));
+                plan.getHousehold().peopleByOwner().keySet());
     }
 
     public HouseholdRmdResult calculate(
@@ -122,33 +101,14 @@ public final class HouseholdRmdCalculator {
         AccountPortfolio portfolio =
                 plan.getAccountPortfolio();
 
-        Person primary =
-                household.getPrimaryPerson();
-
-        Person spouse =
-                household.getSpouse();
-
-        OwnerRmdResult primaryResult =
-                eligibleOwners.contains(AccountOwnership.PRIMARY) ? calculateOwnerRmd(
-                        portfolio,
-                        balanceSnapshot,
-                        primary,
-                        AccountOwnership.PRIMARY,
-                        projectionYear,
-                        governmentRules) : OwnerRmdResult.zero();
-
-        OwnerRmdResult spouseResult =
-                eligibleOwners.contains(AccountOwnership.SPOUSE) ? calculateOwnerRmd(
-                        portfolio,
-                        balanceSnapshot,
-                        spouse,
-                        AccountOwnership.SPOUSE,
-                        projectionYear,
-                        governmentRules) : OwnerRmdResult.zero();
-
-        return new HouseholdRmdResult(
-                primaryResult,
-                spouseResult);
+        var results = new java.util.EnumMap<AccountOwnership, OwnerRmdResult>(AccountOwnership.class);
+        for (var entry : household.peopleByOwner().entrySet()) {
+            var owner = entry.getKey();
+            results.put(owner, eligibleOwners.contains(owner)
+                    ? calculateOwnerRmd(portfolio, balanceSnapshot, entry.getValue(), owner, projectionYear, governmentRules)
+                    : OwnerRmdResult.zero());
+        }
+        return new HouseholdRmdResult(results);
     }
 
     /*

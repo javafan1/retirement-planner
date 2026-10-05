@@ -34,6 +34,10 @@ public record ProjectionMetrics(
         Objects.requireNonNull(lifetimeMedicarePremiums);
         Objects.requireNonNull(lifetimeHouseholdSocialSecurity);
         Objects.requireNonNull(lifetimePrimarySocialSecurity);
-        Objects.requireNonNull(lifetimeSpouseSocialSecurity);
+        // Null explicitly means no spouse; it is not an observed zero benefit.
+    }
+
+    public java.util.Optional<BigDecimal> spouseSocialSecurity() {
+        return java.util.Optional.ofNullable(lifetimeSpouseSocialSecurity);
     }
 }

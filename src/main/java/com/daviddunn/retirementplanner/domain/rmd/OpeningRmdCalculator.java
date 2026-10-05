@@ -44,7 +44,7 @@ public final class OpeningRmdCalculator {
             GovernmentRules governmentRules) {
 
         return calculate(plan, distributionYear, governmentRules,
-                Set.of(AccountOwnership.PRIMARY, AccountOwnership.SPOUSE));
+                plan.getHousehold().peopleByOwner().keySet());
     }
 
     public OpeningRmdCalculation calculate(
@@ -71,23 +71,18 @@ public final class OpeningRmdCalculator {
                         distributionYear,
                         governmentRules, eligibleOwners);
 
-        OwnerRemainingRmd primary = eligibleOwners.contains(AccountOwnership.PRIMARY) ? calculateRemainingOwnerRmd(
-                plan.getAccountPortfolio(),
-                AccountOwnership.PRIMARY,
-                annualRequirement.getPrimaryRmd()) : new OwnerRemainingRmd(OwnerRmdResult.zero(), BigDecimal.ZERO);
-
-        OwnerRemainingRmd spouse = eligibleOwners.contains(AccountOwnership.SPOUSE) ? calculateRemainingOwnerRmd(
-                plan.getAccountPortfolio(),
-                AccountOwnership.SPOUSE,
-                annualRequirement.getSpouseRmd()) : new OwnerRemainingRmd(OwnerRmdResult.zero(), BigDecimal.ZERO);
-
-        return new OpeningRmdCalculation(
-                annualRequirement,
-                new HouseholdRmdResult(primary.result(), spouse.result()),
-                primary.distributedBeforeProjection()
-                        .add(spouse.distributedBeforeProjection()));
+        var remaining = new java.util.EnumMap<AccountOwnership, OwnerRmdResult>(AccountOwnership.class);
+        BigDecimal distributed = BigDecimal.ZERO;
+        for (var entry : annualRequirement.ownerResults().entrySet()) {
+            var owner = entry.getKey();
+            var result = eligibleOwners.contains(owner) ? calculateRemainingOwnerRmd(
+                    plan.getAccountPortfolio(), owner, entry.getValue())
+                    : new OwnerRemainingRmd(OwnerRmdResult.zero(), BigDecimal.ZERO);
+            remaining.put(owner, result.result());
+            distributed = distributed.add(result.distributedBeforeProjection());
+        }
+        return new OpeningRmdCalculation(annualRequirement, new HouseholdRmdResult(remaining), distributed);
     }
-
     /** Also applies when second death uses opening balances without an annual projection. */
     public void validateLifetimeOpeningDistributions(
             RetirementPlan plan, int distributionYear, Set<AccountOwnership> eligibleOwners) {

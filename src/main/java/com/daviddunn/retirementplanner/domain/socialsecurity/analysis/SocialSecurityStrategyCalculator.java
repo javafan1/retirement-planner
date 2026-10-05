@@ -194,6 +194,26 @@ public final class SocialSecurityStrategyCalculator {
         }
     }
 
+    /** Own retirement only, using the same monthly calculation as the paired engine. No survivor strategy. */
+    public Map<Integer, BigDecimal> calculateOwnRetirement(
+            SocialSecurityClaimingElection election, int firstYear, int lastYear, BigDecimal colaRate) {
+        Objects.requireNonNull(election);
+        Objects.requireNonNull(colaRate);
+        if (firstYear <= 0 || lastYear < firstYear || colaRate.compareTo(BigDecimal.ONE.negate()) <= 0) {
+            throw new IllegalArgumentException("Invalid own-retirement calculation range or COLA.");
+        }
+        var prepared = prepare(election);
+        Map<Integer, BigDecimal> annual = new LinkedHashMap<>();
+        for (int year = firstYear; year <= lastYear; year++) {
+            BigDecimal total = BigDecimal.ZERO;
+            for (int month = 1; month <= 12; month++) {
+                total = total.add(ownBenefit(prepared, YearMonth.of(year, month), true, colaRate));
+            }
+            annual.put(year, total);
+        }
+        return java.util.Collections.unmodifiableMap(annual);
+    }
+
     private PreparedElection prepare(
             SocialSecurityClaimingElection election) {
 

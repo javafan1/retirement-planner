@@ -40,6 +40,29 @@ import java.util.Map;
 
 public class ProjectionEngine {
 
+    private static void validateSinglePersonProjection(RetirementPlan plan, ProjectionEvaluationContext context) {
+        if (plan.getHousehold().hasSpouse()) return;
+        if (context.householdLifetimeScenario().isPresent() || context.socialSecurityStrategy().isPresent()
+                || context.survivorClaimingAge().isPresent()) {
+            throw new UnsupportedOperationException("Single-person lifetime/survivor strategy projection is deferred.");
+        }
+        java.util.Objects.requireNonNull(plan.getHousehold().getPrimaryPerson().getBirthDate(), "Primary birth date is required.");
+        for (var account : plan.getAccountPortfolio().getAccounts()) {
+            if (account.getOwnership() == AccountOwnership.JOINT) {
+                throw new IllegalArgumentException("Joint accounts require a spouse; resolve ownership explicitly before projection.");
+            }
+        }
+        for (var income : plan.getHousehold().getPrimaryPerson().getIncomeSources()) {
+            if (income.getOwnership() != AccountOwnership.PRIMARY) {
+                throw new IllegalArgumentException("Single-person income must be primary-owned.");
+            }
+            if (income instanceof Pension pension && pension.getSurvivorMonthlyBenefit() != null
+                    && pension.getSurvivorMonthlyBenefit().signum() > 0) {
+                throw new IllegalArgumentException("A survivor pension election requires a spouse.");
+            }
+        }
+    }
+
     private final HouseholdPensionIncomeCalculator householdPensionIncomeCalculator =
             new HouseholdPensionIncomeCalculator();
     private final WithdrawalCalculator withdrawalCalculator;
@@ -195,7 +218,8 @@ public class ProjectionEngine {
             ProjectionEconomicPath economicPath,
             boolean structured) {
         java.util.Objects.requireNonNull(plan, "Retirement plan is required.");
-        plan.getHousehold().requireSpouse("ProjectionEngine");
+        plan.validateHouseholdReferences();
+        validateSinglePersonProjection(plan, evaluationContext);
         java.util.Objects.requireNonNull(economicPath, "Economic path is required.");
         java.util.Objects.requireNonNull(
                 evaluationContext,
@@ -301,7 +325,7 @@ public class ProjectionEngine {
                 var failure = new FundingFailure(
                         calendarYear, yearOffset,
                         reportingAge(household.getPrimaryPerson(), date),
-                        reportingAge(household.getSpouse(), date),
+                        household.spouse().flatMap(person -> reportingAge(person, date)),
                         constraint.stage, constraint.owner, constraint.required, constraint.available,
                         constraint.required.subtract(constraint.available));
                 return new ProjectionExecutionResult.InsufficientFunds(projection.getYears(), failure);
@@ -440,8 +464,7 @@ public class ProjectionEngine {
         Household household =
                 plan.getHousehold();
 
-        Set<AccountOwnership> eligibleOwners = java.util.stream.Stream.of(
-                        AccountOwnership.PRIMARY, AccountOwnership.SPOUSE)
+        Set<AccountOwnership> eligibleOwners = household.peopleByOwner().keySet().stream()
                 .filter(owner -> !lifetimeRun || deathView.isAlive(owner, calendarYear))
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
         Optional<BigDecimal> authoritativePensionIncome = lifetimeRun
@@ -885,8 +908,7 @@ public class ProjectionEngine {
                         rothConversion,
                         rothConversionResult.getConversion(
                                 AccountOwnership.PRIMARY),
-                        rothConversionResult.getConversion(
-                                AccountOwnership.SPOUSE),
+                        household.hasSpouse() ? rothConversionResult.getConversion(AccountOwnership.SPOUSE) : null,
                         estimatedHeirTax,
                         afterTaxEstateValue,
                         primaryPersonAge);
@@ -912,7 +934,8 @@ public class ProjectionEngine {
          * a modeled prior December 31 balance.
          */
         if (priorYearEndSnapshot == null) {
-            return HouseholdRmdResult.zero();
+            return new HouseholdRmdResult(plan.getHousehold().peopleByOwner().keySet().stream()
+                    .collect(java.util.stream.Collectors.toMap(owner -> owner, owner -> com.daviddunn.retirementplanner.domain.rmd.OwnerRmdResult.zero())));
         }
 
         return householdRmdCalculator.calculate(
@@ -990,18 +1013,9 @@ public class ProjectionEngine {
         BigDecimal total =
                 BigDecimal.ZERO;
 
-        total = total.add(
-                calculateIncome(
-                        household.getPrimaryPerson(),
-                        projectionDate,
-                        deathView, authoritativePensionIncome.isPresent()));
-
-        total = total.add(
-                calculateIncome(
-                        household.getSpouse(),
-                        projectionDate,
-                        deathView, authoritativePensionIncome.isPresent()));
-
+        for (Person person : household.members()) {
+            total = total.add(calculateIncome(person, projectionDate, deathView, authoritativePensionIncome.isPresent()));
+        }
         total = total.add(
                 socialSecurityResult.householdBenefit());
 
@@ -1019,6 +1033,7 @@ public class ProjectionEngine {
             LocalDate projectionDate,
             EffectiveHouseholdDeathView deathView) {
 
+        if (!household.hasSpouse()) return BigDecimal.ZERO;
         int year = projectionDate.getYear();
         boolean primaryAlive = deathView.isAlive(AccountOwnership.PRIMARY, year);
         boolean spouseAlive = deathView.isAlive(AccountOwnership.SPOUSE, year);
@@ -1100,7 +1115,7 @@ public class ProjectionEngine {
             }
 
             if (expense.getExpenseType() == ExpenseType.RECURRING
-                    && deathView.areBothDeceased(projectionDate.getYear())) {
+                    && deathView.isHouseholdDeceased(projectionDate.getYear())) {
                 continue;
             }
 
@@ -1242,27 +1257,13 @@ public class ProjectionEngine {
             EffectiveHouseholdDeathView deathView) {
 
         int participants = 0;
-
-        Person primary = household.getPrimaryPerson();
-
-        if (primary.getBirthDate() != null &&
-                deathView.isAlive(
-                        AccountOwnership.PRIMARY,
-                        projectionDate.getYear()) &&
-                primary.getAge(projectionDate) >= 65) {
-            participants++;
+        for (var entry : household.peopleByOwner().entrySet()) {
+            Person person = entry.getValue();
+            if (person.getBirthDate() != null && deathView.isAlive(entry.getKey(), projectionDate.getYear())
+                    && person.getAge(projectionDate) >= 65) {
+                participants++;
+            }
         }
-
-        Person spouse = household.getSpouse();
-
-        if (spouse.getBirthDate() != null &&
-                deathView.isAlive(
-                        AccountOwnership.SPOUSE,
-                        projectionDate.getYear()) &&
-                spouse.getAge(projectionDate) >= 65) {
-            participants++;
-        }
-
         return participants;
     }
 

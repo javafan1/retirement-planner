@@ -134,6 +134,7 @@ public class ProjectionPdfExporter {
                     "Retirement plan is required.");
         }
 
+        plan.getHousehold().requireSpouse("ProjectionPdfExporter (reporting stage deferred)");
         if (projection == null
                 || projection.isEmpty()) {
 

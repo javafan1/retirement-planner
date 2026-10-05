@@ -147,36 +147,12 @@ public final class TaxIncomeCalculator {
         BigDecimal socialSecurityIncome =
                 BigDecimal.ZERO;
 
-        IncomeTotals primaryTotals =
-                calculateIncome(
-                        household.getPrimaryPerson(),
-                        projectionDate,
-                        socialSecurityColaRate,
-                        socialSecurityResult != null, authoritativePensionIncome.isPresent());
-
-        pensionIncome =
-                pensionIncome.add(
-                        primaryTotals.pensionIncome());
-
-        socialSecurityIncome =
-                socialSecurityIncome.add(
-                        primaryTotals.socialSecurityIncome());
-
-        IncomeTotals spouseTotals =
-                calculateIncome(
-                        household.getSpouse(),
-                        projectionDate,
-                        socialSecurityColaRate,
-                        socialSecurityResult != null, authoritativePensionIncome.isPresent());
-
-        pensionIncome =
-                pensionIncome.add(
-                        spouseTotals.pensionIncome());
-
-        socialSecurityIncome =
-                socialSecurityIncome.add(
-                        spouseTotals.socialSecurityIncome());
-
+        for (Person person : household.members()) {
+            IncomeTotals totals = calculateIncome(person, projectionDate, socialSecurityColaRate,
+                    socialSecurityResult != null, authoritativePensionIncome.isPresent());
+            pensionIncome = pensionIncome.add(totals.pensionIncome());
+            socialSecurityIncome = socialSecurityIncome.add(totals.socialSecurityIncome());
+        }
         if (socialSecurityResult != null) {
 
             socialSecurityIncome =

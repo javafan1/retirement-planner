@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.domain.income;
 import java.math.BigDecimal;
 import java.util.Objects;
 
+/** Single-person results have absent (null) spouse/spousal/survivor components; use hasSpouse() before paired audit access. */
 public record HouseholdSocialSecurityResult(
         BigDecimal primaryOwnBenefit,
         BigDecimal spouseOwnBenefit,
@@ -19,32 +20,45 @@ public record HouseholdSocialSecurityResult(
         primaryOwnBenefit = requireNonNegative(
                 primaryOwnBenefit,
                 "Primary own benefit");
-        spouseOwnBenefit = requireNonNegative(
-                spouseOwnBenefit,
-                "Spouse own benefit");
-        primarySpousalExcessBenefit = requireNonNegative(
-                primarySpousalExcessBenefit,
-                "Primary spousal excess benefit");
-        spouseSpousalExcessBenefit = requireNonNegative(
-                spouseSpousalExcessBenefit,
-                "Spouse spousal excess benefit");
-        primarySurvivorCandidate = requireNonNegative(
-                primarySurvivorCandidate,
-                "Primary survivor candidate");
-        spouseSurvivorCandidate = requireNonNegative(
-                spouseSurvivorCandidate,
-                "Spouse survivor candidate");
-        primarySelection = Objects.requireNonNull(
-                primarySelection,
-                "Primary selection is required.");
-        spouseSelection = Objects.requireNonNull(
-                spouseSelection,
-                "Spouse selection is required.");
+        boolean single = spouseSelection == null;
+        if (single && (spouseOwnBenefit != null || primarySpousalExcessBenefit != null
+                || spouseSpousalExcessBenefit != null || primarySurvivorCandidate != null || spouseSurvivorCandidate != null)) {
+            throw new IllegalArgumentException("Single-person SS has no spouse, spousal or survivor audit values.");
+        }
+        if (!single) {
+            spouseOwnBenefit = requireNonNegative(
+                    spouseOwnBenefit,
+                    "Spouse own benefit");
+            primarySpousalExcessBenefit = requireNonNegative(
+                    primarySpousalExcessBenefit,
+                    "Primary spousal excess benefit");
+            spouseSpousalExcessBenefit = requireNonNegative(
+                    spouseSpousalExcessBenefit,
+                    "Spouse spousal excess benefit");
+            primarySurvivorCandidate = requireNonNegative(
+                    primarySurvivorCandidate,
+                    "Primary survivor candidate");
+            spouseSurvivorCandidate = requireNonNegative(
+                    spouseSurvivorCandidate,
+                    "Spouse survivor candidate");
+            primarySelection = Objects.requireNonNull(
+                    primarySelection,
+                    "Primary selection is required.");
+            spouseSelection = Objects.requireNonNull(
+                    spouseSelection,
+                    "Spouse selection is required.");
+        }
+        Objects.requireNonNull(primarySelection, "Primary selection is required.");
+        if (single && primarySelection == SocialSecurityBenefitSelection.SURVIVOR) {
+            throw new IllegalArgumentException("Single-person SS cannot select a survivor benefit.");
+        }
         householdBenefit = requireNonNegative(
                 householdBenefit,
                 "Household benefit");
 
-        BigDecimal selectedBenefits = selectedBenefit(
+        BigDecimal selectedBenefits = single
+                ? (primarySelection == SocialSecurityBenefitSelection.OWN ? primaryOwnBenefit : BigDecimal.ZERO)
+                : selectedBenefit(
                 primarySelection,
                 primaryOwnBenefit,
                 primarySpousalExcessBenefit,
@@ -90,12 +104,26 @@ public record HouseholdSocialSecurityResult(
                 BigDecimal.ZERO);
     }
 
+    public static HouseholdSocialSecurityResult primaryOnly(BigDecimal ownBenefit) {
+        return new HouseholdSocialSecurityResult(ownBenefit, null, null, null, null, null,
+                ownBenefit.signum() == 0 ? SocialSecurityBenefitSelection.NONE : SocialSecurityBenefitSelection.OWN,
+                null, ownBenefit);
+    }
+
+    public boolean hasSpouse() { return spouseSelection != null; }
+
+    public java.util.Optional<BigDecimal> spouseOwnBenefitIfPresent() {
+        return java.util.Optional.ofNullable(spouseOwnBenefit);
+    }
+
     public BigDecimal primarySelectedBenefit() {
+        if (!hasSpouse()) return primarySelection == SocialSecurityBenefitSelection.OWN ? primaryOwnBenefit : BigDecimal.ZERO;
         return selectedBenefit(primarySelection, primaryOwnBenefit,
                 primarySpousalExcessBenefit, primarySurvivorCandidate);
     }
 
     public BigDecimal spouseSelectedBenefit() {
+        if (!hasSpouse()) throw new IllegalStateException("No spouse Social Security benefit exists.");
         return selectedBenefit(spouseSelection, spouseOwnBenefit,
                 spouseSpousalExcessBenefit, spouseSurvivorCandidate);
     }
