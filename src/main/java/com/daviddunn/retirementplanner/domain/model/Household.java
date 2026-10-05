@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public class Household {
 
@@ -25,8 +26,16 @@ public class Household {
             @JsonProperty("primaryPerson") Person primaryPerson,
             @JsonProperty("spouse") Person spouse) {
 
-        this.primaryPerson = Objects.requireNonNull(primaryPerson);
-        this.spouse = Objects.requireNonNull(spouse);
+        this.primaryPerson = Objects.requireNonNull(primaryPerson, "Primary person is required.");
+        if (primaryPerson == spouse) {
+            throw new IllegalArgumentException("Primary and spouse must be distinct people.");
+        }
+        this.spouse = spouse;
+        validatePersonReferences();
+    }
+
+    public Household(Person primaryPerson) {
+        this(primaryPerson, null);
     }
 
     @JsonIgnore
@@ -39,8 +48,57 @@ public class Household {
         return primaryPerson;
     }
 
-    public Person getSpouse() {
+    /** Persistence-only nullable property; domain callers use spouse() or requireSpouse(). */
+    @JsonProperty("spouse")
+    private Person serializedSpouse() {
         return spouse;
+    }
+
+    @JsonIgnore
+    public Optional<Person> spouse() {
+        return Optional.ofNullable(spouse);
+    }
+
+    @JsonIgnore
+    public boolean hasSpouse() {
+        return spouse != null;
+    }
+
+    @JsonIgnore
+    public List<Person> members() {
+        return hasSpouse() ? List.of(primaryPerson, spouse) : List.of(primaryPerson);
+    }
+
+    /** Compatibility boundary for consumers not yet adapted to optional membership. */
+    @JsonIgnore
+    public Person getSpouse() {
+        return requireSpouse("required-spouse consumer (Household.getSpouse)");
+    }
+
+    public Person requireSpouse(String component) {
+        Objects.requireNonNull(component, "Component is required.");
+        if (!hasSpouse()) {
+            throw new UnsupportedOperationException(
+                    "Single-person household not yet supported by " + component + ".");
+        }
+        return spouse;
+    }
+
+    public void validatePersonReferences() {
+        if (!hasSpouse()) {
+            primaryPerson.getAccounts().forEach(account ->
+                    validateOwnership(account.getOwnership(), "account " + account.getName()));
+            primaryPerson.getIncomeSources().forEach(income ->
+                    validateOwnership(income.getOwnership(), "income " + income.getName()));
+        }
+    }
+
+    public void validateOwnership(AccountOwnership ownership, String description) {
+        Objects.requireNonNull(ownership, "Ownership is required.");
+        if (!hasSpouse() && ownership == AccountOwnership.SPOUSE) {
+            throw new IllegalArgumentException(
+                    "SPOUSE ownership references an absent spouse: " + description + ".");
+        }
     }
 
     public void addExpense(Expense expense) {
@@ -96,7 +154,7 @@ public class Household {
     public BigDecimal getTotalLiabilities() {
 
         return primaryPerson.getTotalLiabilities()
-                .add(spouse.getTotalLiabilities());
+                .add(spouse().map(Person::getTotalLiabilities).orElse(BigDecimal.ZERO));
     }
 
 //    @JsonIgnore
@@ -116,7 +174,7 @@ public class Household {
     public BigDecimal getGuaranteedIncome(LocalDate projectionDate) {
 
         return primaryPerson.getGuaranteedIncome(projectionDate)
-                .add(spouse.getGuaranteedIncome(projectionDate));
+                .add(spouse().map(person -> person.getGuaranteedIncome(projectionDate)).orElse(BigDecimal.ZERO));
     }
 
 }

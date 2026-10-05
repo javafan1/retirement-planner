@@ -66,7 +66,7 @@ public final class SocialSecurityProjectionIncomeProvider {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         Objects.requireNonNull(evaluationContext, "Projection evaluation context is required.");
         return calculate(plan, firstCalendarYear, lastCalendarYear, evaluationContext,
-                EffectiveHouseholdDeathView.resolve(plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
+                EffectiveHouseholdDeathView.resolve(plan.getHousehold(), plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
                         evaluationContext.householdLifetimeScenario()));
     }
 
@@ -86,7 +86,7 @@ public final class SocialSecurityProjectionIncomeProvider {
             Map<SocialSecurityStrategyCalculator.ScheduleKey, Map<Integer, HouseholdSocialSecurityResult>> cache) {
         Objects.requireNonNull(cache);
         return calculate(plan, firstCalendarYear, lastCalendarYear, context,
-                EffectiveHouseholdDeathView.resolve(plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
+                EffectiveHouseholdDeathView.resolve(plan.getHousehold(), plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
                         context.householdLifetimeScenario()), cache);
     }
 
@@ -105,7 +105,7 @@ public final class SocialSecurityProjectionIncomeProvider {
             throw new IllegalArgumentException("Continuation validation requires a lifetime scenario.");
         }
         calculate(plan, firstCalendarYear, lastCalendarYear, context,
-                EffectiveHouseholdDeathView.resolve(plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
+                EffectiveHouseholdDeathView.resolve(plan.getHousehold(), plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
                         context.householdLifetimeScenario()), null, true);
     }
 
@@ -128,7 +128,7 @@ public final class SocialSecurityProjectionIncomeProvider {
         }
         SocialSecurityStrategyCalculator.ScheduleKey[] result = new SocialSecurityStrategyCalculator.ScheduleKey[1];
         calculate(plan, firstCalendarYear, lastCalendarYear, context,
-                EffectiveHouseholdDeathView.resolve(plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
+                EffectiveHouseholdDeathView.resolve(plan.getHousehold(), plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
                         context.householdLifetimeScenario()), null, true, key -> result[0] = key);
         return Objects.requireNonNull(result[0]);
     }
@@ -147,6 +147,7 @@ public final class SocialSecurityProjectionIncomeProvider {
         }
 
         Household household = plan.getHousehold();
+        household.requireSpouse("SocialSecurityProjectionIncomeProvider");
         Person primary = household.getPrimaryPerson();
         Person spouse = household.getSpouse();
         List<SocialSecurityIncome> primarySources = sources(primary, AccountOwnership.PRIMARY);
@@ -240,6 +241,7 @@ public final class SocialSecurityProjectionIncomeProvider {
     public boolean supportsAdvancedPath(RetirementPlan plan) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         Household household = plan.getHousehold();
+        household.requireSpouse("SocialSecurityProjectionIncomeProvider");
         return supportsAdvanced(
                 household.getPrimaryPerson(), household.getSpouse(),
                 sources(household.getPrimaryPerson(), AccountOwnership.PRIMARY),

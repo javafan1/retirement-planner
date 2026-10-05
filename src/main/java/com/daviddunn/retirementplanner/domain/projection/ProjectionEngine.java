@@ -195,6 +195,7 @@ public class ProjectionEngine {
             ProjectionEconomicPath economicPath,
             boolean structured) {
         java.util.Objects.requireNonNull(plan, "Retirement plan is required.");
+        plan.getHousehold().requireSpouse("ProjectionEngine");
         java.util.Objects.requireNonNull(economicPath, "Economic path is required.");
         java.util.Objects.requireNonNull(
                 evaluationContext,
@@ -238,7 +239,7 @@ public class ProjectionEngine {
         evaluationContext.inflationPath().ifPresent(path -> path.requireCoverage(startYear, endingYear));
 
         EffectiveHouseholdDeathView deathView = EffectiveHouseholdDeathView.resolve(
-                assumptions.getDeathScenarioAssumptions(), evaluationContext.householdLifetimeScenario());
+                plan.getHousehold(), assumptions.getDeathScenarioAssumptions(), evaluationContext.householdLifetimeScenario());
 
         Map<Integer, HouseholdSocialSecurityResult> socialSecurityByYear =
                 socialSecurityProjectionIncomeProvider.calculate(

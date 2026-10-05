@@ -64,6 +64,17 @@ public class RetirementPlanSnapshot {
                 List.copyOf(
                         Objects.requireNonNull(
                                 nonInvestableAssets));
+        validateHouseholdReferences();
+    }
+
+    public void validateHouseholdReferences() {
+        household.validatePersonReferences();
+        accountPortfolio.getAccounts().forEach(account ->
+                household.validateOwnership(account.getOwnership(), "baseline account " + account.getName()));
+        if (!household.hasSpouse() && planningAssumptions.getDeathScenarioAssumptions().getDeathScenario()
+                != com.daviddunn.retirementplanner.domain.model.DeathScenario.BOTH_SURVIVE) {
+            throw new IllegalArgumentException("Couple death scenarios are not supported for a single-person baseline.");
+        }
     }
 
     public Household getHousehold() {

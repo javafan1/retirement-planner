@@ -169,7 +169,7 @@ class SurvivorFinancialMechanicsTest {
     @Test
     void authoritativePensionRetainsColaStartAndEndDates() {
         var plan=plan(); var calc=new HouseholdPensionIncomeCalculator();
-        var view=EffectiveHouseholdDeathView.resolve(plan.getPlanningAssumptions().getDeathScenarioAssumptions(), context(2031,null).householdLifetimeScenario());
+        var view=EffectiveHouseholdDeathView.resolve(plan.getHousehold(), plan.getPlanningAssumptions().getDeathScenarioAssumptions(), context(2031,null).householdLifetimeScenario());
         money("0",calc.calculate(plan.getHousehold(),LocalDate.of(2029,12,31),view));
         money("6600",calc.calculate(plan.getHousehold(),LocalDate.of(2031,12,31),view));
         money("3993",calc.calculate(plan.getHousehold(),LocalDate.of(2033,12,31),view));

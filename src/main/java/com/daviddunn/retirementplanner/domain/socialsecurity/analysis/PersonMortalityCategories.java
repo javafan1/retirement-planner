@@ -13,6 +13,7 @@ public record PersonMortalityCategories(
 
     public static PersonMortalityCategories from(Household household) {
         Objects.requireNonNull(household, "Household is required.");
+        household.requireSpouse("PersonMortalityCategories");
         boolean primaryMissing = missing(household.getPrimaryPerson());
         boolean spouseMissing = missing(household.getSpouse());
         if (primaryMissing || spouseMissing) {

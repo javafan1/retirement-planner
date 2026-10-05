@@ -63,6 +63,21 @@ public class RetirementPlan {
             this.nonInvestableAssets.addAll(
                     nonInvestableAssets);
         }
+        validateHouseholdReferences();
+    }
+
+    /** Recheck at persistence/admission boundaries because account and income lists are mutable. */
+    public void validateHouseholdReferences() {
+        household.validatePersonReferences();
+        accountPortfolio.getAccounts().forEach(account ->
+                household.validateOwnership(account.getOwnership(), "account " + account.getName()));
+        if (!household.hasSpouse()
+                && planningAssumptions.getDeathScenarioAssumptions().getDeathScenario() != DeathScenario.BOTH_SURVIVE) {
+            throw new IllegalArgumentException("Couple death scenarios are not supported for a single-person plan.");
+        }
+        if (baseline != null) {
+            baseline.getSnapshot().validateHouseholdReferences();
+        }
     }
 
     /*

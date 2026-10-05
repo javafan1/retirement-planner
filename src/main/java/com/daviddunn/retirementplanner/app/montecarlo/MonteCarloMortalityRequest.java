@@ -63,6 +63,7 @@ public final class MonteCarloMortalityRequest {
         this.survivorClaimingAge = Objects.requireNonNull(survivorClaimingAge);
         survivorClaimingAge.ifPresent(com.daviddunn.retirementplanner.domain.income.SurvivorBenefitClaimingPolicy::validateClaimingAge);
         var household = Objects.requireNonNull(plan.getHousehold(), "Household is required.");
+        household.requireSpouse("MonteCarloMortalityRequest");
         if (household.getPrimaryPerson() == null || household.getSpouse() == null) {
             throw new IllegalArgumentException("Mortality generation requires a two-person household.");
         }

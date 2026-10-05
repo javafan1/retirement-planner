@@ -20,16 +20,17 @@ class HouseholdLifetimeScenarioTest {
 
     @Test
     void effectiveViewUsesPersistedTimingOnlyWhenOverrideIsAbsent() {
+        var household = new Household(new Person(), new Person());
         var persisted = new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2031);
-        var ordinary = EffectiveHouseholdDeathView.resolve(persisted, Optional.empty());
+        var ordinary = EffectiveHouseholdDeathView.resolve(household, persisted, Optional.empty());
         assertTrue(ordinary.isAlive(AccountOwnership.PRIMARY, 2030));
         assertFalse(ordinary.isAlive(AccountOwnership.PRIMARY, 2031));
         assertTrue(ordinary.isAlive(AccountOwnership.SPOUSE, 2050));
         assertTrue(ordinary.isAlive(AccountOwnership.JOINT, 2050));
-        var override = EffectiveHouseholdDeathView.resolve(persisted, Optional.of(HouseholdLifetimeScenario.bothSurvive()));
+        var override = EffectiveHouseholdDeathView.resolve(household, persisted, Optional.of(HouseholdLifetimeScenario.bothSurvive()));
         assertTrue(override.isAlive(AccountOwnership.PRIMARY, 2050));
         assertFalse(override.hasAnyDeathOccurred(2050));
-        var both = EffectiveHouseholdDeathView.resolve(persisted, Optional.of(
+        var both = EffectiveHouseholdDeathView.resolve(household, persisted, Optional.of(
                 new HouseholdLifetimeScenario(Optional.of(Year.of(2031)), Optional.of(Year.of(2033)))));
         assertEquals(Optional.of(Year.of(2031)), both.firstDeathYear());
         assertFalse(both.areBothDeceased(2032));

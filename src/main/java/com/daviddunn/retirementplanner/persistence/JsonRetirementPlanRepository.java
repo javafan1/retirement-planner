@@ -26,6 +26,7 @@ public class JsonRetirementPlanRepository
     public void save(RetirementPlan plan,
                      Path file) throws IOException {
 
+        plan.validateHouseholdReferences();
         mapper.writeValue(file.toFile(), plan);
     }
 
@@ -33,8 +34,9 @@ public class JsonRetirementPlanRepository
     public RetirementPlan load(Path file)
             throws IOException {
 
-        return mapper.readValue(file.toFile(),
-                RetirementPlan.class);
+        RetirementPlan plan = mapper.readValue(file.toFile(), RetirementPlan.class);
+        plan.validateHouseholdReferences();
+        return plan;
     }
 
     private static ObjectMapper createObjectMapper() {
