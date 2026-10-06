@@ -104,27 +104,27 @@ class SinglePersonHouseholdTest {
     }
 
     @Test
-    void downstreamMortalityAndSocialSecurityStrategyAnalysisRejectBeforeComputation() {
+    void downstreamMortalityAndSurvivorAnalysisRejectBeforeComputation() {
         var household = new Household(primary());
         var plan = new RetirementPlan(household, new AccountPortfolio(), TestDataFactory.planningAssumptions());
         var mortality = assertThrows(UnsupportedOperationException.class, () -> PersonMortalityCategories.from(household));
         assertTrue(mortality.getMessage().contains("PersonMortalityCategories"));
         var socialSecurity = assertThrows(UnsupportedOperationException.class,
                 () -> new SocialSecurityProjectionIncomeProvider().calculate(plan, 2026, 2030,
-                        ProjectionEvaluationContext.withLifetimeScenario(HouseholdLifetimeScenario.bothSurvive())));
-        assertTrue(socialSecurity.getMessage().contains("deferred"));
+                        ProjectionEvaluationContext.withLifetimeScenario(HouseholdLifetimeScenario.bothSurvive()).withSurvivorClaimingAge(67)));
+        assertTrue(socialSecurity.getMessage().contains("survivor"));
     }
 
     @Test
-    void lifetimeProjectionAndMonteCarloMortalityRemainExplicitlyUnsupported() {
+    void absentSpouseInputsAndMonteCarloMortalityRemainExplicitlyUnsupported() {
         var plan = new RetirementPlan(new Household(primary()), new AccountPortfolio(), TestDataFactory.planningAssumptions());
         var engine = new ProjectionEngine();
-        var context = ProjectionEvaluationContext.withLifetimeScenario(HouseholdLifetimeScenario.bothSurvive());
-        assertTrue(assertThrows(UnsupportedOperationException.class, () -> engine.project(plan, context))
-                .getMessage().contains("deferred"));
-        assertTrue(assertThrows(UnsupportedOperationException.class, () -> engine.projectWithOutcome(plan, context,
+        var context = ProjectionEvaluationContext.withLifetimeScenario(HouseholdLifetimeScenario.bothSurvive()).withSurvivorClaimingAge(67);
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> engine.project(plan, context))
+                .getMessage().contains("survivor"));
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> engine.projectWithOutcome(plan, context,
                         ProjectionEconomicPath.constant(BigDecimal.ZERO)))
-                .getMessage().contains("deferred"));
+                .getMessage().contains("survivor"));
         var settings = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSettings(
                 1, 417, BigDecimal.ZERO, BigDecimal.ZERO);
         var session = com.daviddunn.retirementplanner.domain.socialsecurity.analysis.LongevitySessionSettings

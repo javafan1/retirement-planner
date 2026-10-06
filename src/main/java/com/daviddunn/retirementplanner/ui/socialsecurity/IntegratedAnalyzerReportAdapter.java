@@ -20,6 +20,9 @@ final class IntegratedAnalyzerReportAdapter {
             IntegratedSocialSecurityCompleteStrategySearchEntry selected,
             List<ExhaustiveIntegratedSearchPresentation.Group> orderedRows, String socialSecurityReference) {
         var result = model.result();
+        if (!result.currentPlanBaseline().evaluatedStrategy().hasSpouse()) {
+            throw new UnsupportedOperationException("Single-person integrated PDF export is deferred to the reporting milestone.");
+        }
         List<Section> sections = new ArrayList<>();
         sections.add(new Section("Search Summary and Current Plan", List.of(
                 "Ranking objective: Deterministic After-Tax Estate; future dollars at the configured horizon.",

@@ -197,6 +197,13 @@ public final class SocialSecurityStrategyCalculator {
     /** Own retirement only, using the same monthly calculation as the paired engine. No survivor strategy. */
     public Map<Integer, BigDecimal> calculateOwnRetirement(
             SocialSecurityClaimingElection election, int firstYear, int lastYear, BigDecimal colaRate) {
+        return calculateOwnRetirement(election, firstYear, lastYear, colaRate, null);
+    }
+
+    /** Death month is excluded by the existing authoritative monthly alive convention. */
+    public Map<Integer, BigDecimal> calculateOwnRetirement(
+            SocialSecurityClaimingElection election, int firstYear, int lastYear, BigDecimal colaRate,
+            LocalDate deathDate) {
         Objects.requireNonNull(election);
         Objects.requireNonNull(colaRate);
         if (firstYear <= 0 || lastYear < firstYear || colaRate.compareTo(BigDecimal.ONE.negate()) <= 0) {
@@ -207,7 +214,8 @@ public final class SocialSecurityStrategyCalculator {
         for (int year = firstYear; year <= lastYear; year++) {
             BigDecimal total = BigDecimal.ZERO;
             for (int month = 1; month <= 12; month++) {
-                total = total.add(ownBenefit(prepared, YearMonth.of(year, month), true, colaRate));
+                YearMonth paymentMonth = YearMonth.of(year, month);
+                total = total.add(ownBenefit(prepared, paymentMonth, isAlive(paymentMonth, deathDate), colaRate));
             }
             annual.put(year, total);
         }

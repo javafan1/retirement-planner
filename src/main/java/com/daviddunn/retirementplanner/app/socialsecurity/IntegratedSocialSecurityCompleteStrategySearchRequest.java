@@ -7,6 +7,11 @@ import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecu
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.ArrayList;
+import java.time.Year;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityRetirementDateCalculator;
+import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityHouseholdClaimingStrategy;
 import java.util.stream.IntStream;
 
 /** Immutable search universe and result-retention settings. */
@@ -17,7 +22,8 @@ public record IntegratedSocialSecurityCompleteStrategySearchRequest(
         List<SocialSecuritySurvivorClaimingCandidate> primarySurvivorCandidates,
         List<SocialSecuritySurvivorClaimingCandidate> spouseSurvivorCandidates,
         IntegratedStrategyRankingMeasure rankingMeasure,
-        int detailRetentionCount) {
+        int detailRetentionCount,
+        Optional<Year> primaryDeathYear) {
 
     public static final int DEFAULT_DETAIL_RETENTION_COUNT = 20;
     private static final List<Integer> STANDARD_AGES =
@@ -26,21 +32,50 @@ public record IntegratedSocialSecurityCompleteStrategySearchRequest(
     public IntegratedSocialSecurityCompleteStrategySearchRequest {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         primaryRetirementAges = validateAges(primaryRetirementAges, "Primary");
-        spouseRetirementAges = validateAges(spouseRetirementAges, "Spouse");
-        primarySurvivorCandidates = validateCandidates(
+        Objects.requireNonNull(primaryDeathYear);
+        if (!plan.getHousehold().hasSpouse()) {
+            spouseRetirementAges = List.copyOf(spouseRetirementAges);
+            primarySurvivorCandidates = List.copyOf(primarySurvivorCandidates);
+            spouseSurvivorCandidates = List.copyOf(spouseSurvivorCandidates);
+            if (!spouseRetirementAges.isEmpty() || !primarySurvivorCandidates.isEmpty() || !spouseSurvivorCandidates.isEmpty()) {
+                throw new IllegalArgumentException("Single-person search has no spouse or survivor candidates.");
+            }
+            primaryDeathYear.ifPresent(year -> {
+                if (year.getValue() < plan.getPlanningAssumptions().getProjectionStartDate().getYear()) {
+                    throw new IllegalArgumentException("Primary death year cannot precede the projection start year.");
+                }
+            });
+        } else {
+            if (primaryDeathYear.isPresent()) throw new IllegalArgumentException("Use the couple's configured death scenario.");
+            spouseRetirementAges = validateAges(spouseRetirementAges, "Spouse");
+            primarySurvivorCandidates = validateCandidates(
                 primarySurvivorCandidates, "Primary");
-        spouseSurvivorCandidates = validateCandidates(
+            spouseSurvivorCandidates = validateCandidates(
                 spouseSurvivorCandidates, "Spouse");
+        }
         Objects.requireNonNull(rankingMeasure, "Ranking measure is required.");
         if (detailRetentionCount < 0) {
             throw new IllegalArgumentException("Detail retention count cannot be negative.");
         }
     }
 
+    public IntegratedSocialSecurityCompleteStrategySearchRequest(RetirementPlan plan,
+            List<Integer> primaryAges, List<Integer> spouseAges,
+            List<SocialSecuritySurvivorClaimingCandidate> primarySurvivors,
+            List<SocialSecuritySurvivorClaimingCandidate> spouseSurvivors,
+            IntegratedStrategyRankingMeasure measure, int retained) {
+        this(plan, primaryAges, spouseAges, primarySurvivors, spouseSurvivors, measure, retained, Optional.empty());
+    }
+
     public static IntegratedSocialSecurityCompleteStrategySearchRequest standard(
             RetirementPlan plan) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         Person primary = plan.getHousehold().getPrimaryPerson();
+        if (!plan.getHousehold().hasSpouse()) {
+            return new IntegratedSocialSecurityCompleteStrategySearchRequest(plan, STANDARD_AGES,
+                    List.of(), List.of(), List.of(), IntegratedStrategyRankingMeasure.AFTER_TAX_ESTATE,
+                    DEFAULT_DETAIL_RETENTION_COUNT);
+        }
         Person spouse = plan.getHousehold().getSpouse();
         if (primary == null || spouse == null) {
             throw new IllegalArgumentException(
@@ -59,10 +94,34 @@ public record IntegratedSocialSecurityCompleteStrategySearchRequest(
     }
 
     public int strategyCount() {
+        if (!plan.getHousehold().hasSpouse()) return primaryRetirementAges.size();
         return Math.multiplyExact(
                 Math.multiplyExact(primaryRetirementAges.size(), spouseRetirementAges.size()),
                 Math.multiplyExact(primarySurvivorCandidates.size(),
                         spouseSurvivorCandidates.size()));
+    }
+
+    /** Ordered real elections only. Couple generation order remains age/age/survivor/survivor. */
+    public List<SocialSecurityHouseholdClaimingStrategy> strategies() {
+        var results = new ArrayList<SocialSecurityHouseholdClaimingStrategy>();
+        var primary = plan.getHousehold().getPrimaryPerson();
+        for (int primaryAge : primaryRetirementAges) {
+            var date = SocialSecurityRetirementDateCalculator
+                    .calculateRetirementClaimDate(primary.getBirthDate(), primaryAge);
+            if (!plan.getHousehold().hasSpouse()) {
+                results.add(SocialSecurityHouseholdClaimingStrategy.primaryOnly(primaryAge, date));
+            } else {
+                for (int spouseAge : spouseRetirementAges) {
+                    var spouseDate = SocialSecurityRetirementDateCalculator
+                            .calculateRetirementClaimDate(plan.getHousehold().getSpouse().getBirthDate(), spouseAge);
+                    for (var primarySurvivor : primarySurvivorCandidates) for (var spouseSurvivor : spouseSurvivorCandidates) {
+                        results.add(new SocialSecurityHouseholdClaimingStrategy(
+                                primaryAge, spouseAge, date, spouseDate, primarySurvivor, spouseSurvivor));
+                    }
+                }
+            }
+        }
+        return List.copyOf(results);
     }
 
     private static List<Integer> validateAges(List<Integer> ages, String owner) {

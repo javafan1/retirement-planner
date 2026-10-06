@@ -58,8 +58,13 @@ public record IntegratedSocialSecurityCompleteStrategySearchResult(
     private static boolean sameElections(
             SocialSecurityHouseholdClaimingStrategy first,
             SocialSecurityHouseholdClaimingStrategy second) {
+        if (first.hasSpouse() != second.hasSpouse()) return false;
+        if (!first.hasSpouse()) {
+            return first.primaryRetirementAge() == second.primaryRetirementAge()
+                    && first.primaryRetirementClaimDate().equals(second.primaryRetirementClaimDate());
+        }
         return first.primaryRetirementAge() == second.primaryRetirementAge()
-                && first.spouseRetirementAge() == second.spouseRetirementAge()
+                && first.spouseRetirementAge().equals(second.spouseRetirementAge())
                 && first.primaryRetirementClaimDate().equals(
                         second.primaryRetirementClaimDate())
                 && first.spouseRetirementClaimDate().equals(

@@ -4,14 +4,10 @@ import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisPhase;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisProgress;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisProgressListener;
-import com.daviddunn.retirementplanner.domain.income.SocialSecurityRetirementDateCalculator;
-import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionMetrics;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityHouseholdClaimingStrategy;
-import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecuritySurvivorClaimingCandidate;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -59,12 +55,10 @@ public final class IntegratedSocialSecurityCompleteStrategySearchCalculator {
         progressListener.onProgress(new AnalysisProgress(
                 AnalysisPhase.CURRENT_PLAN_BASELINE, 0, 1));
         IntegratedSocialSecurityStrategyResult baseline =
-                evaluator.evaluateCurrentStrategy(plan);
+                evaluator.evaluateCurrentStrategy(plan, request.primaryDeathYear());
         cancellationToken.throwIfCancellationRequested();
         progressListener.onProgress(new AnalysisProgress(
                 AnalysisPhase.CURRENT_PLAN_BASELINE, 1, 1));
-        Person primary = plan.getHousehold().getPrimaryPerson();
-        Person spouse = plan.getHousehold().getSpouse();
         List<Outcome> outcomes = new ArrayList<>(request.strategyCount());
         PriorityQueue<DetailCandidate> retainedDetails = new PriorityQueue<>(
                 worstDetailFirst(request.rankingMeasure()));
@@ -74,40 +68,17 @@ public final class IntegratedSocialSecurityCompleteStrategySearchCalculator {
                 0,
                 request.strategyCount()));
 
-        for (int primaryAge : request.primaryRetirementAges()) {
-            LocalDate primaryDate = SocialSecurityRetirementDateCalculator
-                    .calculateRetirementClaimDate(primary.getBirthDate(), primaryAge);
-            for (int spouseAge : request.spouseRetirementAges()) {
-                LocalDate spouseDate = SocialSecurityRetirementDateCalculator
-                        .calculateRetirementClaimDate(spouse.getBirthDate(), spouseAge);
-                for (SocialSecuritySurvivorClaimingCandidate primarySurvivor
-                        : request.primarySurvivorCandidates()) {
-                    for (SocialSecuritySurvivorClaimingCandidate spouseSurvivor
-                            : request.spouseSurvivorCandidates()) {
-                        cancellationToken.throwIfCancellationRequested();
-                        generationOrder++;
-                        SocialSecurityHouseholdClaimingStrategy strategy =
-                                new SocialSecurityHouseholdClaimingStrategy(
-                                        primaryAge, spouseAge, primaryDate, spouseDate,
-                                        primarySurvivor, spouseSurvivor);
-                        Outcome outcome = evaluate(
-                                plan, strategy, generationOrder, baseline.metrics());
-                        outcome.detailCandidate().ifPresent(candidate -> retainDetail(
-                                retainedDetails,
-                                candidate,
-                                request.detailRetentionCount(),
-                                request.rankingMeasure()));
-                        outcomes.add(outcome.withoutDetail());
-                        cancellationToken.throwIfCancellationRequested();
-                        progressListener.onProgress(new AnalysisProgress(
-                                AnalysisPhase.EXHAUSTIVE_INTEGRATED_STRATEGIES,
-                                generationOrder,
-                                request.strategyCount()));
-                    }
-                }
-            }
+        for (SocialSecurityHouseholdClaimingStrategy strategy : request.strategies()) {
+            cancellationToken.throwIfCancellationRequested();
+            generationOrder++;
+            Outcome outcome = evaluate(plan, strategy, generationOrder, baseline.metrics(), request.primaryDeathYear());
+            outcome.detailCandidate().ifPresent(candidate -> retainDetail(retainedDetails, candidate,
+                    request.detailRetentionCount(), request.rankingMeasure()));
+            outcomes.add(outcome.withoutDetail());
+            cancellationToken.throwIfCancellationRequested();
+            progressListener.onProgress(new AnalysisProgress(AnalysisPhase.EXHAUSTIVE_INTEGRATED_STRATEGIES,
+                    generationOrder, request.strategyCount()));
         }
-
         Comparator<Outcome> ranking = rankingComparator(request.rankingMeasure());
         List<Outcome> rankedOutcomes = outcomes.stream()
                 .filter(Outcome::successful)
@@ -149,9 +120,9 @@ public final class IntegratedSocialSecurityCompleteStrategySearchCalculator {
             RetirementPlan plan,
             SocialSecurityHouseholdClaimingStrategy strategy,
             int generationOrder,
-            ProjectionMetrics baselineMetrics) {
+            ProjectionMetrics baselineMetrics, java.util.Optional<java.time.Year> primaryDeathYear) {
         try {
-            IntegratedSocialSecurityStrategyResult result = evaluator.evaluate(plan, strategy);
+            IntegratedSocialSecurityStrategyResult result = evaluator.evaluate(plan, strategy, primaryDeathYear);
             ProjectionMetrics differences = ProjectionMetricsDifferenceCalculator.subtract(
                     result.metrics(), baselineMetrics);
             return Outcome.success(generationOrder, strategy, result, differences);

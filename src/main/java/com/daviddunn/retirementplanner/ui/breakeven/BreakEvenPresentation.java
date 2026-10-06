@@ -29,6 +29,7 @@ public final class BreakEvenPresentation {
         return NumberFormat.getCurrencyInstance(Locale.US).format(value);
     }
     public static String ages(BreakEvenYearResult point, BreakEvenPlanSummary plan) {
+        if (!plan.hasSpouse()) return plan.primary().name() + " age " + age(point.primaryAge());
         return plan.primary().name() + " age " + age(point.primaryAge()) + " · "
                 + plan.spouse().name() + " age " + age(point.spouseAge());
     }
@@ -64,6 +65,7 @@ public final class BreakEvenPresentation {
     }
 
     public static String compactAges(BreakEvenYearResult point, BreakEvenPlanSummary plan) {
+        if (!plan.hasSpouse()) return plan.primary().name() + " " + age(point.primaryAge());
         return plan.primary().name() + " " + age(point.primaryAge()) + " · "
                 + plan.spouse().name() + " " + age(point.spouseAge());
     }

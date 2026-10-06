@@ -62,6 +62,9 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
             LocalDate mortalityConditioningDate,
             LocalDate presentValueBaseDate) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
+        if (!plan.getHousehold().hasSpouse()) {
+            throw new UnsupportedOperationException("Single-person mortality-weighted Social Security optimization will be available when single-person longevity/mortality analysis is supported.");
+        }
         // Compatibility arguments cannot override the authoritative Person values.
         var categories = PersonMortalityCategories.from(plan.getHousehold());
         primaryCategory = categories.primary();

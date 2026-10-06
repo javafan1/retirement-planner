@@ -148,17 +148,32 @@ public final class SocialSecurityProjectionIncomeProvider {
 
         Household household = plan.getHousehold();
         if (!household.hasSpouse()) {
-            if (evaluationContext.householdLifetimeScenario().isPresent() || evaluationContext.socialSecurityStrategy().isPresent()
-                    || validationOnly || cache != null || evaluationContext.survivorClaimingAge().isPresent()) {
-                throw new UnsupportedOperationException("Single-person Social Security strategy/lifetime analysis is deferred.");
+            if (validationOnly || cache != null || evaluationContext.survivorClaimingAge().isPresent()) {
+                throw new UnsupportedOperationException("Single-person mortality continuation and survivor analysis are unavailable.");
             }
             plan.validateHouseholdReferences();
+            var override = evaluationContext.socialSecurityStrategy().orElse(null);
+            if (override != null && override.hasSpouse()) {
+                throw new IllegalArgumentException("A single-person strategy cannot contain spouse elections.");
+            }
             var ownSources = sources(household.getPrimaryPerson(), AccountOwnership.PRIMARY);
             if (ownSources.size() > 1) throw new IllegalArgumentException("Single-person projection supports one own Social Security record.");
+            LocalDate claimDate = null;
+            if (!ownSources.isEmpty()) {
+                int age = override == null ? ownSources.getFirst().getClaimingAge() : override.primaryRetirementAge();
+                claimDate = SocialSecurityRetirementDateCalculator.calculateRetirementClaimDate(
+                        household.getPrimaryPerson().getBirthDate(), age);
+                if (override != null && !claimDate.equals(override.primaryRetirementClaimDate())) {
+                    throw new IllegalArgumentException("Primary claim date must match the authoritative claiming age.");
+                }
+            } else if (override != null) {
+                throw new IllegalArgumentException("A primary Social Security source is required for a claiming strategy.");
+            }
             Map<Integer, BigDecimal> amounts = ownSources.isEmpty() ? Map.of()
                     : strategyCalculator.calculateOwnRetirement(election(household.getPrimaryPerson(), ownSources.getFirst(),
-                            AccountOwnership.PRIMARY, ownSources.getFirst().getStartDate()), firstCalendarYear, lastCalendarYear,
-                            plan.getPlanningAssumptions().getSocialSecurityColaRate());
+                            AccountOwnership.PRIMARY, claimDate), firstCalendarYear, lastCalendarYear,
+                            plan.getPlanningAssumptions().getSocialSecurityColaRate(),
+                            deathView.deathDate(AccountOwnership.PRIMARY).orElse(null));
             Map<Integer, HouseholdSocialSecurityResult> results = new LinkedHashMap<>();
             for (int year = firstCalendarYear; year <= lastCalendarYear; year++) {
                 results.put(year, HouseholdSocialSecurityResult.primaryOnly(amounts.getOrDefault(year, BigDecimal.ZERO)));
@@ -198,6 +213,7 @@ public final class SocialSecurityProjectionIncomeProvider {
         SocialSecurityHouseholdClaimingStrategy override =
                 evaluationContext.socialSecurityStrategy().orElse(null);
         if (override != null) {
+            if (!override.hasSpouse()) throw new IllegalArgumentException("A couple strategy requires spouse elections.");
             validateOverride(primary, spouse, override);
         }
         LocalDate primarySurvivorClaim;
@@ -258,7 +274,10 @@ public final class SocialSecurityProjectionIncomeProvider {
     public boolean supportsAdvancedPath(RetirementPlan plan) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         Household household = plan.getHousehold();
-        household.requireSpouse("SocialSecurityProjectionIncomeProvider");
+        if (!household.hasSpouse()) {
+            return household.getPrimaryPerson().getBirthDate() != null
+                    && sources(household.getPrimaryPerson(), AccountOwnership.PRIMARY).size() == 1;
+        }
         return supportsAdvanced(
                 household.getPrimaryPerson(), household.getSpouse(),
                 sources(household.getPrimaryPerson(), AccountOwnership.PRIMARY),

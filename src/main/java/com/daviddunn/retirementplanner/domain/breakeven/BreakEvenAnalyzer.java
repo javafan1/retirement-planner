@@ -30,7 +30,8 @@ public final class BreakEvenAnalyzer {
                     cv = currentTotal;
                 }
                 points.add(new BreakEvenYearResult(year, c.getPrimaryPersonAge(),
-                        current.assumptions().spouse().ageIn(year), bv, cv, cv.subtract(bv)));
+                        current.assumptions().hasSpouse() ? current.assumptions().spouse().ageIn(year) : null,
+                        bv, cv, cv.subtract(bv)));
             }
             metrics.put(metric, summarize(metric, points));
         }

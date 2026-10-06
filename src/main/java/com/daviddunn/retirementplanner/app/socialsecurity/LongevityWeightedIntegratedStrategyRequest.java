@@ -19,6 +19,9 @@ public record LongevityWeightedIntegratedStrategyRequest(
         AnalysisCancellationToken cancellationToken) {
     public LongevityWeightedIntegratedStrategyRequest {
         Objects.requireNonNull(sourcePlan, "Source plan is required.");
+        if (!sourcePlan.getHousehold().hasSpouse()) {
+            throw new UnsupportedOperationException("Single-person Longevity-Weighted Integrated analysis requires the deferred single-person mortality model.");
+        }
         Objects.requireNonNull(strategy, "Complete strategy is required.");
         Objects.requireNonNull(longevityScenarios, "Prepared mortality scenarios are required.");
         Objects.requireNonNull(valuationDate, "Analyzer present-value base date is required.");

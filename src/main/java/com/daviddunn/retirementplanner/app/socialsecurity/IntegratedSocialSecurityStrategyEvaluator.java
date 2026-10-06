@@ -41,6 +41,11 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
     public IntegratedSocialSecurityStrategyResult evaluate(
             RetirementPlan sourcePlan,
             SocialSecurityHouseholdClaimingStrategy strategy) {
+        return evaluate(sourcePlan, strategy, java.util.Optional.empty());
+    }
+
+    public IntegratedSocialSecurityStrategyResult evaluate(RetirementPlan sourcePlan,
+            SocialSecurityHouseholdClaimingStrategy strategy, java.util.Optional<java.time.Year> primaryDeathYear) {
         Objects.requireNonNull(sourcePlan, "Retirement plan is required.");
         Objects.requireNonNull(strategy, "Social Security strategy is required.");
         requireAdvancedPlan(sourcePlan);
@@ -48,19 +53,33 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
 
         RetirementPlan scenario = copyService.copy(sourcePlan);
         return project(scenario, strategy, List.of(),
-                ProjectionEvaluationContext.withSocialSecurityStrategy(strategy));
+                primaryDeathYear.isPresent() ? ProjectionEvaluationContext.withSocialSecurityStrategy(strategy,
+                        singleTiming(sourcePlan, primaryDeathYear)) : ProjectionEvaluationContext.withSocialSecurityStrategy(strategy));
     }
 
     public IntegratedSocialSecurityStrategyResult evaluateCurrentStrategy(
             RetirementPlan sourcePlan) {
+        return evaluateCurrentStrategy(sourcePlan, java.util.Optional.empty());
+    }
+
+    public IntegratedSocialSecurityStrategyResult evaluateCurrentStrategy(RetirementPlan sourcePlan,
+            java.util.Optional<java.time.Year> primaryDeathYear) {
         Objects.requireNonNull(sourcePlan, "Retirement plan is required.");
         requireAdvancedPlan(sourcePlan);
         SocialSecurityHouseholdClaimingStrategy current = extractCurrentStrategy(sourcePlan);
         RetirementPlan scenario = copyService.copy(sourcePlan);
         return project(scenario, current, List.of(
-                "Current plan survivor behavior was evaluated using its configured "
-                        + "deterministic survivor policy."),
-                ProjectionEvaluationContext.empty());
+                sourcePlan.getHousehold().hasSpouse()
+                        ? "Current plan survivor behavior was evaluated using its configured deterministic survivor policy."
+                        : "Current primary claiming age evaluated through the configured deterministic plan horizon."),
+                primaryDeathYear.isPresent() ? ProjectionEvaluationContext.withLifetimeScenario(
+                        singleTiming(sourcePlan, primaryDeathYear)) : ProjectionEvaluationContext.empty());
+    }
+
+    private static com.daviddunn.retirementplanner.domain.projection.HouseholdLifetimeScenario singleTiming(
+            RetirementPlan plan, java.util.Optional<java.time.Year> year) {
+        if (plan.getHousehold().hasSpouse()) throw new IllegalArgumentException("Primary-only death timing requires a single-person household.");
+        return com.daviddunn.retirementplanner.domain.projection.HouseholdLifetimeScenario.primaryOnly(year);
     }
 
     public SocialSecurityHouseholdClaimingStrategy extractCurrentStrategy(
@@ -68,6 +87,11 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         requireAdvancedPlan(plan);
         Person primary = plan.getHousehold().getPrimaryPerson();
+        if (!plan.getHousehold().hasSpouse()) {
+            var own = source(primary, AccountOwnership.PRIMARY);
+            return SocialSecurityHouseholdClaimingStrategy.primaryOnly(own.getClaimingAge(),
+                    SocialSecurityRetirementDateCalculator.calculateRetirementClaimDate(primary.getBirthDate(), own.getClaimingAge()));
+        }
         Person spouse = plan.getHousehold().getSpouse();
         SocialSecurityIncome primarySource = source(primary, AccountOwnership.PRIMARY);
         SocialSecurityIncome spouseSource = source(spouse, AccountOwnership.SPOUSE);
@@ -99,6 +123,9 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
 
     static void requireAdvancedPlan(RetirementPlan plan) {
         if (!new SocialSecurityProjectionIncomeProvider().supportsAdvancedPath(plan)) {
+            if (!plan.getHousehold().hasSpouse()) {
+                throw new IllegalArgumentException("Single-person integrated analysis requires the primary birth date and exactly one primary-owned Social Security source.");
+            }
             throw new IllegalArgumentException(
                     "Integrated Social Security strategy evaluation requires two modern-cohort "
                             + "people with exactly one correctly owned Social Security source each; "
@@ -109,10 +136,13 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
     static void validateStrategy(
             RetirementPlan plan,
             SocialSecurityHouseholdClaimingStrategy strategy) {
+        if (plan.getHousehold().hasSpouse() != strategy.hasSpouse()) {
+            throw new IllegalArgumentException("Strategy elections must match household composition.");
+        }
         validateOwnerStrategy(plan.getHousehold().getPrimaryPerson(),
                 strategy.primaryRetirementAge(), strategy.primaryRetirementClaimDate(),
                 "Primary");
-        validateOwnerStrategy(plan.getHousehold().getSpouse(),
+        if (strategy.hasSpouse()) validateOwnerStrategy(plan.getHousehold().getSpouse(),
                 strategy.spouseRetirementAge(), strategy.spouseRetirementClaimDate(),
                 "Spouse");
     }

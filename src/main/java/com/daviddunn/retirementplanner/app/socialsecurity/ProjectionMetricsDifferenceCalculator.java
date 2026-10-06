@@ -41,6 +41,10 @@ final class ProjectionMetricsDifferenceCalculator {
     }
 
     private static BigDecimal difference(BigDecimal candidate, BigDecimal baseline) {
+        if (candidate == null && baseline == null) return null;
+        if (candidate == null || baseline == null) {
+            throw new IllegalArgumentException("Cannot compare metrics for different household compositions.");
+        }
         return candidate.subtract(baseline);
     }
 }

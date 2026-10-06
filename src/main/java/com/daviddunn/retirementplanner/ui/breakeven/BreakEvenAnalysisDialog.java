@@ -36,6 +36,7 @@ public final class BreakEvenAnalysisDialog extends Dialog<Void> {
         getDialogPane().getButtonTypes().addAll(export, ButtonType.CLOSE);
         var exportButton = getDialogPane().lookupButton(export);
         exportButton.setId("break-even-export-pdf");
+        exportButton.setDisable(!result.baselineAssumptions().hasSpouse() || !result.currentAssumptions().hasSpouse());
         exportButton.addEventFilter(ActionEvent.ACTION, event -> {
             event.consume();
             choosePdf();

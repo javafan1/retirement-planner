@@ -26,6 +26,11 @@ public record HouseholdLifetimeScenario(
         return new HouseholdLifetimeScenario(Optional.empty(), Optional.empty());
     }
 
+    /** Primary timing only; absence of a spouse is supplied by Household membership, never inferred from dates. */
+    public static HouseholdLifetimeScenario primaryOnly(Optional<Year> deathYear) {
+        return new HouseholdLifetimeScenario(deathYear, Optional.empty());
+    }
+
     public Optional<LocalDate> primaryDeathDate() {
         return primaryDeathYear.map(year -> year.atDay(1));
     }

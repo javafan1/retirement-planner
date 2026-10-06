@@ -111,6 +111,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private IntegratedSocialSecurityComparisonPresentation integratedPresentation;
     private ExhaustiveIntegratedSearchPresentation exhaustivePresentation;
     private boolean socialSecurityResultCurrent;
+    private SinglePersonIntegratedView singlePersonView;
 
     public SocialSecurityStrategyAnalyzerDialog(Window owner, RetirementPlan plan) {
         this(owner, plan, new SocialSecurityAnalyzerJobController(
@@ -121,8 +122,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             SocialSecurityAnalyzerJobController jobs) {
         this.plan = plan;
         this.jobs = jobs;
-        baselineInputs = new CurrentStrategyBaselineView(plan);
-        baselineInputs.onChanged(this::baselineChanged);
+        baselineInputs = plan.getHousehold().hasSpouse() ? new CurrentStrategyBaselineView(plan) : null;
+        if (baselineInputs != null) baselineInputs.onChanged(this::baselineChanged);
         pvDate = new DatePicker(plan.getPlanningAssumptions().getProjectionStartDate());
         mortalityDate = new DatePicker(pvDate.getValue());
         stage.initOwner(owner);
@@ -132,16 +133,32 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         stage.setMinHeight(650);
         stage.setWidth(1180);
         stage.setHeight(820);
-        stage.setScene(new Scene(content()));
+        if (plan.getHousehold().hasSpouse()) {
+            stage.setScene(new Scene(content()));
+        } else {
+            singlePersonView = new SinglePersonIntegratedView(plan, jobs);
+            var scroll = new ScrollPane(singlePersonView);
+            scroll.setFitToWidth(true);
+            stage.setScene(new Scene(scroll));
+        }
         stage.setOnCloseRequest(event -> close());
         stage.setOnHidden(event -> close());
-        jobs.onChanged(this::refreshJobState);
-        refreshJobState();
+        if (singlePersonView == null) {
+            jobs.onChanged(this::refreshJobState);
+            refreshJobState();
+        }
     }
 
     public SocialSecurityStrategyAnalyzerDialog(Window owner,
             com.daviddunn.retirementplanner.ui.controller.ApplicationController source) {
         this(owner, source.getCurrentPlan());
+        if (singlePersonView != null) {
+            detachPlanListener = source.addSourcePlanRevisionListener(() -> {
+                plan = source.getCurrentPlan();
+                singlePersonView.invalidate(plan);
+            });
+            return;
+        }
         var sharedLongevity = source.getLongevitySessionSettings();
         mortalityDate.setValue(sharedLongevity.conditioningDate());
         primaryMortalityAdjustment.setText(sharedLongevity.primaryAdjustment().factor().toPlainString());

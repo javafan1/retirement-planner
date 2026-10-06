@@ -42,9 +42,10 @@ public class ProjectionEngine {
 
     private static void validateSinglePersonProjection(RetirementPlan plan, ProjectionEvaluationContext context) {
         if (plan.getHousehold().hasSpouse()) return;
-        if (context.householdLifetimeScenario().isPresent() || context.socialSecurityStrategy().isPresent()
-                || context.survivorClaimingAge().isPresent()) {
-            throw new UnsupportedOperationException("Single-person lifetime/survivor strategy projection is deferred.");
+        if (context.survivorClaimingAge().isPresent()
+                || context.socialSecurityStrategy().map(strategy -> strategy.hasSpouse()).orElse(false)
+                || context.householdLifetimeScenario().flatMap(HouseholdLifetimeScenario::spouseDeathYear).isPresent()) {
+            throw new IllegalArgumentException("A single-person projection cannot contain spouse or survivor assumptions.");
         }
         java.util.Objects.requireNonNull(plan.getHousehold().getPrimaryPerson().getBirthDate(), "Primary birth date is required.");
         for (var account : plan.getAccountPortfolio().getAccounts()) {
@@ -1274,6 +1275,10 @@ public class ProjectionEngine {
             EffectiveHouseholdDeathView deathView) {
 
         int year = projectionDate.getYear();
+        // The surviving-filer transition is a couple rule, not a change to a single person's configured status.
+        if (deathView.state(AccountOwnership.SPOUSE, year) == EffectiveHouseholdDeathView.PersonState.ABSENT) {
+            return getFilingStatus(assumptions);
+        }
         if (!deathView.hasAnyDeathOccurred(year)
                 || deathView.firstDeathYear().orElseThrow().getValue() == year) {
             return getFilingStatus(assumptions);

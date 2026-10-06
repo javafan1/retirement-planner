@@ -15,6 +15,9 @@ import static com.daviddunn.retirementplanner.app.export.PdfReportSupport.*;
 public final class BreakEvenPdfExporter {
     public void export(BreakEvenPdfReport report, Path file) throws IOException {
         Objects.requireNonNull(report); Objects.requireNonNull(file);
+        if (!report.analysis().baselineAssumptions().hasSpouse() || !report.analysis().currentAssumptions().hasSpouse()) {
+            throw new UnsupportedOperationException("Single-person Break-Even PDF export is deferred to the reporting milestone.");
+        }
         try (var document = new PDDocument()) {
             document.getDocumentInformation().setTitle("Break-Even Analysis");
             try (var writer = new TextPages(document, "Break-Even Analysis")) {

@@ -24,6 +24,10 @@ public final class BreakEvenContextFactory {
         List<BreakEvenEvent> events = events(result);
         var b = result.baselineAssumptions();
         var c = result.currentAssumptions();
+        if (!b.hasSpouse() || !c.hasSpouse()) {
+            return new BreakEvenContext(events, Map.of(),
+                    "Single-person survival probabilities require the deferred single-person mortality model. Deterministic break-even amounts are available.");
+        }
         if (!sameMortality(b.primary(), c.primary()) || !sameMortality(b.spouse(), c.spouse())) {
             return new BreakEvenContext(events, Map.of(), "Survival probability unavailable because the compared plans use different mortality assumptions (birth dates or mortality categories).");
         }
@@ -78,6 +82,7 @@ public final class BreakEvenContextFactory {
         for (AccountOwnership owner : List.of(AccountOwnership.PRIMARY, AccountOwnership.SPOUSE)) {
             var baseline = owner == AccountOwnership.PRIMARY ? result.baselineAssumptions().primary() : result.baselineAssumptions().spouse();
             var current = owner == AccountOwnership.PRIMARY ? result.currentAssumptions().primary() : result.currentAssumptions().spouse();
+            if (baseline == null && current == null) continue;
             Map<Integer, List<BreakEvenEvent.Election>> grouped = new TreeMap<>();
             addElection(grouped, baseline, BreakEvenEvent.PlanScope.BASELINE, result);
             addElection(grouped, current, BreakEvenEvent.PlanScope.CURRENT, result);
@@ -89,7 +94,7 @@ public final class BreakEvenContextFactory {
     }
     private static void addElection(Map<Integer, List<BreakEvenEvent.Election>> grouped,
             BreakEvenPlanSummary.PersonSummary person, BreakEvenEvent.PlanScope scope, BreakEvenAnalysisResult result) {
-        if (person.retirementClaimDate() == null || person.retirementClaimingAge() == null) return;
+        if (person == null || person.retirementClaimDate() == null || person.retirementClaimingAge() == null) return;
         int year = person.retirementClaimDate().getYear();
         if (year < result.comparisonStartYear() || year > result.comparisonEndYear()) return;
         grouped.computeIfAbsent(year, ignored -> new ArrayList<>()).add(

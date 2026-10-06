@@ -34,6 +34,9 @@ public class SocialSecurityDialog
             Household household) {
 
         this.household = household;
+        if (!household.hasSpouse() && socialSecurity != null && socialSecurity.getOwnership() != AccountOwnership.PRIMARY) {
+            throw new IllegalArgumentException("Single-person Social Security must belong to the primary person.");
+        }
 
         this.planProjectionStartYear = benefitValuationYear;
         this.benefitValuationYear = socialSecurity != null
@@ -55,9 +58,7 @@ public class SocialSecurityDialog
         nameField = new TextField();
 
         ownershipCombo = new ComboBox<>();
-        ownershipCombo.getItems().addAll(
-                AccountOwnership.PRIMARY,
-                AccountOwnership.SPOUSE);
+        ownershipCombo.getItems().addAll(household.peopleByOwner().keySet());
         ownershipCombo.getSelectionModel().selectFirst();
 
         startDatePicker = new DatePicker();

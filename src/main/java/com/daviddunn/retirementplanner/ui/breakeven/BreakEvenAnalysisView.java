@@ -137,7 +137,9 @@ public final class BreakEvenAnalysisView extends VBox {
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         column("Year", point -> Integer.toString(point.year()));
         column(result.currentAssumptions().primary().name() + " Age", point -> BreakEvenPresentation.age(point.primaryAge()));
-        column(result.currentAssumptions().spouse().name() + " Age", point -> BreakEvenPresentation.age(point.spouseAge()));
+        if (result.currentAssumptions().hasSpouse()) {
+            column(result.currentAssumptions().spouse().name() + " Age", point -> BreakEvenPresentation.age(point.spouseAge()));
+        }
         baselineColumn = column("Baseline", point -> BreakEvenPresentation.money(point.baselineValue()));
         currentColumn = column("Current", point -> BreakEvenPresentation.money(point.currentValue()));
         column("Difference (Current − Baseline)", point -> BreakEvenPresentation.signedMoney(point.difference()));
@@ -362,6 +364,12 @@ public final class BreakEvenAnalysisView extends VBox {
     }
 
     private Label planCard(String title, BreakEvenPlanSummary plan) {
+        if (!plan.hasSpouse()) {
+            Label summary = label(title + " — SS claiming age: " + plan.primary().name() + " "
+                    + BreakEvenPresentation.age(plan.primary().retirementClaimingAge()));
+            summary.getStyleClass().add("break-even-plan-summary");
+            return summary;
+        }
         Label summary = label(title + " — SS claiming ages: " + plan.primary().name() + " "
                 + BreakEvenPresentation.age(plan.primary().retirementClaimingAge()) + " · "
                 + plan.spouse().name() + " " + BreakEvenPresentation.age(plan.spouse().retirementClaimingAge()));

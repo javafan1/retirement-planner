@@ -20,9 +20,17 @@ public record BreakEvenPlanSummary(PersonSummary primary, PersonSummary spouse) 
     }
 
     public static BreakEvenPlanSummary from(Household household) {
-        return new BreakEvenPlanSummary(person(household.getPrimaryPerson(), "Primary"),
-                person(household.getSpouse(), "Spouse"));
+        PersonSummary primary = person(household.getPrimaryPerson(), "Primary");
+        if (!household.hasSpouse() && primary.birthDate() != null && primary.retirementClaimingAge() != null) {
+            primary = new PersonSummary(primary.name(), primary.birthDate(), primary.retirementClaimingAge(),
+                    com.daviddunn.retirementplanner.domain.income.SocialSecurityRetirementDateCalculator
+                            .calculateRetirementClaimDate(primary.birthDate(), primary.retirementClaimingAge()), primary.mortalityCategory());
+        }
+        return new BreakEvenPlanSummary(primary,
+                household.spouse().map(spouse -> person(spouse, "Spouse")).orElse(null));
     }
+
+    public boolean hasSpouse() { return spouse != null; }
 
     private static PersonSummary person(Person person, String fallback) {
         if (person == null) return new PersonSummary(fallback, null, null);
