@@ -348,6 +348,7 @@ class HouseholdViewTest {
                     new java.math.BigDecimal("10000000")));
             var stage = new javafx.stage.Stage();
             window.setStage(stage);
+            ((CheckBox) view.getChildren().filtered(node -> node instanceof CheckBox).getFirst()).setSelected(true);
             date(view, 0).setValue(LocalDate.of(1960, 1, 1));
             date(view, 1).setValue(LocalDate.of(1962, 1, 1));
             category(view, 0).setValue(MortalityCategory.MALE);
@@ -396,7 +397,7 @@ class HouseholdViewTest {
         });
     }
     private static PersonCard card(HouseholdView view, int member) {
-        return (PersonCard) ((TitledPane) view.getChildren().get(member)).getContent();
+        return (PersonCard) ((TitledPane) view.getChildren().filtered(node -> node instanceof TitledPane).get(member)).getContent();
     }
     private static TextField first(HouseholdView view, int member) {
         return (TextField) card(view, member).getChildren().get(1);
@@ -412,10 +413,10 @@ class HouseholdViewTest {
         return (DatePicker) card(view, member).getChildren().get(5);
     }
     private static Button button(HouseholdView view, int index) {
-        return (Button) ((HBox) view.getChildren().get(2)).getChildren().get(index);
+        return (Button) ((HBox) view.getChildren().filtered(node -> node instanceof HBox).getFirst()).getChildren().get(index);
     }
     private static Label status(HouseholdView view) {
-        return (Label) view.getChildren().get(3);
+        return (Label) view.getChildren().filtered(node -> node instanceof Label).getFirst();
     }
     private static void clean(HouseholdView view) {
         assertFalse(view.isDirty());
@@ -439,6 +440,7 @@ class HouseholdViewTest {
         final HouseholdView view = new HouseholdView();
         final AtomicInteger notifications = new AtomicInteger();
         Fixture() {
+            controller.getCurrentPlan().setSpouse(new Person("", "", null));
             primary().setMortalityCategory(MortalityCategory.MALE);
             spouse().setMortalityCategory(MortalityCategory.FEMALE);
             primary().setFirstName("Primary");

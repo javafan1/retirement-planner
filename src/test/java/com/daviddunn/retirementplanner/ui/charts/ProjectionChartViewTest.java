@@ -116,6 +116,7 @@ class ProjectionChartViewTest {
         fx(() -> {
             var controller = new ApplicationController();
             var plan = controller.getCurrentPlan();
+            plan.setSpouse(new com.daviddunn.retirementplanner.domain.model.Person("", "", null));
             var primary = plan.getHousehold().getPrimaryPerson();
             var spouse = plan.getHousehold().getSpouse();
             primary.setFirstName("Alex"); primary.setBirthDate(java.time.LocalDate.of(1963, 6, 4));

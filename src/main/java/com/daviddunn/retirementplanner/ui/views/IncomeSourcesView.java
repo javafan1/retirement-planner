@@ -158,7 +158,7 @@ public class IncomeSourcesView extends BorderPane {
         if (selected instanceof Pension pension) {
 
             PensionDialog dialog =
-                    new PensionDialog(pension);
+                    new PensionDialog(pension, currentPlan.getHousehold());
 
             Optional<Pension> result =
                     dialog.showAndWait();
@@ -304,7 +304,7 @@ public class IncomeSourcesView extends BorderPane {
     private void addPension() {
 
         PensionDialog dialog =
-                new PensionDialog(null);
+                new PensionDialog(null, currentPlan.getHousehold());
 
         Optional<Pension> result =
                 dialog.showAndWait();
@@ -558,17 +558,8 @@ public class IncomeSourcesView extends BorderPane {
             return;
         }
 
-        table.getItems().addAll(
-                currentPlan
-                        .getHousehold()
-                        .getPrimaryPerson()
-                        .getIncomeSources());
-
-        table.getItems().addAll(
-                currentPlan
-                        .getHousehold()
-                        .getSpouse()
-                        .getIncomeSources());
+        currentPlan.getHousehold().members().forEach(person ->
+                table.getItems().addAll(person.getIncomeSources()));
     }
 
     public TableView<IncomeSource> getTable() {

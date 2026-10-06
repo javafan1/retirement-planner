@@ -14,6 +14,13 @@ import java.util.Objects;
 /** Read-only translation from current plan data to an immutable analyzer request. */
 public final class SocialSecurityStrategyAnalysisRequestFactory {
 
+    /** Primary-only preparation; the legacy create overloads return couple-specific grid contexts. */
+    public IndividualLongevityScenarios createIndividual(RetirementPlan plan,
+            SocialSecurityMortalityAdjustment adjustment, LocalDate conditioningDate) {
+        return IndividualLongevityScenarios.create(plan.getHousehold(), adjustment, conditioningDate,
+                SocialSecurityMortalityTables.ssaPeriod2022());
+    }
+
     private static final List<Integer> RETIREMENT_AGES =
             List.of(62, 63, 64, 65, 66, 67, 68, 69, 70);
 
@@ -63,7 +70,7 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
             LocalDate presentValueBaseDate) {
         Objects.requireNonNull(plan, "Retirement plan is required.");
         if (!plan.getHousehold().hasSpouse()) {
-            throw new UnsupportedOperationException("Single-person mortality-weighted Social Security optimization will be available when single-person longevity/mortality analysis is supported.");
+            throw new UnsupportedOperationException("Use createIndividual and SinglePersonMortalityAnalysis for single-person mortality-weighted analysis; this context describes a couple grid.");
         }
         // Compatibility arguments cannot override the authoritative Person values.
         var categories = PersonMortalityCategories.from(plan.getHousehold());

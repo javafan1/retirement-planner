@@ -181,17 +181,17 @@ public class DashboardView extends BorderPane {
                 currency.format(
                         income.getPrimarySocialSecurityMonthly()));
 
-        spouseSocialSecurityLabel.setText(
-                currency.format(
-                        income.getSpouseSocialSecurityMonthly()));
+        spouseSocialSecurityLabel.setText(income.hasSpouse() ? currency.format(income.getSpouseSocialSecurityMonthly()) : "");
 
         primaryPensionLabel.setText(
                 currency.format(
                         income.getPrimaryPensionMonthly()));
 
-        spousePensionLabel.setText(
-                currency.format(
-                        income.getSpousePensionMonthly()));
+        spousePensionLabel.setText(income.hasSpouse() ? currency.format(income.getSpousePensionMonthly()) : "");
+        var grid = (GridPane) spousePensionLabel.getParent();
+        grid.getChildren().stream().filter(node -> java.util.Objects.equals(GridPane.getRowIndex(node), GridPane.getRowIndex(spousePensionLabel))
+                || java.util.Objects.equals(GridPane.getRowIndex(node), GridPane.getRowIndex(spouseSocialSecurityLabel)))
+                .forEach(node -> { node.setVisible(income.hasSpouse()); node.setManaged(income.hasSpouse()); });
 
         totalGuaranteedIncomeLabel.setText(
                 currency.format(

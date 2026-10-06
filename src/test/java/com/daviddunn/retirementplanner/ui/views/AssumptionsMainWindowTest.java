@@ -317,6 +317,7 @@ class AssumptionsMainWindowTest {
             household = control(window, "householdView");
             controller.newPlan();
             var plan = controller.getCurrentPlan();
+            plan.setSpouse(new com.daviddunn.retirementplanner.domain.model.Person("", "", null));
             plan.getHousehold().getPrimaryPerson().setMortalityCategory(MortalityCategory.MALE);
             plan.getHousehold().getSpouse().setMortalityCategory(MortalityCategory.FEMALE);
             plan.getHousehold().getPrimaryPerson().setBirthDate(LocalDate.of(1960, 1, 1));

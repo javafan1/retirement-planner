@@ -17,8 +17,6 @@ import java.util.function.Function;
 
 /** One-dimensional presentation using the existing deterministic search and job lifecycle. */
 final class SinglePersonIntegratedView extends VBox {
-    static final String DEFERRED_SS = "Single-person mortality-weighted Social Security optimization will become available "
-            + "when single-person longevity/mortality analysis is supported. Its expected-PV objective is unchanged.";
     final Button run = new Button("Run Nine Claiming Strategies");
     final Button cancel = new Button("Cancel");
     final Button breakEven = new Button("Break-Even vs Current Plan");
@@ -32,6 +30,8 @@ final class SinglePersonIntegratedView extends VBox {
     private RetirementPlan plan;
     private SinglePersonIntegratedAnalysis completed;
     private boolean current;
+    final SinglePersonMortalityView ssView;
+    final SinglePersonMortalityView weightedView;
 
     SinglePersonIntegratedView(RetirementPlan plan, SocialSecurityAnalyzerJobController jobs) {
         super(10);
@@ -43,13 +43,6 @@ final class SinglePersonIntegratedView extends VBox {
         Label explanation = label("Evaluates primary claiming ages 62–70 through the full retirement plan. "
                 + "Ranked by deterministic After-Tax Estate over the configured plan horizon. "
                 + "This is not mortality-weighted Social Security Only optimization or a recommendation.");
-        var ss = new Tab("Social Security Only", label(DEFERRED_SS));
-        var weighted = new Tab("Longevity-Weighted Integrated", label("Single-person Longevity-Weighted Integrated analysis "
-                + "requires the single-person mortality model, deferred to the longevity/mortality milestone."));
-        var deferred = new TabPane(ss, weighted);
-        deferred.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        deferred.setPrefHeight(95);
-        deferred.setMinHeight(95);
         deathYear.setPromptText("Optional year");
         deathYear.setPrefColumnCount(10);
         deathYear.setMaxWidth(200);
@@ -90,7 +83,7 @@ final class SinglePersonIntegratedView extends VBox {
             if (comparison != null) {
                 var context = new com.daviddunn.retirementplanner.domain.breakeven.BreakEvenContext(
                         com.daviddunn.retirementplanner.app.breakeven.BreakEvenContextFactory.events(comparison), Map.of(),
-                        "Single-person survival probabilities are deferred until the single-person mortality model is supported.");
+                        "The single-person survival overlay is deferred to reporting integration. This comparison uses deterministic completed projections.");
                 var dialog = new BreakEvenAnalysisDialog(comparison, context);
                 dialog.setHeaderText("Selected claiming age " + selected.strategy().primaryRetirementAge()
                         + " (Current) versus frozen plan age " + completed.result().currentPlanBaseline()
@@ -99,15 +92,24 @@ final class SinglePersonIntegratedView extends VBox {
                 dialog.showAndWait();
             }
         });
-        getChildren().addAll(title, explanation, deferred, new HBox(10, deathLabel, deathYear, run, cancel),
+        var deterministic = new VBox(10);
+        deterministic.getChildren().addAll(title, explanation, new HBox(10, deathLabel, deathYear, run, cancel),
                 status, progress, summary, table, details, breakEven,
-                label("Read-only analysis. Single-person PDF export and mortality-weighted analysis remain unavailable."));
+                label("Read-only analysis. Single-person PDF export remains unavailable."));
+        ssView = new SinglePersonMortalityView(plan, jobs, SinglePersonMortalityAnalysis.Mode.SOCIAL_SECURITY_ONLY);
+        weightedView = new SinglePersonMortalityView(plan, jobs, SinglePersonMortalityAnalysis.Mode.INTEGRATED);
+        var tabs = new TabPane(new Tab("Deterministic Integrated", deterministic),
+                new Tab("Social Security Only", ssView), new Tab("Longevity-Weighted Integrated", weightedView));
+        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        getChildren().add(tabs);
         jobs.onChanged(this::refresh);
         refresh();
     }
 
     void invalidate(RetirementPlan changed) {
         plan = changed;
+        ssView.invalidate(changed);
+        weightedView.invalidate(changed);
         current = false;
         jobs.invalidate(SocialSecurityAnalyzerJobController.Change.PLAN);
         status.setText("Inputs changed — run deterministic analysis again.");
@@ -174,6 +176,8 @@ final class SinglePersonIntegratedView extends VBox {
     }
 
     private void refresh() {
+        ssView.refresh();
+        weightedView.refresh();
         boolean busy = jobs.state() == SocialSecurityAnalyzerJobController.State.RUNNING
                 || jobs.state() == SocialSecurityAnalyzerJobController.State.CANCELLING;
         if (busy) progress.show(jobs.progress()); else progress.hide();

@@ -915,7 +915,7 @@ public class ResultsSummaryView extends BorderPane {
                     }
                 });
 
-        Button exportButton =
+        exportButton =
                 new Button("Export");
 
         exportButton.getStyleClass().add(
@@ -1778,7 +1778,7 @@ public class ResultsSummaryView extends BorderPane {
         survivorAgeComboBox.setMaxWidth(
                 Double.MAX_VALUE);
 
-        Label horizonLabel = new Label("Assumed second death / end of household projection");
+        horizonLabel.setText("Assumed second death / end of household projection");
         horizonLabel.setWrapText(true);
         horizonLabel.getStyleClass().add("assumption-label");
         InputHelp.install(projectionLengthField, HelpText.PLANNING_HORIZON);
@@ -2409,6 +2409,9 @@ public class ResultsSummaryView extends BorderPane {
                 BigDecimal.ZERO);
     }
 
+    private Button exportButton;
+    private final Label horizonLabel = new Label();
+
     public void load(
             RetirementPlan plan,
             Projection projection,
@@ -2419,6 +2422,17 @@ public class ResultsSummaryView extends BorderPane {
         setBreakEvenAnalysis(null);
 
         currentPlan = plan;
+        boolean couple = plan.getHousehold().hasSpouse();
+        GridPane deathGrid = (GridPane) deathScenarioComboBox.getParent();
+        deathGrid.getChildren().stream().filter(node -> GridPane.getRowIndex(node) > 0)
+                .forEach(node -> { node.setVisible(couple); node.setManaged(couple); });
+        horizonLabel.setText(couple ? "Assumed second death / end of household projection" : "End of configured projection");
+        if (!couple) InputHelp.install(projectionLengthField, "Number of calendar years in the configured deterministic projection, including the starting year.");
+        else InputHelp.install(projectionLengthField, HelpText.PLANNING_HORIZON);
+        InputHelp.link(horizonLabel, projectionLengthField);
+        planningHorizonValue.setTooltip(new Tooltip(horizonLabel.getText()));
+        exportButton.setDisable(!couple);
+        exportButton.setTooltip(new Tooltip(couple ? "Export the completed projection." : "Single-person PDF and CSV reporting is deferred to the reporting stage."));
         currentProjection = projection;
 
         loadAssumptions(plan);
@@ -3450,12 +3464,7 @@ public class ResultsSummaryView extends BorderPane {
                 plan.getHousehold()
                         .getPrimaryPerson());
 
-        if (plan.getHousehold().getSpouse() != null) {
-
-            addSocialSecuritySource(
-                    plan.getHousehold()
-                            .getSpouse());
-        }
+        plan.getHousehold().spouse().ifPresent(this::addSocialSecuritySource);
     }
 
     private void addSocialSecuritySource(

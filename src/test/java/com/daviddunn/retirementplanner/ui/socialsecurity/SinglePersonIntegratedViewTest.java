@@ -76,7 +76,7 @@ class SinglePersonIntegratedViewTest {
         });
     }
 
-    @Test void dialogUsesSinglePresentationAndDefersMortalityWithoutStartingJobs() throws Exception {
+    @Test void dialogUsesSinglePresentationAndOffersMortalityWithoutStartingJobs() throws Exception {
         fx(() -> {
             try (var coordinator = new SocialSecurityAnalysisJobCoordinator();
                  var jobs = new SocialSecurityAnalyzerJobController(coordinator)) {
@@ -88,7 +88,10 @@ class SinglePersonIntegratedViewTest {
                     assertNotNull(stage.getScene().lookup("#single-claiming-strategies"));
                     assertTrue(stage.getScene().getRoot().lookupAll(".heat-map-cell").isEmpty());
                     assertEquals(0, jobs.generation());
-                    assertTrue(text(stage.getScene().getRoot()).contains("mortality-weighted Social Security optimization"));
+                    var tabs = (TabPane) stage.getScene().getRoot().lookup(".tab-pane");
+                    assertEquals(java.util.List.of("Deterministic Integrated", "Social Security Only", "Longevity-Weighted Integrated"),
+                            tabs.getTabs().stream().map(Tab::getText).toList());
+                    assertInstanceOf(SinglePersonMortalityView.class, tabs.getTabs().get(1).getContent());
                 } finally { stage.close(); }
             }
             return null;

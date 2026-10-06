@@ -52,6 +52,7 @@ public class PersonCard extends GridPane {
 
         ColumnConstraints labelColumn = new ColumnConstraints();
         labelColumn.setHalignment(HPos.RIGHT);
+        labelColumn.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
 
         ColumnConstraints fieldColumn = new ColumnConstraints();
         fieldColumn.setHgrow(Priority.ALWAYS);
@@ -134,15 +135,16 @@ public class PersonCard extends GridPane {
             birthDatePicker.requestFocus();
             throw exception;
         }
-        if (birthDate == null) {
-            birthDatePicker.requestFocus();
-            throw new IllegalArgumentException("Birth date is required.");
+        try {
+            com.daviddunn.retirementplanner.domain.model.PersonInformationValidation.validate(
+                    birthDate, mortalityCategory.getValue());
         }
-        // Person permits empty names and preserves whitespace. Keep those semantics.
-        if (mortalityCategory.getValue() == null) {
-            mortalityCategory.requestFocus();
-            throw new IllegalArgumentException("Mortality category is required.");
+        catch (IllegalArgumentException exception) {
+            if (birthDate == null) birthDatePicker.requestFocus();
+            else mortalityCategory.requestFocus();
+            throw exception;
         }
+        // Preserve the existing optional-name semantics.
         return new Edit(firstNameField.getText(), lastNameField.getText(), birthDate,
                 mortalityCategory.getValue());
     }

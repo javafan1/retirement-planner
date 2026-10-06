@@ -398,7 +398,7 @@ public class ApplicationController {
     public RetirementPlan newPlan() {
 
         currentPlan =
-                RetirementPlanFactory.createEmptyPlan();
+                RetirementPlanFactory.createSinglePersonPlan();
         sourcePlanChanged();
 
         currentFile = null;

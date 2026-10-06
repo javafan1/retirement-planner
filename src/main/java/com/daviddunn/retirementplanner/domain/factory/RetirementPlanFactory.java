@@ -25,6 +25,16 @@ public final class RetirementPlanFactory {
 
     public static RetirementPlan createEmptyPlan() {
 
+        return createEmptyPlan(true);
+    }
+
+    /** Normal New action: no placeholder spouse. Existing couple factory remains compatible. */
+    public static RetirementPlan createSinglePersonPlan() {
+        return createEmptyPlan(false);
+    }
+
+    private static RetirementPlan createEmptyPlan(boolean includeSpouse) {
+
         Person primary =
                 new Person(
                         "",
@@ -32,10 +42,10 @@ public final class RetirementPlanFactory {
                         null);
 
         Person spouse =
-                new Person(
+                includeSpouse ? new Person(
                         "",
                         "",
-                        null);
+                        null) : null;
 
         Household household =
                 new Household(

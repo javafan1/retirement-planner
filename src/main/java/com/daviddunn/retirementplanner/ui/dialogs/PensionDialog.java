@@ -21,6 +21,18 @@ public class PensionDialog extends Dialog<Pension> {
     private final TextField colaRateField;
 
     public PensionDialog(Pension pension) {
+        this(pension, true);
+    }
+
+    public PensionDialog(Pension pension, com.daviddunn.retirementplanner.domain.model.Household household) {
+        this(pension, household.hasSpouse());
+    }
+
+    private PensionDialog(Pension pension, boolean hasSpouse) {
+        if (!hasSpouse && pension != null && (pension.getOwnership() != AccountOwnership.PRIMARY
+                || (pension.getSurvivorMonthlyBenefit() != null && pension.getSurvivorMonthlyBenefit().signum() > 0))) {
+            throw new IllegalArgumentException("A single-person pension cannot require a spouse or survivor benefit.");
+        }
 
         if (pension == null) {
             setTitle("Add Pension");
@@ -38,9 +50,8 @@ public class PensionDialog extends Dialog<Pension> {
          * Income sources belong to an individual,
          * so JOINT is intentionally excluded.
          */
-        ownershipCombo.getItems().addAll(
-                AccountOwnership.PRIMARY,
-                AccountOwnership.SPOUSE);
+        ownershipCombo.getItems().add(AccountOwnership.PRIMARY);
+        if (hasSpouse) ownershipCombo.getItems().add(AccountOwnership.SPOUSE);
 
         ownershipCombo.getSelectionModel().selectFirst();
 
@@ -197,6 +208,16 @@ public class PensionDialog extends Dialog<Pension> {
         InputHelp.install(survivorMonthlyBenefitField, "Monthly dollar benefit payable to the surviving spouse after the pension owner's death, before COLA. Enter an amount, not a percentage; blank means no survivor benefit.");
         InputHelp.install(colaRateField, "Annual pension COLA as a decimal: enter 0.02 for 2%, or 0 for no increase. Compounded from the pension start year for both owner and survivor benefits; independent of General Inflation.");
         InputHelp.linkGridLabels(grid);
+        if (!hasSpouse) {
+            grid.getChildren().stream()
+                    .filter(node -> java.util.Objects.equals(GridPane.getRowIndex(node),
+                            GridPane.getRowIndex(survivorMonthlyBenefitField)))
+                    .forEach(node -> { node.setVisible(false); node.setManaged(false); });
+            InputHelp.install(ownershipCombo, "The actual person receiving this pension. A single-person household has only Primary ownership.");
+            InputHelp.install(endDatePicker, "Optional last date of pension payments. Leave blank for no scheduled termination; modeled death still ends the person's income.");
+            InputHelp.install(colaRateField, "Annual pension COLA as a decimal: enter 0.02 for 2%, or 0 for no increase. Compounded from the pension start year, independently of General Inflation.");
+            InputHelp.linkGridLabels(grid);
+        }
         setResultConverter(button -> {
 
             if (button != ButtonType.OK) {

@@ -24,6 +24,10 @@ public class IncomeSummaryService {
                 retirementPlan.getHousehold()
                         .getPrimaryPerson();
 
+        if (!retirementPlan.getHousehold().hasSpouse()) {
+            return new IncomeSummary(calculateSocialSecurity(primary), calculatePension(primary));
+        }
+
         Person spouse =
                 retirementPlan.getHousehold()
                         .getSpouse();

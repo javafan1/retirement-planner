@@ -300,10 +300,25 @@ public class MainWindow {
         MenuItem comparisonNotice = new MenuItem(
                 com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyComparisonRunService.MISSING_BASELINE);
         comparisonNotice.setDisable(true);
+        MenuItem singlePersonNotice = new MenuItem("Single-person Monte Carlo is deferred to Stage 4B.");
+        singlePersonNotice.setId("single-person-monte-carlo-notice");
+        singlePersonNotice.setDisable(true);
+        analysisMenu.getItems().add(singlePersonNotice);
         Runnable updateComparison = () -> {
+            var plan = controller.getCurrentPlan();
+            boolean couple = plan != null && plan.getHousehold().hasSpouse();
+            monteCarloItem.setDisable(!couple);
+            singlePersonNotice.setVisible(!couple);
             boolean available = com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyComparisonRunService
                     .available(controller.getCurrentPlan());
-            comparisonItem.setDisable(!available);
+            boolean baselineCouple = available && plan.getBaseline().getSnapshot().getHousehold().hasSpouse();
+            comparisonItem.setDisable(!available || !couple || !baselineCouple);
+            if (available && couple && !baselineCouple) {
+                singlePersonNotice.setText("Monte Carlo comparison requires a couple in both Current Plan and Saved Baseline until Stage 4B.");
+                singlePersonNotice.setVisible(true);
+            } else {
+                singlePersonNotice.setText("Single-person Monte Carlo is deferred to Stage 4B.");
+            }
             comparisonNotice.setVisible(!available);
         };
         updateComparison.run();

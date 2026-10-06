@@ -48,7 +48,7 @@ public final class LongevityWeightedIntegratedStrategyComparisonRequest {
         }
         frozenPlan = new RetirementPlanScenarioCopyService().copy(Objects.requireNonNull(sourcePlan));
         if (!frozenPlan.getHousehold().hasSpouse()) {
-            throw new UnsupportedOperationException("Single-person Longevity-Weighted Integrated analysis requires the deferred single-person mortality model.");
+            throw new UnsupportedOperationException("Use SinglePersonMortalityAnalysis for individual weighted analysis; this comparison requires joint mortality scenarios.");
         }
         IntegratedSocialSecurityStrategyEvaluator.requireAdvancedPlan(frozenPlan);
         EstatePresentValueCalculator.validateRate(frozenPlan.getPlanningAssumptions()

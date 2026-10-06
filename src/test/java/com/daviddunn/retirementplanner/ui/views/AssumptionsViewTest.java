@@ -477,6 +477,7 @@ class AssumptionsViewTest {
         final AtomicInteger revisions = new AtomicInteger();
 
         Fixture() {
+            plan().setSpouse(new com.daviddunn.retirementplanner.domain.model.Person("", "", null));
             plan().getHousehold().getPrimaryPerson().setBirthDate(LocalDate.of(1963, 6, 4));
             plan().getHousehold().getSpouse().setBirthDate(LocalDate.of(1965, 2, 28));
             PlanningAssumptions a = assumptions();

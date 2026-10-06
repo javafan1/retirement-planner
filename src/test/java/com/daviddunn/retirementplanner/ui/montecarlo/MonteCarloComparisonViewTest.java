@@ -29,6 +29,8 @@ class MonteCarloComparisonViewTest {
             var window = new MainWindow(); var scene = window.createScene();
             var field = MainWindow.class.getDeclaredField("controller"); field.setAccessible(true);
             var controller = (ApplicationController) field.get(window);
+            controller.newPlan();
+            controller.getCurrentPlan().setSpouse(new com.daviddunn.retirementplanner.domain.model.Person("", "", null));
             controller.getCurrentPlan().setBaseline(null);
             var menu = ((MenuBar) scene.lookup(".menu-bar")).getMenus().stream().filter(m -> m.getText().equals("Analysis")).findFirst().orElseThrow();
             menu.getOnShowing().handle(new javafx.event.Event(Menu.ON_SHOWING));

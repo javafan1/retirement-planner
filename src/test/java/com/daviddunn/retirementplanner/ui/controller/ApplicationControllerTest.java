@@ -54,6 +54,7 @@ class ApplicationControllerTest {
                 .getPrimaryPerson()
                 .setBirthDate(LocalDate.of(1960, 1, 1));
 
+        controller.getCurrentPlan().setSpouse(new com.daviddunn.retirementplanner.domain.model.Person("Spouse", "", null));
         controller.getCurrentPlan()
                 .getHousehold()
                 .getSpouse()

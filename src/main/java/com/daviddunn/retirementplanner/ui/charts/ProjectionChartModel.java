@@ -83,7 +83,7 @@ public record ProjectionChartModel(List<Point> years, List<Claim> claims,
     public static List<Claim> claims(BreakEvenPlanSummary people, int firstYear, int lastYear) {
         List<Claim> claims = new ArrayList<>();
         if (people != null) {
-            for (var person : List.of(people.primary(), people.spouse())) {
+            for (var person : people.hasSpouse() ? List.of(people.primary(), people.spouse()) : List.of(people.primary())) {
                 // Shared immutable election metadata captures source.getStartDate(), exactly as projection does.
                 LocalDate date = person.retirementClaimDate();
                 if (date != null && person.retirementClaimingAge() != null

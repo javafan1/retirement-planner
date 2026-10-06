@@ -213,7 +213,7 @@ public class AccountsView extends BorderPane {
     private void onAdd() {
 
         AccountDialog dialog =
-                new AccountDialog(null);
+                new AccountDialog(null, currentPlan.getHousehold());
 
         Optional<Account> result =
                 dialog.showAndWait();
@@ -239,7 +239,7 @@ public class AccountsView extends BorderPane {
         }
 
         AccountDialog dialog =
-                new AccountDialog(selected);
+                new AccountDialog(selected, currentPlan.getHousehold());
 
         Optional<Account> result =
                 dialog.showAndWait();

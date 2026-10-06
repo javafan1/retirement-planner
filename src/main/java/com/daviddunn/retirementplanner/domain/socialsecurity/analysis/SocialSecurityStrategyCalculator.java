@@ -222,6 +222,22 @@ public final class SocialSecurityStrategyCalculator {
         return java.util.Collections.unmodifiableMap(annual);
     }
 
+    /** Own-only monthly stream for individual valuation; shares the authoritative benefit formula. */
+    public Map<YearMonth, BigDecimal> calculateOwnRetirementMonthly(
+            SocialSecurityClaimingElection election, YearMonth first, YearMonth last, BigDecimal colaRate) {
+        Objects.requireNonNull(first);
+        Objects.requireNonNull(last);
+        if (last.isBefore(first) || Objects.requireNonNull(colaRate).compareTo(BigDecimal.ONE.negate()) <= 0) {
+            throw new IllegalArgumentException("Invalid monthly own-benefit horizon or COLA.");
+        }
+        var prepared = prepare(Objects.requireNonNull(election));
+        Map<YearMonth, BigDecimal> result = new LinkedHashMap<>();
+        for (var month = first; !month.isAfter(last); month = month.plusMonths(1)) {
+            result.put(month, ownBenefit(prepared, month, true, colaRate));
+        }
+        return java.util.Collections.unmodifiableMap(result);
+    }
+
     private PreparedElection prepare(
             SocialSecurityClaimingElection election) {
 

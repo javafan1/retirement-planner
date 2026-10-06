@@ -378,38 +378,41 @@ public class ProjectionYearDetailsPane
                                 value.getSocialSecurityResult()
                                         .primaryOwnBenefit()));
 
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Spouse Own Benefit / Candidate",
-                        year.getSocialSecurityResult()
-                                .spouseOwnBenefit(),
-                        getBaselineValue(value ->
-                                value.getSocialSecurityResult()
-                                        .spouseOwnBenefit()));
+        if (year.getSocialSecurityResult().hasSpouse() || (baselineYear != null && baselineYear.getSocialSecurityResult().hasSpouse())) {
+            row =
+                    addMoneyComparisonRow(
+                            grid,
+                            row,
+                            "Spouse Own Benefit / Candidate",
+                            year.getSocialSecurityResult()
+                                    .spouseOwnBenefit(),
+                            getBaselineValue(value ->
+                                    value.getSocialSecurityResult()
+                                            .spouseOwnBenefit()));
 
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Primary Survivor Candidate",
-                        year.getSocialSecurityResult()
-                                .primarySurvivorCandidate(),
-                        getBaselineValue(value ->
-                                value.getSocialSecurityResult()
-                                        .primarySurvivorCandidate()));
+            row =
+                    addMoneyComparisonRow(
+                            grid,
+                            row,
+                            "Primary Survivor Candidate",
+                            year.getSocialSecurityResult()
+                                    .primarySurvivorCandidate(),
+                            getBaselineValue(value ->
+                                    value.getSocialSecurityResult()
+                                            .primarySurvivorCandidate()));
 
-        row =
-                addMoneyComparisonRow(
-                        grid,
-                        row,
-                        "Spouse Survivor Candidate",
-                        year.getSocialSecurityResult()
-                                .spouseSurvivorCandidate(),
-                        getBaselineValue(value ->
-                                value.getSocialSecurityResult()
-                                        .spouseSurvivorCandidate()));
+            row =
+                    addMoneyComparisonRow(
+                            grid,
+                            row,
+                            "Spouse Survivor Candidate",
+                            year.getSocialSecurityResult()
+                                    .spouseSurvivorCandidate(),
+                            getBaselineValue(value ->
+                                    value.getSocialSecurityResult()
+                                            .spouseSurvivorCandidate()));
+
+        }
 
         row =
                 addTextComparisonRow(
@@ -424,18 +427,17 @@ public class ProjectionYearDetailsPane
                                         .primarySelection()
                                         .getDisplayName()));
 
-        row =
-                addTextComparisonRow(
-                        grid,
-                        row,
-                        "Spouse Selected Benefit",
-                        year.getSocialSecurityResult()
-                                .spouseSelection()
-                                .getDisplayName(),
-                        getBaselineText(value ->
-                                value.getSocialSecurityResult()
-                                        .spouseSelection()
-                                        .getDisplayName()));
+        if (year.getSocialSecurityResult().hasSpouse() || (baselineYear != null && baselineYear.getSocialSecurityResult().hasSpouse())) {
+            row =
+                    addTextComparisonRow(
+                            grid,
+                            row,
+                            "Spouse Selected Benefit",
+                            year.getSocialSecurityResult().hasSpouse() ? year.getSocialSecurityResult().spouseSelection().getDisplayName() : "Not applicable",
+                            getBaselineText(value ->
+                                    value.getSocialSecurityResult().hasSpouse() ? value.getSocialSecurityResult().spouseSelection().getDisplayName() : "Not applicable"));
+
+        }
 
         row =
                 addMoneyComparisonRow(
@@ -485,9 +487,11 @@ public class ProjectionYearDetailsPane
         row = addMoneyComparisonRow(
                 grid, row, "Primary Roth Conversion",
                 year.getPrimaryRothConversion(), null);
-        row = addMoneyComparisonRow(
-                grid, row, "Spouse Roth Conversion",
-                year.getSpouseRothConversion(), null);
+        if (year.getSocialSecurityResult().hasSpouse()) {
+            row = addMoneyComparisonRow(
+                    grid, row, "Spouse Roth Conversion",
+                    year.getSpouseRothConversion(), null);
+        }
 
         row = addSubsectionHeader(
                 grid, row, "Required Minimum Distributions");

@@ -26,7 +26,7 @@ public final class BreakEvenContextFactory {
         var c = result.currentAssumptions();
         if (!b.hasSpouse() || !c.hasSpouse()) {
             return new BreakEvenContext(events, Map.of(),
-                    "Single-person survival probabilities require the deferred single-person mortality model. Deterministic break-even amounts are available.");
+                    "The single-person survival overlay is deferred to reporting integration. Deterministic break-even amounts are available.");
         }
         if (!sameMortality(b.primary(), c.primary()) || !sameMortality(b.spouse(), c.spouse())) {
             return new BreakEvenContext(events, Map.of(), "Survival probability unavailable because the compared plans use different mortality assumptions (birth dates or mortality categories).");

@@ -20,6 +20,8 @@ import javafx.application.Platform;
 
 public class AccountDialog extends Dialog<Account> {
 
+    private final boolean hasSpouse;
+
     private final TextField nameField;
     private final ComboBox<AccountType> typeCombo;
     private final ComboBox<AccountOwnership> ownershipCombo;
@@ -36,6 +38,18 @@ public class AccountDialog extends Dialog<Account> {
             beneficiaryRelationshipCombo;
 
     public AccountDialog(Account account) {
+        this(account, true);
+    }
+
+    public AccountDialog(Account account, com.daviddunn.retirementplanner.domain.model.Household household) {
+        this(account, household.hasSpouse());
+    }
+
+    private AccountDialog(Account account, boolean hasSpouse) {
+        this.hasSpouse = hasSpouse;
+        if (!hasSpouse && account != null && account.getOwnership() != AccountOwnership.PRIMARY) {
+            throw new IllegalArgumentException("Single-person accounts require Primary ownership; ownership is not reassigned automatically.");
+        }
 
         if (account == null) {
             setTitle("Add Account");
@@ -352,7 +366,7 @@ public class AccountDialog extends Dialog<Account> {
                 ownershipCombo.getValue();
 
         List<AccountOwnership> allowedOwnerships =
-                type != null &&
+                !hasSpouse ? List.of(AccountOwnership.PRIMARY) : type != null &&
                         type.requiresIndividualOwnership()
                         ? List.of(
                                 AccountOwnership.PRIMARY,

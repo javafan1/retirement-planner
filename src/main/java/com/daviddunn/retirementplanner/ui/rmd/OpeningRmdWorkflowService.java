@@ -85,19 +85,8 @@ public final class OpeningRmdWorkflowService {
 
         int distributionYear = getDistributionYear(plan);
 
-        return List.of(
-                getApplicableAccounts(
-                        plan,
-                        plan.getHousehold().getPrimaryPerson(),
-                        AccountOwnership.PRIMARY,
-                        distributionYear),
-                getApplicableAccounts(
-                        plan,
-                        plan.getHousehold().getSpouse(),
-                        AccountOwnership.SPOUSE,
-                        distributionYear))
-                .stream()
-                .flatMap(List::stream)
+        return plan.getHousehold().peopleByOwner().entrySet().stream()
+                .flatMap(entry -> getApplicableAccounts(plan, entry.getValue(), entry.getKey(), distributionYear).stream())
                 .toList();
     }
 

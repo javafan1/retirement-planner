@@ -21,9 +21,7 @@ public final class ProjectionReadiness {
 
         if (household == null
                 || household.getPrimaryPerson() == null
-                || household.getSpouse() == null
-                || household.getPrimaryPerson().getBirthDate() == null
-                || household.getSpouse().getBirthDate() == null) {
+                || household.members().stream().anyMatch(person -> person.getBirthDate() == null)) {
 
             return false;
         }

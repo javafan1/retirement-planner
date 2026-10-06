@@ -13,6 +13,19 @@ public final class IncomeSummary {
 
     private final BigDecimal totalGuaranteedMonthlyIncome;
 
+    /** A primary-only summary has absent spouse fields, never fabricated income. */
+    public IncomeSummary(BigDecimal primarySocialSecurityMonthly, BigDecimal primaryPensionMonthly) {
+        this.primarySocialSecurityMonthly = Objects.requireNonNull(primarySocialSecurityMonthly);
+        this.primaryPensionMonthly = Objects.requireNonNull(primaryPensionMonthly);
+        this.spouseSocialSecurityMonthly = null;
+        this.spousePensionMonthly = null;
+        this.totalGuaranteedMonthlyIncome = primarySocialSecurityMonthly.add(primaryPensionMonthly);
+    }
+
+    public boolean hasSpouse() {
+        return spouseSocialSecurityMonthly != null;
+    }
+
     public IncomeSummary(
             BigDecimal primarySocialSecurityMonthly,
             BigDecimal spouseSocialSecurityMonthly,

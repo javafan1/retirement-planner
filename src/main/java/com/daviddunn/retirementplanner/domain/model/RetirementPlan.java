@@ -14,7 +14,7 @@ import java.util.Objects;
 
 public class RetirementPlan {
 
-    private final Household household;
+    private Household household;
     private final AccountPortfolio accountPortfolio;
 
     private PlanningAssumptions planningAssumptions;
@@ -115,6 +115,43 @@ public class RetirementPlan {
 
     public Household getHousehold() {
         return household;
+    }
+
+    /** Explicit membership edit. Never deletes or reassigns financial records. */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void setSpouse(Person spouse) {
+        if (household.spouse().orElse(null) == spouse) return;
+        if (household.hasSpouse()) {
+            Person existing = household.getSpouse();
+            List<String> dependencies = new ArrayList<>();
+            existing.getAccounts().forEach(account -> dependencies.add("account " + account.getName()));
+            existing.getIncomeSources().forEach(income -> dependencies.add("income " + income.getName()));
+            household.getPrimaryPerson().getAccounts().stream()
+                    .filter(account -> account.getOwnership() != AccountOwnership.PRIMARY)
+                    .forEach(account -> dependencies.add("account " + account.getName()));
+            accountPortfolio.getAccounts().stream()
+                    .filter(account -> account.getOwnership() != AccountOwnership.PRIMARY)
+                    .forEach(account -> dependencies.add("account " + account.getName()));
+            household.getPrimaryPerson().getIncomeSources().stream()
+                    .filter(income -> income instanceof com.daviddunn.retirementplanner.domain.income.Pension)
+                    .map(income -> (com.daviddunn.retirementplanner.domain.income.Pension) income)
+                    .filter(pension -> pension.getSurvivorMonthlyBenefit() != null
+                            && pension.getSurvivorMonthlyBenefit().signum() > 0)
+                    .forEach(pension -> dependencies.add("survivor pension " + pension.getName()));
+            if (planningAssumptions.getDeathScenarioAssumptions().getDeathScenario() != DeathScenario.BOTH_SURVIVE) {
+                dependencies.add("couple death scenario");
+            }
+            if (!dependencies.isEmpty()) {
+                throw new IllegalArgumentException("Cannot remove or replace spouse while these records depend on them: "
+                        + String.join(", ", dependencies) + ". Update these records first.");
+            }
+        }
+        Household replacement = new Household(household.getPrimaryPerson(), spouse);
+        accountPortfolio.getAccounts().forEach(account ->
+                replacement.validateOwnership(account.getOwnership(), "account " + account.getName()));
+        household.getExpenses().forEach(replacement::addExpense);
+        // Do not alter membership of a previously captured baseline household.
+        household = replacement;
     }
 
     public PlanningAssumptions getPlanningAssumptions() {

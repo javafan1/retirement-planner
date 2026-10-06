@@ -65,6 +65,9 @@ public class AssumptionsView extends VBox {
     /*
      * Tax assumptions.
      */
+    private final ComboBox<com.daviddunn.retirementplanner.domain.rules.FilingStatus> filingStatusComboBox = new ComboBox<>();
+    private final Label horizonLabel = new Label();
+    private final HelpIcon horizonHelp = new HelpIcon(HelpText.PLANNING_HORIZON);
     private final TextField federalBracketGrowthField;
     private final TextField standardDeductionGrowthField;
     private final TextField futureFederalMarginalRateAdjustmentField;
@@ -229,13 +232,13 @@ public class AssumptionsView extends VBox {
                 1,
                 row++);
 
-        Label horizonLabel = new Label("Assumed second death / end of household projection:");
+        horizonLabel.setText("Assumed second death / end of household projection:");
         grid.add(
                 horizonLabel,
                 0,
                 row);
 
-        grid.add(new HelpIcon(HelpText.PLANNING_HORIZON), 1, row);
+        grid.add(horizonHelp, 1, row);
         grid.add(new HBox(8, projectionLengthField, new Label("years")), 2, row++);
 
         grid.add(
@@ -405,6 +408,12 @@ public class AssumptionsView extends VBox {
                 3,
                 1);
 
+        filingStatusComboBox.getItems().setAll(com.daviddunn.retirementplanner.domain.rules.FilingStatus.values());
+        filingStatusComboBox.setId("filing-status");
+        InputHelp.install(filingStatusComboBox, "Configured tax filing status used for tax and Medicare/IRMAA calculations. Select it independently of whether this plan includes a spouse. Existing modeled survivor-year transitions still apply to couple death scenarios.");
+        grid.add(new Label("Filing Status:"), 0, row);
+        grid.add(filingStatusComboBox, 1, row++);
+        filingStatusComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
         grid.add(
                 new Label(
                         "Federal Tax Bracket Growth (%):"),
@@ -531,6 +540,7 @@ public class AssumptionsView extends VBox {
 
         currentPlan = Objects.requireNonNull(plan);
         loading = true;
+        updateHouseholdPresentation();
 
         PlanningAssumptions assumptions =
                 plan.getPlanningAssumptions();
@@ -620,6 +630,7 @@ public class AssumptionsView extends VBox {
         /*
          * Tax assumptions.
          */
+        filingStatusComboBox.setValue(taxAssumptions.getFilingStatus());
         federalBracketGrowthField.setText(
                 toPercent(
                         taxAssumptions
@@ -672,6 +683,22 @@ public class AssumptionsView extends VBox {
         updateDirty();
     }
 
+    private void updateHouseholdPresentation() {
+        boolean couple = currentPlan.getHousehold().hasSpouse();
+        GridPane inputGrid = (GridPane) deathScenarioComboBox.getParent();
+        int firstCoupleRow = GridPane.getRowIndex(deathScenarioComboBox);
+        int lastCoupleRow = GridPane.getRowIndex(postDeathExpenseFactorField);
+        inputGrid.getChildren().stream().filter(node -> GridPane.getRowIndex(node) != null
+                && GridPane.getRowIndex(node) >= firstCoupleRow && GridPane.getRowIndex(node) <= lastCoupleRow)
+                .forEach(node -> { node.setVisible(couple); node.setManaged(couple); });
+        horizonLabel.setText(couple ? "Assumed second death / end of household projection:" : "Configured projection length:");
+        String horizonHelpText = couple ? HelpText.PLANNING_HORIZON
+                : "Number of calendar years in the configured deterministic projection, including the starting year, which may be partial. Mortality-weighted analyses use their own lifetime scenarios.";
+        horizonHelp.setTooltip(HelpIcon.createTooltip(horizonHelpText));
+        InputHelp.install(projectionLengthField, horizonHelpText);
+        InputHelp.link(horizonLabel, projectionLengthField);
+    }
+
     public boolean save(RetirementPlan plan) {
         return plan == currentPlan && applyChanges();
     }
@@ -681,6 +708,7 @@ public class AssumptionsView extends VBox {
             load(plan);
         }
         else {
+            updateHouseholdPresentation();
             updateDirty();
             updateOpeningRmdButtonVisibility();
         }
@@ -787,11 +815,13 @@ public class AssumptionsView extends VBox {
         BigDecimal state = percent(stateIncomeTaxRateField, "State income tax rate");
         BigDecimal local = percent(localIncomeTaxRateField, "Local income tax rate");
         BigDecimal heir = percent(estimatedHeirTaxRateField, "Estimated heir tax rate");
+        var filingStatus = read(filingStatusComboBox, "Filing status", () ->
+                Objects.requireNonNull(filingStatusComboBox.getValue(), "A selection is required."));
         TaxAssumptions tax = read(estimatedHeirTaxRateField, "Estimated heir tax rate", () ->
                 new TaxAssumptions(bracket, deduction, state, local,
-                        applied.getTaxAssumptions().getFilingStatus(), heir,
+                        filingStatus, heir,
                         future.adjustment(), future.effectiveYear()));
-        DeathScenario scenario = read(deathScenarioComboBox, "Death scenario", () ->
+        DeathScenario scenario = !currentPlan.getHousehold().hasSpouse() ? DeathScenario.BOTH_SURVIVE : read(deathScenarioComboBox, "Death scenario", () ->
                 Objects.requireNonNull(deathScenarioComboBox.getValue(), "A selection is required."));
         DeathScenarioAssumptions appliedDeath = applied.getDeathScenarioAssumptions();
         boolean active = scenario != DeathScenario.BOTH_SURVIVE;
@@ -867,7 +897,7 @@ public class AssumptionsView extends VBox {
         return Arrays.<Object>asList(assumptions.getProjectionStartDate(), assumptions.getProjectionLengthYears(),
                 economic.getExpectedAnnualInvestmentReturn(), economic.getGeneralInflationRate(),
                 economic.getHealthcareInflationRate(), economic.getSocialSecurityColaRate(),
-                tax.getFederalTaxBracketGrowthRate(), tax.getStandardDeductionGrowthRate(),
+                tax.getFilingStatus(), tax.getFederalTaxBracketGrowthRate(), tax.getStandardDeductionGrowthRate(),
                 tax.getFutureFederalMarginalRateAdjustment(), tax.getFutureFederalMarginalRateEffectiveYear(),
                 tax.getStateIncomeTaxRate(), tax.getLocalIncomeTaxRate(), tax.getEstimatedHeirTaxRateOnTaxDeferredAssets(),
                 death.getDeathScenario(), death.getDeathYear(), death.getSurvivorClaimingAge(),

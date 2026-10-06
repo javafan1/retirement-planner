@@ -19,6 +19,7 @@ class BreakEvenControllerTest {
     @Test void twentyFiveYearSeventySixtyTwoVsSeventySeventyContextDoesNotChangeAnyMetric() {
         var controller = new ApplicationController();
         var plan = controller.getCurrentPlan();
+        plan.setSpouse(new Person("", "", null));
         var primary = plan.getHousehold().getPrimaryPerson();
         var spouse = plan.getHousehold().getSpouse();
         primary.setFirstName("David"); primary.setBirthDate(LocalDate.of(1963, 6, 4));
@@ -73,6 +74,7 @@ class BreakEvenControllerTest {
     @Test void normalComparisonWorkflowCapturesIndependentElectionsAndDifferentHorizons() {
         ApplicationController controller = new ApplicationController();
         var plan = controller.getCurrentPlan();
+        plan.setSpouse(new Person("", "", null));
         plan.getHousehold().getPrimaryPerson().setFirstName("David");
         plan.getHousehold().getPrimaryPerson().setBirthDate(LocalDate.of(1963, 6, 4));
         plan.getHousehold().getPrimaryPerson().addIncomeSource(new SocialSecurityIncome(
@@ -127,6 +129,7 @@ class BreakEvenControllerTest {
         });
         assertNull(controller.getCachedBreakEvenAnalysis());
         RetirementPlan plan = controller.getCurrentPlan();
+        plan.setSpouse(new Person("", "", null));
         plan.getHousehold().getPrimaryPerson().setBirthDate(LocalDate.of(1963, 6, 4));
         plan.getHousehold().getSpouse().setBirthDate(LocalDate.of(1965, 2, 28));
         plan.getHousehold().getPrimaryPerson().setMortalityCategory(MortalityCategory.MALE);
@@ -172,6 +175,7 @@ class BreakEvenControllerTest {
     @Test void changingPlanCannotReusePreviousBaselineCache() throws Exception {
         ApplicationController controller = new ApplicationController();
         var plan = controller.getCurrentPlan();
+        plan.setSpouse(new Person("", "", null));
         plan.setBaseline(ProjectionBaselineFactory.create(plan, "Old baseline"));
         set(controller, "cachedBaselineIdentity", plan.getBaseline());
         set(controller, "baselineProjection", new Projection());
