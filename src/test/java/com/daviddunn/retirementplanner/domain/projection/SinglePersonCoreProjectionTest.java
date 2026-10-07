@@ -253,12 +253,13 @@ class SinglePersonCoreProjectionTest {
     }
 
     @Test
-    void deferredMonteCarloAndReportsFailBeforeWriting(@org.junit.jupiter.api.io.TempDir Path directory) throws Exception {
+    void monteCarloWorksWhileReportsRemainDeferred(@org.junit.jupiter.api.io.TempDir Path directory) throws Exception {
         var plan = plan(false, FilingStatus.SINGLE);
         var projection = new ProjectionEngine().project(plan);
         var settings = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSettings(1, 417, BigDecimal.ZERO, BigDecimal.ZERO);
-        assertThrows(UnsupportedOperationException.class,
-                () -> new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloAnalyzer().analyze(plan, settings));
+        var monteCarlo = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloAnalyzer().analyze(plan, settings);
+        assertEquals(1, monteCarlo.completedCount());
+        assertFalse(plan.getHousehold().hasSpouse());
         Path csv = directory.resolve("single.csv");
         assertThrows(UnsupportedOperationException.class,
                 () -> new com.daviddunn.retirementplanner.app.export.ProjectionCsvExporter().export(projection, List.of(), csv));

@@ -23,28 +23,29 @@ final class MonteCarloMortalityAccumulator {
     }
 
     static Aggregates reduce(int firstYear, List<WorldOutcome> outcomes) {
+        boolean couple = outcomes.getFirst().lifetime().hasSpouse();
+        if (outcomes.stream().anyMatch(o -> o.lifetime().hasSpouse() != couple)) throw new IllegalArgumentException("Mixed household compositions.");
         int lastYear = outcomes.stream().mapToInt(WorldOutcome::finalLivingFinancialYear).max().orElseThrow();
         var annual = new TreeMap<Integer, MonteCarloMortalityAnnualResult>();
         for (int year = firstYear; year <= lastYear; year++) {
             var samples = new ArrayList<BigDecimal>(outcomes.size());
+            int living = 0;
             int bothAlive = 0;
             int primaryOnly = 0;
             int spouseOnly = 0;
             int deceased = 0;
             int failed = 0;
             for (var outcome : outcomes) {
-                boolean primaryAlive = year < outcome.lifetimeScenario().primaryDeathYear().orElseThrow().getValue();
-                boolean spouseAlive = year < outcome.lifetimeScenario().spouseDeathYear().orElseThrow().getValue();
-                if (!primaryAlive && !spouseAlive) {
+                var lifetime = outcome.lifetime();
+                if (!lifetime.living(year)) {
                     deceased++;
                     continue;
                 }
-                if (primaryAlive && spouseAlive) {
-                    bothAlive++;
-                } else if (primaryAlive) {
-                    primaryOnly++;
-                } else {
-                    spouseOnly++;
+                living++;
+                if (lifetime instanceof MonteCarloLifetime.Couple pair) {
+                    if (pair.primary().alive(year) && pair.spouse().alive(year)) bothAlive++;
+                    else if (pair.primary().alive(year)) primaryOnly++;
+                    else spouseOnly++;
                 }
                 var observation = outcome.annualInvestableAssets().get(year);
                 if (observation != null) {
@@ -57,8 +58,8 @@ final class MonteCarloMortalityAccumulator {
                 }
             }
             annual.put(year, new MonteCarloMortalityAnnualResult(year, outcomes.size(),
-                    bothAlive + primaryOnly + spouseOnly, samples.size(), failed, deceased,
-                    bothAlive, primaryOnly, spouseOnly, MonteCarloPercentiles.of(samples)));
+                    living, samples.size(), failed, deceased,
+                    couple ? Optional.of(new MonteCarloMortalityAnnualResult.CouplePopulation(bothAlive, primaryOnly, spouseOnly)) : Optional.empty(), MonteCarloPercentiles.of(samples)));
         }
 
         var assets = new ArrayList<BigDecimal>();

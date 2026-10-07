@@ -15,13 +15,20 @@ import java.util.Optional;
 public record MonteCarloWorld(
         int scenarioIndex,
         ProjectionEconomicPath economicPath,
-        HouseholdLifetimeScenario lifetimeScenario,
+        MonteCarloLifetime lifetime,
         Optional<ProjectionInflationPath> inflationPath) {
 
     public MonteCarloWorld(int scenarioIndex, ProjectionEconomicPath economicPath,
             HouseholdLifetimeScenario lifetimeScenario) {
-        this(scenarioIndex, economicPath, lifetimeScenario, Optional.empty());
+        this(scenarioIndex, economicPath, MonteCarloLifetime.couple(lifetimeScenario), Optional.empty());
     }
+
+    public MonteCarloWorld(int scenarioIndex, ProjectionEconomicPath economicPath,
+            HouseholdLifetimeScenario timing, Optional<ProjectionInflationPath> inflationPath) {
+        this(scenarioIndex, economicPath, MonteCarloLifetime.couple(timing), inflationPath);
+    }
+
+    public HouseholdLifetimeScenario lifetimeScenario() { return lifetime.projectionTiming(); }
 
     public MonteCarloWorld {
         Objects.requireNonNull(inflationPath, "Inflation path optional is required.");
@@ -29,10 +36,7 @@ public record MonteCarloWorld(
             throw new IllegalArgumentException("Scenario index cannot be negative.");
         }
         Objects.requireNonNull(economicPath, "Economic path is required.");
-        Objects.requireNonNull(lifetimeScenario, "Lifetime scenario is required.");
-        if (lifetimeScenario.primaryDeathYear().isEmpty()
-                || lifetimeScenario.spouseDeathYear().isEmpty()) {
-            throw new IllegalArgumentException("Mortality worlds require both household death years.");
-        }
+        Objects.requireNonNull(lifetime, "Lifetime is required.");
+        lifetime.terminalDeathYear();
     }
 }

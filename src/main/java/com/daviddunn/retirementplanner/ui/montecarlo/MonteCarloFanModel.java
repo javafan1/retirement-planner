@@ -37,7 +37,7 @@ public record MonteCarloFanModel(
         return new MonteCarloFanModel(result.annualResults().values().stream()
                 .map(annual -> new Year(annual.year(), annual.investableAssets(), Optional.empty(), Optional.of(annual)))
                 .toList(), result.requestedSimulationCount(), ProjectionChartModel.empty(), MonteCarloMode.LONGEVITY_ADJUSTED,
-                people.primary().name(), people.spouse().name());
+                people.primary().name(), people.hasSpouse() ? people.spouse().name() : "");
     }
 
     public static MonteCarloFanModel from(MonteCarloAnalysisResult result, ProjectionChartModel context) {

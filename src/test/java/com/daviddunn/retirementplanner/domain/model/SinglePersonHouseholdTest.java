@@ -116,7 +116,7 @@ class SinglePersonHouseholdTest {
     }
 
     @Test
-    void absentSpouseInputsAndMonteCarloMortalityRemainExplicitlyUnsupported() {
+    void absentSpouseInputsRemainInvalidButIndividualMortalityNeedsOnlyPrimaryCategory() {
         var plan = new RetirementPlan(new Household(primary()), new AccountPortfolio(), TestDataFactory.planningAssumptions());
         var engine = new ProjectionEngine();
         var context = ProjectionEvaluationContext.withLifetimeScenario(HouseholdLifetimeScenario.bothSurvive()).withSurvivorClaimingAge(67);
@@ -129,9 +129,13 @@ class SinglePersonHouseholdTest {
                 1, 417, BigDecimal.ZERO, BigDecimal.ZERO);
         var session = com.daviddunn.retirementplanner.domain.socialsecurity.analysis.LongevitySessionSettings
                 .defaults(LocalDate.of(2026, 1, 1));
-        assertTrue(assertThrows(UnsupportedOperationException.class,
+        assertTrue(assertThrows(IllegalArgumentException.class,
                 () -> new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloMortalityRequest(plan, settings, session))
-                .getMessage().contains("MonteCarloMortalityRequest"));
+                .getMessage().contains("Primary mortality category"));
+        plan.getHousehold().getPrimaryPerson().setMortalityCategory(MortalityCategory.MALE);
+        var request = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloMortalityRequest(plan, settings, session);
+        assertFalse(request.hasSpouse());
+        assertTrue(request.survivorClaimingAge().isEmpty());
     }
 
     @Test

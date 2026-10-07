@@ -51,8 +51,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         Objects.requireNonNull(cancellation).throwIfCancellationRequested();
         var a = request.strategyA().copyForRun();
         var b = request.strategyB().copyForRun();
-        a.getHousehold().requireSpouse("MonteCarloStrategyComparisonAnalyzer");
-        b.getHousehold().requireSpouse("MonteCarloStrategyComparisonAnalyzer");
+
         validate(a, request.assumptions());
         validate(b, request.assumptions());
         validateSamePeople(a, b);
@@ -77,7 +76,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
             cancellation.throwIfCancellationRequested();
             var outcomeB = evaluateSide(b, world, request, Stage.STRATEGY_B);
             cancellation.throwIfCancellationRequested();
-            pairs.add(new MonteCarloPairedOutcome(index, world.lifetimeScenario(), outcomeA, outcomeB));
+            pairs.add(new MonteCarloPairedOutcome(index, world.lifetime(), outcomeA, outcomeB));
             if ((index + 1) % interval == 0 || index + 1 == count) {
                 report(progress, index + 1, count);
             }
@@ -117,9 +116,9 @@ public final class MonteCarloStrategyComparisonAnalyzer {
                         opening.nominalInvestableAssets().add(nonInvestable), opening.nominalAfterTaxEstate(),
                         BigDecimal.ZERO)), Optional.empty());
             }
-            context = ProjectionEvaluationContext.withLifetimeScenario(world.lifetimeScenario())
-                    .withExactEndingYear(last).withSurvivorClaimingAge(
-                            plan.getPlanningAssumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge());
+            context = ProjectionEvaluationContext.withLifetimeScenario(world.lifetimeScenario()).withExactEndingYear(last);
+            if (world.lifetime().hasSpouse()) context = context.withSurvivorClaimingAge(
+                    plan.getPlanningAssumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge());
         }
         if (world.inflationPath().isPresent()) {
             context = context.withInflationPath(world.inflationPath().orElseThrow());
@@ -154,17 +153,17 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         if (assumptions instanceof MonteCarloStrategyComparisonRequest.Fixed fixed) {
             return fixed.endingYear();
         }
-        return Math.max(world.lifetimeScenario().primaryDeathYear().orElseThrow().getValue(),
-                world.lifetimeScenario().spouseDeathYear().orElseThrow().getValue()) - 1;
+        return world.lifetime().terminalDeathYear() - 1;
     }
 
     private static void validateWorld(MonteCarloComparisonWorld world, int index,
             MonteCarloStrategyComparisonRequest.Assumptions assumptions) {
+        if (world.lifetime().hasSpouse() != assumptions.hasSpouse()) throw new IllegalArgumentException("World composition must match request.");
         if (world.scenarioIndex() != index) {
             throw new IllegalArgumentException("World scenario index does not match requested index.");
         }
         if (assumptions instanceof MonteCarloStrategyComparisonRequest.Fixed fixed
-                && !world.lifetimeScenario().equals(fixed.lifetimeScenario())) {
+                && !world.lifetime().equals(fixed.lifetime())) {
             throw new IllegalArgumentException("Fixed world death timing must match the comparison request.");
         }
         int last = endingYear(world, assumptions);
@@ -180,6 +179,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         if (!plan.getPlanningAssumptions().getProjectionStartDate().equals(assumptions.start())) {
             throw new IllegalArgumentException("Each strategy must match the comparison start date.");
         }
+        if (plan.getHousehold().hasSpouse() != assumptions.hasSpouse()) throw new IllegalArgumentException("Strategy composition must match request.");
         var death = plan.getPlanningAssumptions().getDeathScenarioAssumptions();
         if (assumptions instanceof MonteCarloStrategyComparisonRequest.Fixed fixed) {
             var primary = death.getDeathScenario() == DeathScenario.PRIMARY_DIES
@@ -191,10 +191,14 @@ public final class MonteCarloStrategyComparisonAnalyzer {
             }
         } else {
             var mortality = ((MonteCarloStrategyComparisonRequest.Longevity) assumptions).mortality();
-            if (!new SocialSecurityProjectionIncomeProvider().supportsAdvancedPath(plan)) {
-                throw new IllegalArgumentException("Longevity comparison requires the advanced two-person Social Security path.");
+            if (plan.getHousehold().hasSpouse() && !new SocialSecurityProjectionIncomeProvider().supportsAdvancedPath(plan)) {
+                throw new IllegalArgumentException("Longevity comparison requires the advanced Social Security path.");
             }
             var household = plan.getHousehold();
+            if (!household.hasSpouse()) {
+                MonteCarloAnalyzer.validateMortalityPreparation(plan, mortality);
+                return;
+            }
             var categories = PersonMortalityCategories.from(household);
             if (!household.getPrimaryPerson().getBirthDate().equals(mortality.primaryBirthDate())
                     || !household.getSpouse().getBirthDate().equals(mortality.spouseBirthDate())
@@ -214,7 +218,8 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         var ah = a.getHousehold();
         var bh = b.getHousehold();
         if (!samePerson(ah.getPrimaryPerson(), bh.getPrimaryPerson())
-                || !samePerson(ah.getSpouse(), bh.getSpouse())) {
+                || ah.hasSpouse() != bh.hasSpouse()
+                || ah.hasSpouse() && !samePerson(ah.getSpouse(), bh.getSpouse())) {
             throw new IllegalArgumentException("Strategies must describe the same household demographics.");
         }
     }

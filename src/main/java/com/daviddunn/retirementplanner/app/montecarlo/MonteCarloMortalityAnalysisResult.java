@@ -15,7 +15,7 @@ import java.util.TreeMap;
 
 /**
  * Authoritative mortality aggregates plus compact execution observations.
- * All four terminal distributions are conditional on funding through second
+ * All four terminal distributions are conditional on funding through the last present person's
  * death. Values remain nominal future dollars at each world's own terminal
  * balance date, not a common valuation date; no discount or inflation adjustment
  * is applied. Lifetime taxes are the engine's nominal lifetime total. Reproduction requires
@@ -50,9 +50,10 @@ public final class MonteCarloMortalityAnalysisResult {
         if (outcomes.size() != request.settings().simulationCount()) {
             throw new IllegalArgumentException("Every requested mortality world needs an outcome.");
         }
-        int first = request.longevityAssumptions().mortalityBaseDate().getYear();
+        int first = request.conditioningDate().getYear();
         for (int index = 0; index < outcomes.size(); index++) {
             var outcome = outcomes.get(index);
+            if (outcome.lifetime().hasSpouse() != request.hasSpouse()) throw new IllegalArgumentException("Outcome composition must match request.");
             if (outcome.scenarioIndex() != index) {
                 throw new IllegalArgumentException("World outcomes must retain scenario index order.");
             }
@@ -90,7 +91,7 @@ public final class MonteCarloMortalityAnalysisResult {
 
     /** Projection start year; preparation requires mortality conditioning to match the plan start. */
     public int firstReportingYear() {
-        return request.longevityAssumptions().mortalityBaseDate().getYear();
+        return request.conditioningDate().getYear();
     }
 
     /** Latest sampled final living year, absent when every world ends at opening. No nominal-horizon cap. */
@@ -98,7 +99,7 @@ public final class MonteCarloMortalityAnalysisResult {
         return aggregates.annualResults().keySet().stream().max(Integer::compareTo);
     }
 
-    /** Inclusive common reporting range, empty only when every world has opening-date second death. */
+    /** Inclusive common reporting range, empty only when every world has opening-date terminal death. */
     public Map<Integer, MonteCarloMortalityAnnualResult> annualResults() {
         return aggregates.annualResults();
     }
@@ -127,7 +128,7 @@ public final class MonteCarloMortalityAnalysisResult {
         return aggregates.latestSuccessfulTerminalBalanceDate();
     }
 
-    /** Counts by actual balance-date year, including the opening date for opening second death. */
+    /** Counts by actual balance-date year, including the opening date for opening terminal death. */
     public Map<Integer, Integer> successfulTerminalYearCounts() {
         return aggregates.successfulTerminalYearCounts();
     }
@@ -179,17 +180,23 @@ public final class MonteCarloMortalityAnalysisResult {
     /** No terminal metric (including lifetime taxes) exists for a funding-failed world. */
     public record WorldOutcome(
             int scenarioIndex,
-            HouseholdLifetimeScenario lifetimeScenario,
+            MonteCarloLifetime lifetime,
             Map<Integer, BigDecimal> annualInvestableAssets,
             Optional<TerminalOutcome> terminal,
             Optional<FundingFailure> fundingFailure) {
 
+        public WorldOutcome(int scenarioIndex, HouseholdLifetimeScenario timing, Map<Integer, BigDecimal> annual,
+                Optional<TerminalOutcome> terminal, Optional<FundingFailure> failure) {
+            this(scenarioIndex, MonteCarloLifetime.couple(timing), annual, terminal, failure);
+        }
+
+        public HouseholdLifetimeScenario lifetimeScenario() { return lifetime.projectionTiming(); }
+
         public WorldOutcome {
-            Objects.requireNonNull(lifetimeScenario);
+            Objects.requireNonNull(lifetime);
             Objects.requireNonNull(terminal);
             Objects.requireNonNull(fundingFailure);
-            if (scenarioIndex < 0 || lifetimeScenario.primaryDeathYear().isEmpty()
-                    || lifetimeScenario.spouseDeathYear().isEmpty()) {
+            if (scenarioIndex < 0) {
                 throw new IllegalArgumentException("An indexed complete lifetime is required.");
             }
             if (terminal.isPresent() == fundingFailure.isPresent()) {
@@ -197,20 +204,27 @@ public final class MonteCarloMortalityAnalysisResult {
             }
             annualInvestableAssets = Collections.unmodifiableMap(new TreeMap<>(annualInvestableAssets));
             annualInvestableAssets.values().forEach(Objects::requireNonNull);
-            int secondDeath = Math.max(lifetimeScenario.primaryDeathYear().orElseThrow().getValue(),
-                    lifetimeScenario.spouseDeathYear().orElseThrow().getValue());
+            int secondDeath = lifetime.terminalDeathYear();
             if (fundingFailure.isPresent() && fundingFailure.orElseThrow().calendarYear() >= secondDeath) {
-                throw new IllegalArgumentException("Funding failure must precede second death.");
+                throw new IllegalArgumentException("Funding failure must precede terminal death.");
             }
         }
 
         public int secondDeathYear() {
-            return Math.max(lifetimeScenario.primaryDeathYear().orElseThrow().getValue(),
-                    lifetimeScenario.spouseDeathYear().orElseThrow().getValue());
+            if (!lifetime.hasSpouse()) throw new IllegalStateException("An individual has no second death.");
+            return lifetime.terminalDeathYear();
+        }
+
+        /** Preserve the established couple diagnostic/fingerprint format, including every financial value. */
+        @Override public String toString() {
+            return "WorldOutcome[scenarioIndex=" + scenarioIndex
+                    + (lifetime.hasSpouse() ? ", lifetimeScenario=" + lifetimeScenario() : ", lifetime=" + lifetime)
+                    + ", annualInvestableAssets=" + annualInvestableAssets + ", terminal=" + terminal
+                    + ", fundingFailure=" + fundingFailure + "]";
         }
 
         public int finalLivingFinancialYear() {
-            return secondDeathYear() - 1;
+            return lifetime.terminalDeathYear() - 1;
         }
     }
 

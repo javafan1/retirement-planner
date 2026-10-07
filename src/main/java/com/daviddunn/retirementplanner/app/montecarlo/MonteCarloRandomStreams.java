@@ -28,6 +28,7 @@ public final class MonteCarloRandomStreams {
 
     // Dimension IDs are frozen, including unused reserved dimensions.
     public static final int PRIMARY_MORTALITY = 2;
+    public static final int PRIMARY_MORTALITY_V1 = 1;
     public static final int SPOUSE_MORTALITY = 3;
     public static final int GENERAL_INFLATION = 4;
     public static final int GENERAL_INFLATION_V1 = 1;

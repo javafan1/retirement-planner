@@ -63,7 +63,7 @@ public final class MonteCarloAnalyzer {
             AnalysisCancellationToken cancellation) {
         return analyzeMortality(source, request, null,
                 MonteCarloScenarioGenerator.MODEL_VERSION,
-                "HOUSEHOLD_MORTALITY_V" + MonteCarloRandomStreams.HOUSEHOLD_MORTALITY_V1, progress, cancellation);
+                request.hasSpouse() ? "HOUSEHOLD_MORTALITY_V" + MonteCarloRandomStreams.HOUSEHOLD_MORTALITY_V1 : "PRIMARY_MORTALITY_V1", progress, cancellation);
     }
 
     /** Explicit indexed worlds support direct-engine oracles without changing fixed-mode APIs. */
@@ -89,7 +89,7 @@ public final class MonteCarloAnalyzer {
         Objects.requireNonNull(progress);
         Objects.requireNonNull(cancellation);
         cancellation.throwIfCancellationRequested();
-        Objects.requireNonNull(source).getHousehold().requireSpouse("MonteCarloAnalyzer");
+        Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
         validateMortalityPreparation(plan, request);
         IntFunction<MonteCarloWorld> worlds = suppliedWorlds != null
@@ -108,9 +108,9 @@ public final class MonteCarloAnalyzer {
                 if (world.scenarioIndex() != index) {
                     throw new IllegalArgumentException("World scenario index does not match requested index.");
                 }
-                var lifetime = world.lifetimeScenario();
-                int secondDeathYear = Math.max(lifetime.primaryDeathYear().orElseThrow().getValue(),
-                        lifetime.spouseDeathYear().orElseThrow().getValue());
+                var lifetime = world.lifetime();
+                if (lifetime.hasSpouse() != request.hasSpouse()) throw new IllegalArgumentException("World composition must match request.");
+                int secondDeathYear = lifetime.terminalDeathYear();
                 var deathDate = LocalDate.of(secondDeathYear, 1, 1);
                 estate.validateCoverageStart(plan, deathDate);
                 if (deathDate.equals(start)) {
@@ -125,8 +125,8 @@ public final class MonteCarloAnalyzer {
                                     opening.nominalAfterTaxEstate(), BigDecimal.ZERO)), Optional.empty()));
                 } else {
                     int last = secondDeathYear - 1;
-                    var context = ProjectionEvaluationContext.withLifetimeScenario(lifetime)
-                            .withSurvivorClaimingAge(request.survivorClaimingAge().orElseThrow()).withExactEndingYear(last);
+                    var context = ProjectionEvaluationContext.withLifetimeScenario(lifetime.projectionTiming()).withExactEndingYear(last);
+                    if (request.hasSpouse()) context = context.withSurvivorClaimingAge(request.survivorClaimingAge().orElseThrow());
                     if (world.inflationPath().isPresent()) {
                         context = context.withInflationPath(world.inflationPath().orElseThrow());
                     }
@@ -162,27 +162,31 @@ public final class MonteCarloAnalyzer {
         return result;
     }
 
-    private static void validateMortalityPreparation(RetirementPlan plan, MonteCarloMortalityRequest request) {
-        if (!new SocialSecurityProjectionIncomeProvider().supportsAdvancedPath(plan)) {
-            throw new IllegalArgumentException("Mortality execution requires the advanced two-person Social Security "
-                    + "path: modern-cohort people with one correctly owned Social Security source each.");
+    static void validateMortalityPreparation(RetirementPlan plan, MonteCarloMortalityRequest request) {
+        ProjectionEngine.validateSinglePersonProjection(plan, ProjectionEvaluationContext.empty());
+        if (plan.getHousehold().hasSpouse() && !new SocialSecurityProjectionIncomeProvider().supportsAdvancedPath(plan)) {
+            throw new IllegalArgumentException("Mortality execution requires the advanced Social Security "
+                    + "path: one correctly owned Social Security source for each present person.");
         }
-        if (request.survivorClaimingAge().isEmpty()) {
+        if (request.hasSpouse() && request.survivorClaimingAge().isEmpty()) {
             throw new IllegalArgumentException("Mortality execution requires an analysis survivor claiming age "
                     + "for either first-death direction; select an age before running analysis.");
         }
         var household = plan.getHousehold();
-        var categories = PersonMortalityCategories.from(household);
-        var assumptions = request.longevityAssumptions();
-        if (!request.primaryBirthDate().equals(household.getPrimaryPerson().getBirthDate())
-                || !request.spouseBirthDate().equals(household.getSpouse().getBirthDate())
-                || categories.primary() != assumptions.primaryCategory()
-                || categories.spouse() != assumptions.spouseCategory()
-                || !plan.getPlanningAssumptions().getProjectionStartDate().equals(assumptions.mortalityBaseDate())) {
+        if (household.hasSpouse() != request.hasSpouse()
+                || !request.primaryBirthDate().equals(household.getPrimaryPerson().getBirthDate())
+                || !household.getPrimaryPerson().getMortalityCategory().name().equals(request.primary().mortalityCategory().name())
+                || !plan.getPlanningAssumptions().getProjectionStartDate().equals(request.conditioningDate())) {
             throw new IllegalArgumentException("Mortality request does not match the plan's people or projection start.");
         }
+        if (household.hasSpouse()) {
+            var categories = PersonMortalityCategories.from(household);
+            if (!request.spouseBirthDate().equals(household.getSpouse().getBirthDate())
+                    || categories.spouse() != request.longevityAssumptions().spouseCategory()) {
+                throw new IllegalArgumentException("Mortality request does not match the spouse.");
+            }
+        }
     }
-
     public MonteCarloAnalysisResult analyze(RetirementPlan plan, MonteCarloSettings settings) {
         return analyze(plan, settings, null);
     }
@@ -266,7 +270,7 @@ public final class MonteCarloAnalyzer {
         Objects.requireNonNull(progress);
         Objects.requireNonNull(cancellation);
         cancellation.throwIfCancellationRequested();
-        Objects.requireNonNull(source).getHousehold().requireSpouse("MonteCarloAnalyzer");
+        Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
         int first = plan.getPlanningAssumptions().getProjectionStartDate().getYear();
         int last = Math.addExact(first, plan.getPlanningAssumptions().getProjectionLengthYears() - 1);

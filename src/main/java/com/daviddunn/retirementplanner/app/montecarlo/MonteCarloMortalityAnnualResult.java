@@ -7,7 +7,8 @@ import java.util.Optional;
 
 /**
  * Empirical populations under January 1 deaths. A household is living in year y
- * exactly when y is before its second death year. Investable-assets percentiles
+ * exactly when at least one actual member is alive. Individual populations have no couple breakdown.
+ * Investable-assets percentiles
  * are conditional on being living AND completing that year's financial row.
  * Deceased households and living households that funding-failed by this year
  * contribute no asset observation; neither is represented by a fabricated zero.
@@ -18,20 +19,40 @@ public record MonteCarloMortalityAnnualResult(
         int livingHouseholdCount,
         int completedLivingYearSampleCount,
         int livingFundingFailedByYearCount,
-        int bothDeceasedCount,
-        int bothAliveCount,
-        int primaryOnlyAliveCount,
-        int spouseOnlyAliveCount,
+        int deceasedCount,
+        Optional<CouplePopulation> couplePopulation,
         Optional<MonteCarloPercentiles> investableAssets) {
 
+    public record CouplePopulation(int bothAliveCount, int primaryOnlyAliveCount, int spouseOnlyAliveCount) {
+        public CouplePopulation {
+            if (bothAliveCount < 0 || primaryOnlyAliveCount < 0 || spouseOnlyAliveCount < 0)
+                throw new IllegalArgumentException("Population counts cannot be negative.");
+        }
+        long living() { return (long) bothAliveCount + primaryOnlyAliveCount + spouseOnlyAliveCount; }
+    }
+
+    public MonteCarloMortalityAnnualResult(int year, int requested, int living, int completed, int failed,
+            int deceased, int bothAlive, int primaryOnly, int spouseOnly, Optional<MonteCarloPercentiles> assets) {
+        this(year, requested, living, completed, failed, deceased,
+                Optional.of(new CouplePopulation(bothAlive, primaryOnly, spouseOnly)), assets);
+    }
+
+    public int bothAliveCount() { return couplePopulation.orElseThrow().bothAliveCount(); }
+    public int primaryOnlyAliveCount() { return couplePopulation.orElseThrow().primaryOnlyAliveCount(); }
+    public int spouseOnlyAliveCount() { return couplePopulation.orElseThrow().spouseOnlyAliveCount(); }
+    public int bothDeceasedCount() {
+        if (couplePopulation.isEmpty()) throw new IllegalStateException("Individual population has no both-deceased state.");
+        return deceasedCount;
+    }
+
     public MonteCarloMortalityAnnualResult {
+        Objects.requireNonNull(couplePopulation);
         Objects.requireNonNull(investableAssets);
         if (requestedWorldCount <= 0 || livingHouseholdCount < 0 || completedLivingYearSampleCount < 0
-                || livingFundingFailedByYearCount < 0 || bothDeceasedCount < 0
-                || bothAliveCount < 0 || primaryOnlyAliveCount < 0 || spouseOnlyAliveCount < 0
-                || requestedWorldCount != (long) livingHouseholdCount + bothDeceasedCount
+                || livingFundingFailedByYearCount < 0 || deceasedCount < 0
+                || requestedWorldCount != (long) livingHouseholdCount + deceasedCount
                 || livingHouseholdCount != (long) completedLivingYearSampleCount + livingFundingFailedByYearCount
-                || livingHouseholdCount != (long) bothAliveCount + primaryOnlyAliveCount + spouseOnlyAliveCount
+                || couplePopulation.isPresent() && livingHouseholdCount != couplePopulation.orElseThrow().living()
                 || investableAssets.isPresent() != (completedLivingYearSampleCount > 0)
                 || investableAssets.map(MonteCarloPercentiles::sampleCount).orElse(0) != completedLivingYearSampleCount) {
             throw new IllegalArgumentException("Annual mortality populations and asset samples must reconcile.");

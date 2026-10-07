@@ -15,7 +15,9 @@ import java.util.Objects;
  * assumptions and calendar origin, HOUSEHOLD_MORTALITY_V1 stream protocol,
  * mortality table contents/version, birth dates, Person mortality categories,
  * adjustments, conditioning date and existing mortality timing convention.
- * The authoritative joint ordering and exact sampling protocol are also preserved.
+ * The authoritative couple joint ordering and exact sampling protocol are preserved.
+ * Individuals use PRIMARY_MORTALITY_V1 and the existing individual distribution directly;
+ * no spouse stream or joint scenarios are created for them.
  * Simulation count, generation order and unrelated execution/cancellation do not
  * enter world identity. Longer market coverage only appends draws to its prefix.
  */
@@ -23,7 +25,8 @@ public final class MonteCarloWorldGenerator {
 
     private final MonteCarloSettings settings;
     private final int firstYear;
-    private final HouseholdLongevityScenarios mortalityScenarios;
+    private final java.util.Optional<HouseholdLongevityScenarios> mortalityScenarios;
+    private final java.util.List<IndividualLongevityScenarios.DeathScenario> individualScenarios;
     private final DiscreteProbabilitySampler mortalitySampler;
     private final MonteCarloScenarioGenerator marketGenerator = new MonteCarloScenarioGenerator();
     private final HouseholdLifetimeScenarioMapper lifetimeMapper = new HouseholdLifetimeScenarioMapper();
@@ -31,27 +34,44 @@ public final class MonteCarloWorldGenerator {
     public MonteCarloWorldGenerator(MonteCarloMortalityRequest request) {
         Objects.requireNonNull(request, "Mortality request is required.");
         settings = request.settings();
-        firstYear = request.longevityAssumptions().mortalityBaseDate().getYear();
-        mortalityScenarios = new HouseholdLongevityScenarioFactory(request.mortalityTable())
-                .create(request.primaryBirthDate(), request.spouseBirthDate(), request.longevityAssumptions());
-        mortalitySampler = new DiscreteProbabilitySampler(mortalityScenarios.scenarios().stream()
-                .map(SocialSecurityJointMortalityScenario::jointProbability).toList());
+        firstYear = request.conditioningDate().getYear();
+        if (request.hasSpouse()) {
+            var couple = new HouseholdLongevityScenarioFactory(request.mortalityTable())
+                    .create(request.primaryBirthDate(), request.spouseBirthDate(), request.longevityAssumptions());
+            mortalityScenarios = java.util.Optional.of(couple);
+            individualScenarios = java.util.List.of();
+            mortalitySampler = new DiscreteProbabilitySampler(couple.scenarios().stream()
+                    .map(SocialSecurityJointMortalityScenario::jointProbability).toList());
+        } else {
+            mortalityScenarios = java.util.Optional.empty();
+            individualScenarios = new IndividualLongevityScenarios(
+                    new SocialSecurityMortalityDistributionProvider(request.mortalityTable())
+                            .createDistribution(request.primary())).scenarios();
+            mortalitySampler = new DiscreteProbabilitySampler(individualScenarios.stream()
+                    .map(IndividualLongevityScenarios.DeathScenario::probability).toList());
+        }
     }
-
     public MonteCarloWorld generate(int scenarioIndex) {
-        var random = MonteCarloRandomStreams.create(settings.seed(), scenarioIndex,
-                MonteCarloRandomStreams.HOUSEHOLD_MORTALITY,
-                MonteCarloRandomStreams.HOUSEHOLD_MORTALITY_V1);
-        var selected = mortalityScenarios.scenarios().get(mortalitySampler.sample(random));
-        var lifetime = lifetimeMapper.map(selected);
-        int lastLivingYear = Math.max(lifetime.primaryDeathYear().orElseThrow().getValue(),
-                lifetime.spouseDeathYear().orElseThrow().getValue()) - 1;
+        MonteCarloLifetime lifetime;
+        if (mortalityScenarios.isPresent()) {
+            var random = MonteCarloRandomStreams.create(settings.seed(), scenarioIndex,
+                    MonteCarloRandomStreams.HOUSEHOLD_MORTALITY,
+                    MonteCarloRandomStreams.HOUSEHOLD_MORTALITY_V1);
+            var selected = mortalityScenarios.orElseThrow().scenarios().get(mortalitySampler.sample(random));
+            lifetime = MonteCarloLifetime.couple(lifetimeMapper.map(selected));
+        } else {
+            var random = MonteCarloRandomStreams.create(settings.seed(), scenarioIndex,
+                    MonteCarloRandomStreams.PRIMARY_MORTALITY, MonteCarloRandomStreams.PRIMARY_MORTALITY_V1);
+            var selected = individualScenarios.get(mortalitySampler.sample(random));
+            lifetime = MonteCarloLifetime.individual(java.time.Year.from(selected.deathDate()));
+        }
+        int lastLivingYear = lifetime.terminalDeathYear() - 1;
         var economicPath = marketGenerator.generate(firstYear, lastLivingYear, settings, scenarioIndex);
         var inflationPath = new MonteCarloInflationGenerator().generate(firstYear, lastLivingYear, settings, scenarioIndex);
         return new MonteCarloWorld(scenarioIndex, economicPath, lifetime, inflationPath);
     }
 
     public HouseholdLongevityScenarios mortalityScenarios() {
-        return mortalityScenarios;
+        return mortalityScenarios.orElseThrow(() -> new IllegalStateException("Individual sampling has no joint scenarios."));
     }
 }

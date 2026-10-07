@@ -20,6 +20,7 @@ public final class MonteCarloPdfReportAdapter {
     private MonteCarloPdfReportAdapter() { }
 
     public static MonteCarloPdfReport from(MonteCarloRun run) {
+        if (!run.people().hasSpouse()) throw new UnsupportedOperationException("Single-person PDF export is deferred to the reporting stage.");
         Objects.requireNonNull(run);
         boolean mortality = run.mode() == MonteCarloMode.LONGEVITY_ADJUSTED;
         var sections = new ArrayList<Section>();
@@ -83,6 +84,7 @@ public final class MonteCarloPdfReportAdapter {
     }
 
     public static MonteCarloPdfReport from(MonteCarloStrategyComparisonRun run) {
+        if (!run.result().request().assumptions().hasSpouse()) throw new UnsupportedOperationException("Single-person PDF export is deferred to the reporting stage.");
         Objects.requireNonNull(run);
         var r = run.result(); var s = r.summary(); var p = s.pairedStates();
         var sections = new ArrayList<Section>();

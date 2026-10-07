@@ -8,6 +8,7 @@ import com.daviddunn.retirementplanner.domain.income.*;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.projection.*;
 import com.daviddunn.retirementplanner.ui.MainWindow;
+import com.daviddunn.retirementplanner.ui.montecarlo.*;
 import com.daviddunn.retirementplanner.ui.components.PersonCard;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 import com.daviddunn.retirementplanner.ui.dialogs.*;
@@ -224,7 +225,7 @@ class SinglePersonHouseholdUiTest {
         });
     }
 
-    @Test void normalWindowLoadsSingleResultsAndCleanlyDefersMonteCarlo() throws Exception {
+    @Test void normalWindowLoadsSingleResultsAndEnablesMonteCarlo() throws Exception {
         fx(() -> {
             var controller = uiPlan();
             var file = temporary.resolve("window-single.json"); controller.saveAs(file);
@@ -235,9 +236,9 @@ class SinglePersonHouseholdUiTest {
             var root = field(window, "root", BorderPane.class);
             var menu = ((MenuBar) root.getTop()).getMenus().stream().filter(m -> m.getText().equals("Analysis")).findFirst().orElseThrow();
             menu.getOnShowing().handle(null);
-            assertTrue(menu.getItems().stream().filter(i -> "monte-carlo-analysis-menu".equals(i.getId())).findFirst().orElseThrow().isDisable());
+            assertFalse(menu.getItems().stream().filter(i -> "monte-carlo-analysis-menu".equals(i.getId())).findFirst().orElseThrow().isDisable());
             assertTrue(menu.getItems().stream().filter(i -> "monte-carlo-comparison-menu".equals(i.getId())).findFirst().orElseThrow().isDisable());
-            assertTrue(menu.getItems().stream().anyMatch(i -> i.isVisible() && i.getText().contains("Stage 4B")));
+            assertFalse(menu.getItems().stream().anyMatch(i -> i.isVisible() && i.getText().contains("Stage 4B")));
             assertFalse(menu.getItems().getFirst().isDisable(), "Supported Social Security analyzer remains reachable");
             if (Boolean.getBoolean("single.stage4a1.preview")) {
                 var stage = new Stage(); stage.setScene(new Scene(root, 1900, 1040)); stage.show();
@@ -281,6 +282,118 @@ class SinglePersonHouseholdUiTest {
         });
     }
 
+    @Test void uiCreatedSavedReloadedPlanRunsFixedLongevityAndPairedMonteCarlo() throws Exception {
+        var controller = fx(() -> {
+            var c = uiPlan();
+            var file = temporary.resolve("monte-carlo-single.json");
+            c.saveAs(file);
+            c.newPlan();
+            c.open(file);
+            assertFalse(c.getCurrentPlan().getHousehold().hasSpouse());
+            assertNotNull(c.getCurrentProjection());
+            return c;
+        });
+        var queue = new java.util.ArrayDeque<Runnable>();
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        var service = new MonteCarloRunService();
+        var view = fx(() -> {
+            var v = new MonteCarloAnalysisView(controller, queue::add,
+                    (p, s, r, u, c) -> { calls.incrementAndGet(); return service.run(p, s, r, u, c); },
+                    (p, r, u, c) -> { calls.incrementAndGet(); return service.runMortality(p, r, u, c); });
+            new Scene(v, 1900, 1040);
+            return v;
+        });
+        try {
+            for (var mode : MonteCarloMode.values()) {
+                fx(() -> {
+                    ((ComboBox<MonteCarloMode>) view.lookup("#mc-mode")).setValue(mode);
+                    ((ComboBox<Integer>) view.lookup("#mc-simulations")).setValue(100);
+                    ((ComboBox<String>) view.lookup("#mc-inflation-mode")).setValue("Stochastic");
+                    ((TextField) view.lookup("#mc-seed")).setText("417");
+                    if (mode == MonteCarloMode.LONGEVITY_ADJUSTED) {
+                        assertFalse(view.lookup("#mc-spouse-adjustment").getParent().isManaged());
+                        assertFalse(view.lookup("#mc-survivor-age").getParent().isManaged());
+                    }
+                    ((Button) view.lookup("#mc-run")).fire();
+                    assertEquals(MonteCarloSession.State.RUNNING, view.session().state());
+                    return null;
+                });
+                queue.remove().run(); // Actual engine execution, off FX.
+                fx(() -> {
+                    assertEquals(MonteCarloSession.State.COMPLETED, view.session().state(), String.valueOf(view.session().failure()));
+                    assertFalse(view.session().result().people().hasSpouse());
+                    assertEquals("Share of simulated market and lifetime scenarios that completed all modeled obligations through the person's death.",
+                            MonteCarloMortalityPresentation.lifetimeText(MonteCarloMortalityPresentation.FUNDING_HELP, false));
+                    assertEquals(417, view.session().result().settings().seed());
+                    assertFalse(view.canExportPdf());
+                    assertThrows(UnsupportedOperationException.class, () -> MonteCarloPdfReportAdapter.from(view.session().result()));
+                    String visible = visibleText(view).toLowerCase();
+                    assertFalse(visible.contains("second death") || visible.contains("both alive") || visible.contains("survivor"));
+                    if (Boolean.getBoolean("single.stage4b.preview")) {
+                        mcSnapshot(view, mode == MonteCarloMode.FIXED_LIFESPAN ? "fixed" : "longevity");
+                        if (mode == MonteCarloMode.LONGEVITY_ADJUSTED) {
+                            var chart = view.lookup("#monte-carlo-fan");
+                            if (chart != null) chart.fireEvent(new javafx.scene.input.KeyEvent(javafx.scene.input.KeyEvent.KEY_PRESSED,
+                                    "", "", javafx.scene.input.KeyCode.END, false, false, false, false));
+                            mcSnapshot(view, "longevity-late");
+                        }
+                    }
+                    return null;
+                });
+            }
+            assertEquals(2, calls.get());
+            fx(() -> {
+                ((TextField) view.lookup("#mc-volatility")).setText("12");
+                assertTrue(view.session().stale());
+                assertFalse(view.canExportPdf());
+                assertFalse(controller.getCurrentPlan().getHousehold().hasSpouse());
+                return null;
+            });
+            assertEquals(2, calls.get(), "Selection and input edits do not run analysis");
+        } finally { fx(() -> { view.close(); return null; }); }
+
+        var comparisonQueue = new java.util.ArrayDeque<Runnable>();
+        var comparison = fx(() -> {
+            controller.getCurrentPlan().setBaseline(ProjectionBaselineFactory.create(controller.getCurrentPlan(), "Single baseline"));
+            var v = new MonteCarloStrategyComparisonView(controller, comparisonQueue::add, new MonteCarloStrategyComparisonRunService()::run);
+            new Scene(v, 1900, 1040);
+            field(v, "count", ComboBox.class).setValue(30);
+            field(v, "mode", ComboBox.class).setValue(MonteCarloMode.LONGEVITY_ADJUSTED);
+            field(v, "run", Button.class).fire();
+            return v;
+        });
+        try {
+            comparisonQueue.remove().run();
+            fx(() -> {
+                assertEquals(MonteCarloStrategyComparisonSession.State.COMPLETED, comparison.session().state(),
+                        String.valueOf(comparison.session().failure()));
+                assertFalse(comparison.session().result().result().request().assumptions().hasSpouse());
+                assertFalse(comparison.canExportPdf());
+                assertFalse(visibleText(comparison).toLowerCase().contains("second-death"));
+                if (Boolean.getBoolean("single.stage4b.preview")) mcSnapshot(comparison, "comparison");
+                return null;
+            });
+        } finally { fx(() -> { comparison.close(); return null; }); }
+    }
+
+    private static String visibleText(javafx.scene.Node node) {
+        if (!node.isVisible() || !node.isManaged()) return "";
+        var own = node instanceof Labeled labeled ? labeled.getText() : "";
+        if (node instanceof javafx.scene.Parent parent)
+            for (var child : parent.getChildrenUnmodifiable()) own += " " + visibleText(child);
+        return own;
+    }
+
+    private static void mcSnapshot(javafx.scene.Parent view, String name) throws Exception {
+        var scene = view.getScene();
+        view.applyCss(); view.layout();
+        var image = scene.snapshot(null);
+        assertEquals(1900, image.getWidth()); assertEquals(1040, image.getHeight());
+        var output = new java.awt.image.BufferedImage(1900, 1040, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < 1040; y++) for (int x = 0; x < 1900; x++) output.setRGB(x, y, image.getPixelReader().getArgb(x, y));
+        var directory = Path.of("target/single-stage4b-preview"); Files.createDirectories(directory);
+        javax.imageio.ImageIO.write(output, "png", directory.resolve(name + ".png").toFile());
+    }
     private static ApplicationController uiPlan() throws Exception {
         var controller = new ApplicationController(); controller.newPlan();
         var view = new HouseholdView(); view.load(controller.getCurrentPlan()); fillPrimary(view);

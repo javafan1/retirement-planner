@@ -9,15 +9,20 @@ import java.util.Optional;
 /** Scenario index identifies the world within the result's captured request/source. No paths retained. */
 public record MonteCarloPairedOutcome(
         int scenarioIndex,
-        HouseholdLifetimeScenario lifetimeScenario,
+        MonteCarloLifetime lifetime,
         MonteCarloStrategyOutcome outcomeA,
         MonteCarloStrategyOutcome outcomeB) {
+
+    public MonteCarloPairedOutcome(int index, HouseholdLifetimeScenario timing, MonteCarloStrategyOutcome a, MonteCarloStrategyOutcome b) {
+        this(index, MonteCarloLifetime.couple(timing), a, b);
+    }
+    public HouseholdLifetimeScenario lifetimeScenario() { return lifetime.projectionTiming(); }
 
     public MonteCarloPairedOutcome {
         if (scenarioIndex < 0) {
             throw new IllegalArgumentException("Scenario index cannot be negative.");
         }
-        Objects.requireNonNull(lifetimeScenario);
+        Objects.requireNonNull(lifetime);
         Objects.requireNonNull(outcomeA);
         Objects.requireNonNull(outcomeB);
         if (outcomeA.terminal().isPresent() && outcomeB.terminal().isPresent()

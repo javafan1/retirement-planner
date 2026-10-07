@@ -37,15 +37,15 @@ public final class MonteCarloStrategyComparisonAccumulator {
             if (pair.scenarioIndex() != index++) {
                 throw new IllegalArgumentException("Pairs must retain scenario order.");
             }
+            if (pair.lifetime().hasSpouse() != assumptions.hasSpouse()) throw new IllegalArgumentException("Pair composition must match request.");
             int last;
             if (assumptions instanceof MonteCarloStrategyComparisonRequest.Fixed fixed) {
-                if (!fixed.lifetimeScenario().equals(pair.lifetimeScenario())) {
+                if (!fixed.lifetime().equals(pair.lifetime())) {
                     throw new IllegalArgumentException("Fixed pair must match configured mortality.");
                 }
                 last = fixed.endingYear();
             } else {
-                last = Math.max(pair.lifetimeScenario().primaryDeathYear().orElseThrow().getValue(),
-                        pair.lifetimeScenario().spouseDeathYear().orElseThrow().getValue()) - 1;
+                last = pair.lifetime().terminalDeathYear() - 1;
                 if (LocalDate.of(last + 1, 1, 1).isBefore(assumptions.start())) {
                     throw new IllegalArgumentException("Second death precedes opening balances.");
                 }

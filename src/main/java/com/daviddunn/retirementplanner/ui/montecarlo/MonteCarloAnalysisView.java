@@ -289,15 +289,20 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                     .settings("Stochastic".equals(inflationMode.getValue()), inflationMean.getText(),
                             inflationVolatility.getText(), inflationFloor.getText());
             if (!ProjectionReadiness.isReady(controller.getCurrentPlan())) {
-                throw new IllegalArgumentException("Set both birth dates and a projection start date before running analysis.");
+                throw new IllegalArgumentException("Set birth dates for the people present and a projection start date before running analysis.");
             }
             // Capture on FX before the worker starts; later source edits cannot alter this request.
             var snapshot = new RetirementPlanScenarioCopyService().copy(controller.getCurrentPlan());
             if (mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED) {
-                int analysisSurvivorAge = MonteCarloMortalityPresentation.survivorClaimingAge(survivorAge.getText());
-                var longevity = MonteCarloMortalityPresentation.settings(snapshot,
-                        primaryAdjustment.getText(), spouseAdjustment.getText());
-                var request = new MonteCarloMortalityRequest(snapshot, settings, longevity, analysisSurvivorAge);
+                MonteCarloMortalityRequest request;
+                if (snapshot.getHousehold().hasSpouse()) {
+                    int age = MonteCarloMortalityPresentation.survivorClaimingAge(survivorAge.getText());
+                    var longevity = MonteCarloMortalityPresentation.settings(snapshot, primaryAdjustment.getText(), spouseAdjustment.getText());
+                    request = new MonteCarloMortalityRequest(snapshot, settings, longevity, age);
+                } else {
+                    request = MonteCarloMortalityRequest.individual(snapshot, settings,
+                            MonteCarloMortalityPresentation.adjustment(primaryAdjustment.getText(), "Primary"));
+                }
                 validation.setText("");
                 session.start((updates, cancellation) -> mortalityWork.run(snapshot, request, updates, cancellation));
                 return;
@@ -334,6 +339,11 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         primaryAdjustment.setDisable(busy);
         spouseAdjustment.setDisable(busy);
         survivorAge.setDisable(busy);
+        boolean couple = controller.getCurrentPlan().getHousehold().hasSpouse();
+        if (spouseAdjustment.getParent() != null) show(spouseAdjustment.getParent(), couple);
+        if (survivorAge.getParent() != null) show(survivorAge.getParent(), couple);
+        pdf.button().setTooltip(new Tooltip(couple ? "Export the completed frozen result. Run again if the result is stale."
+                : "Single-person PDF export is deferred to the reporting stage."));
         show(longevityInputs, mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED);
         show(mortalityContext, mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED);
         updateMortalityContext();
@@ -371,7 +381,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             planTitle.setText(session.stale() ? "ANALYZED PLAN · STALE RESULT" : "CURRENT PLAN");
             boolean mortality = completed.mode() == MonteCarloMode.LONGEVITY_ADJUSTED;
             summary.setText(mortality ? "Longevity-Adjusted result · " + completed.people().primary().name()
-                    + " / " + completed.people().spouse().name() + " · "
+                    + (completed.people().hasSpouse() ? " / " + completed.people().spouse().name() : "") + " · "
                     + completed.mortalityResult().lastReportingYear().map(last -> "Sampled financial years "
                             + completed.firstYear() + "–" + last).orElse("All sampled lifetimes end at opening")
                     : MonteCarloPresentation.people(completed.people(), completed.lastYear()));
@@ -398,7 +408,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             show(transactions, mode.getValue() == MonteCarloMode.FIXED_LIFESPAN);
             details.setContent(mode.getValue() == MonteCarloMode.FIXED_LIFESPAN ? fixedDetails
                     : label(MonteCarloMortalityPresentation.ANNUAL_NOTICE + "\n"
-                            + MonteCarloMortalityPresentation.NOMINAL_NOTICE, "mc-muted"));
+                            + MonteCarloMortalityPresentation.lifetimeText(MonteCarloMortalityPresentation.NOMINAL_NOTICE, couple), "mc-muted"));
         }
     }
 
@@ -442,6 +452,13 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     private void shareLongevitySettings() {
         try {
+            if (!controller.getCurrentPlan().getHousehold().hasSpouse()) {
+                var previous = controller.getLongevitySessionSettings();
+                controller.setLongevitySessionSettings(new com.daviddunn.retirementplanner.domain.socialsecurity.analysis.LongevitySessionSettings(
+                        previous.conditioningDate(), MonteCarloMortalityPresentation.adjustment(primaryAdjustment.getText(), "Primary"),
+                        previous.spouseAdjustment()));
+                return;
+            }
             var parsed = MonteCarloMortalityPresentation.settings(controller.getCurrentPlan(),
                     primaryAdjustment.getText(), spouseAdjustment.getText());
             // Preserve the other analyzer's independent conditioning date; MC conditions at plan start.
@@ -456,11 +473,11 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         var plan = controller.getCurrentPlan();
         var people = BreakEvenPlanSummary.from(plan.getHousehold());
         var primary = people.primary();
-        var spouse = people.spouse();
+
         mortalityContext.setText(primary.name() + " mortality: "
                 + mortalityCategory(primary.mortalityCategory())
-                + " · " + spouse.name() + " mortality: "
-                + mortalityCategory(spouse.mortalityCategory())
+                + (people.hasSpouse() ? " · " + people.spouse().name() + " mortality: "
+                + mortalityCategory(people.spouse().mortalityCategory()) : "")
                 + " · Conditioning: " + plan.getPlanningAssumptions().getProjectionStartDate());
     }
 
@@ -495,7 +512,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     private void configureResultMode(boolean mortality) {
         fundingTitle.setText(mortality ? "LIFETIME FUNDING PROBABILITY" : "FUNDING PROBABILITY");
-        funding.setTooltip(mortality ? new Tooltip(MonteCarloMortalityPresentation.FUNDING_HELP) : null);
+        funding.setTooltip(mortality ? new Tooltip(MonteCarloMortalityPresentation.lifetimeText(MonteCarloMortalityPresentation.FUNDING_HELP, displayed.people().hasSpouse())) : null);
         outcomesTitle.setText(mortality ? "LIFETIME OUTCOMES — FUNDED SIMULATIONS" : "ENDING OUTCOMES");
         chartNotice.setText(mortality ? MonteCarloMortalityPresentation.ANNUAL_NOTICE
                 : "Annual bands include simulations completing each year. Hover or focus the chart and use Left/Right, Home/End to inspect years. Roth/RMD periods use the deterministic reference.");
@@ -522,8 +539,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         mortalityTable.getItems().setAll(MonteCarloMortalityPresentation.terminalRows(result));
         show(mortalityTable, result.completedCount() > 0);
         terminalDates.setText(MonteCarloMortalityPresentation.terminalDates(result));
-        notice.setText(result.completedCount() == 0 ? MonteCarloMortalityPresentation.NO_TERMINALS
-                : MonteCarloMortalityPresentation.NOMINAL_NOTICE);
+        notice.setText(MonteCarloMortalityPresentation.lifetimeText(result.completedCount() == 0 ? MonteCarloMortalityPresentation.NO_TERMINALS
+                : MonteCarloMortalityPresentation.NOMINAL_NOTICE, result.request().hasSpouse()));
         var settings = completed.settings();
         frozenInputs.setText("Run inputs: " + settings.simulationCount() + " simulations · arithmetic mean "
                 + UIFormatters.percent(settings.expectedReturn()) + " · volatility "
@@ -548,7 +565,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     }
 
     public boolean canExportPdf() {
-        return session != null && session.state() == MonteCarloSession.State.COMPLETED && !session.stale() && session.result() != null;
+        return session != null && session.state() == MonteCarloSession.State.COMPLETED && !session.stale() && session.result() != null && session.result().people().hasSpouse();
     }
 
     public com.daviddunn.retirementplanner.app.export.MonteCarloPdfReport preparePdfReport() {

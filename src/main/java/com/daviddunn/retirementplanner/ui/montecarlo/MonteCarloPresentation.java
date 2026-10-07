@@ -84,7 +84,7 @@ public final class MonteCarloPresentation {
     }
 
     public static String people(BreakEvenPlanSummary people, int lastYear) {
-        String elections = List.of(people.primary(), people.spouse()).stream()
+        String elections = (people.hasSpouse() ? List.of(people.primary(), people.spouse()) : List.of(people.primary())).stream()
                 .filter(person -> person.retirementClaimingAge() != null)
                 .map(person -> person.name() + " SS " + person.retirementClaimingAge())
                 .collect(Collectors.joining(" · "));

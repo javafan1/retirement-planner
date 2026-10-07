@@ -41,12 +41,24 @@ public final class MonteCarloMortalityPresentation {
         String values = year.percentiles().map(p -> "Median " + UIFormatters.money(p.p50())
                 + " · P10 " + UIFormatters.money(p.p10()) + " · P90 " + UIFormatters.money(p.p90()))
                 .orElse("Median unavailable · P10 unavailable · P90 unavailable");
+        if (annual.couplePopulation().isEmpty()) {
+            return year.calendarYear() + " — " + values + String.format(
+                    "\n%,d living of %,d · %,d funded through %d · %,d failed living · %,d deceased",
+                    annual.livingHouseholdCount(), annual.requestedWorldCount(), annual.completedLivingYearSampleCount(),
+                    year.calendarYear(), annual.livingFundingFailedByYearCount(), annual.deceasedCount())
+                    + (smallSample(annual) ? " · " + SMALL_SAMPLE_NOTICE : "");
+        }
         return year.calendarYear() + " — " + values + String.format(
                 "\n%,d living of %,d · %,d funded through %d · %,d both alive · %,d %s only · %,d %s only",
                 annual.livingHouseholdCount(), annual.requestedWorldCount(), annual.completedLivingYearSampleCount(),
                 year.calendarYear(), annual.bothAliveCount(), annual.primaryOnlyAliveCount(), model.primaryName(),
                 annual.spouseOnlyAliveCount(), model.spouseName())
                 + (smallSample(annual) ? " · " + SMALL_SAMPLE_NOTICE : "");
+    }
+
+    public static String lifetimeText(String text, boolean couple) {
+        return couple ? text : text.replace("the household's second death", "the person's death")
+                .replace("second death", "the person's death").replace("second-death", "death");
     }
 
     private MonteCarloMortalityPresentation() {
@@ -57,7 +69,7 @@ public final class MonteCarloMortalityPresentation {
                 adjustment(primary, "Primary"), adjustment(spouse, "Spouse"));
     }
 
-    private static SocialSecurityMortalityAdjustment adjustment(String text, String owner) {
+    public static SocialSecurityMortalityAdjustment adjustment(String text, String owner) {
         try {
             var value = new BigDecimal(text.trim());
             if (value.compareTo(new BigDecimal("0.50")) >= 0 && value.compareTo(new BigDecimal("3.00")) <= 0) {
@@ -84,7 +96,7 @@ public final class MonteCarloMortalityPresentation {
     }
 
     public static String fundingDetail(MonteCarloMortalityAnalysisResult result) {
-        return String.format("%,d of %,d simulations funded all modeled obligations through second death.",
+        return String.format(lifetimeText("%,d of %,d simulations funded all modeled obligations through second death.", result.request().hasSpouse()),
                 result.completedCount(), result.requestedSimulationCount());
     }
 
@@ -119,6 +131,26 @@ public final class MonteCarloMortalityPresentation {
     public static List<Detail> details(MonteCarloRun run) {
         var result = run.mortalityResult();
         var settings = result.request().settings();
+        if (!result.request().hasSpouse()) {
+            var person = result.request().primary();
+            var table = result.request().mortalityTable().metadata();
+            return List.of(
+                    new Detail("Simulation", settings.simulationCount() + " simulations · seed " + settings.seed()
+                            + " · expected return " + UIFormatters.percent(settings.expectedReturn())
+                            + " · volatility " + UIFormatters.percent(settings.returnVolatility())
+                            + ". Independent lognormal gross returns. Session-only settings."),
+                    new Detail("Longevity", run.people().primary().name() + ": " + person.mortalityCategory()
+                            + " × " + person.mortalityAdjustment().factor() + ". " + table.displayName() + " / " + table.sourceVersion()
+                            + ". Conditioning date: " + person.mortalityBaseDate()
+                            + "; complete birthday intervals. Annual financial death occurs January 1."),
+                    new Detail("Funding", fundingDetail(result) + " Funding-failed simulations: " + result.fundingFailureCount()),
+                    new Detail("Annual chart", ANNUAL_NOTICE + " No zero balances are inserted for deceased or failed individuals. "
+                            + "The small-sample notice means 1–100 funded living individuals and at most 5% of requested simulations."),
+                    new Detail("Terminal outcomes", lifetimeText(NOMINAL_NOTICE, false) + " " + terminalDates(result)
+                            + ". After-Tax Estate excludes non-investable assets. Lifetime Taxes includes federal and Michigan income taxes."),
+                    new Detail("Model limitations", "Market returns and individual mortality are independent. "
+                            + "General inflation uses the selected mode; healthcare inflation and Social Security COLA remain deterministic."));
+        }
         var longevity = result.request().longevityAssumptions();
         return List.of(
                 new Detail("Simulation", String.format("%,d simulations · seed %d · expected return %s · volatility %s. ",

@@ -40,7 +40,8 @@ import java.util.Map;
 
 public class ProjectionEngine {
 
-    private static void validateSinglePersonProjection(RetirementPlan plan, ProjectionEvaluationContext context) {
+    /** Shared admission checks, including runs ending at opening without annual execution. */
+    public static void validateSinglePersonProjection(RetirementPlan plan, ProjectionEvaluationContext context) {
         if (plan.getHousehold().hasSpouse()) return;
         if (context.survivorClaimingAge().isPresent()
                 || context.socialSecurityStrategy().map(strategy -> strategy.hasSpouse()).orElse(false)

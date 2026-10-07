@@ -11,15 +11,21 @@ import java.util.Optional;
 public record MonteCarloComparisonWorld(
         int scenarioIndex,
         ProjectionEconomicPath economicPath,
-        HouseholdLifetimeScenario lifetimeScenario,
+        MonteCarloLifetime lifetime,
         Optional<ProjectionInflationPath> inflationPath) {
+
+    public MonteCarloComparisonWorld(int index, ProjectionEconomicPath path, HouseholdLifetimeScenario timing,
+            Optional<ProjectionInflationPath> inflation) {
+        this(index, path, MonteCarloLifetime.couple(timing), inflation);
+    }
+    public HouseholdLifetimeScenario lifetimeScenario() { return lifetime.projectionTiming(); }
 
     public MonteCarloComparisonWorld {
         if (scenarioIndex < 0) {
             throw new IllegalArgumentException("Scenario index cannot be negative.");
         }
         Objects.requireNonNull(economicPath);
-        Objects.requireNonNull(lifetimeScenario);
+        Objects.requireNonNull(lifetime);
         Objects.requireNonNull(inflationPath);
     }
 
@@ -27,6 +33,6 @@ public record MonteCarloComparisonWorld(
     public static MonteCarloComparisonWorld from(MonteCarloWorld world) {
         Objects.requireNonNull(world);
         return new MonteCarloComparisonWorld(world.scenarioIndex(), world.economicPath(),
-                world.lifetimeScenario(), world.inflationPath());
+                world.lifetime(), world.inflationPath());
     }
 }

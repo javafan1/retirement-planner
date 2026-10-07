@@ -192,11 +192,15 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         show(inflationControls, "Stochastic".equals(inflation.getValue()));
         show(longevityControls, mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED);
         var plan = controller.getCurrentPlan();
+        boolean couple = plan.getHousehold().hasSpouse();
+        for (var input : List.of(spouse, survivorA, survivorB)) show(input.getParent(), couple);
+        pdf.button().setTooltip(new Tooltip(couple ? "Export the completed frozen result. Run again if the result is stale."
+                : "Single-person PDF export is deferred to the reporting stage."));
         context.setText(!available ? MonteCarloStrategyComparisonRunService.MISSING_BASELINE
                 : mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED
                 ? "Mortality categories (from plan): " + plan.getHousehold().getPrimaryPerson().getMortalityCategory()
-                    + " / " + plan.getHousehold().getSpouse().getMortalityCategory() + " · Conditioning date: "
-                    + plan.getPlanningAssumptions().getProjectionStartDate() + " (projection start). Survivor ages shown apply only to this run."
+                    + (couple ? " / " + plan.getHousehold().getSpouse().getMortalityCategory() : "") + " · Conditioning date: "
+                    + plan.getPlanningAssumptions().getProjectionStartDate() + " (projection start)." + (couple ? " Survivor ages shown apply only to this run." : "")
                 : "Fixed comparison uses the Current Plan horizon. Both strategies must share the start date, household demographics and configured death timing.");
         show(validation, !validation.getText().isBlank());
         var update = session.progress();
@@ -226,7 +230,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         fundingB.setText(MonteCarloPresentation.fundingPercent(paired.bFundingProbability(), paired.bFailedCount(), paired.bCompletedCount()));
         fundingDifference.setText(difference(paired.fundingProbabilityDifference()));
         states.setText(states(paired)); denominator.setText(denominator(s));
-        terminalNotice.setText(completed.mode() == MonteCarloMode.LONGEVITY_ADJUSTED ? NOMINAL
+        terminalNotice.setText(completed.mode() == MonteCarloMode.LONGEVITY_ADJUSTED ? MonteCarloMortalityPresentation.lifetimeText(NOMINAL, result.request().assumptions().hasSpouse())
                 : "Terminal differences use the common Current Plan horizon. Values are nominal future dollars; taxes are lifetime totals.");
         table.getItems().setAll(metrics(s)); table.getSelectionModel().selectFirst();
         chart.load(s.annualResults());
@@ -266,7 +270,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     private static void show(Node node, boolean value) { node.setVisible(value); node.setManaged(value); }
     public MonteCarloStrategyComparisonSession session() { return session; }
     public boolean canExportPdf() {
-        return session != null && session.state() == MonteCarloStrategyComparisonSession.State.COMPLETED && !session.stale() && session.result() != null;
+        return session != null && session.state() == MonteCarloStrategyComparisonSession.State.COMPLETED && !session.stale() && session.result() != null && session.result().result().request().assumptions().hasSpouse();
     }
     public com.daviddunn.retirementplanner.app.export.MonteCarloPdfReport preparePdfReport() {
         if (!canExportPdf()) throw new IllegalStateException("A current completed paired result is required for PDF export.");

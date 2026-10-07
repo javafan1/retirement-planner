@@ -22,21 +22,27 @@ public record MonteCarloStrategyComparisonRequest(
     public sealed interface Assumptions permits Fixed, Longevity {
         MonteCarloSettings settings();
         LocalDate start();
+        boolean hasSpouse();
     }
 
     /** Exact common horizon. Both plans must have this start and configured death timing. */
     public record Fixed(MonteCarloSettings settings, LocalDate start, int endingYear,
-                        HouseholdLifetimeScenario lifetimeScenario) implements Assumptions {
+                        MonteCarloLifetime lifetime) implements Assumptions {
+        public Fixed(MonteCarloSettings settings, LocalDate start, int endingYear, HouseholdLifetimeScenario timing) {
+            this(settings, start, endingYear, MonteCarloLifetime.couple(timing));
+        }
+        public HouseholdLifetimeScenario lifetimeScenario() { return lifetime.projectionTiming(); }
+        @Override public boolean hasSpouse() { return lifetime.hasSpouse(); }
         public Fixed {
             Objects.requireNonNull(settings);
             Objects.requireNonNull(start);
-            Objects.requireNonNull(lifetimeScenario);
+            Objects.requireNonNull(lifetime);
             Year.of(endingYear);
             if (endingYear < start.getYear()) {
                 throw new IllegalArgumentException("Fixed ending year precedes start.");
             }
-            if (lifetimeScenario.primaryDeathYear().isPresent()
-                    && lifetimeScenario.spouseDeathYear().isPresent()) {
+            if (lifetime instanceof MonteCarloLifetime.Couple couple && couple.primary().deathYear().isPresent()
+                    && couple.spouse().deathYear().isPresent()) {
                 throw new IllegalArgumentException("Fixed configured scenarios support at most one death.");
             }
         }
@@ -49,6 +55,7 @@ public record MonteCarloStrategyComparisonRequest(
             Objects.requireNonNull(mortality);
         }
 
+        @Override public boolean hasSpouse() { return mortality.hasSpouse(); }
         @Override
         public MonteCarloSettings settings() {
             return mortality.settings();
@@ -56,7 +63,7 @@ public record MonteCarloStrategyComparisonRequest(
 
         @Override
         public LocalDate start() {
-            return mortality.longevityAssumptions().mortalityBaseDate();
+            return mortality.conditioningDate();
         }
     }
 
@@ -71,7 +78,7 @@ public record MonteCarloStrategyComparisonRequest(
         var inflation = new MonteCarloInflationGenerator();
         return index -> new MonteCarloComparisonWorld(index,
                 market.generate(fixed.start().getYear(), fixed.endingYear(), fixed.settings(), index),
-                fixed.lifetimeScenario(),
+                fixed.lifetime(),
                 inflation.generate(fixed.start().getYear(), fixed.endingYear(), fixed.settings(), index));
     }
 }

@@ -37,17 +37,26 @@ public final class MonteCarloStrategyComparisonRunService {
         if (!start.equals(b.getPlanningAssumptions().getProjectionStartDate())) {
             throw new IllegalArgumentException("Current Plan and Saved Baseline must have the same projection start date.");
         }
-        for (var people : java.util.List.of(
-                java.util.List.of(a.getHousehold().getPrimaryPerson(), b.getHousehold().getPrimaryPerson()),
-                java.util.List.of(a.getHousehold().getSpouse(), b.getHousehold().getSpouse()))) {
-            if (!Objects.equals(people.get(0).getBirthDate(), people.get(1).getBirthDate())
-                    || people.get(0).getMortalityCategory() != people.get(1).getMortalityCategory()) {
+        if (a.getHousehold().hasSpouse() != b.getHousehold().hasSpouse())
+            throw new IllegalArgumentException("Current Plan and Saved Baseline must have the same household composition.");
+        var membersA = a.getHousehold().members();
+        var membersB = b.getHousehold().members();
+        for (int i = 0; i < membersA.size(); i++) {
+            if (!Objects.equals(membersA.get(i).getBirthDate(), membersB.get(i).getBirthDate())
+                    || membersA.get(i).getMortalityCategory() != membersB.get(i).getMortalityCategory()) {
                 throw new IllegalArgumentException("Both strategies must describe the same birth dates and mortality categories.");
             }
         }
         MonteCarloStrategyComparisonRequest.Assumptions assumptions;
         String lifetime;
-        if (mode == MonteCarloMode.LONGEVITY_ADJUSTED) {
+        if (mode == MonteCarloMode.LONGEVITY_ADJUSTED && !a.getHousehold().hasSpouse()) {
+            var mortality = MonteCarloMortalityRequest.individual(a, settings,
+                    MonteCarloMortalityPresentation.adjustment(primaryAdjustment, "Primary"));
+            assumptions = new MonteCarloStrategyComparisonRequest.Longevity(mortality);
+            lifetime = "Mortality table: " + mortality.mortalityTable().metadata().displayName()
+                    + "; category: " + mortality.primary().mortalityCategory()
+                    + "; conditioning date: " + start + "; longevity factor: " + primaryAdjustment;
+        } else if (mode == MonteCarloMode.LONGEVITY_ADJUSTED) {
             int ageA = MonteCarloMortalityPresentation.survivorClaimingAge(survivorA);
             int ageB = MonteCarloMortalityPresentation.survivorClaimingAge(survivorB);
             applySurvivorAge(a, ageA);
@@ -71,7 +80,7 @@ public final class MonteCarloStrategyComparisonRunService {
             lifetime = "Common fixed horizon: " + start + " through " + last + " (Current Plan horizon)."
                     + "\nSaved Baseline configured length: " + b.getPlanningAssumptions().getProjectionLengthYears()
                     + " years. Mortality table, conditioning and longevity factors: not applied in Fixed Lifespan mode."
-                    + "\nSurvivor SS claiming age: Current Plan " + survivorLabel(a) + ", Saved Baseline " + survivorLabel(b);
+                    + (a.getHousehold().hasSpouse() ? "\nSurvivor SS claiming age: Current Plan " + survivorLabel(a) + ", Saved Baseline " + survivorLabel(b) : "");
         }
         var request = new MonteCarloStrategyComparisonRequest(new MonteCarloStrategyCandidate("Current Plan", a),
                 new MonteCarloStrategyCandidate("Saved Baseline", b), assumptions);
@@ -99,11 +108,12 @@ public final class MonteCarloStrategyComparisonRunService {
         return age == null ? "not configured" : age.toString();
     }
 
-    private static HouseholdLifetimeScenario lifetime(RetirementPlan plan) {
+    private static MonteCarloLifetime lifetime(RetirementPlan plan) {
         var d = plan.getPlanningAssumptions().getDeathScenarioAssumptions();
-        return new HouseholdLifetimeScenario(d.getDeathScenario() == DeathScenario.PRIMARY_DIES
+        if (!plan.getHousehold().hasSpouse()) return new MonteCarloLifetime.Individual(new MonteCarloLifetime.Life(Optional.empty()));
+        return MonteCarloLifetime.couple(new HouseholdLifetimeScenario(d.getDeathScenario() == DeathScenario.PRIMARY_DIES
                 ? Optional.of(Year.of(d.getDeathYear())) : Optional.empty(),
-                d.getDeathScenario() == DeathScenario.SPOUSE_DIES ? Optional.of(Year.of(d.getDeathYear())) : Optional.empty());
+                d.getDeathScenario() == DeathScenario.SPOUSE_DIES ? Optional.of(Year.of(d.getDeathYear())) : Optional.empty()));
     }
 
     private static void applySurvivorAge(RetirementPlan plan, int age) {
