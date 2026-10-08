@@ -13,7 +13,7 @@ public record IntegratedAnalyzerReport(
         Instant exportedAt,
         List<String> context,
         List<String> selectedSummary,
-        HeatMap heatMap,
+        Visualization visualization,
         List<Section> assumptions,
         List<Table> rankedTables,
         List<Section> results) {
@@ -26,10 +26,35 @@ public record IntegratedAnalyzerReport(
         Objects.requireNonNull(exportedAt);
         context = List.copyOf(context);
         selectedSummary = List.copyOf(selectedSummary);
-        Objects.requireNonNull(heatMap);
+        Objects.requireNonNull(visualization);
         assumptions = List.copyOf(assumptions);
         rankedTables = List.copyOf(rankedTables);
         results = List.copyOf(results);
+    }
+
+    public sealed interface Visualization permits HeatMap, Individual { }
+
+    /** Compatibility accessor for genuine couple reports only. */
+    public HeatMap heatMap() { return (HeatMap) visualization; }
+
+    public record Individual(String metric, List<IndividualAge> ages) implements Visualization {
+        public Individual {
+            Objects.requireNonNull(metric);
+            ages = List.copyOf(ages);
+            if (!ages.stream().map(IndividualAge::age).toList().equals(
+                    java.util.stream.IntStream.rangeClosed(62, 70).boxed().toList())) {
+                throw new IllegalArgumentException("Individual reports require ages 62 through 70 in order.");
+            }
+        }
+    }
+
+    public record IndividualAge(int age, String value, String percentOfOptimal,
+            ClaimingHeatMapPalette tier, boolean optimal, boolean selected, boolean current) {
+        public IndividualAge {
+            Objects.requireNonNull(value);
+            Objects.requireNonNull(percentOfOptimal);
+            Objects.requireNonNull(tier);
+        }
     }
 
     public record Section(String title, List<String> lines) {
@@ -50,7 +75,7 @@ public record IntegratedAnalyzerReport(
     }
 
     public record HeatMap(String metric, String explanation, List<Integer> primaryAges,
-                          List<Integer> spouseAges, List<Cell> cells) {
+                          List<Integer> spouseAges, List<Cell> cells) implements Visualization {
         public HeatMap {
             primaryAges = List.copyOf(primaryAges);
             spouseAges = List.copyOf(spouseAges);

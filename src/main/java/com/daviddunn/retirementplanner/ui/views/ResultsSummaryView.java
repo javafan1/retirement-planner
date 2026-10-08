@@ -2431,8 +2431,8 @@ public class ResultsSummaryView extends BorderPane {
         else InputHelp.install(projectionLengthField, HelpText.PLANNING_HORIZON);
         InputHelp.link(horizonLabel, projectionLengthField);
         planningHorizonValue.setTooltip(new Tooltip(horizonLabel.getText()));
-        exportButton.setDisable(!couple);
-        exportButton.setTooltip(new Tooltip(couple ? "Export the completed projection." : "Single-person PDF and CSV reporting is deferred to the reporting stage."));
+        exportButton.setDisable(false);
+        exportButton.setTooltip(new Tooltip("Export the completed projection."));
         currentProjection = projection;
 
         loadAssumptions(plan);

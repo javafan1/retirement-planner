@@ -27,7 +27,7 @@ import java.time.LocalDate;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-class SinglePersonHouseholdUiTest {
+public class SinglePersonHouseholdUiTest {
     @TempDir Path temporary;
 
     @BeforeAll static void startup() throws Exception {
@@ -162,7 +162,7 @@ class SinglePersonHouseholdUiTest {
                     .allMatch(row -> row.account().getOwnership() == AccountOwnership.PRIMARY));
             var results = new ResultsSummaryView(controller);
             results.load(plan, projection, java.util.List.of());
-            assertTrue(field(results, "exportButton", Button.class).isDisabled());
+            assertFalse(field(results, "exportButton", Button.class).isDisabled());
             assertFalse(field(results, "deathScenarioComboBox", ComboBox.class).isVisible());
             var details = new ProjectionYearDetailsPane(projection.getYears().getLast(), null, BigDecimal.ZERO, BigDecimal.ZERO);
             assertFalse(text(details).contains("Spouse"));
@@ -179,6 +179,18 @@ class SinglePersonHouseholdUiTest {
             assertEquals("Edited", controller.getCurrentPlan().getHousehold().getPrimaryPerson().getLastName());
             assertEquals(ending, controller.getCurrentProjection().getYears().getLast().getEndingInvestableAssets());
             assertFalse(Files.readString(file).contains("\"spouse\": {"));
+            results.load(controller.getCurrentPlan(), controller.getCurrentProjection(), java.util.List.of());
+            var pdfPath = com.daviddunn.retirementplanner.Stage4cPdfChecks.path("single-projection");
+            new com.daviddunn.retirementplanner.app.export.ProjectionPdfExporter().export(controller.getCurrentPlan(),
+                    controller.getCurrentProjection(), java.util.List.of(), results.prepareProjectionPdfReport(), pdfPath);
+            String pdfText = com.daviddunn.retirementplanner.Stage4cPdfChecks.inspect(pdfPath);
+            assertTrue(pdfText.contains("Primary Pension"));
+            assertTrue(pdfText.contains("Account / Owner"));
+            var csvPath = pdfPath.resolveSibling("single-projection.csv");
+            new com.daviddunn.retirementplanner.app.export.ProjectionCsvExporter().export(controller.getCurrentProjection(), java.util.List.of(), csvPath);
+            String csv = Files.readString(csvPath);
+            assertFalse(csv.contains("Spouse")); assertFalse(csv.contains("Survivor"));
+            assertTrue(csv.contains("Primary Roth Conversion"));
             return null;
         });
     }
@@ -325,8 +337,16 @@ class SinglePersonHouseholdUiTest {
                     assertEquals("Share of simulated market and lifetime scenarios that completed all modeled obligations through the person's death.",
                             MonteCarloMortalityPresentation.lifetimeText(MonteCarloMortalityPresentation.FUNDING_HELP, false));
                     assertEquals(417, view.session().result().settings().seed());
-                    assertFalse(view.canExportPdf());
-                    assertThrows(UnsupportedOperationException.class, () -> MonteCarloPdfReportAdapter.from(view.session().result()));
+                    assertTrue(view.canExportPdf());
+                    var report = view.preparePdfReport();
+                    int beforeExports = calls.get();
+                    var pdfPath = com.daviddunn.retirementplanner.Stage4cPdfChecks.path("single-mc-" + mode);
+                    new com.daviddunn.retirementplanner.app.export.MonteCarloPdfExporter().export(report, pdfPath);
+                    new com.daviddunn.retirementplanner.app.export.MonteCarloPdfExporter().export(report, pdfPath.resolveSibling("repeat-" + pdfPath.getFileName()));
+                    String pdfText = com.daviddunn.retirementplanner.Stage4cPdfChecks.inspect(pdfPath);
+                    assertTrue(pdfText.contains("417"));
+                    assertTrue(pdfText.contains("Percentile"));
+                    assertEquals(beforeExports, calls.get());
                     String visible = visibleText(view).toLowerCase();
                     assertFalse(visible.contains("second death") || visible.contains("both alive") || visible.contains("survivor"));
                     if (Boolean.getBoolean("single.stage4b.preview")) {
@@ -368,9 +388,27 @@ class SinglePersonHouseholdUiTest {
                 assertEquals(MonteCarloStrategyComparisonSession.State.COMPLETED, comparison.session().state(),
                         String.valueOf(comparison.session().failure()));
                 assertFalse(comparison.session().result().result().request().assumptions().hasSpouse());
-                assertFalse(comparison.canExportPdf());
+                assertTrue(comparison.canExportPdf());
+                var pdfPath = com.daviddunn.retirementplanner.Stage4cPdfChecks.path("single-mc-comparison");
+                new com.daviddunn.retirementplanner.app.export.MonteCarloPdfExporter().export(comparison.preparePdfReport(), pdfPath);
+                com.daviddunn.retirementplanner.Stage4cPdfChecks.inspect(pdfPath);
                 assertFalse(visibleText(comparison).toLowerCase().contains("second-death"));
                 if (Boolean.getBoolean("single.stage4b.preview")) mcSnapshot(comparison, "comparison");
+                return null;
+            });
+            fx(() -> {
+                field(comparison, "mode", ComboBox.class).setValue(MonteCarloMode.FIXED_LIFESPAN);
+                assertFalse(comparison.canExportPdf());
+                field(comparison, "run", Button.class).fire();
+                return null;
+            });
+            comparisonQueue.remove().run();
+            fx(() -> {
+                assertTrue(comparison.canExportPdf());
+                var path = com.daviddunn.retirementplanner.Stage4cPdfChecks.path("single-mc-comparison-fixed");
+                new com.daviddunn.retirementplanner.app.export.MonteCarloPdfExporter().export(comparison.preparePdfReport(), path);
+                com.daviddunn.retirementplanner.Stage4cPdfChecks.inspect(path);
+                assertTrue(comparisonQueue.isEmpty(), "Export does not enqueue analysis");
                 return null;
             });
         } finally { fx(() -> { comparison.close(); return null; }); }
@@ -394,7 +432,7 @@ class SinglePersonHouseholdUiTest {
         var directory = Path.of("target/single-stage4b-preview"); Files.createDirectories(directory);
         javax.imageio.ImageIO.write(output, "png", directory.resolve(name + ".png").toFile());
     }
-    private static ApplicationController uiPlan() throws Exception {
+    public static ApplicationController uiPlan() throws Exception {
         var controller = new ApplicationController(); controller.newPlan();
         var view = new HouseholdView(); view.load(controller.getCurrentPlan()); fillPrimary(view);
         assertTrue(view.applyChanges());

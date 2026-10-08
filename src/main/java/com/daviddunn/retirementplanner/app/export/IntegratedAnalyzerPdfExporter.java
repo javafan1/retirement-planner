@@ -20,7 +20,7 @@ public final class IntegratedAnalyzerPdfExporter {
         Path temporary = Files.createTempFile(target.getParent(), ".integrated-analysis-", ".pdf");
         try {
             try (PDDocument document = new PDDocument()) {
-                document.getDocumentInformation().setTitle(IntegratedAnalyzerReport.TITLE + " - " + report.analysisType());
+                document.getDocumentInformation().setTitle(title(report) + " - " + report.analysisType());
                 document.getDocumentInformation().setAuthor("Retirement Planner");
                 document.getDocumentInformation().setSubject("Completed analysis results; no analysis was rerun for export.");
                 try (Renderer renderer = new Renderer(document, report)) {
@@ -33,6 +33,10 @@ public final class IntegratedAnalyzerPdfExporter {
         } finally {
             Files.deleteIfExists(temporary);
         }
+    }
+
+    private static String title(IntegratedAnalyzerReport report) {
+        return report.analysisType().equals("Social Security Only") ? "Social Security Claiming Analysis" : IntegratedAnalyzerReport.TITLE;
     }
 
     private static final class Renderer implements AutoCloseable {
@@ -58,7 +62,7 @@ public final class IntegratedAnalyzerPdfExporter {
 
         void render() throws IOException {
             newPage(false);
-            text(IntegratedAnalyzerReport.TITLE, MARGIN, 570, 19, true, BLUE);
+            text(title(report), MARGIN, 570, 19, true, BLUE);
             text(report.analysisType(), MARGIN, 548, 15, true, INK);
             text(report.household(), MARGIN, 529, 10, true, INK);
             var dateTime = java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm 'UTC'").withZone(java.time.ZoneOffset.UTC);
@@ -71,15 +75,17 @@ public final class IntegratedAnalyzerPdfExporter {
                 }
             }
             float mapTop = Math.min(438, y - 10);
-            heatMap(mapTop);
+            if (report.visualization() instanceof Individual individual) individualMap(mapTop, individual);
+            else heatMap(mapTop);
             selectedSummary(mapTop);
             newPage(true);
             for (var section : report.assumptions()) section(section);
             for (var table : report.rankedTables()) {
-                newPage(true);
+                if (report.visualization() instanceof Individual) ensure(100); else newPage(true);
                 table(table);
+                if (report.visualization() instanceof Individual) y -= 24;
             }
-            newPage(true);
+            if (!(report.visualization() instanceof Individual)) newPage(true);
             for (var section : report.results()) section(section);
             close();
             for (int index = 0; index < document.getNumberOfPages(); index++) {
@@ -111,6 +117,40 @@ public final class IntegratedAnalyzerPdfExporter {
                 text(report.household(), MARGIN, y, 9, false, MUTED);
                 y -= 24;
             }
+        }
+
+        private void individualMap(float top, Individual map) throws IOException {
+            text("PRIMARY CLAIMING-AGE ALTERNATIVES", MARGIN, top, 11, true, BLUE);
+            text("Metric: " + map.metric(), MARGIN, top - 16, 9, true, INK);
+            text("Age", MARGIN + 8, top - 37, 9, true, INK);
+            text("Value", MARGIN + 66, top - 37, 9, true, INK);
+            text("% of optimal", MARGIN + 210, top - 37, 9, true, INK);
+            text("Markers", MARGIN + 312, top - 37, 9, true, INK);
+            float rowTop = top - 45;
+            for (var age : map.ages()) {
+                float bottom = rowTop - 27;
+                rectangle(MARGIN, bottom, 480, 25, Color.decode(age.tier().color));
+                if (age.selected()) {
+                    content.setStrokingColor(BLUE); content.setLineWidth(2);
+                    content.addRect(MARGIN + 1, bottom + 1, 478, 23); content.stroke();
+                }
+                text(Integer.toString(age.age()), MARGIN + 8, bottom + 8, 9, true, INK);
+                text(age.value(), MARGIN + 66, bottom + 8, 9, false, INK);
+                text(age.percentOfOptimal(), MARGIN + 210, bottom + 8, 9, false, INK);
+                text((age.optimal() ? "Optimal " : "") + (age.selected() ? "Selected " : "") + (age.current() ? "Current" : ""),
+                        MARGIN + 312, bottom + 8, 9, true, INK);
+                if (age.optimal()) star(MARGIN + 463, bottom + 12, 4);
+                rowTop -= 27;
+            }
+            float legend = rowTop - 14;
+            int i = 0;
+            for (var tier : ClaimingHeatMapPalette.values()) {
+                float x = MARGIN + i % 3 * 164;
+                float baseline = legend - i / 3 * 15;
+                rectangle(x, baseline - 1, 9, 9, Color.decode(tier.color));
+                text(tier.label, x + 12, baseline, 7, false, INK); i++;
+            }
+            text("Colors use unrounded % of optimal. Stars mark exact ties; outline marks selection.", MARGIN, legend - 36, 7, false, MUTED);
         }
 
         private void heatMap(float top) throws IOException {

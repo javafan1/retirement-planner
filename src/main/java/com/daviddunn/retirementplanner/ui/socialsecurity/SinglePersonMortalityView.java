@@ -30,6 +30,17 @@ final class SinglePersonMortalityView extends VBox {
     private RetirementPlan plan;
     private SinglePersonMortalityAnalysis.Result completed;
     private boolean current;
+    private IndividualReportContext reportContext;
+    private final IndividualPdfExportAction pdf;
+
+    boolean canExportPdf() { return current && completed != null && reportContext != null
+            && jobs.state() == SocialSecurityAnalyzerJobController.State.IDLE; }
+    com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport preparePdfReport() {
+        if (!canExportPdf()) throw new IllegalStateException("A current completed analysis is required.");
+        var selected = table.getSelectionModel().getSelectedItem();
+        return IndividualAnalyzerReportAdapter.mortality(reportContext, completed,
+                selected == null ? completed.currentAge() : selected.strategy().primaryRetirementAge());
+    }
     private final AnalysisProgressView progress = new AnalysisProgressView();
 
     SinglePersonMortalityView(RetirementPlan plan, SocialSecurityAnalyzerJobController jobs, SinglePersonMortalityAnalysis.Mode mode) {
@@ -37,6 +48,8 @@ final class SinglePersonMortalityView extends VBox {
         this.plan = plan;
         this.jobs = jobs;
         this.mode = mode;
+        pdf = new IndividualPdfExportAction("single-mortality-pdf", mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED
+                ? "social-security-longevity-weighted.pdf" : "social-security-only.pdf", this::canExportPdf, this::preparePdfReport);
         setPadding(new Insets(14));
         conditioning.setValue(plan.getPlanningAssumptions().getProjectionStartDate());
         valuation.setValue(conditioning.getValue());
@@ -91,8 +104,8 @@ final class SinglePersonMortalityView extends VBox {
         discount.textProperty().addListener((o, a, b) -> edited());
         conditioning.valueProperty().addListener((o, a, b) -> edited());
         valuation.valueProperty().addListener((o, a, b) -> edited());
-        getChildren().addAll(heading, explanation, assumptions, inputs, new HBox(10, run, cancel), status, progress, summary, table, details,
-                label("Read-only analysis. Mortality uses the SSA period table with terminal residual at age 120. Single-person PDF export remains deferred."));
+        getChildren().addAll(heading, explanation, assumptions, inputs, new HBox(10, run, cancel, pdf.button()), status, progress, summary, table, details,
+                label("Read-only analysis. Mortality uses the SSA period table with terminal residual at age 120. PDF export uses the completed frozen result."));
         refresh();
     }
 
@@ -106,6 +119,7 @@ final class SinglePersonMortalityView extends VBox {
     void start() {
         try {
             var frozen = new RetirementPlanScenarioCopyService().copy(plan);
+            var captured = IndividualReportContext.capture(frozen);
             var mortality = new SocialSecurityStrategyAnalysisRequestFactory().createIndividual(frozen,
                     SocialSecurityMortalityAdjustment.of(new BigDecimal(factor.getText().trim())), conditioning.getValue());
             var date = valuation.getValue();
@@ -114,7 +128,7 @@ final class SinglePersonMortalityView extends VBox {
             boolean admitted = jobs.start(mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED
                             ? SocialSecurityAnalyzerJobController.Mode.WEIGHTED : SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY,
                     (p, c) -> new SinglePersonMortalityAnalysis().calculate(frozen, mortality, date, rate, mode, p, c),
-                    this::render, failure -> status.setText("Analysis failed: " + failure.getMessage()));
+                    result -> { reportContext = captured; render(result); }, failure -> status.setText("Analysis failed: " + failure.getMessage()));
             if (!admitted) status.setText("Another analysis is running.");
         } catch (RuntimeException invalid) { current = false; status.setText("Check inputs: " + invalid.getMessage()); }
         refresh();
@@ -137,6 +151,7 @@ final class SinglePersonMortalityView extends VBox {
         if (busy) progress.show(jobs.progress()); else progress.hide();
         run.setDisable(busy);
         cancel.setDisable(!busy);
+        pdf.refresh();
         factor.setDisable(busy); discount.setDisable(busy); conditioning.setDisable(busy); valuation.setDisable(busy);
         assumptions.setText("Mortality category from Person: " + plan.getHousehold().getPrimaryPerson().getMortalityCategory());
         if (busy) status.setText("Evaluating " + (mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED ? "individual lifetime scenarios" : "own-benefit claiming strategies")

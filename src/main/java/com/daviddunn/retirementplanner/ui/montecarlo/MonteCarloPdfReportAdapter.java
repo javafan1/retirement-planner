@@ -20,8 +20,8 @@ public final class MonteCarloPdfReportAdapter {
     private MonteCarloPdfReportAdapter() { }
 
     public static MonteCarloPdfReport from(MonteCarloRun run) {
-        if (!run.people().hasSpouse()) throw new UnsupportedOperationException("Single-person PDF export is deferred to the reporting stage.");
         Objects.requireNonNull(run);
+        boolean couple = run.people().hasSpouse();
         boolean mortality = run.mode() == MonteCarloMode.LONGEVITY_ADJUSTED;
         var sections = new ArrayList<Section>();
         var context = new ArrayList<>(settings(run.settings()));
@@ -31,11 +31,17 @@ public final class MonteCarloPdfReportAdapter {
         long completed;
         if (mortality) {
             var r = run.mortalityResult(); completed = r.completedCount(); failures = r.fundingFailureStatistics();
-            var longevity = r.request().longevityAssumptions();
-            context.add("Mortality categories: Primary " + longevity.primaryCategory() + "; Spouse " + longevity.spouseCategory()
-                    + " | Conditioning date: " + longevity.mortalityBaseDate());
-            context.add("Longevity adjustments: Primary " + longevity.primaryAdjustment().factor() + "; Spouse " + longevity.spouseAdjustment().factor()
-                    + " | Survivor Social Security claiming age: " + r.request().survivorClaimingAge().orElseThrow());
+            if (couple) {
+                var longevity = r.request().longevityAssumptions();
+                context.add("Mortality categories: Primary " + longevity.primaryCategory() + "; Spouse " + longevity.spouseCategory()
+                        + " | Conditioning date: " + longevity.mortalityBaseDate());
+                context.add("Longevity adjustments: Primary " + longevity.primaryAdjustment().factor() + "; Spouse " + longevity.spouseAdjustment().factor()
+                        + " | Survivor Social Security claiming age: " + r.request().survivorClaimingAge().orElseThrow());
+            } else {
+                var primary = r.request().primary();
+                context.add("Primary mortality category: " + primary.mortalityCategory() + " | Conditioning date: " + primary.mortalityBaseDate());
+                context.add("Primary Longevity Factor: " + primary.mortalityAdjustment().factor());
+            }
             sections.add(section("Funding reliability", "Lifetime funding probability: " + MonteCarloPresentation.fundingPercent(r.fundingProbability(), r.fundingFailureCount(), completed),
                     MonteCarloMortalityPresentation.fundingDetail(r)));
             metrics = List.of(r.endingInvestableAssets(), r.endingNetWorth(), r.afterTaxEstate(), r.lifetimeTaxes());
@@ -47,21 +53,30 @@ public final class MonteCarloPdfReportAdapter {
         }
         sections.add(new Section("Terminal financial outcomes", List.of(
                 "Conditional on " + count(completed) + " successfully completed simulations of " + count(run.settings().simulationCount()) + " requested. Failed outcomes are not replaced with zeros.",
-                mortality ? MonteCarloStrategyComparisonPresentation.NOMINAL.replace("terminal differences", "terminal values")
+                mortality ? MonteCarloMortalityPresentation.lifetimeText(MonteCarloStrategyComparisonPresentation.NOMINAL.replace("terminal differences", "terminal values"), couple)
                         : "Terminal values use the common planning horizon ending " + run.lastYear() + ". Values are nominal future dollars; taxes are lifetime totals."),
                 List.of(distributions(metrics, false, List.of()))));
         if (mortality) {
             var r = run.mortalityResult();
-            var rows = r.annualResults().values().stream().map(a -> List.of("" + a.year(), count(a.requestedWorldCount()), count(a.livingHouseholdCount()),
-                    count(a.completedLivingYearSampleCount()), count(a.bothAliveCount()), count(a.primaryOnlyAliveCount()), count(a.spouseOnlyAliveCount()),
-                    count(a.livingFundingFailedByYearCount()), count(a.bothDeceasedCount()), MonteCarloMortalityPresentation.smallSample(a) ? "Small" : "")).toList();
-            sections.add(new Section("Annual living population", List.of(ANNUAL, "Funded/sample is both the completed-living count and annual percentile sample count. Failed living excludes normal post-second-death absence.", SMALL),
-                    List.of(new Table(List.of("Year", "Requested", "Living", "Funded / sample", "Both alive", "Primary only", "Spouse only", "Failed living", "Deceased", "Sample flag"), rows,
-                            List.of(42, 59, 48, 62, 55, 55, 55, 55, 55, 54)))));
+            if (couple) {
+                var rows = r.annualResults().values().stream().map(a -> List.of("" + a.year(), count(a.requestedWorldCount()), count(a.livingHouseholdCount()),
+                        count(a.completedLivingYearSampleCount()), count(a.bothAliveCount()), count(a.primaryOnlyAliveCount()), count(a.spouseOnlyAliveCount()),
+                        count(a.livingFundingFailedByYearCount()), count(a.bothDeceasedCount()), MonteCarloMortalityPresentation.smallSample(a) ? "Small" : "")).toList();
+                sections.add(new Section("Annual living population", List.of(ANNUAL, "Funded/sample is both the completed-living count and annual percentile sample count. Failed living excludes normal post-second-death absence.", SMALL),
+                        List.of(new Table(List.of("Year", "Requested", "Living", "Funded / sample", "Both alive", "Primary only", "Spouse only", "Failed living", "Deceased", "Sample flag"), rows,
+                                List.of(42, 59, 48, 62, 55, 55, 55, 55, 55, 54)))));
+            } else {
+                var rows = r.annualResults().values().stream().map(a -> List.of("" + a.year(), count(a.requestedWorldCount()),
+                        count(a.livingHouseholdCount()), count(a.completedLivingYearSampleCount()), count(a.livingFundingFailedByYearCount()),
+                        count(a.deceasedCount()), MonteCarloMortalityPresentation.smallSample(a) ? "Small" : "")).toList();
+                sections.add(new Section("Annual living population", List.of(ANNUAL, SMALL), List.of(new Table(
+                        List.of("Year", "Requested", "Living", "Funded / sample", "Failed living", "Deceased", "Sample flag"), rows,
+                        List.of(50, 80, 80, 95, 85, 75, 75)))));
+            }
             sections.add(new Section("Terminal dates and analysis details", List.of(MonteCarloMortalityPresentation.terminalDates(r),
-                    "Terminal-year counts use the actual successful balance-date year. Opening-date second death uses opening assets; no annual financial row is fabricated.",
+                    MonteCarloMortalityPresentation.lifetimeText("Terminal-year counts use the actual successful balance-date year. Opening-date second death uses opening assets; no annual financial row is fabricated.", couple),
                     "Mortality model: " + r.mortalityModel(),
-                    "Mortality table: " + r.request().longevityAssumptions().tableMetadata()), List.of(new Table(List.of("Successful terminal year", "Completed simulations"),
+                    "Mortality table: " + r.request().mortalityTable().metadata()), List.of(new Table(List.of("Successful terminal year", "Completed simulations"),
                     r.successfulTerminalYearCounts().entrySet().stream().map(e -> List.of("" + e.getKey(), count(e.getValue()))).toList(), List.of(270, 270)))));
         }
         sections.add(annualValues(run.fan().years().stream().map(y -> new Point(y.calendarYear(), y.percentiles(), y.deterministic())).toList(), false, run.settings().simulationCount()));
@@ -84,7 +99,6 @@ public final class MonteCarloPdfReportAdapter {
     }
 
     public static MonteCarloPdfReport from(MonteCarloStrategyComparisonRun run) {
-        if (!run.result().request().assumptions().hasSpouse()) throw new UnsupportedOperationException("Single-person PDF export is deferred to the reporting stage.");
         Objects.requireNonNull(run);
         var r = run.result(); var s = r.summary(); var p = s.pairedStates();
         var sections = new ArrayList<Section>();
@@ -114,7 +128,7 @@ public final class MonteCarloPdfReportAdapter {
                 MonteCarloStrategyComparisonPresentation.denominator(s),
                 "Relation probabilities use the same both-completed denominator; ties are a separate category.",
                 "Lifetime Modeled Income Taxes: positive Current − Baseline means Current Plan paid MORE modeled income tax; negative means Current Plan paid LESS. More tax is not inherently favorable."));
-        if (run.mode() == MonteCarloMode.LONGEVITY_ADJUSTED) notes.add(MonteCarloStrategyComparisonPresentation.NOMINAL);
+        if (run.mode() == MonteCarloMode.LONGEVITY_ADJUSTED) notes.add(MonteCarloMortalityPresentation.lifetimeText(MonteCarloStrategyComparisonPresentation.NOMINAL, r.request().assumptions().hasSpouse()));
         sections.add(new Section("Paired financial differences", notes, List.of(distributions(m.stream().map(MonteCarloPairedMetricSummary::differencePercentiles).toList(), true, extras))));
         sections.add(new Section("Annual paired population", List.of(MonteCarloStrategyComparisonPresentation.ANNUAL,
                 "Current-only / Baseline-only funded and both failed count living households only. Deceased/not living is normal mortality absence, not funding failure.", SMALL), List.of(new Table(

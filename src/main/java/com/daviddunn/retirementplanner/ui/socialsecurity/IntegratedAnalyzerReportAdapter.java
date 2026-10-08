@@ -21,7 +21,7 @@ final class IntegratedAnalyzerReportAdapter {
             List<ExhaustiveIntegratedSearchPresentation.Group> orderedRows, String socialSecurityReference) {
         var result = model.result();
         if (!result.currentPlanBaseline().evaluatedStrategy().hasSpouse()) {
-            throw new UnsupportedOperationException("Single-person integrated PDF export is deferred to the reporting milestone.");
+            throw new UnsupportedOperationException("The couple report adapter requires a two-person result. Use the individual report adapter for one person.");
         }
         List<Section> sections = new ArrayList<>();
         sections.add(new Section("Search Summary and Current Plan", List.of(

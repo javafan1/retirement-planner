@@ -30,6 +30,19 @@ final class SinglePersonIntegratedView extends VBox {
     private RetirementPlan plan;
     private SinglePersonIntegratedAnalysis completed;
     private boolean current;
+    private IndividualReportContext reportContext;
+    private final IndividualPdfExportAction pdf = new IndividualPdfExportAction("single-deterministic-pdf",
+            "social-security-deterministic.pdf", this::canExportPdf, this::preparePdfReport);
+
+    boolean canExportPdf() { return current && completed != null && reportContext != null
+            && jobs.state() == SocialSecurityAnalyzerJobController.State.IDLE; }
+    com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport preparePdfReport() {
+        if (!canExportPdf()) throw new IllegalStateException("A current completed analysis is required.");
+        var selected = table.getSelectionModel().getSelectedItem();
+        return IndividualAnalyzerReportAdapter.deterministic(reportContext, completed,
+                selected == null ? completed.result().currentPlanBaseline().evaluatedStrategy().primaryRetirementAge()
+                        : selected.strategy().primaryRetirementAge());
+    }
     final SinglePersonMortalityView ssView;
     final SinglePersonMortalityView weightedView;
 
@@ -93,9 +106,9 @@ final class SinglePersonIntegratedView extends VBox {
             }
         });
         var deterministic = new VBox(10);
-        deterministic.getChildren().addAll(title, explanation, new HBox(10, deathLabel, deathYear, run, cancel),
+        deterministic.getChildren().addAll(title, explanation, new HBox(10, deathLabel, deathYear, run, cancel, pdf.button()),
                 status, progress, summary, table, details, breakEven,
-                label("Read-only analysis. Single-person PDF export remains unavailable."));
+                label("Read-only analysis. PDF export uses the completed frozen result."));
         ssView = new SinglePersonMortalityView(plan, jobs, SinglePersonMortalityAnalysis.Mode.SOCIAL_SECURITY_ONLY);
         weightedView = new SinglePersonMortalityView(plan, jobs, SinglePersonMortalityAnalysis.Mode.INTEGRATED);
         var tabs = new TabPane(new Tab("Deterministic Integrated", deterministic),
@@ -120,6 +133,7 @@ final class SinglePersonIntegratedView extends VBox {
         try {
             if (plan.getHousehold().hasSpouse()) throw new IllegalArgumentException("Household composition changed; reopen the analyzer.");
             var frozen = new RetirementPlanScenarioCopyService().copy(plan);
+            var captured = IndividualReportContext.capture(frozen);
             var base = IntegratedSocialSecurityCompleteStrategySearchRequest.standard(frozen);
             Optional<Year> death = deathYear.getText().isBlank() ? Optional.empty()
                     : Optional.of(Year.of(Integer.parseInt(deathYear.getText().trim())));
@@ -127,7 +141,7 @@ final class SinglePersonIntegratedView extends VBox {
                     List.of(), List.of(), List.of(), base.rankingMeasure(), 9, death);
             current = false;
             boolean started = jobs.start(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
-                    (p, c) -> SinglePersonIntegratedAnalysis.calculate(request, p, c), this::render,
+                    (p, c) -> SinglePersonIntegratedAnalysis.calculate(request, p, c), result -> { reportContext = captured; render(result); },
                     failure -> status.setText("Analysis failed: " + failure.getMessage()));
             if (!started) status.setText("Another analysis is running. Try again when it finishes.");
             refreshControls();
@@ -189,6 +203,7 @@ final class SinglePersonIntegratedView extends VBox {
         boolean busy = jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE;
         run.setDisable(busy || plan.getHousehold().hasSpouse());
         cancel.setDisable(!busy);
+        pdf.refresh();
         deathYear.setDisable(busy);
         var selected = table.getSelectionModel().getSelectedItem();
         breakEven.setDisable(busy || !current || completed == null || selected == null

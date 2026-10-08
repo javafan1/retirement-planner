@@ -253,7 +253,7 @@ class SinglePersonCoreProjectionTest {
     }
 
     @Test
-    void monteCarloWorksWhileReportsRemainDeferred(@org.junit.jupiter.api.io.TempDir Path directory) throws Exception {
+    void monteCarloAndIndividualCsvWorkWithoutSpouse(@org.junit.jupiter.api.io.TempDir Path directory) throws Exception {
         var plan = plan(false, FilingStatus.SINGLE);
         var projection = new ProjectionEngine().project(plan);
         var settings = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSettings(1, 417, BigDecimal.ZERO, BigDecimal.ZERO);
@@ -261,11 +261,11 @@ class SinglePersonCoreProjectionTest {
         assertEquals(1, monteCarlo.completedCount());
         assertFalse(plan.getHousehold().hasSpouse());
         Path csv = directory.resolve("single.csv");
-        assertThrows(UnsupportedOperationException.class,
-                () -> new com.daviddunn.retirementplanner.app.export.ProjectionCsvExporter().export(projection, List.of(), csv));
-        assertFalse(Files.exists(csv));
+        new com.daviddunn.retirementplanner.app.export.ProjectionCsvExporter().export(projection, List.of(), csv);
+        assertTrue(Files.exists(csv));
+        assertFalse(Files.readString(csv).contains("Spouse"));
         Path pdf = directory.resolve("single.pdf");
-        assertThrows(UnsupportedOperationException.class,
+        assertThrows(NullPointerException.class,
                 () -> new com.daviddunn.retirementplanner.app.export.ProjectionPdfExporter().export(plan, projection, List.of(), null, pdf));
         assertFalse(Files.exists(pdf));
     }

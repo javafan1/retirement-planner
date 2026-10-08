@@ -343,7 +343,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         if (spouseAdjustment.getParent() != null) show(spouseAdjustment.getParent(), couple);
         if (survivorAge.getParent() != null) show(survivorAge.getParent(), couple);
         pdf.button().setTooltip(new Tooltip(couple ? "Export the completed frozen result. Run again if the result is stale."
-                : "Single-person PDF export is deferred to the reporting stage."));
+                : "Export the completed frozen result. Run again if stale."));
         show(longevityInputs, mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED);
         show(mortalityContext, mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED);
         updateMortalityContext();
@@ -565,7 +565,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     }
 
     public boolean canExportPdf() {
-        return session != null && session.state() == MonteCarloSession.State.COMPLETED && !session.stale() && session.result() != null && session.result().people().hasSpouse();
+        return session != null && session.state() == MonteCarloSession.State.COMPLETED && !session.stale() && session.result() != null;
     }
 
     public com.daviddunn.retirementplanner.app.export.MonteCarloPdfReport preparePdfReport() {

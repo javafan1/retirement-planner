@@ -195,7 +195,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         boolean couple = plan.getHousehold().hasSpouse();
         for (var input : List.of(spouse, survivorA, survivorB)) show(input.getParent(), couple);
         pdf.button().setTooltip(new Tooltip(couple ? "Export the completed frozen result. Run again if the result is stale."
-                : "Single-person PDF export is deferred to the reporting stage."));
+                : "Export the completed frozen result. Run again if stale."));
         context.setText(!available ? MonteCarloStrategyComparisonRunService.MISSING_BASELINE
                 : mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED
                 ? "Mortality categories (from plan): " + plan.getHousehold().getPrimaryPerson().getMortalityCategory()
@@ -270,7 +270,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     private static void show(Node node, boolean value) { node.setVisible(value); node.setManaged(value); }
     public MonteCarloStrategyComparisonSession session() { return session; }
     public boolean canExportPdf() {
-        return session != null && session.state() == MonteCarloStrategyComparisonSession.State.COMPLETED && !session.stale() && session.result() != null && session.result().result().request().assumptions().hasSpouse();
+        return session != null && session.state() == MonteCarloStrategyComparisonSession.State.COMPLETED && !session.stale() && session.result() != null;
     }
     public com.daviddunn.retirementplanner.app.export.MonteCarloPdfReport preparePdfReport() {
         if (!canExportPdf()) throw new IllegalStateException("A current completed paired result is required for PDF export.");

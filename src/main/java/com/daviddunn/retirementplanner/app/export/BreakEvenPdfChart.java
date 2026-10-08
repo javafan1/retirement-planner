@@ -65,7 +65,7 @@ final class BreakEvenPdfChart {
                 text(out, survival == null ? "—" : BreakEvenPresentation.probability(survival), x - 10, 99, 9, true, INK);
             }
             text(out, "Calendar Year", 380, 119, 10, false, INK);
-            text(out, "Probability at least one spouse alive", LEFT, 79, 10, true, INK);
+            text(out, report.analysis().currentAssumptions().hasSpouse() ? "Probability at least one spouse alive" : "Primary survival probability", LEFT, 79, 10, true, INK);
             text(out, "Modeled survival context, not an individual lifespan prediction. See mortality notes.", LEFT, 63, 9, false, INK);
             text(out, "Comparison: " + first + "–" + last + " · " + metric.years().size() + " shared years", LEFT, 45, 9, false, INK);
             List<float[]> occupied = new ArrayList<>();

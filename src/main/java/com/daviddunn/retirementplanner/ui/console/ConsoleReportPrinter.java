@@ -216,6 +216,7 @@ public class ConsoleReportPrinter {
 
         System.out.println();
 
+        if (!household.hasSpouse()) return;
         System.out.println("Spouse");
         System.out.println("------");
         System.out.println("Name : " +

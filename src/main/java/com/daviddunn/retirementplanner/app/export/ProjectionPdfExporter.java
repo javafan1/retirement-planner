@@ -134,7 +134,7 @@ public class ProjectionPdfExporter {
                     "Retirement plan is required.");
         }
 
-        plan.getHousehold().requireSpouse("ProjectionPdfExporter (reporting stage deferred)");
+
         if (projection == null
                 || projection.isEmpty()) {
 
@@ -399,8 +399,7 @@ public class ProjectionPdfExporter {
 
         writeKeyValue(
                 "Death Scenario",
-                death.getDeathScenario()
-                        .toString(),
+                plan.getHousehold().hasSpouse() ? death.getDeathScenario().toString() : "Primary lifetime / configured horizon",
                 GRAY);
 
         if (death.getDeathYear() != null) {
@@ -412,7 +411,7 @@ public class ProjectionPdfExporter {
                     GRAY);
         }
 
-        if (death.getDeathScenario() != com.daviddunn.retirementplanner.domain.model.DeathScenario.BOTH_SURVIVE
+        if (plan.getHousehold().hasSpouse() && death.getDeathScenario() != com.daviddunn.retirementplanner.domain.model.DeathScenario.BOTH_SURVIVE
                 && death.getSurvivorClaimingAge() != null) {
 
             var choices = com.daviddunn.retirementplanner.domain.income.SurvivorBenefitClaimingPolicy.choices(
@@ -481,7 +480,7 @@ public class ProjectionPdfExporter {
         writeKeyValue("Future Federal Marginal Adjustment", percent(tax.getFutureFederalMarginalRateAdjustment())
                 + (tax.getFutureFederalMarginalRateEffectiveYear() == null ? " / not scheduled" : " / effective " + tax.getFutureFederalMarginalRateEffectiveYear()), GRAY);
         if (roth != null) writeKeyValue("Roth Stop Rule", roth.getStopRule().toString(), GRAY);
-        for (var person : java.util.stream.Stream.of(plan.getHousehold().getPrimaryPerson(), plan.getHousehold().getSpouse()).filter(java.util.Objects::nonNull).toList()) {
+        for (var person : plan.getHousehold().members()) {
             writeKeyValue("Household Member", person.getFullName() + " / born " + person.getBirthDate(), GRAY);
             for (var income : person.getIncomeSources()) {
                 if (income instanceof com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome ss) {
@@ -490,6 +489,14 @@ public class ProjectionPdfExporter {
                     writeKeyValue("Social Security Start / Benefit Valuation Year", ss.getStartDate() + " / " + ss.getBenefitValuationYear(), GRAY);
                 }
             }
+        }
+        if (!plan.getHousehold().hasSpouse()) {
+            for (var source : plan.getHousehold().getPrimaryPerson().getIncomeSources()) {
+                if (source instanceof com.daviddunn.retirementplanner.domain.income.Pension pension)
+                    writeKeyValue("Primary Pension", money(pension.getMonthlyBenefit()) + "/month; COLA " + percent(pension.getAnnualColaRate()), GRAY);
+            }
+            for (var account : plan.getAccountPortfolio().getAccounts())
+                writeKeyValue("Account / Owner", account.getName() + " / " + account.getOwnership() + " / " + money(account.getCurrentBalance()), GRAY);
         }
         currentY -= 10;
     }

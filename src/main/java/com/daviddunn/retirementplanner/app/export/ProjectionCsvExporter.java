@@ -27,9 +27,6 @@ public class ProjectionCsvExporter {
                     "Projection cannot be empty.");
         }
 
-        if (projection.getYears().stream().anyMatch(year -> !year.getSocialSecurityResult().hasSpouse())) {
-            throw new UnsupportedOperationException("Single-person projection CSV export is deferred to the reporting stage.");
-        }
         if (nonInvestableProjections == null) {
             nonInvestableProjections =
                     List.of();
@@ -38,12 +35,13 @@ public class ProjectionCsvExporter {
         try (BufferedWriter writer =
                      Files.newBufferedWriter(file)) {
 
-            writeHeader(writer);
+            boolean individual = !projection.getYears().getFirst().getSocialSecurityResult().hasSpouse();
+            if (individual) writeIndividualHeader(writer); else writeHeader(writer);
 
             for (ProjectionYear year :
                     projection.getYears()) {
 
-                writeYear(
+                if (individual) writeIndividualYear(writer, year, nonInvestableProjections); else writeYear(
                         writer,
                         year,
                         nonInvestableProjections);
@@ -172,6 +170,143 @@ public class ProjectionCsvExporter {
                 year.getRequestedRothConversion(),
                 year.getPrimaryRothConversion(),
                 year.getSpouseRothConversion(),
+                year.getRothConversion(),
+                year.getRothConversionShortfall(),
+                year.getEndingRetainedNonQualifiedAssets(),
+                year.getEndingInvestableAssets(),
+
+                nonInvestableValue,
+                netWorth,
+
+                year.getAdjustedGrossIncome(),
+                year.getTaxableSocialSecurity(),
+                year.getFederalTaxableIncome(),
+                year.getFederalStandardDeduction(),
+                year.getFederalIncomeTax(),
+
+                year.getMichiganRetirementIncome(),
+                year.getMichiganRetirementDeduction(),
+                year.getMichiganTaxableIncome(),
+                year.getMichiganIncomeTax(),
+                year.getTotalIncomeTax(),
+                year.getCombinedEffectiveTaxRate(),
+
+                year.getAnnualMedicarePremium(),
+                year.getMonthlyPartBPremium(),
+                year.getMonthlyPartDPremium(),
+                year.getIrmaaBracketDisplay(),
+
+                year.getEstimatedHeirTax(),
+                year.getAfterTaxEstateValue());
+    }
+
+
+    private void writeIndividualHeader(
+            BufferedWriter writer)
+            throws IOException {
+
+        writer.write(
+                "Projection Year,"
+                        + "Calendar Year,"
+                        + "Primary Age,"
+                        + "Beginning Investable Assets,"
+                        + "Investment Growth,"
+                        + "Guaranteed Income,"
+                        + "Primary Own Social Security,"
+                        + "Primary Selected Social Security Benefit,"
+                        + "Household Social Security,"
+                        + "Annual Expenses,"
+                        + "Cash Flow Need,"
+                        + "Portfolio Withdrawal,"
+                        + "Required Minimum Distribution,"
+                        + "RMD Distributed Before Projection,"
+                        + "RMD Distributed In Projection,"
+                        + "Excess RMD,"
+                        + "Beginning Retained Non-Qualified Assets,"
+                        + "Retained Non-Qualified Asset Growth,"
+                        + "Retained Household Surplus,"
+                        + "Retained from Excess RMD,"
+                        + "Retained from Guaranteed Income,"
+                        + "Tax Funding Withdrawal,"
+                        + "Requested Roth Conversion,"
+                        + "Primary Roth Conversion,"
+                        + "Roth Conversion,"
+                        + "Roth Conversion Shortfall,"
+                        + "Ending Retained Non-Qualified Assets,"
+                        + "Ending Investable Assets,"
+                        + "Non-Investable Assets,"
+                        + "Net Worth,"
+                        + "Adjusted Gross Income,"
+                        + "Taxable Social Security,"
+                        + "Federal Taxable Income,"
+                        + "Federal Standard Deduction,"
+                        + "Federal Income Tax,"
+                        + "Michigan Retirement Income,"
+                        + "Michigan Retirement Deduction,"
+                        + "Michigan Taxable Income,"
+                        + "Michigan Income Tax,"
+                        + "Total Income Tax,"
+                        + "Combined Effective Tax Rate,"
+                        + "Annual Medicare Premium,"
+                        + "Monthly Part B Premium,"
+                        + "Monthly Part D Premium,"
+                        + "IRMAA Bracket,"
+                        + "Estimated Heir Tax,"
+                        + "After-Tax Estate Value");
+
+        writer.newLine();
+    }
+
+
+    private void writeIndividualYear(
+            BufferedWriter writer,
+            ProjectionYear year,
+            List<NonInvestableAssetProjection>
+                    nonInvestableProjections)
+            throws IOException {
+
+        BigDecimal nonInvestableValue =
+                getNonInvestableAssetValue(
+                        year.getCalendarYear(),
+                        nonInvestableProjections);
+
+        BigDecimal netWorth =
+                year.getEndingInvestableAssets()
+                        .add(nonInvestableValue);
+
+        writeRow(
+                writer,
+
+                year.getProjectionYear(),
+                year.getCalendarYear(),
+                year.getPrimaryPersonAge(),
+
+                year.getBeginningInvestableAssets(),
+                year.getInvestmentGrowth(),
+                year.getGuaranteedIncome(),
+                year.getSocialSecurityResult()
+                        .primaryOwnBenefit(),
+                year.getSocialSecurityResult()
+                        .primarySelection()
+                        .getDisplayName(),
+                year.getSocialSecurityResult()
+                        .householdBenefit(),
+                year.getAnnualExpenses(),
+                year.getCashFlowNeed(),
+                year.getPortfolioWithdrawal(),
+                year.getRequiredMinimumDistribution(),
+                year.getRmdDistributedBeforeProjection(),
+                year.getRmdDistributedInProjection(),
+                year.getExcessRmd(),
+                year.getBeginningRetainedNonQualifiedAssets(),
+                year.getRetainedNonQualifiedAssetGrowth(),
+                year.getRetainedHouseholdSurplus(),
+                year.getRetainedFromExcessRmd(),
+                year.getRetainedFromGuaranteedIncome(),
+                year.getTaxFundingWithdrawal(),
+                year.getRequestedRothConversion(),
+                year.getPrimaryRothConversion(),
+
                 year.getRothConversion(),
                 year.getRothConversionShortfall(),
                 year.getEndingRetainedNonQualifiedAssets(),
