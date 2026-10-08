@@ -1,6 +1,9 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport;
+import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Field;
+import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Kind;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
 import com.daviddunn.retirementplanner.domain.financial.GrowthCategory;
@@ -13,6 +16,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public class ExpenseDialog extends Dialog<Expense> {
+
+    private final boolean guidedCreation;
 
     private final TextField descriptionField;
     private final TextField annualAmountField;
@@ -34,6 +39,13 @@ public class ExpenseDialog extends Dialog<Expense> {
 
 
     public ExpenseDialog(Expense expense) {
+
+        this(expense, false);
+    }
+
+    public ExpenseDialog(Expense expense, boolean guidedCreation) {
+
+        this.guidedCreation = guidedCreation;
 
         if (expense == null) {
             setTitle("Add Expense");
@@ -210,7 +222,7 @@ public class ExpenseDialog extends Dialog<Expense> {
                 javafx.event.ActionEvent.ACTION,
                 event -> {
 
-                    if (!validateAndBuildExpense()) {
+                    if (!guidedCreation && !validateAndBuildExpense()) {
                         event.consume();
                     }
                 });
@@ -221,6 +233,19 @@ public class ExpenseDialog extends Dialog<Expense> {
                         ? result
                         : null);
 
+        if (guidedCreation) {
+            WizardDialogSupport.install(this, java.util.List.of(
+                    new Field("Description", descriptionField, Kind.TEXT, true),
+                    new Field("Expense Type", expenseTypeComboBox, Kind.CHOICE, true),
+                    new Field("Amount", annualAmountField, Kind.NUMBER, true),
+                    new Field("Growth Category", growthCategoryComboBox, Kind.CHOICE, true),
+                    new Field("Effective Date", effectiveDatePicker, Kind.DATE, false),
+                    new Field("End Date", endDatePicker, Kind.DATE, false)), () -> {
+                        if (!validateAndBuildExpense()) throw new IllegalArgumentException("Please complete the expense.");
+                        return result;
+                    });
+            updateExpenseTypeControls(expenseTypeComboBox.getValue());
+        }
 
     }
 
@@ -310,6 +335,10 @@ public class ExpenseDialog extends Dialog<Expense> {
     private void showValidationError(
             String message) {
 
+        if (guidedCreation) {
+            throw new IllegalArgumentException(message);
+        }
+
         Alert alert =
                 new Alert(Alert.AlertType.ERROR);
 
@@ -335,12 +364,12 @@ public class ExpenseDialog extends Dialog<Expense> {
 
         amountLabel.setText(
                 oneTime
-                        ? "Purchase Amount:"
-                        : "Annual Amount:");
+                        ? (guidedCreation ? "Purchase Amount *" : "Purchase Amount:")
+                        : (guidedCreation ? "Annual Amount *" : "Annual Amount:"));
 
         effectiveDateLabel.setText(
                 oneTime
-                        ? "Purchase Date:"
+                        ? (guidedCreation ? "Purchase Date *" : "Purchase Date:")
                         : "Effective Date:");
 
         /*

@@ -764,8 +764,13 @@ public class MainWindow {
                         return;
                     }
                     controller.newPlan(plan);
-                    // Household-only creation has no funding inputs yet; clear results without simulating.
+                    // Legal empty plans retain Phase 5A's deferred projection; populated plans use the normal engine.
                     loadCurrentPlan(false);
+                    if (!plan.getAccountPortfolio().getAccounts().isEmpty()
+                            || plan.getHousehold().members().stream().anyMatch(person -> !person.getIncomeSources().isEmpty())
+                            || !plan.getHousehold().getExpenses().isEmpty()) {
+                        refreshProjectionViews();
+                    }
                     TabPane tabs = (TabPane) root.getCenter();
                     tabs.getSelectionModel().select(tabs.getTabs().stream()
                             .filter(tab -> tab.getContent() == householdView)

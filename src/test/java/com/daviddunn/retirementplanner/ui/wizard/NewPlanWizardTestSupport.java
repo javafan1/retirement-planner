@@ -78,6 +78,11 @@ public final class NewPlanWizardTestSupport {
                 .filter(pane -> "new-plan-wizard".equals(pane.getId())).findFirst().orElseThrow();
     }
 
+    public static NewRetirementPlanWizard householdWizard() {
+        var draft = new NewPlanDraft();
+        return new NewRetirementPlanWizard(null, draft, List.of(new HouseholdWizardStep(draft)));
+    }
+
     public static AtomicInteger answerCreate(boolean couple, String departureChoice) {
         AtomicInteger prompts = new AtomicInteger();
         Platform.runLater(() -> {
@@ -97,6 +102,9 @@ public final class NewPlanWizardTestSupport {
                                 prompts.incrementAndGet();
                                 button(dialog, departureChoice).fire();
                             }));
+                }
+                for (int step = 0; step < 6 && button(pane, "Next").isVisible(); step++) {
+                    button(pane, "Next").fire();
                 }
                 button(pane, "Create Plan").fire();
             }

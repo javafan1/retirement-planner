@@ -42,7 +42,7 @@ class NewPlanWizardPreviewTest {
                 "spouse-added", "populated-couple", "narrow-couple")) {
             AtomicReference<NewRetirementPlanWizard> reference = new AtomicReference<>();
             fx(() -> {
-                var wizard = new NewRetirementPlanWizard(null);
+                var wizard = householdWizard();
                 reference.set(wizard);
                 wizard.show();
                 var pane = wizard.getDialogPane();

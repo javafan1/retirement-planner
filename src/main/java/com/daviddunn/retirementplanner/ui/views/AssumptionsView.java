@@ -81,6 +81,7 @@ public class AssumptionsView extends VBox {
     private final Button cancelButton = new Button("Cancel");
     private final ReadOnlyBooleanWrapper dirty = new ReadOnlyBooleanWrapper();
     private boolean loading;
+    private final boolean guidedCreation;
     private RetirementPlan currentPlan;
 
     /*
@@ -92,6 +93,14 @@ public class AssumptionsView extends VBox {
     private Runnable onOpeningRmdRequested;
 
     public AssumptionsView() {
+
+        this(false);
+    }
+
+    /** Compact initial-plan presentation, using the same inputs, parser and atomic apply path. */
+    public AssumptionsView(boolean guidedCreation) {
+
+        this.guidedCreation = guidedCreation;
 
         setPadding(new Insets(20));
         setSpacing(15);
@@ -506,6 +515,57 @@ public class AssumptionsView extends VBox {
          * Establish the initial disabled state.
          */
         updateDeathScenarioFields();
+        if (guidedCreation) {
+            configureGuidedCreation(grid);
+        }
+    }
+
+    private void configureGuidedCreation(GridPane fullGrid) {
+        fullGrid.setVisible(false);
+        fullGrid.setManaged(false);
+        GridPane compact = new GridPane();
+        compact.setHgap(12);
+        compact.setVgap(10);
+        var labels = new javafx.scene.layout.ColumnConstraints();
+        labels.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        var inputs = new javafx.scene.layout.ColumnConstraints();
+        inputs.setHgrow(javafx.scene.layout.Priority.ALWAYS);
+        compact.getColumnConstraints().addAll(labels, inputs);
+        List<Control> controls = List.of(projectionStartDatePicker, projectionLengthField,
+                investmentReturnField, inflationRateField, healthcareInflationField,
+                socialSecurityColaField, filingStatusComboBox);
+        List<String> names = List.of("Projection start date", "Projection length (years)",
+                "Investment return (%)", "General inflation (%)", "Healthcare inflation (%)",
+                "Social Security COLA (%)", "Filing status");
+        List<String> ids = List.of("start", "length", "return", "inflation", "healthcare", "cola", "filing-status");
+        for (int row = 0; row < controls.size(); row++) {
+            Control input = controls.get(row);
+            ((javafx.scene.layout.Pane) input.getParent()).getChildren().remove(input);
+            input.setId("wizard-assumption-" + ids.get(row));
+            input.setMaxWidth(Double.MAX_VALUE);
+            Label label = new Label(names.get(row) + " *");
+            label.setLabelFor(input);
+            compact.add(label, 0, row);
+            compact.add(input, 1, row);
+            if (input instanceof TextField text) text.textProperty().addListener((o, a, b) -> clearGuidedError(input));
+            if (input instanceof DatePicker date) date.getEditor().textProperty().addListener((o, a, b) -> clearGuidedError(input));
+            if (input instanceof ComboBox<?> combo) combo.valueProperty().addListener((o, a, b) -> clearGuidedError(input));
+        }
+        Label required = new Label("* Required. Existing defaults are shown; review them for your plan.");
+        required.setWrapText(true);
+        required.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        statusLabel.setWrapText(true);
+        statusLabel.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        statusLabel.getStyleClass().add("wizard-field-error");
+        statusLabel.visibleProperty().bind(statusLabel.textProperty().isNotEmpty());
+        statusLabel.managedProperty().bind(statusLabel.visibleProperty());
+        getChildren().setAll(required, compact, fullGrid, statusLabel);
+        setPadding(new Insets(8));
+    }
+
+    private void clearGuidedError(Control input) {
+        input.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), false);
+        statusLabel.setText("");
     }
 
     public void load(
@@ -710,6 +770,7 @@ public class AssumptionsView extends VBox {
         }
         catch (InputException exception) {
             statusLabel.setText(exception.getMessage());
+            if (guidedCreation) exception.control.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), true);
             exception.control.requestFocus();
             return false;
         }
@@ -725,6 +786,7 @@ public class AssumptionsView extends VBox {
         }
         catch (InputException exception) {
             statusLabel.setText(exception.getMessage());
+            if (guidedCreation) exception.control.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), true);
             exception.control.requestFocus();
             updateDirty();
             return false;

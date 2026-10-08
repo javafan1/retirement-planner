@@ -31,6 +31,20 @@
     -fx-text-fill: #a12622;
 }
 
+.new-plan-wizard .wizard-review-section {
+    -fx-padding: 10px;
+    -fx-background-color: white;
+    -fx-border-color: #dce3ec;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.new-plan-wizard .wizard-review-warning {
+    -fx-padding: 8px;
+    -fx-background-color: #fff6df;
+    -fx-text-fill: #634600;
+}
+
 .new-plan-wizard .text-field:invalid,
 .new-plan-wizard .date-picker:invalid,
 .new-plan-wizard .combo-box:invalid {

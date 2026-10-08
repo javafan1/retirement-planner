@@ -35,7 +35,7 @@ class NewRetirementPlanWizardTest {
     @Test
     void beginsWithOnlyPrimaryRequiredIndicatorsAndNoEarlyErrors() throws Exception {
         fx(() -> {
-            var wizard = new NewRetirementPlanWizard(null);
+            var wizard = householdWizard();
             wizard.show();
             try {
                 var pane = wizard.getDialogPane();
@@ -63,7 +63,7 @@ class NewRetirementPlanWizardTest {
     @Test
     void invalidCreateStaysOpenAndIdentifiesBirthDateThenCategory() throws Exception {
         fx(() -> {
-            var wizard = new NewRetirementPlanWizard(null);
+            var wizard = householdWizard();
             wizard.show();
             try {
                 var pane = wizard.getDialogPane();
@@ -88,7 +88,7 @@ class NewRetirementPlanWizardTest {
     @Test
     void malformedTypedBirthDateIsBlockedUsingExistingParser() throws Exception {
         fx(() -> {
-            var wizard = new NewRetirementPlanWizard(null);
+            var wizard = householdWizard();
             wizard.show();
             try {
                 fill(person(wizard.getDialogPane(), "primary"), "Alex", "Example", PRIMARY_DATE, MortalityCategory.FEMALE);
@@ -107,7 +107,7 @@ class NewRetirementPlanWizardTest {
     @Test
     void namesRemainOptionalAndTypedDateAndFemaleCategoryCreateOnePerson() throws Exception {
         fx(() -> {
-            var wizard = new NewRetirementPlanWizard(null);
+            var wizard = householdWizard();
             wizard.show();
             var pane = wizard.getDialogPane();
             var card = person(pane, "primary");
@@ -162,7 +162,7 @@ class NewRetirementPlanWizardTest {
     @Test
     void removeSpouseDiscardsEntriesAndCreatesOnlyPrimary() throws Exception {
         fx(() -> {
-            var wizard = new NewRetirementPlanWizard(null);
+            var wizard = householdWizard();
             wizard.show();
             var pane = wizard.getDialogPane();
             fill(person(pane, "primary"), "Alex", "Example", PRIMARY_DATE, MortalityCategory.MALE);
@@ -183,7 +183,7 @@ class NewRetirementPlanWizardTest {
     @ValueSource(booleans = {false, true})
     void createdPlansPreserveFactoryDefaultsAndRoundTripPersonValues(boolean couple) throws Exception {
         fx(() -> {
-            var wizard = new NewRetirementPlanWizard(null);
+            var wizard = householdWizard();
             wizard.show();
             var pane = wizard.getDialogPane();
             fill(person(pane, "primary"), "Alex", "Example", PRIMARY_DATE, MortalityCategory.MALE);
@@ -220,7 +220,7 @@ class NewRetirementPlanWizardTest {
     @Test
     void allPersonInputsHaveHelpWithoutDuplicateHelpIcons() throws Exception {
         fx(() -> {
-            var wizard = new NewRetirementPlanWizard(null);
+            var wizard = householdWizard();
             wizard.show();
             try {
                 var pane = wizard.getDialogPane();

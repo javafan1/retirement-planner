@@ -1,6 +1,9 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport;
+import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Field;
+import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Kind;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import javafx.geometry.Insets;
@@ -26,6 +29,23 @@ public class PensionDialog extends Dialog<Pension> {
 
     public PensionDialog(Pension pension, com.daviddunn.retirementplanner.domain.model.Household household) {
         this(pension, household.hasSpouse());
+    }
+
+    public PensionDialog(Pension pension, com.daviddunn.retirementplanner.domain.model.Household household,
+                         boolean guidedCreation) {
+        this(pension, household);
+        if (guidedCreation) {
+            var converter = getResultConverter();
+            WizardDialogSupport.install(this, java.util.List.of(
+                    new Field("Name", nameField, Kind.TEXT, false),
+                    new Field("Owner", ownershipCombo, Kind.CHOICE, true),
+                    new Field("Start Date", startDatePicker, Kind.DATE, true),
+                    new Field("End Date", endDatePicker, Kind.DATE, false),
+                    new Field("Monthly Benefit", monthlyBenefitField, Kind.NUMBER, true),
+                    new Field("Survivor Monthly Benefit", survivorMonthlyBenefitField, Kind.NUMBER, false),
+                    new Field("Annual COLA Rate", colaRateField, Kind.NUMBER, true)),
+                    () -> converter.call(ButtonType.OK));
+        }
     }
 
     private PensionDialog(Pension pension, boolean hasSpouse) {

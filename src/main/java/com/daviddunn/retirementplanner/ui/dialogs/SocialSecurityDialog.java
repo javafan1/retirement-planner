@@ -2,6 +2,9 @@ package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.ui.help.PlanningInputHelp;
+import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport;
+import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Field;
+import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Kind;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitStartDateCalculator;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
@@ -27,6 +30,22 @@ public class SocialSecurityDialog
     private final CheckBox useTodaysDollarConventionCheckBox;
     private final Household household;
     private final Label startDateValidationLabel;
+
+    public SocialSecurityDialog(SocialSecurityIncome income, int benefitValuationYear, Household household,
+                                java.util.List<AccountOwnership> permittedOwners) {
+        this(income, benefitValuationYear, household);
+        var selected = ownershipCombo.getValue();
+        ownershipCombo.getItems().setAll(permittedOwners);
+        ownershipCombo.setValue(permittedOwners.contains(selected) ? selected : permittedOwners.getFirst());
+        if (income == null) nameField.setText("Social Security");
+        var converter = getResultConverter();
+        WizardDialogSupport.install(this, java.util.List.of(
+                new Field("Name", nameField, Kind.TEXT, false),
+                new Field("Owner", ownershipCombo, Kind.CHOICE, true),
+                new Field("FRA Monthly Benefit", fraBenefitField, Kind.NUMBER, true),
+                new Field("Claiming Age", claimingAgeCombo, Kind.CHOICE, true)),
+                () -> converter.call(ButtonType.OK));
+    }
 
     public SocialSecurityDialog(
             SocialSecurityIncome socialSecurity,

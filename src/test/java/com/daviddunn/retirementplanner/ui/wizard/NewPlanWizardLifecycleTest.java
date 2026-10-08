@@ -100,7 +100,7 @@ class NewPlanWizardLifecycleTest {
             Platform.runLater(() -> {
                 DialogPane pane = activeWizardPane();
                 try {
-                    button(pane, "Create Plan").fire();
+                    button(pane, "Next").fire();
                     assertTrue(pane.getScene().getWindow().isShowing());
                     assertSame(current, f.controller.getCurrentPlan());
                     assertEquals(revision, f.controller.getSourcePlanRevision());

@@ -37,7 +37,9 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
 
     private NewRetirementPlanWizard(Window owner, NewPlanDraft draft) {
 
-        this(owner, draft, List.of(new HouseholdWizardStep(draft)));
+        this(owner, draft, List.of(new HouseholdWizardStep(draft), new AccountsWizardStep(draft),
+                new IncomeWizardStep(draft), new ExpensesWizardStep(draft),
+                new AssumptionsWizardStep(draft), new ReviewWizardStep(draft)));
     }
 
     /** Additional implemented pages can be registered without changing navigation. */
@@ -60,7 +62,7 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
         Label title = new Label("NEW RETIREMENT PLAN");
         title.getStyleClass().add("wizard-title");
         title.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
-        Label description = new Label("Start with your household. Continue in the plan's tabs to add accounts, income, expenses, and assumptions.");
+        Label description = new Label("Build your initial retirement plan. Additional and advanced details remain available in the plan's tabs.");
         description.setWrapText(true);
         description.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         description.getStyleClass().add("wizard-description");
@@ -73,11 +75,16 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
         page.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         page.setMinHeight(0);
         page.setId("wizard-page");
-        VBox content = new VBox(14, title, description, stepLabel, progress, page);
+        Label path = new Label(this.steps.stream().map(NewPlanWizardStep::title).collect(java.util.stream.Collectors.joining(" → ")));
+        path.setId("wizard-step-path");
+        path.setWrapText(true);
+        path.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        path.getStyleClass().add("wizard-description");
+        VBox content = new VBox(12, title, description, path, stepLabel, progress, page);
         content.setPadding(new Insets(18));
         VBox.setVgrow(page, javafx.scene.layout.Priority.ALWAYS);
         getDialogPane().setContent(content);
-        getDialogPane().setPrefSize(680, 650);
+        getDialogPane().setPrefSize(760, 700);
         getDialogPane().setMinSize(460, 380);
         getDialogPane().getButtonTypes().setAll(backType, nextType, createType, ButtonType.CANCEL);
         button(backType).addEventFilter(ActionEvent.ACTION, event -> {
@@ -89,6 +96,7 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
         });
         button(nextType).addEventFilter(ActionEvent.ACTION, event -> {
             event.consume();
+            if (stepIndex == steps.size() - 1) return;
             if (steps.get(stepIndex).validateAndApply()) {
                 stepIndex++;
                 showStep();
@@ -98,6 +106,10 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
             }
         });
         button(createType).addEventFilter(ActionEvent.ACTION, event -> {
+            if (stepIndex != steps.size() - 1) {
+                event.consume();
+                return;
+            }
             for (int index = 0; index < steps.size(); index++) {
                 if (!steps.get(index).validateAndApply()) {
                     event.consume();
@@ -110,6 +122,15 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
             completedPlan = draft.complete();
         });
         setResultConverter(type -> type == createType ? completedPlan : null);
+        for (NewPlanWizardStep step : this.steps) {
+            if (step instanceof ReviewWizardStep review) review.setEditStep(this::navigateTo);
+        }
+        showStep();
+    }
+
+    private void navigateTo(int index) {
+        if (index < 0 || index >= steps.size()) throw new IllegalArgumentException("Invalid wizard step.");
+        stepIndex = index;
         showStep();
     }
 
@@ -120,6 +141,7 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
 
     private void showStep() {
 
+        steps.get(stepIndex).onEntering();
         stepLabel.setText("Step " + (stepIndex + 1) + " of " + steps.size() + " — " + steps.get(stepIndex).title());
         progress.setProgress((stepIndex + 1.0) / steps.size());
         page.setContent(steps.get(stepIndex).content());
@@ -128,6 +150,8 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
         button(backType).setDisable(stepIndex == 0);
         visible(button(nextType), stepIndex < steps.size() - 1);
         visible(button(createType), stepIndex == steps.size() - 1);
+        button(nextType).setDefaultButton(stepIndex < steps.size() - 1);
+        button(createType).setDefaultButton(stepIndex == steps.size() - 1);
     }
 
     private void revealInvalidControl() {

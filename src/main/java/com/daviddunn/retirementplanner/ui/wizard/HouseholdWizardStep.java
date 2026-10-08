@@ -40,6 +40,7 @@ public final class HouseholdWizardStep implements NewPlanWizardStep {
         required.setWrapText(true);
         content.getChildren().addAll(required, heading("Primary Person"), primaryCard,
                 addSpouseButton, validationMessage);
+        if (draft.getPlan().getHousehold().hasSpouse()) showSpouse();
     }
 
     @Override
@@ -57,11 +58,16 @@ public final class HouseholdWizardStep implements NewPlanWizardStep {
     private void addSpouse() {
 
         draft.getPlan().setSpouse(new Person("", "", null));
+        showSpouse();
+    }
+
+    private void showSpouse() {
         spouseCard = new PersonCard(true);
         spouseCard.setId("wizard-spouse");
+        spouseCard.load(draft.getPlan().getHousehold().requireSpouse("New Plan Wizard"));
         Button remove = new Button("Remove Spouse");
         remove.setId("wizard-remove-spouse");
-        InputHelp.install(remove, "Remove the spouse and discard their entries from this new-plan draft.");
+        InputHelp.install(remove, "Remove the spouse from this draft. Spouse-owned or joint financial records and survivor benefits must first be removed or reassigned; nothing is deleted automatically.");
         remove.setOnAction(event -> removeSpouse());
         HBox heading = new HBox(16, heading("Spouse Person"), remove);
         heading.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
@@ -75,7 +81,13 @@ public final class HouseholdWizardStep implements NewPlanWizardStep {
 
     private void removeSpouse() {
 
-        draft.getPlan().setSpouse(null);
+        try {
+            draft.getPlan().setSpouse(null);
+        }
+        catch (IllegalArgumentException exception) {
+            validationMessage.setText(exception.getMessage());
+            return;
+        }
         content.getChildren().remove(spouseSection);
         spouseSection = null;
         spouseCard = null;
@@ -106,6 +118,7 @@ public final class HouseholdWizardStep implements NewPlanWizardStep {
         if (spouse != null) {
             spouse.applyTo(draft.getPlan().getHousehold().requireSpouse("New Plan Wizard"));
         }
+        draft.refreshSocialSecurityDates();
         validationMessage.setText("");
         return true;
     }

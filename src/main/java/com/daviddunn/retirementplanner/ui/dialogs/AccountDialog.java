@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport;
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.financial.AccountFactory;
 import com.daviddunn.retirementplanner.domain.financial.InheritedAccountInformation;
@@ -43,6 +44,31 @@ public class AccountDialog extends Dialog<Account> {
 
     public AccountDialog(Account account, com.daviddunn.retirementplanner.domain.model.Household household) {
         this(account, household.hasSpouse());
+    }
+
+    public AccountDialog(Account account, com.daviddunn.retirementplanner.domain.model.Household household,
+                         boolean guidedCreation) {
+        this(account, household.hasSpouse());
+        if (guidedCreation) {
+            var converter = getResultConverter();
+            var fields = java.util.List.of(
+                    new WizardDialogSupport.Field("Name", nameField,
+                            WizardDialogSupport.Kind.TEXT, false),
+                    new WizardDialogSupport.Field("Type", typeCombo,
+                            WizardDialogSupport.Kind.CHOICE, true),
+                    new WizardDialogSupport.Field("Owner", ownershipCombo,
+                            WizardDialogSupport.Kind.CHOICE, true),
+                    new WizardDialogSupport.Field("Current Balance", balanceField,
+                            WizardDialogSupport.Kind.NUMBER, true),
+                    new WizardDialogSupport.Field("Original Owner DOB", originalOwnerDobPicker,
+                            WizardDialogSupport.Kind.DATE, true),
+                    new WizardDialogSupport.Field("Original Owner Date of Death", originalOwnerDeathPicker,
+                            WizardDialogSupport.Kind.DATE, true),
+                    new WizardDialogSupport.Field("Beneficiary Relationship", beneficiaryRelationshipCombo,
+                            WizardDialogSupport.Kind.CHOICE, true));
+            WizardDialogSupport.install(this, fields,
+                    () -> converter.call(ButtonType.OK));
+        }
     }
 
     private AccountDialog(Account account, boolean hasSpouse) {

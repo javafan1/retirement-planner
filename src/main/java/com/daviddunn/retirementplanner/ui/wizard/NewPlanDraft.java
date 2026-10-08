@@ -21,4 +21,24 @@ public final class NewPlanDraft {
         plan.validateHouseholdReferences();
         return plan;
     }
+
+    /** Keep the same DOB/claiming-age election convention as the existing Social Security editor. */
+    public void refreshSocialSecurityDates() {
+        plan.getHousehold().members().forEach(person -> {
+            for (var income : person.getIncomeSources()) {
+                if (income instanceof com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome socialSecurity) {
+                    var start = com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitStartDateCalculator
+                            .calculate(person, socialSecurity.getClaimingAge()).orElseThrow();
+                    if (!start.equals(socialSecurity.getStartDate())) {
+                        person.replaceIncomeSource(socialSecurity,
+                                new com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome(
+                                        socialSecurity.getName(), socialSecurity.getOwnership(), start,
+                                        socialSecurity.getEndDate(), socialSecurity.getFullRetirementMonthlyBenefit(),
+                                        socialSecurity.getClaimingAge(), socialSecurity.getAnnualColaRate(),
+                                        socialSecurity.getBenefitValuationYear()));
+                    }
+                }
+            }
+        });
+    }
 }

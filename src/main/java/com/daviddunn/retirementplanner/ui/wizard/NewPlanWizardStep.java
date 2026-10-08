@@ -11,4 +11,6 @@ public interface NewPlanWizardStep {
 
     /** Reports actionable feedback in the page and returns false when navigation is blocked. */
     boolean validateAndApply();
+
+    default void onEntering() { }
 }
