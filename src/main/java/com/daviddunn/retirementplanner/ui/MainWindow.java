@@ -349,9 +349,9 @@ public class MainWindow {
 
 
 
-        tabPane.getTabs().add(
-                createTab("Charts",
-                        portfolioChartView));
+//        tabPane.getTabs().add(
+//                createTab("Charts",
+//                        portfolioChartView));
 
 
         tabPane.getTabs().add(
