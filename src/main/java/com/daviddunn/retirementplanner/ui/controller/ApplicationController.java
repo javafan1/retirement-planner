@@ -397,8 +397,14 @@ public class ApplicationController {
 
     public RetirementPlan newPlan() {
 
-        currentPlan =
-                RetirementPlanFactory.createSinglePersonPlan();
+        return newPlan(RetirementPlanFactory.createSinglePersonPlan());
+    }
+
+    /** Activates an isolated, completed new-plan draft using the existing New lifecycle. */
+    public RetirementPlan newPlan(RetirementPlan plan) {
+
+        java.util.Objects.requireNonNull(plan, "New plan is required.").validateHouseholdReferences();
+        currentPlan = plan;
         sourcePlanChanged();
 
         currentFile = null;

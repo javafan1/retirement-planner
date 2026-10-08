@@ -23,8 +23,19 @@ public class PersonCard extends GridPane {
     private final TextField lastNameField = new TextField();
     private final DatePicker birthDatePicker = new DatePicker();
     private final ComboBox<MortalityCategory> mortalityCategory = new ComboBox<>();
+    private final boolean guidedCreation;
+    private final Label birthDateError = new Label();
+    private final Label mortalityCategoryError = new Label();
 
     public PersonCard() {
+
+        this(false);
+    }
+
+    /** Required indicators and inline feedback are opt-in for guided new-plan creation. */
+    public PersonCard(boolean guidedCreation) {
+
+        this.guidedCreation = guidedCreation;
 
         mortalityCategory.getItems().setAll(MortalityCategory.values());
         mortalityCategory.setPromptText("Required");
@@ -46,9 +57,9 @@ public class PersonCard extends GridPane {
         birthDatePicker.valueProperty().addListener((observable, oldValue, newValue) ->
                 birthDatePicker.getEditor().setText(
                         birthDatePicker.getConverter().toString(newValue)));
-        setPadding(new Insets(15));
+        setPadding(guidedCreation ? new Insets(6, 15, 6, 15) : new Insets(15));
         setHgap(10);
-        setVgap(10);
+        setVgap(guidedCreation ? 8 : 10);
 
         ColumnConstraints labelColumn = new ColumnConstraints();
         labelColumn.setHalignment(HPos.RIGHT);
@@ -70,11 +81,25 @@ public class PersonCard extends GridPane {
         add(new Label("Last Name:"), 0, 1);
         add(lastNameField, 1, 1);
 
-        add(new Label("Birth Date:"), 0, 2);
+        add(new Label(guidedCreation ? "Birth Date *" : "Birth Date:"), 0, 2);
         add(birthDatePicker, 1, 2);
-        add(new Label("Mortality category:"), 0, 3);
+        int categoryRow = guidedCreation ? 4 : 3;
+        add(new Label(guidedCreation ? "Mortality category *" : "Mortality category:"), 0, categoryRow);
         InputHelp.install(birthDatePicker, "This person's birth date. Used to determine ages, Social Security eligibility and start dates, Medicare eligibility, RMD timing and longevity-model ages.");
-        add(mortalityCategory, 1, 3);
+        add(mortalityCategory, 1, categoryRow);
+        if (guidedCreation) {
+            labelColumn.setHalignment(HPos.LEFT);
+            InputHelp.install(firstNameField, "Optional first name, shown in the plan's household and person details.");
+            InputHelp.install(lastNameField, "Optional last name, shown in the plan's household and person details.");
+            configureError(birthDateError);
+            configureError(mortalityCategoryError);
+            add(birthDateError, 1, 3);
+            add(mortalityCategoryError, 1, 5);
+            birthDatePicker.getEditor().textProperty().addListener((observable, oldValue, newValue) ->
+                    clearError(birthDatePicker, birthDateError));
+            mortalityCategory.valueProperty().addListener((observable, oldValue, newValue) ->
+                    clearError(mortalityCategory, mortalityCategoryError));
+        }
         InputHelp.linkGridLabels(this);
     }
 
@@ -132,6 +157,7 @@ public class PersonCard extends GridPane {
             birthDate = readBirthDate();
         }
         catch (IllegalArgumentException exception) {
+            showError(birthDatePicker, birthDateError, exception.getMessage());
             birthDatePicker.requestFocus();
             throw exception;
         }
@@ -140,6 +166,8 @@ public class PersonCard extends GridPane {
                     birthDate, mortalityCategory.getValue());
         }
         catch (IllegalArgumentException exception) {
+            if (birthDate == null) showError(birthDatePicker, birthDateError, exception.getMessage());
+            else showError(mortalityCategory, mortalityCategoryError, exception.getMessage());
             if (birthDate == null) birthDatePicker.requestFocus();
             else mortalityCategory.requestFocus();
             throw exception;
@@ -157,6 +185,29 @@ public class PersonCard extends GridPane {
         catch (RuntimeException exception) {
             throw new IllegalArgumentException("Please enter a valid birth date.", exception);
         }
+    }
+
+    private void configureError(Label error) {
+
+        error.getStyleClass().add("wizard-field-error");
+        error.setWrapText(true);
+        error.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        error.visibleProperty().bind(error.textProperty().isNotEmpty());
+        error.managedProperty().bind(error.visibleProperty());
+    }
+
+    private void showError(javafx.scene.control.Control input, Label error, String message) {
+
+        if (guidedCreation) {
+            input.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), true);
+            error.setText(message);
+        }
+    }
+
+    private void clearError(javafx.scene.control.Control input, Label error) {
+
+        input.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), false);
+        error.setText("");
     }
 
     public record Edit(String firstName, String lastName, LocalDate birthDate,

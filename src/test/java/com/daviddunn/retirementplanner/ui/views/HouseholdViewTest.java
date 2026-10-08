@@ -319,7 +319,7 @@ class HouseholdViewTest {
             answerNextPrompt("Cancel");
             assertEquals(false, invoke(window, "confirmPlanDeparture"));
             assertEquals("Draft", first(view, 0).getText());
-            answerNextPrompt("Discard");
+            com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport.answerCreate(false, "Discard");
             invoke(window, "onNew");
             clean(view);
             assertNotEquals("Draft", first(view, 0).getText());

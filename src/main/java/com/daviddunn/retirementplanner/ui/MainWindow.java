@@ -419,6 +419,11 @@ public class MainWindow {
 
     private void loadCurrentPlan() {
 
+        loadCurrentPlan(true);
+    }
+
+    private void loadCurrentPlan(boolean runProjection) {
+
         RetirementPlan plan = controller.getCurrentPlan();
 
 
@@ -432,7 +437,12 @@ public class MainWindow {
 
         updateWindowTitle();
 
-        refreshAllViews();
+        if (runProjection) {
+            refreshAllViews();
+        }
+        else {
+            refreshProjectionViews(false);
+        }
     }
 
     private boolean saveCurrentPlan() {
@@ -655,6 +665,11 @@ public class MainWindow {
     }
     private void refreshProjectionViews() {
 
+        refreshProjectionViews(true);
+    }
+
+    private void refreshProjectionViews(boolean runProjection) {
+
         resultsView.setBreakEvenAnalysis(null);
         resultsSummaryView.setBreakEvenAnalysis(null);
 
@@ -662,24 +677,24 @@ public class MainWindow {
 
         try {
             Projection projection =
-                    controller.getCurrentProjection();
+                    runProjection ? controller.getCurrentProjection() : null;
 
             ProjectionSummary summary =
-                    controller.getCurrentProjectionSummary();
+                    runProjection ? controller.getCurrentProjectionSummary() : null;
 
             dashboardView.load(summary);
             portfolioChartView.load(projection);
             projectionYearView.load(projection);
             resultsView.load(
                     projection,
-                    controller.getCurrentNonInvestableAssetProjections());
+                    runProjection ? controller.getCurrentNonInvestableAssetProjections() : List.of());
             assumptionsView.refresh(
                     controller.getCurrentPlan());
 
             resultsSummaryView.load(
                     controller.getCurrentPlan(),
                     projection,
-                    controller.getCurrentNonInvestableAssetProjections());
+                    runProjection ? controller.getCurrentNonInvestableAssetProjections() : List.of());
 
             var breakEven = controller.getCachedBreakEvenAnalysis();
             resultsView.setBreakEvenAnalysis(breakEven);
@@ -742,20 +757,21 @@ public class MainWindow {
 
     private void onNew() {
 
-        if (!confirmPlanDeparture()) {
-            return;
-        }
-
-        controller.newPlan();
-
-        loadCurrentPlan();
-
-        updateWindowTitle();
-
-        statusLabel.setText(
-                controller.isCurrentPlanReadyForProjection()
-                        ? "New plan."
-                        : "Complete the required plan information to run a projection.");
+        new com.daviddunn.retirementplanner.ui.wizard.NewRetirementPlanWizard(stage)
+                .showAndWait().ifPresent(plan -> {
+                    // Opening/canceling the wizard must preserve even unapplied tab edits.
+                    if (!confirmPlanDeparture()) {
+                        return;
+                    }
+                    controller.newPlan(plan);
+                    // Household-only creation has no funding inputs yet; clear results without simulating.
+                    loadCurrentPlan(false);
+                    TabPane tabs = (TabPane) root.getCenter();
+                    tabs.getSelectionModel().select(tabs.getTabs().stream()
+                            .filter(tab -> tab.getContent() == householdView)
+                            .findFirst().orElseThrow());
+                    statusLabel.setText("New plan. Continue editing using the tabs.");
+                });
     }
 
     private void refreshAllViews() {

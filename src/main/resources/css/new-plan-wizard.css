@@ -1,0 +1,40 @@
+.new-plan-wizard {
+    -fx-background-color: #f7f9fc;
+}
+
+.new-plan-wizard .wizard-title {
+    -fx-font-size: 21px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #20344d;
+}
+
+.new-plan-wizard .wizard-description {
+    -fx-text-fill: #46566a;
+}
+
+.new-plan-wizard .wizard-step-heading {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.new-plan-wizard .wizard-person-heading {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.new-plan-wizard .scroll-pane,
+.new-plan-wizard .scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.new-plan-wizard .wizard-field-error {
+    -fx-text-fill: #a12622;
+}
+
+.new-plan-wizard .text-field:invalid,
+.new-plan-wizard .date-picker:invalid,
+.new-plan-wizard .combo-box:invalid {
+    -fx-border-color: #a12622;
+    -fx-border-width: 2px;
+    -fx-border-radius: 3px;
+}

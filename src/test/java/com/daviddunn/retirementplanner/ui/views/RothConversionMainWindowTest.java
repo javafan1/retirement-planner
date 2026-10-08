@@ -199,7 +199,7 @@ class RothConversionMainWindowTest {
             assertFalse(f.assumptions.isDirty());
             assertTrue(f.controller.isModified());
             assertEquals("2027", field(f.roth, "conversionYearField").getText());
-            answerNextPrompt("Discard");
+            com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport.answerCreate(false, "Discard");
             invoke(f.window, "onNew");
             RothConversionViewTest.clean(f.roth);
             assertNull(f.controller.getCurrentPlan().getRothConversionRequest());

@@ -249,7 +249,8 @@ class AssumptionsMainWindowTest {
             var before = f.controller.getCurrentPlan();
             field(f.assumptions, "inflationRateField").setText("invalid");
             householdName(f.household).setText("Draft");
-            AtomicInteger prompts = answerNextPrompt("Discard");
+            AtomicInteger prompts = com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport
+                    .answerCreate(false, "Discard");
             invoke(f.window, "onNew");
             assertEquals(1, prompts.get());
             assertNotSame(before, f.controller.getCurrentPlan());
