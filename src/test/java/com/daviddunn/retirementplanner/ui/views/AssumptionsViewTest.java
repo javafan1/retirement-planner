@@ -6,8 +6,11 @@ import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
+import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
+import com.daviddunn.retirementplanner.ui.help.HelpText;
 import javafx.application.Platform;
 import javafx.scene.control.*;
+import javafx.scene.layout.GridPane;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,6 +43,29 @@ class AssumptionsViewTest {
             Platform.runLater(startup);
         }
         startup.get(20, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void inputTooltipsRemainWithoutLabelSideHelpIcons() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            String[][] inputs = {
+                    {"projectionLengthField", HelpText.PLANNING_HORIZON},
+                    {"investmentReturnField", HelpText.INVESTMENT_RETURN},
+                    {"inflationRateField", HelpText.GENERAL_INFLATION},
+                    {"healthcareInflationField", HelpText.HEALTHCARE_INFLATION},
+                    {"socialSecurityColaField", HelpText.SOCIAL_SECURITY_COLA}
+            };
+            for (String[] input : inputs) {
+                TextField field = field(f.view, input[0]);
+                assertNotNull(field.getTooltip());
+                assertEquals(input[1], field.getTooltip().getText());
+            }
+            GridPane grid = (GridPane) f.view.getChildren().getFirst();
+            assertFalse(grid.getChildren().stream().anyMatch(HelpIcon.class::isInstance));
+            assertFalse(grid.getChildren().stream()
+                    .anyMatch(node -> node.getStyleClass().contains("help-icon")));
+        });
     }
 
     @Test

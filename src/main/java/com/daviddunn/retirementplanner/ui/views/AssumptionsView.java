@@ -8,7 +8,6 @@ import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
-import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
 import com.daviddunn.retirementplanner.ui.help.HelpText;
 import com.daviddunn.retirementplanner.ui.rmd.OpeningRmdWorkflowService;
 import javafx.beans.property.ReadOnlyBooleanProperty;
@@ -67,7 +66,6 @@ public class AssumptionsView extends VBox {
      */
     private final ComboBox<com.daviddunn.retirementplanner.domain.rules.FilingStatus> filingStatusComboBox = new ComboBox<>();
     private final Label horizonLabel = new Label();
-    private final HelpIcon horizonHelp = new HelpIcon(HelpText.PLANNING_HORIZON);
     private final TextField federalBracketGrowthField;
     private final TextField standardDeductionGrowthField;
     private final TextField futureFederalMarginalRateAdjustmentField;
@@ -238,8 +236,7 @@ public class AssumptionsView extends VBox {
                 0,
                 row);
 
-        grid.add(horizonHelp, 1, row);
-        grid.add(new HBox(8, projectionLengthField, new Label("years")), 2, row++);
+        grid.add(new HBox(8, projectionLengthField, new Label("years")), 1, row++);
 
         grid.add(
                 openingRmdButton,
@@ -321,14 +318,8 @@ public class AssumptionsView extends VBox {
                 row);
 
         grid.add(
-                new HelpIcon(
-                        HelpText.INVESTMENT_RETURN),
-                1,
-                row);
-
-        grid.add(
                 investmentReturnField,
-                2,
+                1,
                 row++);
 
         grid.add(
@@ -338,14 +329,8 @@ public class AssumptionsView extends VBox {
                 row);
 
         grid.add(
-                new HelpIcon(
-                        HelpText.GENERAL_INFLATION),
-                1,
-                row);
-
-        grid.add(
                 inflationRateField,
-                2,
+                1,
                 row++);
 
         grid.add(
@@ -355,14 +340,8 @@ public class AssumptionsView extends VBox {
                 row);
 
         grid.add(
-                new HelpIcon(
-                        HelpText.HEALTHCARE_INFLATION),
-                1,
-                row);
-
-        grid.add(
                 healthcareInflationField,
-                2,
+                1,
                 row++);
 
         grid.add(
@@ -372,14 +351,8 @@ public class AssumptionsView extends VBox {
                 row);
 
         grid.add(
-                new HelpIcon(
-                        HelpText.SOCIAL_SECURITY_COLA),
-                1,
-                row);
-
-        grid.add(
                 socialSecurityColaField,
-                2,
+                1,
                 row++);
 
         /*
@@ -694,7 +667,6 @@ public class AssumptionsView extends VBox {
         horizonLabel.setText(couple ? "Assumed second death / end of household projection:" : "Configured projection length:");
         String horizonHelpText = couple ? HelpText.PLANNING_HORIZON
                 : "Number of calendar years in the configured deterministic projection, including the starting year, which may be partial. Mortality-weighted analyses use their own lifetime scenarios.";
-        horizonHelp.setTooltip(HelpIcon.createTooltip(horizonHelpText));
         InputHelp.install(projectionLengthField, horizonHelpText);
         InputHelp.link(horizonLabel, projectionLengthField);
     }
