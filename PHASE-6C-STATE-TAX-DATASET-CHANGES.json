@@ -1,0 +1,358 @@
+[ {
+  "operation" : "replace",
+  "path" : "/datasetVersion",
+  "oldValue" : "2026-10-08-research-draft",
+  "newValue" : "2026-10-09-phase6c-validated-boundaries"
+}, {
+  "operation" : "replace",
+  "path" : "/jurisdictions/0/calculationStatus",
+  "oldValue" : "REVIEW_REQUIRED",
+  "newValue" : "READY_WITH_LIMITATIONS"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/0/modeling/limitations/3",
+  "newValue" : "2026 indexed brackets/deductions/credits verified against FTB October indexing. Senior/blind credits and high-income credit phaseout remain omitted; high-income net tax is approximate within omitted credits, not return-accurate."
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/0/scenarioBoundaries",
+  "newValue" : [ {
+    "id" : "CA_EARLY_DISTRIBUTION",
+    "stage" : "BEFORE_RETIREMENT",
+    "basis" : "STARTING_STATE_BASE",
+    "trigger" : "AGE_BELOW_MINIMUM",
+    "minimumAge" : 59.5,
+    "incomeTypes" : [ "TRADITIONAL_IRA", "EMPLOYER_RETIREMENT_PLAN", "PENSION" ],
+    "reason" : "Potential early-distribution additional tax and exception eligibility are not modeled."
+  } ]
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/0/sources/1",
+  "newValue" : {
+    "publisher" : "California FTB additional retirement taxes",
+    "url" : "https://www.ftb.ca.gov/forms/2025/2025-3805p-instructions.html"
+  }
+}, {
+  "operation" : "replace",
+  "path" : "/jurisdictions/1/calculationStatus",
+  "oldValue" : "REVIEW_REQUIRED",
+  "newValue" : "READY_WITH_LIMITATIONS"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/1/retirementAdjustments/0/coordinatedLimit",
+  "newValue" : true
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/1/retirementAdjustments/0/priority",
+  "newValue" : 1
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/1/retirementAdjustments/1",
+  "newValue" : {
+    "id" : "MI_QUALIFYING_ROTH_CONVERSION",
+    "type" : "INCOME_EXCLUSION",
+    "scope" : "HOUSEHOLD",
+    "appliesTo" : [ "ROTH_CONVERSION" ],
+    "qualification" : "QUALIFYING_RETIREMENT_BENEFIT_ONLY",
+    "eligibility" : {
+      "minimumAge" : 59.5
+    },
+    "calculation" : {
+      "maximumAmount" : {
+        "MARRIED_FILING_JOINTLY" : 135220,
+        "SINGLE" : 67610
+      },
+      "method" : "CAPPED_ELIGIBLE_INCOME"
+    },
+    "exclusionGroup" : "MI_RETIREMENT",
+    "coordinatedLimit" : true,
+    "priority" : 2
+  }
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/1/scenarioBoundaries",
+  "newValue" : [ {
+    "id" : "MI_ALTERNATIVE_AGE_DEDUCTION",
+    "stage" : "BEFORE_RETIREMENT",
+    "basis" : "STARTING_STATE_BASE",
+    "trigger" : "PRESENT",
+    "reason" : "Age 67+ alternative all-income deduction/elections are not modeled; no automatic retirement-only estimate.",
+    "minimumAge" : 67
+  }, {
+    "id" : "MI_PUBLIC_PENSION_ELECTIONS",
+    "stage" : "BEFORE_RETIREMENT",
+    "basis" : "STARTING_STATE_BASE",
+    "trigger" : "PRESENT",
+    "reason" : "Public-source unlimited/alternative pension elections require separate assessment.",
+    "incomeTypes" : [ "PENSION" ],
+    "pensionSources" : [ "FEDERAL_GOVERNMENT", "NEW_YORK_STATE_LOCAL_GOVERNMENT", "OTHER_GOVERNMENT", "UNKNOWN" ]
+  } ]
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/1/sources/3",
+  "newValue" : {
+    "publisher" : "Michigan Treasury Roth rollover FAQ",
+    "url" : "https://www.michigan.gov/taxes/questions/iit/accordion/subtract/is-a-rollover-from-a-regular-ira-to-a-roth-ira-an-allowable-subtraction-1"
+  }
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/2/scenarioBoundaries",
+  "newValue" : [ ]
+}, {
+  "operation" : "replace",
+  "path" : "/jurisdictions/3/calculationStatus",
+  "oldValue" : "REVIEW_REQUIRED",
+  "newValue" : "READY_FOR_SIMPLIFIED_MODEL"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/3/retirementAdjustments/0/appliesTo/3",
+  "newValue" : "ROTH_CONVERSION"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/3/scenarioBoundaries",
+  "newValue" : [ ]
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/3/sources/2",
+  "newValue" : {
+    "publisher" : "Illinois DOR Pub 120",
+    "url" : "https://tax.illinois.gov/research/publications/pubs/retirement-income.html"
+  }
+}, {
+  "operation" : "replace",
+  "path" : "/jurisdictions/4/calculationStatus",
+  "oldValue" : "REVIEW_REQUIRED",
+  "newValue" : "READY_WITH_LIMITATIONS"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/4/retirementAdjustments/2",
+  "newValue" : {
+    "id" : "PA_COMPLETE_IRA_TO_ROTH",
+    "type" : "INCOME_EXCLUSION",
+    "scope" : "PER_PERSON",
+    "appliesTo" : [ "ROTH_CONVERSION" ],
+    "qualification" : "COMPLETE_IRA_TO_ROTH_CONVERSION",
+    "calculation" : {
+      "method" : "UNLIMITED_ELIGIBLE_INCOME"
+    }
+  }
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/4/scenarioBoundaries",
+  "newValue" : [ {
+    "id" : "PA_CONVERSION_ELIGIBILITY",
+    "stage" : "BEFORE_RETIREMENT",
+    "basis" : "STARTING_STATE_BASE",
+    "trigger" : "UNASSESSED_QUALIFICATION",
+    "reason" : "Complete qualifying IRA-to-Roth transfer must be confirmed; withheld/retained amounts or unavailable basis are unsupported.",
+    "incomeTypes" : [ "ROTH_CONVERSION" ],
+    "qualification" : "COMPLETE_IRA_TO_ROTH_CONVERSION"
+  } ]
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/4/sources/2",
+  "newValue" : {
+    "publisher" : "Pennsylvania DOR conversion FAQ 274",
+    "url" : "https://revenue-pa.custhelp.com/app/answers/detail/a_id/274/kw/retirement"
+  }
+}, {
+  "operation" : "replace",
+  "path" : "/jurisdictions/5/calculationStatus",
+  "oldValue" : "REVIEW_REQUIRED",
+  "newValue" : "READY_WITH_LIMITATIONS"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/5/retirementAdjustments/0/appliesTo/3",
+  "newValue" : "ROTH_CONVERSION"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/5/scenarioBoundaries",
+  "newValue" : [ {
+    "id" : "NY_HIGH_INCOME_RECAPTURE",
+    "stage" : "AFTER_RETIREMENT",
+    "basis" : "ADJUSTED_STATE_BASE",
+    "trigger" : "ABOVE_MAXIMUM",
+    "reason" : "New York AGI above 107650 requires supplemental high-income tax worksheets not modeled.",
+    "maximumIncome" : {
+      "MARRIED_FILING_JOINTLY" : 107650,
+      "SINGLE" : 107650
+    }
+  } ]
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/5/sources/3",
+  "newValue" : {
+    "publisher" : "New York 2026 estimated tax instructions",
+    "url" : "https://www.tax.ny.gov/pdf/current_forms/it/it2105i.pdf"
+  }
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/5/sources/4",
+  "newValue" : {
+    "publisher" : "New York Roth conversion memorandum",
+    "url" : "https://www.tax.ny.gov/pdf/memos/income/m98_7i.pdf"
+  }
+}, {
+  "operation" : "replace",
+  "path" : "/jurisdictions/6/calculationStatus",
+  "oldValue" : "REVIEW_REQUIRED",
+  "newValue" : "READY_WITH_LIMITATIONS"
+}, {
+  "operation" : "replace",
+  "path" : "/jurisdictions/6/modeling/limitations/0",
+  "oldValue" : "Colorado begins with federal taxable income; do not subtract federal standard deduction twice.",
+  "newValue" : "Federal taxable income is authoritative; federal deductions are not repeated."
+}, {
+  "operation" : "replace",
+  "path" : "/jurisdictions/6/modeling/limitations/1",
+  "oldValue" : "Social Security subtraction interacts with pension subtraction; model shared income limits.",
+  "newValue" : "Social Security consumes the per-person pension allowance; full Social Security may exceed that allowance."
+}, {
+  "operation" : "replace",
+  "path" : "/jurisdictions/6/modeling/limitations/2",
+  "oldValue" : "2026 rule simplification omits special eligible survivor benefits and some under-65 Social Security rules.",
+  "newValue" : "Premature IRA distributions require explicitly assessed exception eligibility; survivor/beneficiary exceptions not modeled."
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/6/modeling/limitations/3",
+  "newValue" : "Roth conversions and federal AGI above 300000 return UNSUPPORTED."
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/6/retirementAdjustments/0/coordinatedLimit",
+  "newValue" : true
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/6/retirementAdjustments/1/coordinatedLimit",
+  "newValue" : true
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/6/retirementAdjustments/2",
+  "newValue" : {
+    "id" : "CO_SOCIAL_SECURITY_55_PLUS_LOW_AGI",
+    "type" : "INCOME_EXCLUSION",
+    "scope" : "PER_PERSON",
+    "appliesTo" : [ "SOCIAL_SECURITY" ],
+    "eligibility" : {
+      "minimumAge" : 55,
+      "federalAgiMaximum" : {
+        "MARRIED_FILING_JOINTLY" : 95000,
+        "SINGLE" : 75000
+      }
+    },
+    "calculation" : {
+      "method" : "UNLIMITED_FEDERALLY_TAXABLE_SOCIAL_SECURITY"
+    },
+    "exclusionGroup" : "CO_PENSION_AND_SS",
+    "coordinatedLimit" : true,
+    "priority" : 2
+  }
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/6/scenarioBoundaries",
+  "newValue" : [ {
+    "id" : "CO_FEDERAL_DEDUCTION_ADDBACK",
+    "stage" : "BEFORE_RETIREMENT",
+    "basis" : "FEDERAL_AGI",
+    "trigger" : "ABOVE_MAXIMUM",
+    "reason" : "2026 high-income federal deduction addbacks require deduction details absent from this request.",
+    "maximumIncome" : {
+      "MARRIED_FILING_JOINTLY" : 300000,
+      "SINGLE" : 300000
+    }
+  }, {
+    "id" : "CO_CONVERSION_REVIEW",
+    "stage" : "BEFORE_RETIREMENT",
+    "basis" : "FEDERAL_AGI",
+    "trigger" : "PRESENT",
+    "reason" : "Roth conversion subtraction eligibility is not independently established for the supported approximation.",
+    "incomeTypes" : [ "ROTH_CONVERSION" ]
+  }, {
+    "id" : "CO_SS_OWNER_ALLOCATION",
+    "stage" : "BEFORE_RETIREMENT",
+    "basis" : "FEDERAL_AGI",
+    "trigger" : "SOCIAL_SECURITY_ALLOCATION_MISMATCH",
+    "reason" : "Joint federally taxable Social Security must be allocated proportionally to each persons gross benefits, to cents.",
+    "incomeTypes" : [ "SOCIAL_SECURITY" ]
+  } ]
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/6/sources/2",
+  "newValue" : {
+    "publisher" : "Colorado DOR retirement subtraction guide",
+    "url" : "https://tax.colorado.gov/sites/tax/files/documents/ITT_Social_Security_Pensions_and_Annuities_Jan_2025.pdf"
+  }
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/6/sources/3",
+  "newValue" : {
+    "publisher" : "Colorado DOR January 2026 income tax guide",
+    "url" : "https://tax.colorado.gov/sites/tax/files/documents/Individual_Income_Tax_Guide_January_2026.pdf"
+  }
+}, {
+  "operation" : "replace",
+  "path" : "/jurisdictions/7/calculationStatus",
+  "oldValue" : "REVIEW_REQUIRED",
+  "newValue" : "READY_WITH_LIMITATIONS"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/7/modeling/limitations/4",
+  "newValue" : "Other Retirement Income Exclusion is not calculated; potentially affected investment-income scenarios and unproven special-exclusion eligibility return UNSUPPORTED."
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/7/retirementAdjustments/0/appliesTo/3",
+  "newValue" : "ROTH_CONVERSION"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/7/retirementAdjustments/0/calculation/aboveFinalBand",
+  "newValue" : "NO_EXCLUSION"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/7/retirementAdjustments/0/calculation/incomeBandEndpoints",
+  "newValue" : "UPPER_INCLUSIVE"
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/7/scenarioBoundaries",
+  "newValue" : [ {
+    "id" : "NJ_CONVERSION_BASIS",
+    "stage" : "BEFORE_RETIREMENT",
+    "basis" : "STARTING_STATE_BASE",
+    "trigger" : "UNASSESSED_QUALIFICATION",
+    "reason" : "An explicitly established NJ-taxable conversion amount is required; zero basis is not assumed.",
+    "incomeTypes" : [ "ROTH_CONVERSION" ],
+    "qualification" : "STATE_TAXABLE_CONVERSION_AMOUNT_ESTABLISHED"
+  }, {
+    "id" : "NJ_OTHER_RETIREMENT_EXCLUSION",
+    "stage" : "BEFORE_RETIREMENT",
+    "basis" : "STARTING_STATE_BASE",
+    "trigger" : "PRESENT",
+    "reason" : "Age-eligible investment income at or below 150000 may qualify for Other Retirement Income Exclusion; earned-income eligibility is unavailable.",
+    "maximumIncome" : {
+      "MARRIED_FILING_JOINTLY" : 150000,
+      "SINGLE" : 150000
+    },
+    "minimumAge" : 62,
+    "incomeTypes" : [ "INTEREST", "ORDINARY_DIVIDEND", "QUALIFIED_DIVIDEND", "SHORT_TERM_CAPITAL_GAIN", "LONG_TERM_CAPITAL_GAIN" ]
+  }, {
+    "id" : "NJ_SPECIAL_RETIREMENT_ELIGIBILITY",
+    "stage" : "AFTER_RETIREMENT",
+    "basis" : "STARTING_STATE_BASE",
+    "trigger" : "BENEFIT_ELIGIBILITY_UNKNOWN",
+    "reason" : "Special retirement exclusion eligibility is unknown without evidence of Social Security benefits; do not invent eligibility or silently omit a potentially material exclusion.",
+    "maximumIncome" : {
+      "MARRIED_FILING_JOINTLY" : 150000,
+      "SINGLE" : 150000
+    },
+    "minimumAge" : 62
+  } ]
+}, {
+  "operation" : "add",
+  "path" : "/jurisdictions/7/sources/3",
+  "newValue" : {
+    "publisher" : "New Jersey January 2026 GIT-1 and GIT-2",
+    "url" : "https://www.nj.gov/treasury/taxation/pdf/pubs/tgi-ee/git1&2.pdf"
+  }
+}, {
+  "operation" : "replace",
+  "path" : "/schemaVersion",
+  "oldValue" : "1.0-draft",
+  "newValue" : "1.1-validated-boundaries"
+} ]

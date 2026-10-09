@@ -1,0 +1,1027 @@
+{
+  "schemaVersion": "1.0-draft",
+  "datasetVersion": "2026-10-08-research-draft",
+  "taxYear": 2026,
+  "currency": "USD",
+  "model": {
+    "name": "Simplified Full-Year Resident Retirement State Tax",
+    "purpose": "Planning estimates only; NOT a tax return or approved production calculator",
+    "calculationBasis": "FULL_YEAR_RESIDENT",
+    "supportedFilingStatuses": [
+      "SINGLE",
+      "MARRIED_FILING_JOINTLY"
+    ],
+    "jurisdictionCount": 8,
+    "effectiveRateOverride": {
+      "storedIn": "RETIREMENT_PLAN_NOT_DATASET",
+      "method": "EFFECTIVE_RATE_OVERRIDE",
+      "base": "SIMPLIFIED_STATE_TAXABLE_INCOME",
+      "note": "Effective rate is not a marginal rate; not suitable as an exact Roth conversion optimizer."
+    },
+    "calculationStatusPolicy": "Only READY_FOR_SIMPLIFIED_MODEL may be treated as ready without explicit review; REVIEW_REQUIRED is not a zero-tax state.",
+    "excluded": [
+      "LOCAL_TAX",
+      "ITEMIZED_DEDUCTIONS",
+      "PART_YEAR_RESIDENCY",
+      "NONRESIDENT_SOURCING",
+      "TERRITORIES",
+      "DETAILED_STATE_IRA_BASIS",
+      "TAX_RETURN_PRECISION"
+    ]
+  },
+  "jurisdictions": [
+    {
+      "jurisdictionCode": "CA",
+      "jurisdictionName": "California",
+      "jurisdictionType": "STATE",
+      "taxYear": 2026,
+      "calculationStatus": "REVIEW_REQUIRED",
+      "taxBase": "FEDERAL_AGI_WITH_ADJUSTMENTS",
+      "taxSystem": {
+        "type": "PROGRESSIVE",
+        "brackets": {
+          "SINGLE": [
+            {
+              "from": 0,
+              "to": 11456,
+              "rate": 0.01
+            },
+            {
+              "from": 11456,
+              "to": 27157,
+              "rate": 0.02
+            },
+            {
+              "from": 27157,
+              "to": 42861,
+              "rate": 0.04
+            },
+            {
+              "from": 42861,
+              "to": 59498,
+              "rate": 0.06
+            },
+            {
+              "from": 59498,
+              "to": 75197,
+              "rate": 0.08
+            },
+            {
+              "from": 75197,
+              "to": 384109,
+              "rate": 0.093
+            },
+            {
+              "from": 384109,
+              "to": 460927,
+              "rate": 0.103
+            },
+            {
+              "from": 460927,
+              "to": 768213,
+              "rate": 0.113
+            },
+            {
+              "from": 768213,
+              "to": null,
+              "rate": 0.123
+            }
+          ],
+          "MARRIED_FILING_JOINTLY": [
+            {
+              "from": 0,
+              "to": 22912,
+              "rate": 0.01
+            },
+            {
+              "from": 22912,
+              "to": 54314,
+              "rate": 0.02
+            },
+            {
+              "from": 54314,
+              "to": 85722,
+              "rate": 0.04
+            },
+            {
+              "from": 85722,
+              "to": 118996,
+              "rate": 0.06
+            },
+            {
+              "from": 118996,
+              "to": 150394,
+              "rate": 0.08
+            },
+            {
+              "from": 150394,
+              "to": 768218,
+              "rate": 0.093
+            },
+            {
+              "from": 768218,
+              "to": 921854,
+              "rate": 0.103
+            },
+            {
+              "from": 921854,
+              "to": 1536426,
+              "rate": 0.113
+            },
+            {
+              "from": 1536426,
+              "to": null,
+              "rate": 0.123
+            }
+          ]
+        }
+      },
+      "deductions": {
+        "standardDeduction": {
+          "SINGLE": 5900,
+          "MARRIED_FILING_JOINTLY": 11800
+        },
+        "personalExemption": {
+          "type": "CREDIT",
+          "amount": {
+            "SINGLE": 158,
+            "MARRIED_FILING_JOINTLY": 316
+          },
+          "incomePhaseout": "NOT_MODELED"
+        }
+      },
+      "incomeTreatment": {
+        "SOCIAL_SECURITY": "EXEMPT",
+        "TRADITIONAL_IRA": "TAXABLE",
+        "EMPLOYER_RETIREMENT_PLAN": "TAXABLE",
+        "PENSION": "TAXABLE",
+        "ROTH_CONVERSION": "TAXABLE",
+        "QUALIFIED_ROTH_DISTRIBUTION": "EXEMPT",
+        "INTEREST": "TAXABLE",
+        "ORDINARY_DIVIDEND": "TAXABLE",
+        "QUALIFIED_DIVIDEND": "TAXABLE",
+        "SHORT_TERM_CAPITAL_GAIN": "TAXABLE",
+        "LONG_TERM_CAPITAL_GAIN": "TAXABLE"
+      },
+      "retirementAdjustments": [],
+      "seniorAdjustments": [],
+      "additionalTaxes": [
+        {
+          "id": "CA_MENTAL_HEALTH",
+          "type": "MARGINAL_SURCHARGE",
+          "basis": "STATE_TAXABLE_INCOME",
+          "threshold": {
+            "SINGLE": 1000000,
+            "MARRIED_FILING_JOINTLY": 1000000
+          },
+          "rate": 0.01
+        }
+      ],
+      "modeling": {
+        "fullYearResidentOnly": true,
+        "approximationLevel": "RETIREMENT_PLANNING",
+        "limitations": [
+          "Personal exemption credit phaseout not modeled; tax table rounding not modeled.",
+          "IRA basis differences and AMT not modeled.",
+          "Mental Health Services Tax 1% on taxable income above $1 million modeled."
+        ]
+      },
+      "sources": [
+        {
+          "publisher": "California FTB",
+          "url": "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/"
+        }
+      ]
+    },
+    {
+      "jurisdictionCode": "MI",
+      "jurisdictionName": "Michigan",
+      "jurisdictionType": "STATE",
+      "taxYear": 2026,
+      "calculationStatus": "REVIEW_REQUIRED",
+      "taxBase": "FEDERAL_AGI_WITH_ADJUSTMENTS",
+      "taxSystem": {
+        "type": "FLAT",
+        "rate": 0.0425
+      },
+      "deductions": {
+        "standardDeduction": {
+          "SINGLE": 0,
+          "MARRIED_FILING_JOINTLY": 0
+        },
+        "personalExemption": {
+          "type": "DEDUCTION",
+          "amount": {
+            "SINGLE": 5900,
+            "MARRIED_FILING_JOINTLY": 11800
+          }
+        }
+      },
+      "incomeTreatment": {
+        "SOCIAL_SECURITY": "EXEMPT",
+        "TRADITIONAL_IRA": "TAXABLE",
+        "EMPLOYER_RETIREMENT_PLAN": "TAXABLE",
+        "PENSION": "TAXABLE",
+        "ROTH_CONVERSION": "TAXABLE",
+        "QUALIFIED_ROTH_DISTRIBUTION": "EXEMPT",
+        "INTEREST": "TAXABLE",
+        "ORDINARY_DIVIDEND": "TAXABLE",
+        "QUALIFIED_DIVIDEND": "TAXABLE",
+        "SHORT_TERM_CAPITAL_GAIN": "TAXABLE",
+        "LONG_TERM_CAPITAL_GAIN": "TAXABLE"
+      },
+      "retirementAdjustments": [
+        {
+          "id": "MI_2026_QUALIFYING_RETIREMENT_SUBTRACTION",
+          "type": "INCOME_EXCLUSION",
+          "scope": "HOUSEHOLD",
+          "appliesTo": [
+            "TRADITIONAL_IRA",
+            "EMPLOYER_RETIREMENT_PLAN",
+            "PENSION"
+          ],
+          "qualification": "QUALIFYING_RETIREMENT_BENEFIT_ONLY",
+          "calculation": {
+            "method": "CAPPED_ELIGIBLE_INCOME",
+            "maximumAmount": {
+              "SINGLE": 67610,
+              "MARRIED_FILING_JOINTLY": 135220
+            }
+          },
+          "exclusionGroup": "MI_RETIREMENT",
+          "limitations": [
+            "Not all distributions/conversions qualify; excludes alternative deduction election and special public pension treatment."
+          ]
+        }
+      ],
+      "seniorAdjustments": [],
+      "additionalTaxes": [],
+      "modeling": {
+        "fullYearResidentOnly": true,
+        "approximationLevel": "RETIREMENT_PLANNING",
+        "limitations": [
+          "Simplified 2026 phase-in retirement subtraction; alternative tier/public safety deductions and age-67 standard deduction election not modeled.",
+          "Qualifying Roth conversions are not automatically assumed eligible for Michigan retirement subtraction.",
+          "Compare against existing Michigan engine before production use."
+        ]
+      },
+      "sources": [
+        {
+          "publisher": "Michigan Treasury rate",
+          "url": "https://www.michigan.gov/treasury/news/2026/04/15/state-individual-income-tax-rate-for-2026-tax-year-determined"
+        },
+        {
+          "publisher": "Michigan ORS subtraction",
+          "url": "https://www.michigan.gov/ors/public-act-4-of-2023-faq"
+        },
+        {
+          "publisher": "Michigan withholding exemptions",
+          "url": "https://www.michigan.gov/taxes/business-taxes/withholding/calendar-year-tax-information"
+        }
+      ]
+    },
+    {
+      "jurisdictionCode": "FL",
+      "jurisdictionName": "Florida",
+      "jurisdictionType": "STATE",
+      "taxYear": 2026,
+      "calculationStatus": "READY_FOR_SIMPLIFIED_MODEL",
+      "taxBase": "NONE",
+      "taxSystem": {
+        "type": "NONE"
+      },
+      "deductions": {
+        "standardDeduction": {
+          "SINGLE": 0,
+          "MARRIED_FILING_JOINTLY": 0
+        },
+        "personalExemption": {
+          "type": "NONE",
+          "amount": {
+            "SINGLE": 0,
+            "MARRIED_FILING_JOINTLY": 0
+          }
+        }
+      },
+      "incomeTreatment": {
+        "SOCIAL_SECURITY": "EXEMPT",
+        "TRADITIONAL_IRA": "EXEMPT",
+        "EMPLOYER_RETIREMENT_PLAN": "EXEMPT",
+        "PENSION": "EXEMPT",
+        "ROTH_CONVERSION": "EXEMPT",
+        "QUALIFIED_ROTH_DISTRIBUTION": "EXEMPT",
+        "INTEREST": "EXEMPT",
+        "ORDINARY_DIVIDEND": "EXEMPT",
+        "QUALIFIED_DIVIDEND": "EXEMPT",
+        "SHORT_TERM_CAPITAL_GAIN": "EXEMPT",
+        "LONG_TERM_CAPITAL_GAIN": "EXEMPT"
+      },
+      "retirementAdjustments": [],
+      "seniorAdjustments": [],
+      "additionalTaxes": [],
+      "modeling": {
+        "fullYearResidentOnly": true,
+        "approximationLevel": "RETIREMENT_PLANNING",
+        "limitations": []
+      },
+      "sources": [
+        {
+          "publisher": "Florida Department of Revenue",
+          "url": "https://floridarevenue.com/faq/Pages/FAQDetails.aspx?FAQID=1466"
+        }
+      ]
+    },
+    {
+      "jurisdictionCode": "IL",
+      "jurisdictionName": "Illinois",
+      "jurisdictionType": "STATE",
+      "taxYear": 2026,
+      "calculationStatus": "REVIEW_REQUIRED",
+      "taxBase": "FEDERAL_AGI_WITH_ADJUSTMENTS",
+      "taxSystem": {
+        "type": "FLAT",
+        "rate": 0.0495
+      },
+      "deductions": {
+        "standardDeduction": {
+          "SINGLE": 0,
+          "MARRIED_FILING_JOINTLY": 0
+        },
+        "personalExemption": {
+          "type": "DEDUCTION",
+          "amount": {
+            "SINGLE": 2925,
+            "MARRIED_FILING_JOINTLY": 5850
+          },
+          "federalAgiCeiling": {
+            "SINGLE": 250000,
+            "MARRIED_FILING_JOINTLY": 500000
+          }
+        }
+      },
+      "incomeTreatment": {
+        "SOCIAL_SECURITY": "EXEMPT",
+        "TRADITIONAL_IRA": "TAXABLE",
+        "EMPLOYER_RETIREMENT_PLAN": "TAXABLE",
+        "PENSION": "TAXABLE",
+        "ROTH_CONVERSION": "TAXABLE",
+        "QUALIFIED_ROTH_DISTRIBUTION": "EXEMPT",
+        "INTEREST": "TAXABLE",
+        "ORDINARY_DIVIDEND": "TAXABLE",
+        "QUALIFIED_DIVIDEND": "TAXABLE",
+        "SHORT_TERM_CAPITAL_GAIN": "TAXABLE",
+        "LONG_TERM_CAPITAL_GAIN": "TAXABLE"
+      },
+      "retirementAdjustments": [
+        {
+          "id": "IL_QUALIFIED_RETIREMENT",
+          "type": "INCOME_EXCLUSION",
+          "scope": "HOUSEHOLD",
+          "appliesTo": [
+            "TRADITIONAL_IRA",
+            "EMPLOYER_RETIREMENT_PLAN",
+            "PENSION"
+          ],
+          "qualification": "QUALIFYING_FEDERALLY_TAXABLE_RETIREMENT_INCOME",
+          "calculation": {
+            "method": "UNLIMITED_ELIGIBLE_INCOME"
+          },
+          "limitations": [
+            "Roth conversion classification requires separate legal verification; do not automatically exempt."
+          ]
+        }
+      ],
+      "seniorAdjustments": [
+        {
+          "id": "IL_AGE_65",
+          "type": "DEDUCTION",
+          "scope": "PER_PERSON",
+          "minimumAge": 65,
+          "amount": 1000,
+          "subjectToPersonalExemptionAgiCeiling": true
+        }
+      ],
+      "additionalTaxes": [],
+      "modeling": {
+        "fullYearResidentOnly": true,
+        "approximationLevel": "RETIREMENT_PLANNING",
+        "limitations": [
+          "Qualifying retirement income federally included in AGI is subtracted; some special types require qualification.",
+          "Additional $1,000 exemption per taxpayer age 65+; not for each household indiscriminately."
+        ]
+      },
+      "sources": [
+        {
+          "publisher": "Illinois retirement subtraction",
+          "url": "https://tax.illinois.gov/individuals/pension.html"
+        },
+        {
+          "publisher": "Illinois 2026 exemption",
+          "url": "https://tax.illinois.gov/questionsandanswers/answer.851.html"
+        }
+      ]
+    },
+    {
+      "jurisdictionCode": "PA",
+      "jurisdictionName": "Pennsylvania",
+      "jurisdictionType": "STATE",
+      "taxYear": 2026,
+      "calculationStatus": "REVIEW_REQUIRED",
+      "taxBase": "STATE_DEFINED_INCOME",
+      "taxSystem": {
+        "type": "FLAT",
+        "rate": 0.0307
+      },
+      "deductions": {
+        "standardDeduction": {
+          "SINGLE": 0,
+          "MARRIED_FILING_JOINTLY": 0
+        },
+        "personalExemption": {
+          "type": "NONE",
+          "amount": {
+            "SINGLE": 0,
+            "MARRIED_FILING_JOINTLY": 0
+          }
+        }
+      },
+      "incomeTreatment": {
+        "SOCIAL_SECURITY": "EXEMPT",
+        "TRADITIONAL_IRA": "TAXABLE",
+        "EMPLOYER_RETIREMENT_PLAN": "TAXABLE",
+        "PENSION": "TAXABLE",
+        "ROTH_CONVERSION": "TAXABLE",
+        "QUALIFIED_ROTH_DISTRIBUTION": "EXEMPT",
+        "INTEREST": "TAXABLE",
+        "ORDINARY_DIVIDEND": "TAXABLE",
+        "QUALIFIED_DIVIDEND": "TAXABLE",
+        "SHORT_TERM_CAPITAL_GAIN": "TAXABLE",
+        "LONG_TERM_CAPITAL_GAIN": "TAXABLE"
+      },
+      "retirementAdjustments": [
+        {
+          "id": "PA_QUALIFYING_IRA",
+          "type": "INCOME_EXCLUSION",
+          "scope": "PER_PERSON",
+          "appliesTo": [
+            "TRADITIONAL_IRA"
+          ],
+          "eligibility": {
+            "minimumAge": 59.5,
+            "alternativeQualifyingEvents": [
+              "DEATH",
+              "DISABILITY"
+            ]
+          },
+          "calculation": {
+            "method": "UNLIMITED_ELIGIBLE_INCOME"
+          }
+        },
+        {
+          "id": "PA_QUALIFYING_PENSION",
+          "type": "INCOME_EXCLUSION",
+          "scope": "PER_PERSON",
+          "appliesTo": [
+            "PENSION",
+            "EMPLOYER_RETIREMENT_PLAN"
+          ],
+          "qualification": "ELIGIBLE_PLAN_AND_RETIRED",
+          "calculation": {
+            "method": "UNLIMITED_ELIGIBLE_INCOME"
+          }
+        }
+      ],
+      "seniorAdjustments": [],
+      "additionalTaxes": [],
+      "modeling": {
+        "fullYearResidentOnly": true,
+        "approximationLevel": "RETIREMENT_PLANNING",
+        "limitations": [
+          "Pennsylvania does not use federal AGI or a standard deduction as the tax base.",
+          "Qualifying IRA distributions generally exempt at age 59.5; employer pension qualification depends on retirement plan eligibility.",
+          "Early withdrawals, annuity basis and Roth conversions require separate handling; never assume all Roth conversions exempt."
+        ]
+      },
+      "sources": [
+        {
+          "publisher": "PA rate",
+          "url": "https://www.pa.gov/agencies/revenue/resources/tax-rates"
+        },
+        {
+          "publisher": "PA retirement income guidance",
+          "url": "https://www.pa.gov/agencies/revenue/forms-and-publications/pa-personal-income-tax-guide/gross-compensation"
+        }
+      ]
+    },
+    {
+      "jurisdictionCode": "NY",
+      "jurisdictionName": "New York",
+      "jurisdictionType": "STATE",
+      "taxYear": 2026,
+      "calculationStatus": "REVIEW_REQUIRED",
+      "taxBase": "FEDERAL_AGI_WITH_ADJUSTMENTS",
+      "taxSystem": {
+        "type": "PROGRESSIVE",
+        "brackets": {
+          "SINGLE": [
+            {
+              "from": 0,
+              "to": 8500,
+              "rate": 0.039
+            },
+            {
+              "from": 8500,
+              "to": 11700,
+              "rate": 0.044
+            },
+            {
+              "from": 11700,
+              "to": 13900,
+              "rate": 0.0515
+            },
+            {
+              "from": 13900,
+              "to": 80650,
+              "rate": 0.054
+            },
+            {
+              "from": 80650,
+              "to": 215400,
+              "rate": 0.059
+            },
+            {
+              "from": 215400,
+              "to": 1077550,
+              "rate": 0.0685
+            },
+            {
+              "from": 1077550,
+              "to": 5000000,
+              "rate": 0.0965
+            },
+            {
+              "from": 5000000,
+              "to": 25000000,
+              "rate": 0.103
+            },
+            {
+              "from": 25000000,
+              "to": null,
+              "rate": 0.109
+            }
+          ],
+          "MARRIED_FILING_JOINTLY": [
+            {
+              "from": 0,
+              "to": 17150,
+              "rate": 0.039
+            },
+            {
+              "from": 17150,
+              "to": 23600,
+              "rate": 0.044
+            },
+            {
+              "from": 23600,
+              "to": 27900,
+              "rate": 0.0515
+            },
+            {
+              "from": 27900,
+              "to": 161550,
+              "rate": 0.054
+            },
+            {
+              "from": 161550,
+              "to": 323200,
+              "rate": 0.059
+            },
+            {
+              "from": 323200,
+              "to": 2155350,
+              "rate": 0.0685
+            },
+            {
+              "from": 2155350,
+              "to": 5000000,
+              "rate": 0.0965
+            },
+            {
+              "from": 5000000,
+              "to": 25000000,
+              "rate": 0.103
+            },
+            {
+              "from": 25000000,
+              "to": null,
+              "rate": 0.109
+            }
+          ]
+        }
+      },
+      "deductions": {
+        "standardDeduction": {
+          "SINGLE": 8000,
+          "MARRIED_FILING_JOINTLY": 16050
+        },
+        "personalExemption": {
+          "type": "NONE",
+          "amount": {
+            "SINGLE": 0,
+            "MARRIED_FILING_JOINTLY": 0
+          }
+        }
+      },
+      "incomeTreatment": {
+        "SOCIAL_SECURITY": "EXEMPT",
+        "TRADITIONAL_IRA": "TAXABLE",
+        "EMPLOYER_RETIREMENT_PLAN": "TAXABLE",
+        "PENSION": "TAXABLE",
+        "ROTH_CONVERSION": "TAXABLE",
+        "QUALIFIED_ROTH_DISTRIBUTION": "EXEMPT",
+        "INTEREST": "TAXABLE",
+        "ORDINARY_DIVIDEND": "TAXABLE",
+        "QUALIFIED_DIVIDEND": "TAXABLE",
+        "SHORT_TERM_CAPITAL_GAIN": "TAXABLE",
+        "LONG_TERM_CAPITAL_GAIN": "TAXABLE"
+      },
+      "retirementAdjustments": [
+        {
+          "id": "NY_PRIVATE_PENSION_20000",
+          "type": "INCOME_EXCLUSION",
+          "scope": "PER_PERSON",
+          "appliesTo": [
+            "TRADITIONAL_IRA",
+            "EMPLOYER_RETIREMENT_PLAN",
+            "PENSION"
+          ],
+          "qualification": "QUALIFYING_PRIVATE_RETIREMENT",
+          "eligibility": {
+            "minimumAge": 59.5
+          },
+          "calculation": {
+            "method": "CAPPED_ELIGIBLE_INCOME",
+            "maximumAmount": 20000
+          },
+          "exclusionGroup": "NY_PENSION_PER_PERSON"
+        },
+        {
+          "id": "NY_GOVERNMENT_PENSION",
+          "type": "INCOME_EXCLUSION",
+          "scope": "PER_PERSON",
+          "appliesTo": [
+            "PENSION"
+          ],
+          "pensionSources": [
+            "FEDERAL_GOVERNMENT",
+            "NEW_YORK_STATE_LOCAL_GOVERNMENT"
+          ],
+          "calculation": {
+            "method": "UNLIMITED_ELIGIBLE_INCOME"
+          },
+          "priority": 1,
+          "preventDoubleExclusion": true
+        }
+      ],
+      "seniorAdjustments": [],
+      "additionalTaxes": [],
+      "modeling": {
+        "fullYearResidentOnly": true,
+        "approximationLevel": "RETIREMENT_PLANNING",
+        "limitations": [
+          "New York high-income tax recapture/benefit of lower brackets not modeled.",
+          "New York City and Yonkers local income taxes excluded.",
+          "Qualifying government pensions exempt; requires pension source."
+        ]
+      },
+      "sources": [
+        {
+          "publisher": "New York tax law section 601",
+          "url": "https://www.nysenate.gov/legislation/laws/TAX/601"
+        },
+        {
+          "publisher": "NY standard deduction 2026",
+          "url": "https://www.tax.ny.gov/pdf/2026/inc/it2104i_2026.pdf"
+        },
+        {
+          "publisher": "NY pension exclusion",
+          "url": "https://www.tax.ny.gov/pdf/research/stats/expenditure-reports/fy26ter.pdf"
+        }
+      ]
+    },
+    {
+      "jurisdictionCode": "CO",
+      "jurisdictionName": "Colorado",
+      "jurisdictionType": "STATE",
+      "taxYear": 2026,
+      "calculationStatus": "REVIEW_REQUIRED",
+      "taxBase": "FEDERAL_TAXABLE_INCOME_WITH_ADJUSTMENTS",
+      "taxSystem": {
+        "type": "FLAT",
+        "rate": 0.044
+      },
+      "deductions": {
+        "standardDeduction": {
+          "SINGLE": 0,
+          "MARRIED_FILING_JOINTLY": 0
+        },
+        "personalExemption": {
+          "type": "NONE",
+          "amount": {
+            "SINGLE": 0,
+            "MARRIED_FILING_JOINTLY": 0
+          }
+        }
+      },
+      "incomeTreatment": {
+        "SOCIAL_SECURITY": "TAXABLE",
+        "TRADITIONAL_IRA": "TAXABLE",
+        "EMPLOYER_RETIREMENT_PLAN": "TAXABLE",
+        "PENSION": "TAXABLE",
+        "ROTH_CONVERSION": "TAXABLE",
+        "QUALIFIED_ROTH_DISTRIBUTION": "EXEMPT",
+        "INTEREST": "TAXABLE",
+        "ORDINARY_DIVIDEND": "TAXABLE",
+        "QUALIFIED_DIVIDEND": "TAXABLE",
+        "SHORT_TERM_CAPITAL_GAIN": "TAXABLE",
+        "LONG_TERM_CAPITAL_GAIN": "TAXABLE"
+      },
+      "retirementAdjustments": [
+        {
+          "id": "CO_PENSION_SUBTRACTION",
+          "type": "INCOME_EXCLUSION",
+          "scope": "PER_PERSON",
+          "appliesTo": [
+            "PENSION",
+            "TRADITIONAL_IRA",
+            "EMPLOYER_RETIREMENT_PLAN",
+            "SOCIAL_SECURITY"
+          ],
+          "qualification": "COLORADO_QUALIFYING_PENSION_ANNUITY",
+          "ageBands": [
+            {
+              "minimumAge": 55,
+              "maximumAge": 64,
+              "maximumExclusion": 20000
+            },
+            {
+              "minimumAge": 65,
+              "maximumAge": null,
+              "maximumExclusion": 24000
+            }
+          ],
+          "exclusionGroup": "CO_PENSION_AND_SS",
+          "calculation": {
+            "method": "AGE_BAND_CAPPED_ELIGIBLE_INCOME"
+          }
+        },
+        {
+          "id": "CO_SOCIAL_SECURITY_65_PLUS",
+          "type": "INCOME_EXCLUSION",
+          "scope": "PER_PERSON",
+          "appliesTo": [
+            "SOCIAL_SECURITY"
+          ],
+          "eligibility": {
+            "minimumAge": 65
+          },
+          "calculation": {
+            "method": "UNLIMITED_FEDERALLY_TAXABLE_SOCIAL_SECURITY"
+          },
+          "exclusionGroup": "CO_PENSION_AND_SS",
+          "priority": 1,
+          "preventDoubleExclusion": true
+        }
+      ],
+      "seniorAdjustments": [],
+      "additionalTaxes": [],
+      "modeling": {
+        "fullYearResidentOnly": true,
+        "approximationLevel": "RETIREMENT_PLANNING",
+        "limitations": [
+          "Colorado begins with federal taxable income; do not subtract federal standard deduction twice.",
+          "Social Security subtraction interacts with pension subtraction; model shared income limits.",
+          "2026 rule simplification omits special eligible survivor benefits and some under-65 Social Security rules."
+        ]
+      },
+      "sources": [
+        {
+          "publisher": "Colorado Legislative Council",
+          "url": "https://content.leg.colorado.gov/agencies/legislative-council-staff/individual-income-tax%C2%A0"
+        },
+        {
+          "publisher": "Colorado retirees",
+          "url": "https://tax.colorado.gov/individual-income-tax-information-for-retirees"
+        }
+      ]
+    },
+    {
+      "jurisdictionCode": "NJ",
+      "jurisdictionName": "New Jersey",
+      "jurisdictionType": "STATE",
+      "taxYear": 2026,
+      "calculationStatus": "REVIEW_REQUIRED",
+      "taxBase": "STATE_DEFINED_INCOME",
+      "taxSystem": {
+        "type": "PROGRESSIVE",
+        "brackets": {
+          "SINGLE": [
+            {
+              "from": 0,
+              "to": 20000,
+              "rate": 0.014
+            },
+            {
+              "from": 20000,
+              "to": 35000,
+              "rate": 0.0175
+            },
+            {
+              "from": 35000,
+              "to": 40000,
+              "rate": 0.035
+            },
+            {
+              "from": 40000,
+              "to": 75000,
+              "rate": 0.05525
+            },
+            {
+              "from": 75000,
+              "to": 500000,
+              "rate": 0.0637
+            },
+            {
+              "from": 500000,
+              "to": 1000000,
+              "rate": 0.0897
+            },
+            {
+              "from": 1000000,
+              "to": null,
+              "rate": 0.1075
+            }
+          ],
+          "MARRIED_FILING_JOINTLY": [
+            {
+              "from": 0,
+              "to": 20000,
+              "rate": 0.014
+            },
+            {
+              "from": 20000,
+              "to": 50000,
+              "rate": 0.0175
+            },
+            {
+              "from": 50000,
+              "to": 70000,
+              "rate": 0.0245
+            },
+            {
+              "from": 70000,
+              "to": 80000,
+              "rate": 0.035
+            },
+            {
+              "from": 80000,
+              "to": 150000,
+              "rate": 0.05525
+            },
+            {
+              "from": 150000,
+              "to": 500000,
+              "rate": 0.0637
+            },
+            {
+              "from": 500000,
+              "to": 1000000,
+              "rate": 0.0897
+            },
+            {
+              "from": 1000000,
+              "to": null,
+              "rate": 0.1075
+            }
+          ]
+        },
+        "filingThreshold": {
+          "SINGLE": 10000,
+          "MARRIED_FILING_JOINTLY": 20000
+        }
+      },
+      "deductions": {
+        "standardDeduction": {
+          "SINGLE": 0,
+          "MARRIED_FILING_JOINTLY": 0
+        },
+        "personalExemption": {
+          "type": "DEDUCTION",
+          "amount": {
+            "SINGLE": 1000,
+            "MARRIED_FILING_JOINTLY": 2000
+          }
+        }
+      },
+      "incomeTreatment": {
+        "SOCIAL_SECURITY": "EXEMPT",
+        "TRADITIONAL_IRA": "TAXABLE",
+        "EMPLOYER_RETIREMENT_PLAN": "TAXABLE",
+        "PENSION": "TAXABLE",
+        "ROTH_CONVERSION": "TAXABLE",
+        "QUALIFIED_ROTH_DISTRIBUTION": "EXEMPT",
+        "INTEREST": "TAXABLE",
+        "ORDINARY_DIVIDEND": "TAXABLE",
+        "QUALIFIED_DIVIDEND": "TAXABLE",
+        "SHORT_TERM_CAPITAL_GAIN": "TAXABLE",
+        "LONG_TERM_CAPITAL_GAIN": "TAXABLE"
+      },
+      "retirementAdjustments": [
+        {
+          "id": "NJ_PENSION_EXCLUSION",
+          "type": "INCOME_EXCLUSION",
+          "scope": "HOUSEHOLD_WITH_QUALIFIED_PERSON_INCOME",
+          "appliesTo": [
+            "TRADITIONAL_IRA",
+            "PENSION",
+            "EMPLOYER_RETIREMENT_PLAN"
+          ],
+          "eligibility": {
+            "minimumAge": 62,
+            "ageTest": "EITHER_SPOUSE",
+            "incomeBasis": "NJ_TOTAL_INCOME"
+          },
+          "calculation": {
+            "method": "STEPPED_INCOME_EXCLUSION",
+            "bands": [
+              {
+                "incomeFrom": 0,
+                "incomeTo": 100000,
+                "method": "CAPPED_ELIGIBLE_INCOME",
+                "maximumAmount": {
+                  "SINGLE": 75000,
+                  "MARRIED_FILING_JOINTLY": 100000
+                }
+              },
+              {
+                "incomeFrom": 100000,
+                "incomeTo": 125000,
+                "method": "PERCENT_OF_ELIGIBLE_INCOME",
+                "percentage": {
+                  "SINGLE": 0.375,
+                  "MARRIED_FILING_JOINTLY": 0.5
+                }
+              },
+              {
+                "incomeFrom": 125000,
+                "incomeTo": 150000,
+                "method": "PERCENT_OF_ELIGIBLE_INCOME",
+                "percentage": {
+                  "SINGLE": 0.1875,
+                  "MARRIED_FILING_JOINTLY": 0.25
+                }
+              }
+            ]
+          },
+          "limitations": [
+            "Only retirement income of age-qualified spouse is eligible when one spouse qualifies."
+          ]
+        }
+      ],
+      "seniorAdjustments": [
+        {
+          "id": "NJ_AGE_65",
+          "type": "DEDUCTION",
+          "scope": "PER_PERSON",
+          "minimumAge": 65,
+          "amount": 1000
+        }
+      ],
+      "additionalTaxes": [],
+      "modeling": {
+        "fullYearResidentOnly": true,
+        "approximationLevel": "RETIREMENT_PLANNING",
+        "limitations": [
+          "No federal AGI starting point; NJ total income differs from federal AGI.",
+          "Other retirement income exclusion not modeled.",
+          "Pension/IRA basis differences not modeled.",
+          "NJ tax-table rounding for incomes below $100k not modeled."
+        ]
+      },
+      "sources": [
+        {
+          "publisher": "NJ retirement exclusion",
+          "url": "https://www.nj.gov/treasury/taxation/njit7.shtml"
+        },
+        {
+          "publisher": "NJ tax rates",
+          "url": "https://nj.gov/treasury/taxation/taxtables.shtml"
+        },
+        {
+          "publisher": "NJ exemptions",
+          "url": "https://www.nj.gov/treasury/taxation/git_over.shtml"
+        }
+      ]
+    }
+  ]
+}
