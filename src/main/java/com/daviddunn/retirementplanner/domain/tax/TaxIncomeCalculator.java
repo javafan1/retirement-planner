@@ -1,6 +1,11 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.OptionalInt;
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.income.IncomeSource;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
@@ -147,13 +152,17 @@ public final class TaxIncomeCalculator {
         BigDecimal socialSecurityIncome =
                 BigDecimal.ZERO;
 
+        List<IncomeSourceAttribution> sources = new ArrayList<>();
         for (Person person : household.members()) {
+            AccountOwnership owner = household.peopleByOwner().entrySet().stream()
+                    .filter(entry -> entry.getValue() == person).findFirst().orElseThrow().getKey();
             IncomeTotals totals = calculateIncome(person, projectionDate, socialSecurityColaRate,
-                    socialSecurityResult != null, authoritativePensionIncome.isPresent());
+                    socialSecurityResult != null, authoritativePensionIncome.isPresent(), owner, sources);
             pensionIncome = pensionIncome.add(totals.pensionIncome());
             socialSecurityIncome = socialSecurityIncome.add(totals.socialSecurityIncome());
         }
         if (socialSecurityResult != null) {
+            addSelectedSocialSecurity(sources, socialSecurityResult, projectionDate.getYear());
 
             socialSecurityIncome =
                     socialSecurityResult.householdBenefit();
@@ -161,13 +170,16 @@ public final class TaxIncomeCalculator {
         } else if (deathAssumptions != null
                 && socialSecurityColaRate != null) {
 
-            socialSecurityIncome =
+            HouseholdSocialSecurityResult selected =
                     householdSocialSecurityIncomeCalculator
-                            .calculateAnnualIncome(
+                            .calculate(
                                     household,
                                     projectionDate,
                                     deathAssumptions,
                                     socialSecurityColaRate);
+            socialSecurityIncome = selected.householdBenefit();
+            sources.removeIf(source -> source.kind() == IncomeSourceAttribution.Kind.SOCIAL_SECURITY);
+            addSelectedSocialSecurity(sources, selected, projectionDate.getYear());
         }
 
         Objects.requireNonNull(
@@ -179,13 +191,24 @@ public final class TaxIncomeCalculator {
                     "Opening tax-deferred distribution cannot be negative.");
         }
 
+        int year = projectionDate.getYear();
+        authoritativePensionIncome.ifPresent(amount -> TaxIncomeAttribution.aggregate(sources,
+                IncomeSourceAttribution.Kind.PENSION, amount, true, year));
+        TaxIncomeAttribution.aggregate(sources, IncomeSourceAttribution.Kind.ORDINARY_RETIREMENT_WITHDRAWAL,
+                taxDeferredWithdrawals, true, year);
+        TaxIncomeAttribution.aggregate(sources, IncomeSourceAttribution.Kind.OPENING_RMD,
+                openingTaxDeferredDistribution, true, year);
+        TaxIncomeAttribution.aggregate(sources, IncomeSourceAttribution.Kind.ROTH_CONVERSION,
+                rothConversion, true, year);
+        TaxIncomeAttribution.aggregate(sources, IncomeSourceAttribution.Kind.INTEREST,
+                taxableInterestIncome, true, year);
         return new TaxIncome(
                 authoritativePensionIncome.orElse(pensionIncome),
                 socialSecurityIncome,
                 taxDeferredWithdrawals.add(
                         openingTaxDeferredDistribution),
                 rothConversion,
-                taxableInterestIncome);
+                taxableInterestIncome, sources);
     }
 
     public TaxIncome calculate(
@@ -208,11 +231,29 @@ public final class TaxIncomeCalculator {
                 deathAssumptions);
     }
 
+    private static void addSelectedSocialSecurity(List<IncomeSourceAttribution> sources,
+            HouseholdSocialSecurityResult result, int year) {
+        addSocialSecurity(sources, AccountOwnership.PRIMARY, result.primarySelectedBenefit(), year);
+        if (result.hasSpouse()) {
+            addSocialSecurity(sources, AccountOwnership.SPOUSE, result.spouseSelectedBenefit(), year);
+        }
+    }
+
+    private static void addSocialSecurity(List<IncomeSourceAttribution> sources,
+            AccountOwnership owner, BigDecimal amount, int year) {
+        if (amount.signum() > 0) {
+            sources.add(new IncomeSourceAttribution(IncomeSourceAttribution.Kind.SOCIAL_SECURITY,
+                    IncomeSourceAttribution.Purpose.INCOME, Optional.of(owner), Optional.empty(),
+                    Optional.empty(), "Social Security", amount, Optional.empty(),
+                    OptionalInt.of(year), Optional.empty()));
+        }
+    }
     private IncomeTotals calculateIncome(
             Person person,
             LocalDate projectionDate,
             BigDecimal socialSecurityColaRate,
-            boolean socialSecurityAlreadyCalculated, boolean pensionAlreadyCalculated) {
+            boolean socialSecurityAlreadyCalculated, boolean pensionAlreadyCalculated,
+            AccountOwnership owner, List<IncomeSourceAttribution> sources) {
 
         BigDecimal pensionIncome =
                 BigDecimal.ZERO;
@@ -255,13 +296,18 @@ public final class TaxIncomeCalculator {
                         projectionDate);
             }
 
-            if (income instanceof Pension) {
+            if (income instanceof Pension pension) {
+                if (annualIncome.signum() > 0) {
+                    sources.add(IncomeSourceAttribution.pension(pension, pension.getOwnership(),
+                            annualIncome, projectionDate.getYear()));
+                }
 
                 pensionIncome =
                         pensionIncome.add(
                                 annualIncome);
 
             } else if (income instanceof SocialSecurityIncome) {
+                addSocialSecurity(sources, owner, annualIncome, projectionDate.getYear());
 
                 socialSecurityIncome =
                         socialSecurityIncome.add(

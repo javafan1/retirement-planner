@@ -9,6 +9,8 @@ import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import java.util.ArrayList;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
@@ -73,6 +75,7 @@ public final class OpeningRmdCalculator {
 
         var remaining = new java.util.EnumMap<AccountOwnership, OwnerRmdResult>(AccountOwnership.class);
         BigDecimal distributed = BigDecimal.ZERO;
+        List<IncomeSourceAttribution> sources = new ArrayList<>();
         for (var entry : annualRequirement.ownerResults().entrySet()) {
             var owner = entry.getKey();
             var result = eligibleOwners.contains(owner) ? calculateRemainingOwnerRmd(
@@ -80,8 +83,24 @@ public final class OpeningRmdCalculator {
                     : new OwnerRemainingRmd(OwnerRmdResult.zero(), BigDecimal.ZERO);
             remaining.put(owner, result.result());
             distributed = distributed.add(result.distributedBeforeProjection());
+            if (eligibleOwners.contains(owner)) {
+                List<Account> accounts = new ArrayList<>(plan.getAccountPortfolio().getAccounts(owner).stream()
+                        .filter(account -> account.getType().isSubjectToOwnerRmd())
+                        .filter(account -> account.getType().getRmdAccountCategory() == RmdAccountCategory.IRA)
+                        .toList());
+                entry.getValue().getTraditional401kRmds().forEach(rmd -> accounts.add(rmd.getAccount()));
+                entry.getValue().getTraditional403bRmds().forEach(rmd -> accounts.add(rmd.getAccount()));
+                for (Account account : accounts) {
+                    BigDecimal amount = getDistributedBeforeProjection(account);
+                    if (amount.signum() > 0) {
+                        sources.add(IncomeSourceAttribution.withdrawal(account, amount,
+                                IncomeSourceAttribution.Kind.OPENING_RMD,
+                                IncomeSourceAttribution.Purpose.INCOME).inYear(distributionYear));
+                    }
+                }
+            }
         }
-        return new OpeningRmdCalculation(annualRequirement, new HouseholdRmdResult(remaining), distributed);
+        return new OpeningRmdCalculation(annualRequirement, new HouseholdRmdResult(remaining), distributed, sources);
     }
     /** Also applies when second death uses opening balances without an annual projection. */
     public void validateLifetimeOpeningDistributions(

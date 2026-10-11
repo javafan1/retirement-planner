@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.rmd;
 
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import java.util.List;
 import java.math.BigDecimal;
 import java.util.Objects;
 
@@ -9,6 +11,12 @@ import java.util.Objects;
  */
 public final class OpeningRmdCalculation {
 
+    private final List<IncomeSourceAttribution> incomeSources;
+
+    public List<IncomeSourceAttribution> getIncomeSources() {
+        return incomeSources;
+    }
+
     private final HouseholdRmdResult annualRequirement;
     private final HouseholdRmdResult remainingRequirement;
     private final BigDecimal distributedBeforeProjection;
@@ -17,6 +25,15 @@ public final class OpeningRmdCalculation {
             HouseholdRmdResult annualRequirement,
             HouseholdRmdResult remainingRequirement,
             BigDecimal distributedBeforeProjection) {
+        this(annualRequirement, remainingRequirement, distributedBeforeProjection, List.of());
+    }
+
+    public OpeningRmdCalculation(
+            HouseholdRmdResult annualRequirement,
+            HouseholdRmdResult remainingRequirement,
+            BigDecimal distributedBeforeProjection,
+            List<IncomeSourceAttribution> incomeSources) {
+        this.incomeSources = List.copyOf(incomeSources);
 
         this.annualRequirement = Objects.requireNonNull(
                 annualRequirement,

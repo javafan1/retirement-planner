@@ -31,6 +31,8 @@ import com.daviddunn.retirementplanner.domain.withdrawal.*;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
 
 
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import com.daviddunn.retirementplanner.domain.income.HouseholdPensionIncomeCalculator.PensionIncomeResult;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -469,10 +471,11 @@ public class ProjectionEngine {
         Set<AccountOwnership> eligibleOwners = household.peopleByOwner().keySet().stream()
                 .filter(owner -> !lifetimeRun || deathView.isAlive(owner, calendarYear))
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        Optional<BigDecimal> authoritativePensionIncome = lifetimeRun
+        Optional<PensionIncomeResult> pensionResult = lifetimeRun
                 ? Optional.of(householdPensionIncomeCalculator
-                        .calculate(household, projectionDate, deathView))
+                        .calculateWithSources(household, projectionDate, deathView))
                 : Optional.empty();
+        Optional<BigDecimal> authoritativePensionIncome = pensionResult.map(PensionIncomeResult::total);
 
         BigDecimal guaranteedIncome =
                 calculateTotalIncome(
@@ -727,6 +730,13 @@ public class ProjectionEngine {
         ProjectedPortfolio portfolioAfterConversion =
                 rothConversionResult.getPortfolio();
 
+        List<IncomeSourceAttribution> supplementalIncomeSources = new java.util.ArrayList<>(
+                rothConversionResult.getIncomeSources(calendarYear));
+        if (openingRmdCalculation != null) {
+            supplementalIncomeSources.addAll(openingRmdCalculation.getIncomeSources());
+        }
+        pensionResult.ifPresent(result -> supplementalIncomeSources.addAll(result.sources()));
+
         TaxFundingResult taxFundingResult =
                 taxFundingCalculator.calculate(
                         household,
@@ -746,7 +756,7 @@ public class ProjectionEngine {
                         rmdDistributedBeforeProjection,
                         socialSecurityResult,
                         availableHouseholdCashForTaxes,
-                        authoritativePensionIncome);
+                        authoritativePensionIncome, supplementalIncomeSources);
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();
@@ -913,7 +923,7 @@ public class ProjectionEngine {
                         household.hasSpouse() ? rothConversionResult.getConversion(AccountOwnership.SPOUSE) : null,
                         estimatedHeirTax,
                         afterTaxEstateValue,
-                        primaryPersonAge);
+                        primaryPersonAge, taxFundingResult.getIncomeSources());
 
         return new ProjectionYearCalculation(
                 projectionYear,

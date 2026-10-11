@@ -13,10 +13,18 @@ import java.util.List;
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
 import java.math.BigDecimal;
 import java.util.Objects;
 
 public class ProjectionYear {
+
+    private final List<IncomeSourceAttribution> incomeSources;
+
+    @JsonIgnore
+    public List<IncomeSourceAttribution> getIncomeSources() {
+        return incomeSources;
+    }
 
     private final int projectionYear;
     private final int calendarYear;
@@ -219,6 +227,7 @@ public class ProjectionYear {
         this.requestedRothConversion = BigDecimal.ZERO;
         this.rothConversion =
                 BigDecimal.ZERO;
+        this.incomeSources = List.of();
         this.primaryRothConversion = BigDecimal.ZERO;
         this.spouseRothConversion = BigDecimal.ZERO;
     }
@@ -362,6 +371,7 @@ public class ProjectionYear {
         this.requestedRothConversion = BigDecimal.ZERO;
         this.rothConversion =
                 BigDecimal.ZERO;
+        this.incomeSources = List.of();
         this.primaryRothConversion = BigDecimal.ZERO;
         this.spouseRothConversion = BigDecimal.ZERO;
     }
@@ -405,6 +415,71 @@ public class ProjectionYear {
             BigDecimal estimatedHeirTax,
             BigDecimal afterTaxEstateValue,
             int primaryPersonAge) {
+        this(projectionYear,
+                calendarYear,
+                beginningInvestableAssets,
+                investmentGrowth,
+                guaranteedIncome,
+                socialSecurityResult,
+                annualExpenses,
+                cashFlowNeed,
+                portfolioWithdrawal,
+                requiredMinimumDistribution,
+                rmdDistributedBeforeProjection,
+                rmdDistributedInProjection,
+                excessRmd,
+                beginningRetainedNonQualifiedAssets,
+                retainedNonQualifiedAssetGrowth,
+                endingRetainedNonQualifiedAssets,
+                householdCashSettlement,
+                endingInvestableAssets,
+                endingAccountSnapshots,
+                federalTaxCalculation,
+                michiganTaxCalculation,
+                medicarePremiumCalculation,
+                taxFundingWithdrawal,
+                requestedRothConversion,
+                rothConversion,
+                primaryRothConversion,
+                spouseRothConversion,
+                estimatedHeirTax,
+                afterTaxEstateValue,
+                primaryPersonAge, List.of());
+    }
+
+    public ProjectionYear(
+            int projectionYear,
+            int calendarYear,
+            BigDecimal beginningInvestableAssets,
+            BigDecimal investmentGrowth,
+            BigDecimal guaranteedIncome,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal annualExpenses,
+            BigDecimal cashFlowNeed,
+            BigDecimal portfolioWithdrawal,
+            BigDecimal requiredMinimumDistribution,
+            BigDecimal rmdDistributedBeforeProjection,
+            BigDecimal rmdDistributedInProjection,
+            BigDecimal excessRmd,
+            BigDecimal beginningRetainedNonQualifiedAssets,
+            BigDecimal retainedNonQualifiedAssetGrowth,
+            BigDecimal endingRetainedNonQualifiedAssets,
+            HouseholdCashSettlement householdCashSettlement,
+            BigDecimal endingInvestableAssets,
+            List<ProjectedAccountSnapshot> endingAccountSnapshots,
+            FederalTaxCalculation federalTaxCalculation,
+            MichiganTaxCalculation michiganTaxCalculation,
+            MedicarePremiumCalculation medicarePremiumCalculation,
+            BigDecimal taxFundingWithdrawal,
+            BigDecimal requestedRothConversion,
+            BigDecimal rothConversion,
+            BigDecimal primaryRothConversion,
+            BigDecimal spouseRothConversion,
+            BigDecimal estimatedHeirTax,
+            BigDecimal afterTaxEstateValue,
+            int primaryPersonAge,
+            List<IncomeSourceAttribution> incomeSources) {
+        this.incomeSources = List.copyOf(Objects.requireNonNull(incomeSources));
 
         this.projectionYear =
                 projectionYear;

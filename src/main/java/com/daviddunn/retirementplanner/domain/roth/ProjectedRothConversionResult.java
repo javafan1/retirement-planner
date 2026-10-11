@@ -3,6 +3,9 @@ package com.daviddunn.retirementplanner.domain.roth;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
@@ -31,6 +34,16 @@ public final class ProjectedRothConversionResult {
         return allocations;
     }
 
+    public List<IncomeSourceAttribution> getIncomeSources(int taxYear) {
+        return allocations.stream().map(allocation -> new IncomeSourceAttribution(
+                IncomeSourceAttribution.Kind.ROTH_CONVERSION,
+                IncomeSourceAttribution.Purpose.CONVERSION,
+                Optional.of(allocation.ownership()),
+                Optional.of(IncomeSourceAttribution.AccountReference.capture(allocation.sourceAccount())),
+                Optional.of(IncomeSourceAttribution.AccountReference.capture(allocation.destinationAccount())),
+                allocation.sourceAccount().getName(), allocation.amount(), Optional.of(allocation.amount()),
+                OptionalInt.of(taxYear), Optional.empty())).toList();
+    }
     public BigDecimal getTotalConversion() {
         return allocations.stream()
                 .map(RothConversionAllocation::amount)

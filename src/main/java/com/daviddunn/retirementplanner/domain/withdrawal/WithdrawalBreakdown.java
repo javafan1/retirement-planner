@@ -1,9 +1,19 @@
 package com.daviddunn.retirementplanner.domain.withdrawal;
 
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import java.util.List;
+import java.util.ArrayList;
 import java.math.BigDecimal;
 import java.util.Objects;
 
 public final class WithdrawalBreakdown {
+
+    private final List<IncomeSourceAttribution> incomeSources;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public List<IncomeSourceAttribution> getIncomeSources() {
+        return incomeSources;
+    }
 
     private final BigDecimal cashWithdrawal;
     private final BigDecimal taxableWithdrawal;
@@ -15,6 +25,16 @@ public final class WithdrawalBreakdown {
             BigDecimal taxableWithdrawal,
             BigDecimal taxDeferredWithdrawal,
             BigDecimal rothWithdrawal) {
+        this(cashWithdrawal, taxableWithdrawal, taxDeferredWithdrawal, rothWithdrawal, List.of());
+    }
+
+    public WithdrawalBreakdown(
+            BigDecimal cashWithdrawal,
+            BigDecimal taxableWithdrawal,
+            BigDecimal taxDeferredWithdrawal,
+            BigDecimal rothWithdrawal,
+            List<IncomeSourceAttribution> incomeSources) {
+        this.incomeSources = List.copyOf(Objects.requireNonNull(incomeSources));
 
         this.cashWithdrawal =
                 requireNonNegative(
@@ -84,6 +104,8 @@ public final class WithdrawalBreakdown {
                 other,
                 "Withdrawal breakdown is required.");
 
+        List<IncomeSourceAttribution> combined = new ArrayList<>(incomeSources);
+        combined.addAll(other.incomeSources);
         return new WithdrawalBreakdown(
                 cashWithdrawal.add(
                         other.cashWithdrawal),
@@ -92,7 +114,7 @@ public final class WithdrawalBreakdown {
                 taxDeferredWithdrawal.add(
                         other.taxDeferredWithdrawal),
                 rothWithdrawal.add(
-                        other.rothWithdrawal));
+                        other.rothWithdrawal), combined);
     }
 
     public static WithdrawalBreakdown zero() {

@@ -1,9 +1,18 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import java.util.List;
 import java.math.BigDecimal;
 import java.util.Objects;
 
 public final class TaxIncome {
+
+    private final List<IncomeSourceAttribution> incomeSources;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public List<IncomeSourceAttribution> getIncomeSources() {
+        return incomeSources;
+    }
 
     private final BigDecimal pensionIncome;
     private final BigDecimal socialSecurityIncome;
@@ -17,6 +26,17 @@ public final class TaxIncome {
             BigDecimal taxDeferredWithdrawals,
             BigDecimal rothConversion,
             BigDecimal taxableInterestIncome) {
+        this(pensionIncome, socialSecurityIncome, taxDeferredWithdrawals, rothConversion, taxableInterestIncome, List.of());
+    }
+
+    public TaxIncome(
+            BigDecimal pensionIncome,
+            BigDecimal socialSecurityIncome,
+            BigDecimal taxDeferredWithdrawals,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            List<IncomeSourceAttribution> incomeSources) {
+        this.incomeSources = List.copyOf(Objects.requireNonNull(incomeSources));
 
         this.pensionIncome =
                 requireNonNegative(
@@ -46,6 +66,11 @@ public final class TaxIncome {
 
     public BigDecimal getPensionIncome() {
         return pensionIncome;
+    }
+
+    public TaxIncome withIncomeSources(List<IncomeSourceAttribution> sources) {
+        return new TaxIncome(pensionIncome, socialSecurityIncome, taxDeferredWithdrawals,
+                rothConversion, taxableInterestIncome, sources);
     }
 
     public BigDecimal getSocialSecurityIncome() {

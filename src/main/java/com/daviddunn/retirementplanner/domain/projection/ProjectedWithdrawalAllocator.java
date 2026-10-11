@@ -10,6 +10,8 @@ import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
 import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalBreakdown;
 
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import java.util.ArrayList;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
@@ -315,6 +317,8 @@ public final class ProjectedWithdrawalAllocator {
                     "Withdrawal amount cannot be negative.");
         }
 
+        List<IncomeSourceAttribution> sources = new ArrayList<>();
+
         BigDecimal cashWithdrawal =
                 BigDecimal.ZERO;
 
@@ -338,6 +342,11 @@ public final class ProjectedWithdrawalAllocator {
                         updatedPortfolio.getRetainedNonQualifiedAssets());
 
         if (retainedAssetWithdrawal.signum() > 0) {
+            sources.add(IncomeSourceAttribution.aggregate(
+                    IncomeSourceAttribution.Kind.ORDINARY_WITHDRAWAL,
+                    IncomeSourceAttribution.Purpose.CASH_FLOW,
+                    "Retained household assets", retainedAssetWithdrawal,
+                    java.util.Optional.of(BigDecimal.ZERO)));
             updatedPortfolio =
                     updatedPortfolio
                             .withRetainedNonQualifiedAssetWithdrawal(
@@ -388,6 +397,10 @@ public final class ProjectedWithdrawalAllocator {
                             account,
                             withdrawal);
 
+            sources.add(IncomeSourceAttribution.withdrawal(account, withdrawal,
+                    IncomeSourceAttribution.withdrawalKind(account),
+                    IncomeSourceAttribution.Purpose.CASH_FLOW));
+
             TaxTreatment taxTreatment =
                     account
                             .getType()
@@ -432,7 +445,7 @@ public final class ProjectedWithdrawalAllocator {
                         cashWithdrawal,
                         taxableWithdrawal,
                         taxDeferredWithdrawal,
-                        rothWithdrawal);
+                        rothWithdrawal, sources);
 
         return new ProjectedWithdrawalAllocation(
                 updatedPortfolio,
@@ -470,6 +483,8 @@ public final class ProjectedWithdrawalAllocator {
             ProjectedPortfolio beginningPortfolio,
             ProjectedPortfolio endingPortfolio) {
 
+        List<IncomeSourceAttribution> sources = new ArrayList<>();
+
         BigDecimal cashWithdrawal =
                 BigDecimal.ZERO;
 
@@ -504,6 +519,10 @@ public final class ProjectedWithdrawalAllocator {
                 continue;
             }
 
+            sources.add(IncomeSourceAttribution.withdrawal(account, withdrawal,
+                    IncomeSourceAttribution.Kind.RMD,
+                    IncomeSourceAttribution.Purpose.CASH_FLOW));
+
             TaxTreatment taxTreatment =
                     account
                             .getType()
@@ -537,7 +556,7 @@ public final class ProjectedWithdrawalAllocator {
                 cashWithdrawal,
                 taxableWithdrawal,
                 taxDeferredWithdrawal,
-                rothWithdrawal);
+                rothWithdrawal, sources);
     }
 
     public WithdrawalBreakdown calculateWithdrawalBreakdown(
@@ -569,10 +588,19 @@ public final class ProjectedWithdrawalAllocator {
         BigDecimal remaining =
                 withdrawalAmount;
 
+        List<IncomeSourceAttribution> sources = new ArrayList<>();
+
         BigDecimal cashWithdrawal =
                 remaining.min(
                         portfolio.getRetainedNonQualifiedAssets());
 
+        if (cashWithdrawal.signum() > 0) {
+            sources.add(IncomeSourceAttribution.aggregate(
+                    IncomeSourceAttribution.Kind.ORDINARY_WITHDRAWAL,
+                    IncomeSourceAttribution.Purpose.TAX_FUNDING,
+                    "Retained household assets", cashWithdrawal,
+                    java.util.Optional.of(BigDecimal.ZERO)));
+        }
         remaining = remaining.subtract(cashWithdrawal);
 
         BigDecimal taxableWithdrawal =
@@ -603,6 +631,9 @@ public final class ProjectedWithdrawalAllocator {
                             remaining);
 
             if (withdrawal.signum() > 0) {
+                sources.add(IncomeSourceAttribution.withdrawal(account, withdrawal,
+                        IncomeSourceAttribution.withdrawalKind(account),
+                        IncomeSourceAttribution.Purpose.TAX_FUNDING));
 
                 switch (account
                         .getType()
@@ -649,6 +680,6 @@ public final class ProjectedWithdrawalAllocator {
                 cashWithdrawal,
                 taxableWithdrawal,
                 taxDeferredWithdrawal,
-                rothWithdrawal);
+                rothWithdrawal, sources);
     }
 }

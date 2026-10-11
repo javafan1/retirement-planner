@@ -2,10 +2,19 @@ package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
 
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import java.util.List;
 import java.math.BigDecimal;
 import java.util.Objects;
 
 public final class TaxFundingResult {
+
+    private final List<IncomeSourceAttribution> incomeSources;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public List<IncomeSourceAttribution> getIncomeSources() {
+        return incomeSources;
+    }
 
     private final BigDecimal additionalWithdrawal;
 
@@ -19,6 +28,15 @@ public final class TaxFundingResult {
             BigDecimal additionalWithdrawal,
             FederalTaxCalculation federalTaxCalculation,
             MichiganTaxCalculation michiganTaxCalculation) {
+        this(additionalWithdrawal, federalTaxCalculation, michiganTaxCalculation, List.of());
+    }
+
+    public TaxFundingResult(
+            BigDecimal additionalWithdrawal,
+            FederalTaxCalculation federalTaxCalculation,
+            MichiganTaxCalculation michiganTaxCalculation,
+            List<IncomeSourceAttribution> incomeSources) {
+        this.incomeSources = List.copyOf(Objects.requireNonNull(incomeSources));
 
         this.additionalWithdrawal =
                 Objects.requireNonNull(

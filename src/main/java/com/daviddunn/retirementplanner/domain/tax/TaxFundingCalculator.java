@@ -1,6 +1,9 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.ArrayList;
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
@@ -239,6 +242,43 @@ public final class TaxFundingCalculator {
             HouseholdSocialSecurityResult socialSecurityResult,
             BigDecimal availableHouseholdCash,
             Optional<BigDecimal> authoritativePensionIncome) {
+        return calculate(
+                household,
+                projectionDate,
+                portfolio,
+                existingWithdrawals,
+                withdrawalStrategy,
+                filingStatus,
+                projectedGovernmentRules,
+                rothConversion,
+                taxableInterestIncome,
+                socialSecurityColaRate,
+                deathAssumptions,
+                openingTaxDeferredDistribution,
+                socialSecurityResult,
+                availableHouseholdCash,
+                authoritativePensionIncome,
+                List.of());
+    }
+
+    public TaxFundingResult calculate(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal availableHouseholdCash,
+            Optional<BigDecimal> authoritativePensionIncome,
+            List<IncomeSourceAttribution> supplementalSources) {
+        supplementalSources = List.copyOf(Objects.requireNonNull(supplementalSources));
         Objects.requireNonNull(authoritativePensionIncome, "Authoritative pension optional is required.");
 
 
@@ -348,6 +388,10 @@ public final class TaxFundingCalculator {
                             socialSecurityResult,
                             authoritativePensionIncome);
 
+            List<IncomeSourceAttribution> trialSources = new ArrayList<>(totalWithdrawals.getIncomeSources());
+            trialSources.addAll(supplementalSources);
+            taxIncome = TaxIncomeAttribution.attach(taxIncome, trialSources, projectionDate.getYear());
+
             FederalTaxCalculation federalTaxCalculation =
                     federalTaxCalculator.calculate(
                             taxIncome,
@@ -407,6 +451,10 @@ public final class TaxFundingCalculator {
                                 socialSecurityResult,
                                 authoritativePensionIncome);
 
+                List<IncomeSourceAttribution> finalSources = new ArrayList<>(finalTotalWithdrawals.getIncomeSources());
+                finalSources.addAll(supplementalSources);
+                finalTaxIncome = TaxIncomeAttribution.attach(finalTaxIncome, finalSources, projectionDate.getYear());
+
                 FederalTaxCalculation finalFederalTaxCalculation =
                         federalTaxCalculator.calculate(
                                 finalTaxIncome,
@@ -424,7 +472,7 @@ public final class TaxFundingCalculator {
                 return new TaxFundingResult(
                         requiredWithdrawal,
                         finalFederalTaxCalculation,
-                        finalMichiganTaxCalculation);
+                        finalMichiganTaxCalculation, finalTaxIncome.getIncomeSources());
             }
 
             additionalWithdrawal =
