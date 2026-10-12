@@ -110,7 +110,10 @@ class TaxFundingCalculatorTest {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         new BigDecimal("25000"),
-                        BigDecimal.ZERO);
+                        BigDecimal.ZERO, List.of(com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.withdrawal(
+                                ira, new BigDecimal("25000"),
+                                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.ORDINARY_RETIREMENT_WITHDRAWAL,
+                                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Purpose.CASH_FLOW)));
 
         WithdrawalStrategy withdrawalStrategy =
                 new TaxDeferredFirstWithdrawalStrategy();
@@ -151,6 +154,7 @@ class TaxFundingCalculatorTest {
                                 result
                                         .getFederalTaxCalculation()
                                         .getFederalIncomeTax())
+                        .subtract(result.getMichiganTaxCalculation().incomeTax())
                         .abs();
 
         assertTrue(
@@ -209,7 +213,11 @@ class TaxFundingCalculatorTest {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         new BigDecimal("25000"),
-                        BigDecimal.ZERO);
+                        BigDecimal.ZERO, List.of(com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.withdrawal(
+                                new TraditionalIRA("Earlier IRA", AccountOwnership.PRIMARY, new BigDecimal("25000")),
+                                new BigDecimal("25000"),
+                                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.ORDINARY_RETIREMENT_WITHDRAWAL,
+                                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Purpose.CASH_FLOW)));
 
         WithdrawalStrategy withdrawalStrategy =
                 new TaxableFirstWithdrawalStrategy();
@@ -236,7 +244,9 @@ class TaxFundingCalculatorTest {
          *
          * Federal income tax             1,080
          *
-         * The $1,080 tax-funding withdrawal
+         * Michigan: pension qualification is unknown, so only the known IRA
+         * receives the subtraction. ($18,000 - $11,800) * 4.25% = $263.50.
+         * The $1,343.50 combined tax-funding withdrawal
          * comes from the brokerage account.
          *
          * Under our current MVP model, that
@@ -244,7 +254,7 @@ class TaxFundingCalculatorTest {
          */
         assertEquals(
                 0,
-                new BigDecimal("1080")
+                new BigDecimal("1343.50")
                         .compareTo(
                                 result.getAdditionalWithdrawal()));
 

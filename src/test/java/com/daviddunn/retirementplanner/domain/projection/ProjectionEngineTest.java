@@ -760,11 +760,11 @@ class ProjectionEngineTest {
                 year.getGuaranteedIncome());
 
         assertEquals(
-                new BigDecimal("12000.00"),
+                new BigDecimal("12263.5000000000"),
                 year.getPortfolioWithdrawal());
 
         assertEquals(
-                new BigDecimal("988000.00"),
+                new BigDecimal("987736.50"),
                 year.getEndingInvestableAssets());
     }
 
@@ -2248,28 +2248,28 @@ ProjectionYear
          */
         assertEquals(
                 0,
-                new BigDecimal("44200.00")
+                new BigDecimal("44492.78")
                         .compareTo(
                                 year.getAdjustedGrossIncome()
                                         .setScale(2, RoundingMode.HALF_UP)));
 
         assertEquals(
                 0,
-                new BigDecimal("12000.00")
+                new BigDecimal("12292.78")
                         .compareTo(
                                 year.getFederalTaxableIncome()
                                         .setScale(2, RoundingMode.HALF_UP)));
 
         assertEquals(
                 0,
-                new BigDecimal("1200.00")
+                new BigDecimal("1229.28")
                         .compareTo(
                                 year.getFederalIncomeTax()
                                         .setScale(2, RoundingMode.HALF_UP)));
 
         assertEquals(
                 0,
-                new BigDecimal("1200.00")
+                new BigDecimal("1492.78")
                         .compareTo(
                                 year.getTaxFundingWithdrawal()
                                         .setScale(2, RoundingMode.HALF_UP)));
@@ -2843,7 +2843,7 @@ ProjectionYear
 
         assertEquals(
                 0,
-                new BigDecimal("200779.78")
+                new BigDecimal("203563.35")
                         .compareTo(
                                 year.getRothConversion()
                                         .setScale(
@@ -2862,7 +2862,7 @@ ProjectionYear
 
         assertEquals(
                 0,
-                new BigDecimal("300779.78")
+                new BigDecimal("303563.35")
                         .compareTo(
                                 year.getEndingBalance(rothIra)
                                         .setScale(

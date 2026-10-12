@@ -17,7 +17,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-/** Documents approved deferred discrepancies; does not change or certify production Michigan. */
+/** Keeps the original discrepancy amounts traceable while checking the corrected production boundary. */
 class MichiganPrototypeComparisonTest {
 
     @ParameterizedTest
@@ -33,13 +33,23 @@ class MichiganPrototypeComparisonTest {
         BigDecimal ira = new BigDecimal(iraText);
         BigDecimal interest = new BigDecimal(interestText);
         var rules = new GovernmentRulesRepository().load("/rules/government-rules-2026.json");
-        var taxIncome = new TaxIncome(BigDecimal.ZERO, BigDecimal.ZERO, ira, BigDecimal.ZERO, interest);
-        // Same argument preparation as TaxFundingCalculator trial and final Michigan calls.
+        var primary = new com.daviddunn.retirementplanner.domain.model.Person("Primary", "Fixture", java.time.LocalDate.of(1966, 1, 1));
+        var spouse = status == FilingStatus.SINGLE ? null
+                : new com.daviddunn.retirementplanner.domain.model.Person("Spouse", "Fixture", java.time.LocalDate.of(1966, 1, 1));
+        var household = new com.daviddunn.retirementplanner.domain.model.Household(primary, spouse);
+        var account = new com.daviddunn.retirementplanner.domain.financial.TraditionalIRA("IRA",
+                com.daviddunn.retirementplanner.domain.model.AccountOwnership.PRIMARY, ira);
+        var source = com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.withdrawal(account, ira,
+                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.ORDINARY_RETIREMENT_WITHDRAWAL,
+                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Purpose.CASH_FLOW);
+        var taxIncome = new TaxIncome(BigDecimal.ZERO, BigDecimal.ZERO, ira, BigDecimal.ZERO, interest, List.of(source));
         var production = new MichiganTaxCalculator().calculate(
-                taxIncome.getOrdinaryIncomeBeforeSocialSecurity(), status, rules.getMichiganTaxRules());
-        amount(productionDeduction, production.retirementDeduction());
-        amount(productionTaxable, production.taxableIncome());
-        amount(productionTax, production.incomeTax().setScale(2, RoundingMode.HALF_UP));
+                taxIncome, status, rules.getMichiganTaxRules(),
+                com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxContext.capture(
+                        household, java.time.LocalDate.of(2026, 1, 1), null));
+        amount(prototypeDeduction, production.retirementDeduction());
+        amount(prototypeTaxable, production.taxableIncome());
+        amount(prototypeTax, production.incomeTax().setScale(2, RoundingMode.HALF_UP));
         List<PersonIncome> people = status == FilingStatus.SINGLE
                 ? List.of(person(Owner.PRIMARY, ira, interest))
                 : List.of(person(Owner.PRIMARY, ira.divide(BigDecimal.TWO), interest.divide(BigDecimal.TWO)),

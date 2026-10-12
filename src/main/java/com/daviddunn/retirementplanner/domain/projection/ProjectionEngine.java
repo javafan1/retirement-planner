@@ -27,6 +27,7 @@ import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdCalculator;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.tax.*;
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
+import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxContext;
 import com.daviddunn.retirementplanner.domain.withdrawal.*;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
 
@@ -619,6 +620,17 @@ public class ProjectionEngine {
                         .getTotalRmd()
                         .signum() > 0;
 
+        MichiganTaxContext michiganContext = MichiganTaxContext.capture(
+                household, projectionDate, assumptions.getDeathScenarioAssumptions());
+        if (lifetimeRun) {
+            michiganContext = michiganContext.withActiveOwners(eligibleOwners).withPensionIncome(pensionResult);
+        }
+        List<IncomeSourceAttribution> preConversionSources = new java.util.ArrayList<>();
+        if (openingRmdCalculation != null) {
+            preConversionSources.addAll(openingRmdCalculation.getIncomeSources());
+        }
+        pensionResult.ifPresent(result -> preConversionSources.addAll(result.sources()));
+
         BigDecimal rothConversion =
                 BigDecimal.ZERO;
 
@@ -704,7 +716,7 @@ public class ProjectionEngine {
                                         rmdDistributedBeforeProjection,
                                         socialSecurityResult,
                                         availableHouseholdCashForTaxes,
-                                        authoritativePensionIncome);
+                                        authoritativePensionIncome, preConversionSources, michiganContext, eligibleOwners);
             }
         }
 
@@ -756,7 +768,7 @@ public class ProjectionEngine {
                         rmdDistributedBeforeProjection,
                         socialSecurityResult,
                         availableHouseholdCashForTaxes,
-                        authoritativePensionIncome, supplementalIncomeSources);
+                        authoritativePensionIncome, supplementalIncomeSources, michiganContext);
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();

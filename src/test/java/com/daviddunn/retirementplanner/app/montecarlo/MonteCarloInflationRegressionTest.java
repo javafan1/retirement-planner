@@ -15,9 +15,10 @@ class MonteCarloInflationRegressionTest {
         var analyzer = new MonteCarloAnalyzer();
         var fixed = analyzer.analyze(plan, settings);
         var longevity = analyzer.analyzeMortality(plan, MonteCarloWorldGeneratorTest.request(plan, settings));
-        // Captured before modifying ProjectionEngine or either Monte Carlo execution path.
-        assertEquals("01ed3b0ad6eb20a31d0c5b0dc4736eff5e8946ffd9913fe4d5703be22fb74bab", hash(fixed.outcomes().toString()));
-        assertEquals("f7bc8ef768c25b2de93e9be750ca448bdf31561bd76a6b1ff94823c805811296", hash(longevity.outcomes().toString()));
+        // Phase 6C.3: traced against pre-change classes; annual Michigan, federal and RMD
+        // worksheets are protected separately by MichiganTaxFeedbackRegressionTest.
+        assertEquals("909edbcabaca5186ee0c9d91938ea6887d3b0ad3e8f741367b935adb9c2b28af", hash(fixed.outcomes().toString()));
+        assertEquals("9b2e62ae73fe5be35d92152e1576afe90d2546233ec6f801bb9e92ccb9859c2c", hash(longevity.outcomes().toString()));
     }
 
     private static String hash(String value) throws Exception {

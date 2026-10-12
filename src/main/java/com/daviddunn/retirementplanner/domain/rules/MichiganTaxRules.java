@@ -8,11 +8,19 @@ import java.util.Objects;
 
 public final class MichiganTaxRules {
 
+    private final BigDecimal personalExemption;
+
     private final BigDecimal incomeTaxRate;
 
     private final BigDecimal retirementDeductionSingle;
 
     private final BigDecimal retirementDeductionMarried;
+
+    public MichiganTaxRules(BigDecimal incomeTaxRate, BigDecimal retirementDeductionSingle,
+            BigDecimal retirementDeductionMarried) {
+        // Explicit compatibility for custom/legacy rules with no exemption configured.
+        this(incomeTaxRate, retirementDeductionSingle, retirementDeductionMarried, BigDecimal.ZERO);
+    }
 
     @JsonCreator
     public MichiganTaxRules(
@@ -24,8 +32,15 @@ public final class MichiganTaxRules {
             BigDecimal retirementDeductionSingle,
 
             @JsonProperty("retirementDeductionMarried")
-            BigDecimal retirementDeductionMarried) {
+            BigDecimal retirementDeductionMarried,
 
+            @JsonProperty("personalExemption")
+            BigDecimal personalExemption) {
+
+        this.personalExemption = Objects.requireNonNull(personalExemption, "Michigan personal exemption is required.");
+        if (personalExemption.signum() < 0) {
+            throw new IllegalArgumentException("Michigan personal exemption cannot be negative.");
+        }
         this.incomeTaxRate =
                 Objects.requireNonNull(
                         incomeTaxRate,
@@ -40,6 +55,10 @@ public final class MichiganTaxRules {
                 Objects.requireNonNull(
                         retirementDeductionMarried,
                         "Married retirement deduction is required.");
+    }
+
+    public BigDecimal getPersonalExemption() {
+        return personalExemption;
     }
 
     public BigDecimal getIncomeTaxRate() {

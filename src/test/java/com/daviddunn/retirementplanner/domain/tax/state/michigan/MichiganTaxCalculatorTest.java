@@ -15,6 +15,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class MichiganTaxCalculatorTest {
 
+    private MichiganTaxCalculation calculateAttributed(String amount) {
+        var person = new com.daviddunn.retirementplanner.domain.model.Person("Primary", "Fixture", LocalDate.of(1960, 1, 1));
+        var household = new com.daviddunn.retirementplanner.domain.model.Household(person);
+        var account = new com.daviddunn.retirementplanner.domain.financial.TraditionalIRA("IRA",
+                com.daviddunn.retirementplanner.domain.model.AccountOwnership.PRIMARY, new BigDecimal(amount));
+        var source = com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.withdrawal(account,
+                new BigDecimal(amount), com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.ORDINARY_RETIREMENT_WITHDRAWAL,
+                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Purpose.CASH_FLOW);
+        return calculator.calculate(new com.daviddunn.retirementplanner.domain.tax.TaxIncome(BigDecimal.ZERO,
+                BigDecimal.ZERO, new BigDecimal(amount), BigDecimal.ZERO, BigDecimal.ZERO, java.util.List.of(source)),
+                FilingStatus.SINGLE, projectedRules, MichiganTaxContext.capture(household, LocalDate.of(2027, 1, 1), null));
+    }
+
     private MichiganTaxCalculator calculator;
     private MichiganTaxRules projectedRules;
 
@@ -48,10 +61,7 @@ class MichiganTaxCalculatorTest {
     void incomeBelowRetirementDeductionProducesNoTax() {
 
         MichiganTaxCalculation calculation =
-                calculator.calculate(
-                        BigDecimal.valueOf(30_000),
-                        FilingStatus.SINGLE,
-                        projectedRules);
+                calculateAttributed("30000");
 
         assertEquals(
                 BigDecimal.ZERO,
@@ -66,16 +76,14 @@ class MichiganTaxCalculatorTest {
     void incomeAboveRetirementDeductionProducesTax() {
 
         MichiganTaxCalculation calculation =
-                calculator.calculate(
-                        BigDecimal.valueOf(100_000),
-                        FilingStatus.SINGLE,
-                        projectedRules);
+                calculateAttributed("100000");
 
         BigDecimal expectedTaxableIncome =
                 BigDecimal.valueOf(100_000)
                         .subtract(
                                 projectedRules
-                                        .getRetirementDeductionSingle());
+                                        .getRetirementDeductionSingle())
+                        .subtract(projectedRules.getPersonalExemption());
 
         BigDecimal expectedTax =
                 expectedTaxableIncome.multiply(

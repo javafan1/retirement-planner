@@ -70,7 +70,7 @@ class SinglePersonCoreProjectionTest {
     }
 
     @Test
-    void representativeCoupleRemainsExactlyUnchanged() throws Exception {
+    void representativeCoupleMatchesReviewedMichiganCorrection() throws Exception {
         String actual = financialRows(new ProjectionEngine().project(plan(true, FilingStatus.MARRIED_FILING_JOINTLY)));
         assertEquals(Files.readString(Path.of("src/test/resources/single-person-stage2-couple-golden.txt")).replace("\r\n", "\n"), actual);
     }

@@ -24,7 +24,8 @@ class SurvivorMechanicsCharacterizationTest {
                         + year.getTotalIncomeTax() + ":" + year.getRothConversion() + ":"
                         + year.getEndingInvestableAssets() + ":" + year.getAfterTaxEstateValue().setScale(2, java.math.RoundingMode.HALF_UP))
                 .collect(java.util.stream.Collectors.joining("|"));
-        assertEquals("2030:66000.00:5.00000000:10000:1563625.40:1312375.40|2031:42600.00:0:10000:1610699.36:1354411.86|2032:43260.0000:2171.44000000:10000:1657674.10:1396197.98|2033:39993.000000:807.4100000000:10000:1699155.11:1432334.70|2034:36000.00:0:10000:1743694.96:1471369.94", financial);
+        // Reviewed annual Michigan/source and retained-cash differences are listed in the Phase 6C.3 impact ledger.
+        assertEquals("2030:66000.00:13.50000000:10000:1563616.90:1312366.90|2031:42600.00:204.000000:10000:1610486.61:1354199.11|2032:43260.0000:2654.24000000:10000:1656972.17:1395496.05|2033:39993.000000:1151.3625000000:10000:1698088.18:1431267.77|2034:36000.00:174.2500:10000:1742421.78:1470096.76", financial);
         assertEquals(0, new BigDecimal("10000").compareTo(projection.getYearAt(2).getRothConversion()));
     }
 }

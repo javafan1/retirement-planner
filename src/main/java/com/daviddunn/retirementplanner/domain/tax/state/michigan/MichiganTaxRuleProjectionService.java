@@ -54,6 +54,8 @@ public final class MichiganTaxRuleProjectionService {
         return new MichiganTaxRules(
                 publishedRules.getIncomeTaxRate(),
                 projectedSingleDeduction,
-                projectedMarriedDeduction);
+                projectedMarriedDeduction,
+                projectionService.project(publishedRules.getPersonalExemption(),
+                        publishedTaxYear, projectionYear, planningAssumptions.getExpectedAnnualInflationRate()));
     }
 }

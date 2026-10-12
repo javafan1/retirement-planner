@@ -20,6 +20,12 @@ import java.util.Objects;
 public class ProjectionYear {
 
     private final List<IncomeSourceAttribution> incomeSources;
+    private final MichiganTaxCalculation michiganTaxCalculation;
+
+    @JsonIgnore
+    public java.util.Optional<MichiganTaxCalculation> michiganTaxCalculation() {
+        return java.util.Optional.ofNullable(michiganTaxCalculation);
+    }
 
     @JsonIgnore
     public List<IncomeSourceAttribution> getIncomeSources() {
@@ -228,6 +234,7 @@ public class ProjectionYear {
         this.rothConversion =
                 BigDecimal.ZERO;
         this.incomeSources = List.of();
+        this.michiganTaxCalculation = null;
         this.primaryRothConversion = BigDecimal.ZERO;
         this.spouseRothConversion = BigDecimal.ZERO;
     }
@@ -372,6 +379,7 @@ public class ProjectionYear {
         this.rothConversion =
                 BigDecimal.ZERO;
         this.incomeSources = List.of();
+        this.michiganTaxCalculation = null;
         this.primaryRothConversion = BigDecimal.ZERO;
         this.spouseRothConversion = BigDecimal.ZERO;
     }
@@ -480,6 +488,7 @@ public class ProjectionYear {
             int primaryPersonAge,
             List<IncomeSourceAttribution> incomeSources) {
         this.incomeSources = List.copyOf(Objects.requireNonNull(incomeSources));
+        this.michiganTaxCalculation = Objects.requireNonNull(michiganTaxCalculation);
 
         this.projectionYear =
                 projectionYear;

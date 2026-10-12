@@ -27,12 +27,13 @@ class HouseholdCashSettlementProjectionTest {
 
         assertMoney("72000", year.getGuaranteedIncome());
         assertMoney("50000", year.getAnnualExpenses());
-        assertMoney("4280", year.getTotalIncomeTax());
+        // Federal $4,280 plus Michigan ($72,000 - $11,800) * 4.25% = $2,558.50.
+        assertMoney("6838.50", year.getTotalIncomeTax());
         assertMoney("0", year.getTaxFundingWithdrawal());
-        assertMoney("17720", year.getRetainedHouseholdSurplus());
-        assertMoney("17720", year.getRetainedFromGuaranteedIncome());
+        assertMoney("15161.50", year.getRetainedHouseholdSurplus());
+        assertMoney("15161.50", year.getRetainedFromGuaranteedIncome());
         assertMoney("0", year.getRetainedFromExcessRmd());
-        assertMoney("117720", year.getEndingInvestableAssets());
+        assertMoney("115161.50", year.getEndingInvestableAssets());
         assertMoney(year.getEndingInvestableAssets(), year.getAfterTaxEstateValue());
         assertCashReconciles(year);
         printSettlement("PENSION", year);
@@ -51,7 +52,7 @@ class HouseholdCashSettlementProjectionTest {
                 second.getBeginningRetainedNonQualifiedAssets());
         assertMoney("0", second.getEndingRetainedNonQualifiedAssets());
         assertMoney("50000", second.getPortfolioWithdrawal());
-        assertMoney("67720", second.getEndingInvestableAssets());
+        assertMoney("65161.50", second.getEndingInvestableAssets());
         assertCashReconciles(second);
         printSettlement("RETAINED_USED_NEXT_YEAR", second);
     }

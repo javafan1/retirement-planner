@@ -185,8 +185,8 @@ class ProjectionChartViewTest {
                         plan.getAccountPortfolio().getAccounts()).years().get(3);
                 var sum = chart.getData().stream().map(series -> (java.math.BigDecimal) series.getData().get(3).getYValue())
                         .reduce(ZERO, java.math.BigDecimal::add);
-                assertEquals(0, new java.math.BigDecimal("2211334.90407004880506").compareTo(sum));
-                assertEquals(0, new java.math.BigDecimal("2211334.91").compareTo(point.values().get(ProjectionChartMetric.INVESTABLE_ASSETS)));
+                assertEquals(0, new java.math.BigDecimal("2211669.889459070312500").compareTo(sum));
+                assertEquals(0, new java.math.BigDecimal("2211669.89").compareTo(point.values().get(ProjectionChartMetric.INVESTABLE_ASSETS)));
                 assertEquals(30, chart.lookupAll(".projection-total-point").size());
                 var image = summary.snapshot(null, null);
                 var png = new java.awt.image.BufferedImage((int) image.getWidth(), (int) image.getHeight(), java.awt.image.BufferedImage.TYPE_INT_ARGB);

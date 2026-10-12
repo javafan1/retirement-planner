@@ -80,9 +80,10 @@
 
     "incomeTaxRate": 0.0425,
 
-    "retirementDeductionSingle": 40762,
+    "retirementDeductionSingle": 67610,
 
-    "retirementDeductionMarried": 81524
+    "retirementDeductionMarried": 135220,
+    "personalExemption": 5900
   },
 
   "irmaaRules": {

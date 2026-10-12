@@ -118,7 +118,8 @@ class MonteCarloMortalityResultsTest {
         assertEquals(205, mixed.fundingFailureCount());
         // Complete record text includes classifications, exact annual/terminal percentile values,
         // completed metrics, and the deterministic reference (including its funding-failed prefix).
-        assertEquals("331a465e4025cd0a3d3ad810e8f662133861374b4e5f68203b338af96157833e", fingerprint(funded));
+        // Michigan-only correction; old/new fingerprints and annual feedback are documented in Phase 6C.3.
+        assertEquals("2e59371fe01c505b067f508fefd2ececf443d328bcc052aa2de0aeb41c29c28b", fingerprint(funded));
         assertEquals("3fbe8d554275db48949f6877c153b7a390e048845e4d211c8a87cb256f3c286b", fingerprint(mixed));
     }
 

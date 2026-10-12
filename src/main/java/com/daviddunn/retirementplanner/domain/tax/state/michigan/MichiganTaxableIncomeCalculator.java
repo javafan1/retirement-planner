@@ -19,6 +19,20 @@ public final class MichiganTaxableIncomeCalculator {
 
     public BigDecimal calculateTaxableIncome(
             BigDecimal ordinaryIncome,
+            BigDecimal eligibleRetirementDeduction,
+            BigDecimal personalExemption) {
+        Objects.requireNonNull(ordinaryIncome);
+        Objects.requireNonNull(eligibleRetirementDeduction);
+        Objects.requireNonNull(personalExemption);
+        if (ordinaryIncome.signum() < 0 || eligibleRetirementDeduction.signum() < 0
+                || personalExemption.signum() < 0) {
+            throw new IllegalArgumentException("Michigan income and deductions cannot be negative.");
+        }
+        return ordinaryIncome.subtract(eligibleRetirementDeduction)
+                .subtract(personalExemption).max(BigDecimal.ZERO);
+    }
+    public BigDecimal calculateTaxableIncome(
+            BigDecimal ordinaryIncome,
             FilingStatus filingStatus,
             MichiganTaxRules michiganTaxRules) {
 

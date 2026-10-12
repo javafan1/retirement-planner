@@ -62,8 +62,8 @@ class ProjectionChartReconciliationTest {
         assertEquals(30, model.years().size());
         var affected = model.years().stream().filter(p -> p.year() == 2030).findFirst().orElseThrow();
         assertTrue(affected.compositionComplete());
-        assertEquals(0, new BigDecimal("0.00592995119494").compareTo(affected.compositionResidual()));
-        assertEquals(0, new BigDecimal("2211334.91").compareTo(affected.values().get(ProjectionChartMetric.INVESTABLE_ASSETS)));
+        assertEquals(0, new BigDecimal("0.000540929687500").compareTo(affected.compositionResidual()));
+        assertEquals(0, new BigDecimal("2211669.89").compareTo(affected.values().get(ProjectionChartMetric.INVESTABLE_ASSETS)));
         // Characterize existing results, including first, conversion, first RMD and final years.
         for (var point : model.years()) {
             var source = projection.getYears().stream().filter(y -> y.getCalendarYear() == point.year()).findFirst().orElseThrow();

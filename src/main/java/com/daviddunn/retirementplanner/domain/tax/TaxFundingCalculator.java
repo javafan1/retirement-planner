@@ -13,6 +13,7 @@ import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculator;
+import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxContext;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalBreakdown;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
 
@@ -278,6 +279,36 @@ public final class TaxFundingCalculator {
             BigDecimal availableHouseholdCash,
             Optional<BigDecimal> authoritativePensionIncome,
             List<IncomeSourceAttribution> supplementalSources) {
+        MichiganTaxContext context = MichiganTaxContext.capture(household, projectionDate, deathAssumptions);
+        if (authoritativePensionIncome.isPresent()) {
+            context = context.withPensionIncome(Optional.empty());
+        }
+        return calculate(household, projectionDate, portfolio, existingWithdrawals,
+                withdrawalStrategy, filingStatus, projectedGovernmentRules, rothConversion,
+                taxableInterestIncome, socialSecurityColaRate, deathAssumptions,
+                openingTaxDeferredDistribution, socialSecurityResult, availableHouseholdCash,
+                authoritativePensionIncome, supplementalSources, context);
+    }
+
+    public TaxFundingResult calculate(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal availableHouseholdCash,
+            Optional<BigDecimal> authoritativePensionIncome,
+            List<IncomeSourceAttribution> supplementalSources,
+            MichiganTaxContext michiganContext) {
+        Objects.requireNonNull(michiganContext, "Michigan tax context is required.");
         supplementalSources = List.copyOf(Objects.requireNonNull(supplementalSources));
         Objects.requireNonNull(authoritativePensionIncome, "Authoritative pension optional is required.");
 
@@ -400,9 +431,9 @@ public final class TaxFundingCalculator {
 
             MichiganTaxCalculation michiganTaxCalculation =
                     michiganTaxCalculator.calculate(
-                            taxIncome.getOrdinaryIncomeBeforeSocialSecurity(),
+                            taxIncome,
                             filingStatus,
-                            projectedGovernmentRules.getMichiganTaxRules());
+                            projectedGovernmentRules.getMichiganTaxRules(), michiganContext);
 
             BigDecimal requiredWithdrawal =
                     federalTaxCalculation
@@ -463,11 +494,10 @@ public final class TaxFundingCalculator {
 
                 MichiganTaxCalculation finalMichiganTaxCalculation =
                         michiganTaxCalculator.calculate(
-                                finalTaxIncome
-                                        .getOrdinaryIncomeBeforeSocialSecurity(),
+                                finalTaxIncome,
                                 filingStatus,
                                 projectedGovernmentRules
-                                        .getMichiganTaxRules());
+                                        .getMichiganTaxRules(), michiganContext);
 
                 return new TaxFundingResult(
                         requiredWithdrawal,

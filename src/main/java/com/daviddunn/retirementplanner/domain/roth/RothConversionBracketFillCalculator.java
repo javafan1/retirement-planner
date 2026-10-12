@@ -1,6 +1,10 @@
 package com.daviddunn.retirementplanner.domain.roth;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.ArrayList;
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxContext;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
@@ -28,6 +32,8 @@ public final class RothConversionBracketFillCalculator {
 
     private final TaxFundingCalculator
             taxFundingCalculator;
+
+    private final ProjectedPortfolioRothConverter conversionAttribution = new ProjectedPortfolioRothConverter();
 
     public RothConversionBracketFillCalculator() {
 
@@ -250,6 +256,39 @@ public final class RothConversionBracketFillCalculator {
             HouseholdSocialSecurityResult socialSecurityResult,
             BigDecimal availableHouseholdCash,
             Optional<BigDecimal> authoritativePensionIncome) {
+        MichiganTaxContext context = MichiganTaxContext.capture(household, projectionDate, deathAssumptions);
+        if (authoritativePensionIncome.isPresent()) {
+            context = context.withPensionIncome(Optional.empty());
+        }
+        return calculateConversion(household, projectionDate, portfolio, existingWithdrawals,
+                withdrawalStrategy, filingStatus, projectedGovernmentRules, targetTaxableIncome,
+                taxableInterestIncome, socialSecurityColaRate, deathAssumptions,
+                openingTaxDeferredDistribution, socialSecurityResult, availableHouseholdCash,
+                authoritativePensionIncome, List.of(), context, household.peopleByOwner().keySet());
+    }
+
+    public BigDecimal calculateConversion(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal targetTaxableIncome,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal availableHouseholdCash,
+            Optional<BigDecimal> authoritativePensionIncome,
+            List<IncomeSourceAttribution> supplementalSources,
+            MichiganTaxContext michiganContext,
+            java.util.Set<com.daviddunn.retirementplanner.domain.model.AccountOwnership> conversionOwners) {
+        supplementalSources = List.copyOf(Objects.requireNonNull(supplementalSources));
+        conversionOwners = java.util.Set.copyOf(Objects.requireNonNull(conversionOwners));
+        Objects.requireNonNull(michiganContext, "Michigan tax context is required.");
         Objects.requireNonNull(authoritativePensionIncome, "Authoritative pension optional is required.");
 
 
@@ -337,7 +376,7 @@ public final class RothConversionBracketFillCalculator {
                         openingTaxDeferredDistribution,
                         socialSecurityResult,
                         availableHouseholdCash,
-                        authoritativePensionIncome);
+                        authoritativePensionIncome, supplementalSources, michiganContext);
 
         FederalTaxCalculation
                 preConversionFederalTax =
@@ -374,6 +413,11 @@ public final class RothConversionBracketFillCalculator {
              iteration < MAX_ITERATIONS;
              iteration++) {
 
+            List<IncomeSourceAttribution> trialSources = new ArrayList<>(supplementalSources);
+            trialSources.addAll(conversionAttribution
+                    .convertHousehold(portfolio, rothConversion, conversionOwners)
+                    .getIncomeSources(projectionDate.getYear()));
+
             TaxFundingResult taxFundingResult =
                     taxFundingCalculator.calculate(
                             household,
@@ -390,7 +434,7 @@ public final class RothConversionBracketFillCalculator {
                             openingTaxDeferredDistribution,
                             socialSecurityResult,
                             availableHouseholdCash,
-                            authoritativePensionIncome);
+                            authoritativePensionIncome, trialSources, michiganContext);
 
             BigDecimal finalTaxableIncome =
                     taxFundingResult
