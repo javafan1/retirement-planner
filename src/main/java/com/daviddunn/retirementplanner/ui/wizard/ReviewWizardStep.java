@@ -115,7 +115,9 @@ public final class ReviewWizardStep implements NewPlanWizardStep {
                 + "; inflation " + UIFormatters.percent(economic.getGeneralInflationRate())
                 + "; healthcare " + UIFormatters.percent(economic.getHealthcareInflationRate())
                 + "; Social Security COLA " + UIFormatters.percent(economic.getSocialSecurityColaRate())
-                + "\nFiling status: " + assumptions.getTaxAssumptions().getFilingStatus());
+                + "\nFiling status: " + assumptions.getTaxAssumptions().getFilingStatus()
+                + "\nState of residence: " + assumptions.getStateTaxAssumptions().jurisdiction()
+                + "; simplified state estimate; full-year residency");
     }
 
     private void section(String title, int index, String text) {

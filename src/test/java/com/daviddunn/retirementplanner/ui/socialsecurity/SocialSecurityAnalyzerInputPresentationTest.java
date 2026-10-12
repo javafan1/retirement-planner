@@ -77,7 +77,8 @@ class SocialSecurityAnalyzerInputPresentationTest {
         assertTrue(rows.get("Weighted scenario horizon").value().contains("secondDeathYear - 1"));
         assertTrue(rows.get("Weighted scenario horizon").value().contains("opening snapshot"));
         assertTrue(rows.get("Configured plan death scenario").value().contains("Deterministic only"));
-        assertTrue(rows.get("State / local tax jurisdiction").value().contains("No named jurisdiction stored"));
+        assertTrue(rows.get("State / local tax jurisdiction").value().contains("Michigan"));
+        assertTrue(rows.get("State / local tax jurisdiction").value().contains("full-year residency"));
         assertEquals("Analyzer", rows.get("Valuation date").source());
         assertEquals("Person information", rows.get("Primary mortality category").source());
         assertEquals("Person information", rows.get("Spouse mortality category").source());

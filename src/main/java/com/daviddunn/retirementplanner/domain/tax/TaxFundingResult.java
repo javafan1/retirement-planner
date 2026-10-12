@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
+import com.daviddunn.retirementplanner.domain.tax.state.ProductionStateTaxResult;
 
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
 import java.util.List;
@@ -21,8 +22,7 @@ public final class TaxFundingResult {
     private final FederalTaxCalculation
             federalTaxCalculation;
 
-    private final MichiganTaxCalculation
-            michiganTaxCalculation;
+    private final ProductionStateTaxResult stateTaxCalculation;
 
     public TaxFundingResult(
             BigDecimal additionalWithdrawal,
@@ -36,6 +36,15 @@ public final class TaxFundingResult {
             FederalTaxCalculation federalTaxCalculation,
             MichiganTaxCalculation michiganTaxCalculation,
             List<IncomeSourceAttribution> incomeSources) {
+        this(additionalWithdrawal, federalTaxCalculation,
+                ProductionStateTaxResult.michigan(michiganTaxCalculation), incomeSources);
+    }
+
+    public TaxFundingResult(
+            BigDecimal additionalWithdrawal,
+            FederalTaxCalculation federalTaxCalculation,
+            ProductionStateTaxResult stateTaxCalculation,
+            List<IncomeSourceAttribution> incomeSources) {
         this.incomeSources = List.copyOf(Objects.requireNonNull(incomeSources));
 
         this.additionalWithdrawal =
@@ -48,10 +57,10 @@ public final class TaxFundingResult {
                         federalTaxCalculation,
                         "Federal tax calculation is required.");
 
-        this.michiganTaxCalculation =
+        this.stateTaxCalculation =
                 Objects.requireNonNull(
-                        michiganTaxCalculation,
-                        "Michigan tax calculation is required.");
+                        stateTaxCalculation,
+                        "State tax calculation is required.");
 
         if (additionalWithdrawal.signum() < 0) {
             throw new IllegalArgumentException(
@@ -68,7 +77,12 @@ public final class TaxFundingResult {
     }
 
     public MichiganTaxCalculation getMichiganTaxCalculation() {
-        return michiganTaxCalculation;
+        return stateTaxCalculation.michiganDetails().orElseThrow(() ->
+                new IllegalStateException("Michigan details are unavailable for " + stateTaxCalculation.jurisdiction()));
+    }
+
+    public ProductionStateTaxResult getStateTaxCalculation() {
+        return stateTaxCalculation;
     }
 
     public BigDecimal getTotalIncomeTax() {
@@ -76,7 +90,7 @@ public final class TaxFundingResult {
         return federalTaxCalculation
                 .getFederalIncomeTax()
                 .add(
-                        michiganTaxCalculation
+                        stateTaxCalculation
                                 .incomeTax());
     }
 }

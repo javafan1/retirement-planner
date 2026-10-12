@@ -11,8 +11,12 @@ import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedWithdrawalAllocator;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
-import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
-import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculator;
+
+import com.daviddunn.retirementplanner.domain.tax.state.ProductionStateTaxResult;
+import com.daviddunn.retirementplanner.domain.tax.state.ProductionStateTaxService;
+import com.daviddunn.retirementplanner.domain.tax.state.StateTaxCalculationRequest;
+import com.daviddunn.retirementplanner.domain.tax.state.TaxHouseholdContext;
+import com.daviddunn.retirementplanner.domain.model.StateTaxAssumptions;
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxContext;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalBreakdown;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
@@ -35,8 +39,8 @@ public final class TaxFundingCalculator {
     private final FederalTaxCalculator
             federalTaxCalculator;
 
-    private final MichiganTaxCalculator
-            michiganTaxCalculator;
+    private final ProductionStateTaxService
+            stateTaxService;
 
     private final ProjectedWithdrawalAllocator
             withdrawalAllocator;
@@ -49,8 +53,8 @@ public final class TaxFundingCalculator {
         this.federalTaxCalculator =
                 new FederalTaxCalculator();
 
-        this.michiganTaxCalculator =
-                new MichiganTaxCalculator();
+        this.stateTaxService =
+                new ProductionStateTaxService();
 
         this.withdrawalAllocator =
                 new ProjectedWithdrawalAllocator();
@@ -308,7 +312,36 @@ public final class TaxFundingCalculator {
             Optional<BigDecimal> authoritativePensionIncome,
             List<IncomeSourceAttribution> supplementalSources,
             MichiganTaxContext michiganContext) {
-        Objects.requireNonNull(michiganContext, "Michigan tax context is required.");
+        var context = new TaxHouseholdContext(michiganContext.distributionDate(), michiganContext.birthDates(),
+                michiganContext.householdOwners(), michiganContext.activeOwners(), michiganContext.pensionIncome());
+        return calculate(household, projectionDate, portfolio, existingWithdrawals, withdrawalStrategy,
+                filingStatus, projectedGovernmentRules, rothConversion, taxableInterestIncome,
+                socialSecurityColaRate, deathAssumptions, openingTaxDeferredDistribution,
+                socialSecurityResult, availableHouseholdCash, authoritativePensionIncome,
+                supplementalSources, context, StateTaxAssumptions.michigan());
+    }
+
+    public TaxFundingResult calculate(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal availableHouseholdCash,
+            Optional<BigDecimal> authoritativePensionIncome,
+            List<IncomeSourceAttribution> supplementalSources,
+            TaxHouseholdContext taxContext,
+            StateTaxAssumptions stateTaxAssumptions) {
+        Objects.requireNonNull(taxContext, "Tax household context is required.");
+        Objects.requireNonNull(stateTaxAssumptions);
         supplementalSources = List.copyOf(Objects.requireNonNull(supplementalSources));
         Objects.requireNonNull(authoritativePensionIncome, "Authoritative pension optional is required.");
 
@@ -429,17 +462,15 @@ public final class TaxFundingCalculator {
                             filingStatus,
                             projectedGovernmentRules);
 
-            MichiganTaxCalculation michiganTaxCalculation =
-                    michiganTaxCalculator.calculate(
-                            taxIncome,
-                            filingStatus,
-                            projectedGovernmentRules.getMichiganTaxRules(), michiganContext);
+            ProductionStateTaxResult stateTaxCalculation = stateTaxService.calculate(new StateTaxCalculationRequest(
+                    projectionDate.getYear(), filingStatus, taxContext, taxIncome,
+                    federalTaxCalculation, projectedGovernmentRules, stateTaxAssumptions));
 
             BigDecimal requiredWithdrawal =
                     federalTaxCalculation
                             .getFederalIncomeTax()
                             .add(
-                                    michiganTaxCalculation
+                                    stateTaxCalculation
                                             .incomeTax())
                             .subtract(availableHouseholdCash)
                             .max(BigDecimal.ZERO);
@@ -492,17 +523,14 @@ public final class TaxFundingCalculator {
                                 filingStatus,
                                 projectedGovernmentRules);
 
-                MichiganTaxCalculation finalMichiganTaxCalculation =
-                        michiganTaxCalculator.calculate(
-                                finalTaxIncome,
-                                filingStatus,
-                                projectedGovernmentRules
-                                        .getMichiganTaxRules(), michiganContext);
+                ProductionStateTaxResult finalStateTaxCalculation = stateTaxService.calculate(new StateTaxCalculationRequest(
+                        projectionDate.getYear(), filingStatus, taxContext, finalTaxIncome,
+                        finalFederalTaxCalculation, projectedGovernmentRules, stateTaxAssumptions));
 
                 return new TaxFundingResult(
                         requiredWithdrawal,
                         finalFederalTaxCalculation,
-                        finalMichiganTaxCalculation, finalTaxIncome.getIncomeSources());
+                        finalStateTaxCalculation, finalTaxIncome.getIncomeSources());
             }
 
             additionalWithdrawal =
@@ -510,6 +538,6 @@ public final class TaxFundingCalculator {
         }
 
         throw new IllegalStateException(
-                "Federal tax funding calculation did not converge.");
+                "Income tax funding calculation did not converge.");
     }
 }

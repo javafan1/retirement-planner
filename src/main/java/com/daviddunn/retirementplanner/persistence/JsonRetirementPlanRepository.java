@@ -34,9 +34,25 @@ public class JsonRetirementPlanRepository
     public RetirementPlan load(Path file)
             throws IOException {
 
-        RetirementPlan plan = mapper.readValue(file.toFile(), RetirementPlan.class);
+        byte[] bytes = java.nio.file.Files.readAllBytes(file);
+        var json = mapper.readTree(bytes);
+        if (json == null) {
+            throw new IOException("Plan JSON is empty.");
+        }
+        validateExplicitStateConfiguration(json);
+        // Deserialize original numeric tokens, preserving existing BigDecimal precision and scale.
+        RetirementPlan plan = mapper.readValue(bytes, RetirementPlan.class);
         plan.validateHouseholdReferences();
         return plan;
+    }
+
+    private static void validateExplicitStateConfiguration(com.fasterxml.jackson.databind.JsonNode node) throws IOException {
+        if (node.isObject() && node.has("stateTaxAssumptions") && node.get("stateTaxAssumptions").isNull()) {
+            throw new IOException("Explicit stateTaxAssumptions must not be null; omit the field only for legacy Michigan plans.");
+        }
+        for (var child : node) {
+            validateExplicitStateConfiguration(child);
+        }
     }
 
     private static ObjectMapper createObjectMapper() {

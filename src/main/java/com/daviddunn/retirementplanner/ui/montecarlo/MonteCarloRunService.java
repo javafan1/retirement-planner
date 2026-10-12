@@ -59,7 +59,9 @@ public final class MonteCarloRunService {
                 + "\nConfigured planning horizon: " + (p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1)
                 + "\nPlan general inflation: " + percent(p.getGeneralInflationRate())
                 + "\nHealthcare inflation (deterministic): " + percent(p.getHealthcareInflationRate())
-                + "\nConfigured deterministic reference return: " + percent(p.getExpectedAnnualInvestmentReturn());
+                + "\nConfigured deterministic reference return: " + percent(p.getExpectedAnnualInvestmentReturn())
+                + "\nState of residence: " + p.getStateTaxAssumptions().jurisdiction()
+                + "; simplified state estimate; full-year resident";
     }
 
     private static String percent(java.math.BigDecimal value) {

@@ -622,6 +622,12 @@ public class ProjectionYearDetailsPane
             GridPane grid,
             int row) {
 
+        if (year.getStateTaxJurisdiction() != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI) {
+            row = addSubsectionHeader(grid, row, year.getStateTaxJurisdiction().displayName());
+            return addMoneyComparisonRow(grid, row, year.getStateTaxJurisdiction().displayName() + " State Income Tax",
+                    year.getStateIncomeTax(), getBaselineValue(ProjectionYear::getStateIncomeTax));
+        }
+
         row =
                 addSubsectionHeader(
                         grid,

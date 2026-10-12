@@ -168,6 +168,7 @@ public class ProjectionPdfExporter {
             new ProjectionPdfCharts(report).appendTo(document);
             startPage();
             writeProjectionTable(projection, nonInvestableProjections);
+            writeStateTaxTable(projection);
             finishPage();
             startPage();
             writeKeyAssumptions(plan);
@@ -475,7 +476,11 @@ public class ProjectionPdfExporter {
         writeKeyValue("Filing Status", tax.getFilingStatus().toString(), GRAY);
         writeKeyValue("Federal Bracket Growth", percent(tax.getFederalTaxBracketGrowthRate()), GRAY);
         writeKeyValue("Standard Deduction Growth", percent(tax.getStandardDeductionGrowthRate()), GRAY);
-        writeKeyValue("State / Local Income Tax Rates", percent(tax.getStateIncomeTaxRate()) + " / " + percent(tax.getLocalIncomeTaxRate()), GRAY);
+        writeKeyValue("State of Residence", assumptions.getStateTaxAssumptions().jurisdiction().displayName(), GRAY);
+        writeKeyValue("State Tax Calculation", "Simplified state estimate; full-year resident", GRAY);
+        if (assumptions.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.FL) {
+            writeKeyValue("Florida State Income Tax", "$0 (no individual income tax)", GRAY);
+        }
         writeKeyValue("Estimated Heir Tax Rate", percent(tax.getEstimatedHeirTaxRateOnTaxDeferredAssets()), GRAY);
         writeKeyValue("Future Federal Marginal Adjustment", percent(tax.getFutureFederalMarginalRateAdjustment())
                 + (tax.getFutureFederalMarginalRateEffectiveYear() == null ? " / not scheduled" : " / effective " + tax.getFutureFederalMarginalRateEffectiveYear()), GRAY);
@@ -624,6 +629,23 @@ public class ProjectionPdfExporter {
     // ============================================================
     // Table Helpers
     // ============================================================
+
+    private void writeStateTaxTable(Projection projection) throws IOException {
+        currentY -= 12;
+        writeSectionHeading("STATE INCOME TAX - FULL-YEAR RESIDENCY", BLUE);
+        float[] widths = {60, 140, 160, 140};
+        String[] headers = {"Year", "State", "Calculation", "State Income Tax"};
+        writeTableHeader(headers, widths);
+        for (var year : projection.getYears()) {
+            if (currentY < MARGIN + ROW_HEIGHT * 2) {
+                finishPage();
+                startPage();
+                writeTableHeader(headers, widths);
+            }
+            writeTableRow(new String[]{Integer.toString(year.getCalendarYear()),
+                    year.getStateTaxJurisdiction().displayName(), "Simplified estimate", money(year.getStateIncomeTax())}, widths);
+        }
+    }
 
     private void writeTableHeader(
             String[] headers,

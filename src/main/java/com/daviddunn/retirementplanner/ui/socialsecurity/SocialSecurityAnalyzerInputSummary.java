@@ -93,8 +93,8 @@ record SocialSecurityAnalyzerInputSummary(List<Row> rows) {
                 + "; future marginal adjustment " + percent(tax.getFutureFederalMarginalRateAdjustment())
                 + " from " + (tax.getFutureFederalMarginalRateEffectiveYear() == null ? "not scheduled" : tax.getFutureFederalMarginalRateEffectiveYear())
                 + "; estimated heir tax rate " + percent(tax.getEstimatedHeirTaxRateOnTaxDeferredAssets()), "Tax Assumptions"));
-        rows.add(new Row("State / local tax jurisdiction", "No named jurisdiction stored; configured state rate "
-                + percent(tax.getStateIncomeTaxRate()) + "; local rate " + percent(tax.getLocalIncomeTaxRate()), "Tax Assumptions"));
+        rows.add(new Row("State / local tax jurisdiction", assumptions.getStateTaxAssumptions().jurisdiction()
+                + "; simplified state estimate; full-year residency; local income tax not modeled", "Tax Assumptions"));
         rows.add(new Row("Medicare / IRMAA assumptions", "Modeled automatically for alive, age-eligible people using annual federal tax results, filing status and projected government rules; no separate enrollment setting.", "Retirement Plan / Government rules"));
         rows.add(new Row("RMD assumptions", "Owner DOB, eligible account types and prior December 31 balances; "
                 + portfolio.getAccounts().stream().filter(account -> account.getOpeningRmdAccountData() != null).count()

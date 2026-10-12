@@ -83,7 +83,7 @@ public final class MonteCarloPdfReportAdapter {
         failures(sections, "Funding failure statistics", failures);
         sections.add(section("Analysis assumptions and interpretation", "Return model: " + (mortality ? run.mortalityResult().returnModel() : run.result().returnModel()),
                 EXPECTED, PERCENTILES, inflationNotes(run.settings()),
-                "After-Tax Estate excludes non-investable assets. Lifetime Modeled Income Taxes includes federal and Michigan income taxes.",
+                "After-Tax Estate excludes non-investable assets. Lifetime Modeled Income Taxes includes federal and selected-state income taxes.",
                 mortality ? "The deterministic projection, SS markers and Roth/RMD shading are omitted, as in the longevity UI: configured lifetimes are not sampled lifetimes. Terminal values are not discounted to a common valuation date."
                         : "The deterministic line, SS markers and Roth/RMD shading use the frozen configured plan reference, not a simulated mean. "
                         + (run.referenceIncomplete() ? "The reference encountered a funding constraint; only its completed prefix is shown." : "The reference completed its configured horizon.")));

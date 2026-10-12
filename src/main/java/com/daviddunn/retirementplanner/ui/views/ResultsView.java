@@ -140,8 +140,8 @@ public class ResultsView extends BorderPane {
 
         TableColumn<ProjectionYear, BigDecimal> michiganTaxColumn =
                 createMoneyColumn(
-                        "Michigan Tax",
-                        ProjectionYear::getMichiganIncomeTax);
+                        "State Income Tax",
+                        ProjectionYear::getStateIncomeTax);
 
         TableColumn<ProjectionYear, BigDecimal> totalTaxColumn =
                 createMoneyColumn(
@@ -372,7 +372,8 @@ public class ResultsView extends BorderPane {
                 "Projection: "
                         + firstYear.getCalendarYear()
                         + " - "
-                        + lastYear.getCalendarYear());
+                        + lastYear.getCalendarYear()
+                        + " | " + firstYear.getStateTaxJurisdiction() + " state income tax");
     }
 
     /**

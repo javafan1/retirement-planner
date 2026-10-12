@@ -95,7 +95,10 @@ public final class MonteCarloStrategyComparisonRunService {
                 + "\nHealthcare inflation: Current Plan " + percent(a.getPlanningAssumptions().getHealthcareInflationRate())
                 + ", Saved Baseline " + percent(b.getPlanningAssumptions().getHealthcareInflationRate())
                 + "\n" + lifetime + "\nSettings are session-only. Plan and baseline elections are unchanged."
-                + "\nAfter-Tax Estate excludes non-investable assets. Lifetime Modeled Income Taxes includes federal and Michigan income taxes.";
+                + "\nState of residence: Current Plan " + a.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                + ", Saved Baseline " + b.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                + "; simplified state estimate; full-year resident"
+                + "\nAfter-Tax Estate excludes non-investable assets. Lifetime Modeled Income Taxes includes federal and selected-state income taxes.";
         return new Prepared(request, mode, details);
     }
 
@@ -121,7 +124,7 @@ public final class MonteCarloStrategyComparisonRunService {
         var d = p.getDeathScenarioAssumptions();
         plan.setPlanningAssumptions(new PlanningAssumptions(p.getEconomicAssumptions(), p.getTaxAssumptions(),
                 p.getWithdrawalAssumptions(), new DeathScenarioAssumptions(d.getDeathScenario(), d.getDeathYear(), age),
-                p.getProjectionLengthYears(), p.getProjectionStartDate()));
+                p.getProjectionLengthYears(), p.getProjectionStartDate(), p.getStateTaxAssumptions()));
     }
 
     public MonteCarloStrategyComparisonRun run(Prepared prepared, AnalysisProgressListener progress,

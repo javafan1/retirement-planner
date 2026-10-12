@@ -600,7 +600,7 @@ public class ResultsSummaryView extends BorderPane {
                             updatedDeath,
                             Integer.parseInt(projectionLengthField.getText().trim()),
                             current
-                                    .getProjectionStartDate());
+                                    .getProjectionStartDate(), current.getStateTaxAssumptions());
 
             deathScenarioHandler.accept(
                     updated);
@@ -2490,7 +2490,8 @@ public class ResultsSummaryView extends BorderPane {
                         + last.getCalendarYear()
                         + "  |  "
                         + years.size()
-                        + " years");
+                        + " years | " + first.getStateTaxJurisdiction() + " State Income Tax"
+                        + (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.FL ? ": $0" : ""));
 
         updateMetrics(years);
         updateCharts(years);
@@ -2820,7 +2821,7 @@ public class ResultsSummaryView extends BorderPane {
                             current
                                     .getProjectionLengthYears(),
                             current
-                                    .getProjectionStartDate());
+                                    .getProjectionStartDate(), current.getStateTaxAssumptions());
 
             economicAssumptionsHandler.accept(
                     updated);

@@ -116,11 +116,11 @@ public class ConsoleReportPrinter {
                 "Federal Income Tax",
                 year.getFederalIncomeTax());
 
-        printSection("Michigan Tax");
+        printSection(year.getStateTaxJurisdiction() + " State Income Tax");
 
         printMoney(
-                "Michigan Income Tax",
-                year.getMichiganIncomeTax());
+                year.getStateTaxJurisdiction() + " State Income Tax",
+                year.getStateIncomeTax());
 
         printSection("Total Taxes");
 

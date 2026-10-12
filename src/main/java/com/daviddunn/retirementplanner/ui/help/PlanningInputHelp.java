@@ -12,7 +12,7 @@ public final class PlanningInputHelp {
     public static final String DEDUCTION_GROWTH = "Annual percentage growth in the modeled federal standard deduction. This is separate from bracket growth and General Inflation.";
     public static final String RATE_CHANGE = "Additive change to federal marginal rates in percentage points from the effective year onward. Enter 2 for a two-point increase, not a 2% relative increase. Enter both fields or leave both blank for no change.";
     public static final String RATE_YEAR = "First calendar year using the future federal marginal-rate change. The change continues in later years. Leave both the year and rate-change fields blank to disable it.";
-    public static final String STATE_RATE = "Stored state income-tax percentage assumption. The current projection calculates Michigan tax from government rules; this field does not override that calculation.";
+    public static final String STATE_RATE = "Legacy stored percentage assumption. State of Residence selects the production state income-tax calculation; this legacy field does not override it.";
     public static final String LOCAL_RATE = "Stored local income-tax percentage assumption. The current projection does not apply this field as an additional local tax.";
     public static final String HEIR_RATE = "Estimated tax percentage applied to tax-deferred assets when reporting After-Tax Estate. This affects the estate estimate, not annual household income-tax calculations.";
     public static final String OPENING_RMD = "Review each applicable account's prior December 31 balance and RMD already distributed before the projection start. These historical facts determine the remaining opening-year RMD.";

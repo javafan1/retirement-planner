@@ -229,7 +229,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                         + "Monte Carlo settings are session-only and are not saved into the retirement plan.\n"
                         + "Funding probability measures whether the modeled plan completed the planning horizon without an authoritative funding constraint.\n"
                         + "Funding-constraint shortfalls may involve allocation estimates or owner/account RMD restrictions; they are not necessarily unmet living expenses.\n"
-                        + "After-Tax Estate excludes non-investable assets. Lifetime Taxes includes federal and Michigan income taxes.\n"
+                        + "After-Tax Estate excludes non-investable assets. Lifetime Taxes includes federal and selected-state income taxes.\n"
                         + "Deterministic line and Roth/RMD annotations use the plan's normal projection, not the simulated mean or an optimized strategy.\n"
                         + "Annual sample counts may decline. Ending outcomes include only full-horizon funded simulations.", "mc-muted");
         details.setText("Analysis Details");

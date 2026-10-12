@@ -147,7 +147,7 @@ public final class MonteCarloMortalityPresentation {
                     new Detail("Annual chart", ANNUAL_NOTICE + " No zero balances are inserted for deceased or failed individuals. "
                             + "The small-sample notice means 1–100 funded living individuals and at most 5% of requested simulations."),
                     new Detail("Terminal outcomes", lifetimeText(NOMINAL_NOTICE, false) + " " + terminalDates(result)
-                            + ". After-Tax Estate excludes non-investable assets. Lifetime Taxes includes federal and Michigan income taxes."),
+                            + ". After-Tax Estate excludes non-investable assets. Lifetime Taxes includes federal and selected-state income taxes."),
                     new Detail("Model limitations", "Market returns and individual mortality are independent. "
                             + "General inflation uses the selected mode; healthcare inflation and Social Security COLA remain deterministic."));
         }
@@ -181,7 +181,7 @@ public final class MonteCarloMortalityPresentation {
                 new Detail("Terminal outcomes", "Conditional on funding through second death; failed worlds are not inserted as zeros. "
                         + terminalDates(result) + ". " + NOMINAL_NOTICE
                         + " Values are neither present-value nor constant-dollar adjusted and are not measured in one common year. "
-                        + "After-Tax Estate excludes non-investable assets. Lifetime Taxes includes federal and Michigan income taxes."),
+                        + "After-Tax Estate excludes non-investable assets. Lifetime Taxes includes federal and selected-state income taxes."),
                 new Detail("Model limitations", "Market returns and mortality are independent in this version. Primary/spouse mortality "
                         + "uses the existing independent household mortality model. Deceased-owner accounts remain household assets; "
                         + "there is no inherited-account retitling or beneficiary distribution model. "

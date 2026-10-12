@@ -25,8 +25,8 @@ record IndividualReportContext(String household, String primary, Instant started
                 + "; General Inflation: " + UIFormatters.percent(a.getGeneralInflationRate())
                 + "; Healthcare Inflation: " + UIFormatters.percent(a.getHealthcareInflationRate())
                 + "; Social Security COLA: " + UIFormatters.percent(a.getSocialSecurityColaRate()));
-        lines.add("Filing status: " + t.getFilingStatus() + "; State / local tax rates: "
-                + UIFormatters.percent(t.getStateIncomeTaxRate()) + " / " + UIFormatters.percent(t.getLocalIncomeTaxRate())
+        lines.add("Filing status: " + t.getFilingStatus() + "; State of residence: "
+                + a.getStateTaxAssumptions().jurisdiction() + "; simplified state estimate; full-year resident"
                 + "; Estimated heir tax rate: " + UIFormatters.percent(t.getEstimatedHeirTaxRateOnTaxDeferredAssets()));
         lines.add("Federal bracket / deduction growth: " + UIFormatters.percent(t.getFederalTaxBracketGrowthRate())
                 + " / " + UIFormatters.percent(t.getStandardDeductionGrowthRate())

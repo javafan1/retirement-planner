@@ -17,6 +17,7 @@ public final class PlanningAssumptions {
     private final TaxAssumptions taxAssumptions;
     private final WithdrawalAssumptions withdrawalAssumptions;
     private final DeathScenarioAssumptions deathScenarioAssumptions;
+    private final StateTaxAssumptions stateTaxAssumptions;
 
     private final int projectionLengthYears;
     private final LocalDate projectionStartDate;
@@ -66,7 +67,13 @@ public final class PlanningAssumptions {
             int projectionLengthYears,
 
             @JsonProperty("projectionStartDate")
-            LocalDate projectionStartDate) {
+            LocalDate projectionStartDate,
+
+            @JsonProperty("stateTaxAssumptions")
+            StateTaxAssumptions stateTaxAssumptions) {
+
+        this.stateTaxAssumptions = stateTaxAssumptions != null
+                ? stateTaxAssumptions : StateTaxAssumptions.michigan();
 
         /*
          * Economic assumptions.
@@ -157,6 +164,42 @@ public final class PlanningAssumptions {
      * Allows all current assumption groups to be
      * supplied explicitly.
      */
+    public PlanningAssumptions(
+            EconomicAssumptions economicAssumptions,
+            TaxAssumptions taxAssumptions,
+            WithdrawalAssumptions withdrawalAssumptions,
+            DeathScenarioAssumptions deathScenarioAssumptions,
+            BigDecimal legacyInvestmentReturn,
+            BigDecimal legacyInflationRate,
+            int projectionLengthYears,
+            LocalDate projectionStartDate) {
+        this(economicAssumptions, taxAssumptions, withdrawalAssumptions, deathScenarioAssumptions,
+                legacyInvestmentReturn, legacyInflationRate, projectionLengthYears, projectionStartDate, null);
+    }
+
+    public PlanningAssumptions(
+            EconomicAssumptions economicAssumptions,
+            TaxAssumptions taxAssumptions,
+            WithdrawalAssumptions withdrawalAssumptions,
+            DeathScenarioAssumptions deathScenarioAssumptions,
+            int projectionLengthYears,
+            LocalDate projectionStartDate,
+            StateTaxAssumptions stateTaxAssumptions) {
+        this(economicAssumptions, taxAssumptions, withdrawalAssumptions, deathScenarioAssumptions,
+                null, null, projectionLengthYears, projectionStartDate, stateTaxAssumptions);
+    }
+
+    @JsonProperty("stateTaxAssumptions")
+    public StateTaxAssumptions getStateTaxAssumptions() {
+        return stateTaxAssumptions;
+    }
+
+    public PlanningAssumptions withStateTaxAssumptions(StateTaxAssumptions state) {
+        return new PlanningAssumptions(economicAssumptions, taxAssumptions, withdrawalAssumptions,
+                deathScenarioAssumptions, projectionLengthYears, projectionStartDate,
+                java.util.Objects.requireNonNull(state));
+    }
+
     public PlanningAssumptions(
             EconomicAssumptions economicAssumptions,
             TaxAssumptions taxAssumptions,

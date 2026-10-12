@@ -26,8 +26,8 @@ import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdCalculation;
 import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdCalculator;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.tax.*;
-import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
-import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxContext;
+import com.daviddunn.retirementplanner.domain.tax.state.ProductionStateTaxResult;
+import com.daviddunn.retirementplanner.domain.tax.state.TaxHouseholdContext;
 import com.daviddunn.retirementplanner.domain.withdrawal.*;
 import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
 
@@ -620,10 +620,10 @@ public class ProjectionEngine {
                         .getTotalRmd()
                         .signum() > 0;
 
-        MichiganTaxContext michiganContext = MichiganTaxContext.capture(
+        TaxHouseholdContext taxContext = TaxHouseholdContext.capture(
                 household, projectionDate, assumptions.getDeathScenarioAssumptions());
         if (lifetimeRun) {
-            michiganContext = michiganContext.withActiveOwners(eligibleOwners).withPensionIncome(pensionResult);
+            taxContext = taxContext.withActiveOwners(eligibleOwners).withPensionIncome(pensionResult);
         }
         List<IncomeSourceAttribution> preConversionSources = new java.util.ArrayList<>();
         if (openingRmdCalculation != null) {
@@ -716,7 +716,7 @@ public class ProjectionEngine {
                                         rmdDistributedBeforeProjection,
                                         socialSecurityResult,
                                         availableHouseholdCashForTaxes,
-                                        authoritativePensionIncome, preConversionSources, michiganContext, eligibleOwners);
+                                        authoritativePensionIncome, preConversionSources, taxContext, eligibleOwners, assumptions.getStateTaxAssumptions());
             }
         }
 
@@ -768,7 +768,7 @@ public class ProjectionEngine {
                         rmdDistributedBeforeProjection,
                         socialSecurityResult,
                         availableHouseholdCashForTaxes,
-                        authoritativePensionIncome, supplementalIncomeSources, michiganContext);
+                        authoritativePensionIncome, supplementalIncomeSources, taxContext, assumptions.getStateTaxAssumptions());
 
         BigDecimal taxFundingWithdrawal =
                 taxFundingResult.getAdditionalWithdrawal();
@@ -780,8 +780,8 @@ public class ProjectionEngine {
         FederalTaxCalculation federalTaxCalculation =
                 taxFundingResult.getFederalTaxCalculation();
 
-        MichiganTaxCalculation michiganTaxCalculation =
-                taxFundingResult.getMichiganTaxCalculation();
+        ProductionStateTaxResult stateTaxCalculation =
+                taxFundingResult.getStateTaxCalculation();
 
         int coveredIndividuals =
                 calculateCoveredMedicareParticipants(
@@ -925,7 +925,7 @@ public class ProjectionEngine {
                         endingAssets,
                         endingAccountSnapshots,
                         federalTaxCalculation,
-                        michiganTaxCalculation,
+                        stateTaxCalculation,
                         medicarePremiumCalculation,
                         taxFundingWithdrawal,
                         requestedRothConversion,

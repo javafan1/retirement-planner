@@ -98,7 +98,7 @@ public class ProjectionCsvExporter {
                         + "Michigan Retirement Income,"
                         + "Michigan Retirement Deduction,"
                         + "Michigan Taxable Income,"
-                        + "Michigan Income Tax,"
+                        + "State Income Tax,"
                         + "Total Income Tax,"
                         + "Combined Effective Tax Rate,"
                         + "Annual Medicare Premium,"
@@ -106,7 +106,7 @@ public class ProjectionCsvExporter {
                         + "Monthly Part D Premium,"
                         + "IRMAA Bracket,"
                         + "Estimated Heir Tax,"
-                        + "After-Tax Estate Value");
+                        + "After-Tax Estate Value,State of Residence,State Tax Calculation");
 
         writer.newLine();
     }
@@ -184,10 +184,10 @@ public class ProjectionCsvExporter {
                 year.getFederalStandardDeduction(),
                 year.getFederalIncomeTax(),
 
-                year.getMichiganRetirementIncome(),
-                year.getMichiganRetirementDeduction(),
-                year.getMichiganTaxableIncome(),
-                year.getMichiganIncomeTax(),
+                year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI ? year.getMichiganRetirementIncome() : null,
+                year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI ? year.getMichiganRetirementDeduction() : null,
+                year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI ? year.getMichiganTaxableIncome() : null,
+                year.getStateIncomeTax(),
                 year.getTotalIncomeTax(),
                 year.getCombinedEffectiveTaxRate(),
 
@@ -197,7 +197,7 @@ public class ProjectionCsvExporter {
                 year.getIrmaaBracketDisplay(),
 
                 year.getEstimatedHeirTax(),
-                year.getAfterTaxEstateValue());
+                year.getAfterTaxEstateValue(), year.getStateTaxJurisdiction().name(), "SIMPLIFIED_STATE_ESTIMATE");
     }
 
 
@@ -244,7 +244,7 @@ public class ProjectionCsvExporter {
                         + "Michigan Retirement Income,"
                         + "Michigan Retirement Deduction,"
                         + "Michigan Taxable Income,"
-                        + "Michigan Income Tax,"
+                        + "State Income Tax,"
                         + "Total Income Tax,"
                         + "Combined Effective Tax Rate,"
                         + "Annual Medicare Premium,"
@@ -252,7 +252,7 @@ public class ProjectionCsvExporter {
                         + "Monthly Part D Premium,"
                         + "IRMAA Bracket,"
                         + "Estimated Heir Tax,"
-                        + "After-Tax Estate Value");
+                        + "After-Tax Estate Value,State of Residence,State Tax Calculation");
 
         writer.newLine();
     }
@@ -321,10 +321,10 @@ public class ProjectionCsvExporter {
                 year.getFederalStandardDeduction(),
                 year.getFederalIncomeTax(),
 
-                year.getMichiganRetirementIncome(),
-                year.getMichiganRetirementDeduction(),
-                year.getMichiganTaxableIncome(),
-                year.getMichiganIncomeTax(),
+                year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI ? year.getMichiganRetirementIncome() : null,
+                year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI ? year.getMichiganRetirementDeduction() : null,
+                year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI ? year.getMichiganTaxableIncome() : null,
+                year.getStateIncomeTax(),
                 year.getTotalIncomeTax(),
                 year.getCombinedEffectiveTaxRate(),
 
@@ -334,7 +334,7 @@ public class ProjectionCsvExporter {
                 year.getIrmaaBracketDisplay(),
 
                 year.getEstimatedHeirTax(),
-                year.getAfterTaxEstateValue());
+                year.getAfterTaxEstateValue(), year.getStateTaxJurisdiction().name(), "SIMPLIFIED_STATE_ESTIMATE");
     }
 
 

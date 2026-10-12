@@ -65,6 +65,7 @@ public class AssumptionsView extends VBox {
      * Tax assumptions.
      */
     private final ComboBox<com.daviddunn.retirementplanner.domain.rules.FilingStatus> filingStatusComboBox = new ComboBox<>();
+    private final ComboBox<com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction> stateJurisdictionComboBox = new ComboBox<>();
     private final Label horizonLabel = new Label();
     private final TextField federalBracketGrowthField;
     private final TextField standardDeductionGrowthField;
@@ -396,6 +397,15 @@ public class AssumptionsView extends VBox {
         grid.add(new Label("Filing Status:"), 0, row);
         grid.add(filingStatusComboBox, 1, row++);
         filingStatusComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        stateJurisdictionComboBox.getItems().setAll(com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.values());
+        stateJurisdictionComboBox.setId("state-of-residence");
+        InputHelp.install(stateJurisdictionComboBox, "Full-year residence for every projection year. Michigan uses the modeled retirement rules; Florida has no individual state income tax. Part-year moves and income sourced to other states are not modeled.");
+        Label stateLabel = new Label("State of Residence *");
+        stateLabel.setLabelFor(stateJurisdictionComboBox);
+        grid.add(stateLabel, 0, row);
+        grid.add(new Label("* Required"), 2, row);
+        grid.add(stateJurisdictionComboBox, 1, row++);
+        stateJurisdictionComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
         grid.add(
                 new Label(
                         "Federal Tax Bracket Growth (%):"),
@@ -441,7 +451,7 @@ public class AssumptionsView extends VBox {
 
         grid.add(
                 new Label(
-                        "State Income Tax Rate (%):"),
+                        "Legacy State Income Tax Rate (%):"),
                 0,
                 row);
 
@@ -533,11 +543,11 @@ public class AssumptionsView extends VBox {
         compact.getColumnConstraints().addAll(labels, inputs);
         List<Control> controls = List.of(projectionStartDatePicker, projectionLengthField,
                 investmentReturnField, inflationRateField, healthcareInflationField,
-                socialSecurityColaField, filingStatusComboBox);
+                socialSecurityColaField, filingStatusComboBox, stateJurisdictionComboBox);
         List<String> names = List.of("Projection start date", "Projection length (years)",
                 "Investment return (%)", "General inflation (%)", "Healthcare inflation (%)",
-                "Social Security COLA (%)", "Filing status");
-        List<String> ids = List.of("start", "length", "return", "inflation", "healthcare", "cola", "filing-status");
+                "Social Security COLA (%)", "Filing status", "State of Residence");
+        List<String> ids = List.of("start", "length", "return", "inflation", "healthcare", "cola", "filing-status", "state-of-residence");
         for (int row = 0; row < controls.size(); row++) {
             Control input = controls.get(row);
             ((javafx.scene.layout.Pane) input.getParent()).getChildren().remove(input);
@@ -664,6 +674,7 @@ public class AssumptionsView extends VBox {
          * Tax assumptions.
          */
         filingStatusComboBox.setValue(taxAssumptions.getFilingStatus());
+        stateJurisdictionComboBox.setValue(plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
         federalBracketGrowthField.setText(
                 toPercent(
                         taxAssumptions
@@ -890,7 +901,10 @@ public class AssumptionsView extends VBox {
         BigDecimal factor = percent(postDeathExpenseFactorField, "Post-death expense factor");
         DeathScenarioAssumptions death = read(postDeathExpenseFactorField, "Post-death expense factor", () ->
                 new DeathScenarioAssumptions(scenario, year, age, factor));
-        return new PlanningAssumptions(economic, tax, applied.getWithdrawalAssumptions(), death, length, start);
+        var jurisdiction = read(stateJurisdictionComboBox, "State of Residence", () ->
+                Objects.requireNonNull(stateJurisdictionComboBox.getValue(), "A selection is required."));
+        return new PlanningAssumptions(economic, tax, applied.getWithdrawalAssumptions(), death, length, start,
+                com.daviddunn.retirementplanner.domain.model.StateTaxAssumptions.simplified(jurisdiction));
     }
 
     private FutureFederalTaxRateChangeInput readFutureFederalRateChange(TaxAssumptions applied) {
@@ -933,7 +947,7 @@ public class AssumptionsView extends VBox {
                 economic.getHealthcareInflationRate(), economic.getSocialSecurityColaRate(),
                 tax.getFilingStatus(), tax.getFederalTaxBracketGrowthRate(), tax.getStandardDeductionGrowthRate(),
                 tax.getFutureFederalMarginalRateAdjustment(), tax.getFutureFederalMarginalRateEffectiveYear(),
-                tax.getStateIncomeTaxRate(), tax.getLocalIncomeTaxRate(), tax.getEstimatedHeirTaxRateOnTaxDeferredAssets(),
+                assumptions.getStateTaxAssumptions(), tax.getStateIncomeTaxRate(), tax.getLocalIncomeTaxRate(), tax.getEstimatedHeirTaxRateOnTaxDeferredAssets(),
                 death.getDeathScenario(), death.getDeathYear(), death.getSurvivorClaimingAge(),
                 death.getPostDeathExpenseFactor()).stream()
                 .map(value -> value instanceof BigDecimal decimal ? decimal.stripTrailingZeros() : value)
