@@ -7,11 +7,9 @@ import com.daviddunn.retirementplanner.ui.views.AssumptionsView;
 import com.daviddunn.retirementplanner.ui.views.ResultsView;
 import javafx.scene.control.*;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,8 +20,8 @@ class StateTaxWizardIntegrationTest {
     @BeforeAll static void init() throws Exception { startFx(); }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void fileNewActivatesFloridaThenSaveReloadKeepsZeroTax(boolean couple, @TempDir Path directory) throws Exception {
+    @CsvSource({"false,FL", "true,FL", "false,IL", "true,IL"})
+    void fileNewActivatesSelectedStateThenSaveReloadPreservesTax(boolean couple, StateTaxJurisdiction state, @TempDir Path directory) throws Exception {
         fx(() -> {
             var window = new com.daviddunn.retirementplanner.ui.MainWindow();
             var root = (javafx.scene.layout.BorderPane) window.createScene().getRoot();
@@ -35,7 +33,7 @@ class StateTaxWizardIntegrationTest {
                 try {
                     CompleteWizardFixtures.enterThroughReview(pane, couple);
                     ((Button) pane.lookup("#wizard-review-edit-assumptions")).fire();
-                    ((ComboBox<StateTaxJurisdiction>) pane.lookup("#wizard-assumption-state-of-residence")).setValue(StateTaxJurisdiction.FL);
+                    ((ComboBox<StateTaxJurisdiction>) pane.lookup("#wizard-assumption-state-of-residence")).setValue(state);
                     button(pane, "Next").fire();
                     assertSame(old, controller.getCurrentPlan());
                     button(pane, "Create Plan").fire();
@@ -47,19 +45,22 @@ class StateTaxWizardIntegrationTest {
             if (failure.get() != null) throw new AssertionError(failure.get());
             assertNotSame(old, controller.getCurrentPlan());
             assertFalse(controller.hasCurrentFile());
-            assertEquals(StateTaxJurisdiction.FL, controller.getCurrentPlan().getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
+            assertEquals(state, controller.getCurrentPlan().getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
             AssumptionsView editor = field(window, "assumptionsView");
-            assertEquals(StateTaxJurisdiction.FL, ((ComboBox<StateTaxJurisdiction>) field(editor, "stateJurisdictionComboBox")).getValue());
-            Path file = directory.resolve("florida.json");
+            assertEquals(state, ((ComboBox<StateTaxJurisdiction>) field(editor, "stateJurisdictionComboBox")).getValue());
+            Path file = directory.resolve(state.name() + ".json");
             controller.saveAs(file);
             controller.open(file);
             assertEquals(couple, controller.getCurrentPlan().getHousehold().hasSpouse());
-            for (var year : controller.getCurrentProjection().getYears()) assertEquals(0, year.getStateIncomeTax().signum());
+            for (var year : controller.getCurrentProjection().getYears()) {
+                assertEquals(state, year.getStateTaxJurisdiction());
+                if (state == StateTaxJurisdiction.FL) assertEquals(0, year.getStateIncomeTax().signum());
+            }
         });
     }
 
     @ParameterizedTest
-    @CsvSource({"false,MI", "false,FL", "true,MI", "true,FL"})
+    @CsvSource({"false,MI", "false,FL", "true,MI", "true,FL", "false,IL", "true,IL"})
     void wizardSaveReloadAndProjectionUseSelectedState(boolean couple, StateTaxJurisdiction state,
             @TempDir Path directory) throws Exception {
         fx(() -> {
@@ -70,7 +71,7 @@ class StateTaxWizardIntegrationTest {
                 CompleteWizardFixtures.enterThroughReview(pane, couple);
                 ((Button) pane.lookup("#wizard-review-edit-assumptions")).fire();
                 ComboBox<StateTaxJurisdiction> input = (ComboBox<StateTaxJurisdiction>) pane.lookup("#wizard-assumption-state-of-residence");
-                assertEquals(List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL), input.getItems());
+                assertEquals(List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL, StateTaxJurisdiction.IL), input.getItems());
                 assertNotNull(input.getTooltip());
                 input.setValue(null);
                 button(pane, "Next").fire();
@@ -107,8 +108,9 @@ class StateTaxWizardIntegrationTest {
         });
     }
 
-    @Test
-    void tabEditsAreAtomicDirtyAndCancelRestoresState() throws Exception {
+    @org.junit.jupiter.params.provider.EnumSource(value = StateTaxJurisdiction.class, names = {"FL", "IL"})
+    @ParameterizedTest
+    void tabEditsAreAtomicDirtyAndCancelRestoresState(StateTaxJurisdiction state) throws Exception {
         fx(() -> {
             var controller = new com.daviddunn.retirementplanner.ui.controller.ApplicationController();
             var view = new AssumptionsView();
@@ -116,25 +118,26 @@ class StateTaxWizardIntegrationTest {
             AtomicInteger callbacks = new AtomicInteger();
             view.setOnPlanChanged(() -> { callbacks.incrementAndGet(); controller.markModified(); });
             ComboBox<StateTaxJurisdiction> input = field(view, "stateJurisdictionComboBox");
-            input.setValue(StateTaxJurisdiction.FL);
+            input.setValue(state);
             assertTrue(view.isDirty());
             assertEquals(StateTaxJurisdiction.MI, controller.getCurrentPlan().getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
             view.cancelChanges();
             assertEquals(StateTaxJurisdiction.MI, input.getValue());
             assertEquals(0, callbacks.get());
-            input.setValue(StateTaxJurisdiction.FL);
+            input.setValue(state);
             assertTrue(view.applyChanges());
             assertEquals(1, callbacks.get());
             assertTrue(controller.isModified());
-            assertEquals(StateTaxJurisdiction.FL, controller.getCurrentPlan().getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
+            assertEquals(state, controller.getCurrentPlan().getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
             ((TextField) field(view, "inflationRateField")).setText("3");
             assertTrue(view.applyChanges());
-            assertEquals(StateTaxJurisdiction.FL, controller.getCurrentPlan().getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
+            assertEquals(state, controller.getCurrentPlan().getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
         });
     }
 
-    @Test
-    void substantialFloridaDraftCancelLeavesActivePlanAndDirtyStateExactlyUnchanged() throws Exception {
+    @org.junit.jupiter.params.provider.EnumSource(value = StateTaxJurisdiction.class, names = {"FL", "IL"})
+    @ParameterizedTest
+    void substantialDraftCancelLeavesActivePlanAndDirtyStateExactlyUnchanged(StateTaxJurisdiction state) throws Exception {
         fx(() -> {
             var controller = new com.daviddunn.retirementplanner.ui.controller.ApplicationController();
             controller.markModified();
@@ -145,7 +148,7 @@ class StateTaxWizardIntegrationTest {
             var pane = wizard.getDialogPane();
             CompleteWizardFixtures.enterThroughReview(pane, true);
             ((Button) pane.lookup("#wizard-review-edit-assumptions")).fire();
-            ((ComboBox<StateTaxJurisdiction>) pane.lookup("#wizard-assumption-state-of-residence")).setValue(StateTaxJurisdiction.FL);
+            ((ComboBox<StateTaxJurisdiction>) pane.lookup("#wizard-assumption-state-of-residence")).setValue(state);
             button(pane, "Next").fire();
             button(pane, "Cancel").fire();
             assertNull(wizard.getResult());

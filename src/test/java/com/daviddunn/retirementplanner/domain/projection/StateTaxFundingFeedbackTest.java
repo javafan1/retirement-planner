@@ -32,14 +32,20 @@ class StateTaxFundingFeedbackTest {
         var mi = new ProjectionEngine().project(plan).getYearAt(0);
         plan.setPlanningAssumptions(plan.getPlanningAssumptions().withStateTaxAssumptions(StateTaxAssumptions.simplified(StateTaxJurisdiction.FL)));
         var fl = new ProjectionEngine().project(plan).getYearAt(0);
+        plan.setPlanningAssumptions(plan.getPlanningAssumptions().withStateTaxAssumptions(StateTaxAssumptions.simplified(StateTaxJurisdiction.IL)));
+        var il = new ProjectionEngine().project(plan).getYearAt(0);
         assertEquals(new BigDecimal("203563.35"), cents(mi.getRothConversion()));
         assertEquals(new BigDecimal("207668.00"), cents(fl.getRothConversion()));
-        for (var year : List.of(mi, fl)) {
+        assertEquals(new BigDecimal("207668.00"), cents(il.getRothConversion()));
+        for (var year : List.of(mi, fl, il)) {
             assertTrue(year.getFederalTaxableIncome().subtract(new BigDecimal("211400")).abs().compareTo(new BigDecimal("0.01")) <= 0);
             assertEquals(new BigDecimal("35932.00"), cents(year.getFederalIncomeTax()));
         }
         assertEquals(new BigDecimal("4104.65"), cents(mi.getStateIncomeTax()));
         assertEquals(0, fl.getStateIncomeTax().signum());
+        assertEquals(0, il.getStateIncomeTax().signum());
+        assertEquals(new BigDecimal("1064068.00"), cents(il.getEndingInvestableAssets()));
+        assertEquals(new BigDecimal("874968.00"), cents(il.getAfterTaxEstateValue()));
         var lines = new ArrayList<String>();
         lines.add("Metric|Michigan|Florida|Difference");
         lines.add(row("State tax", mi.getStateIncomeTax(), fl.getStateIncomeTax()));
@@ -81,10 +87,13 @@ class StateTaxFundingFeedbackTest {
         }
         var mi = outcomes.get(StateTaxJurisdiction.MI);
         var fl = outcomes.get(StateTaxJurisdiction.FL);
+        var il = outcomes.get(StateTaxJurisdiction.IL);
         assertEquals(new BigDecimal("12265.52"), cents(mi.getAdditionalWithdrawal()));
         // Federal worksheet: 1240 + 38000*.12 + (13500+W)*.22 = 8770+.22W.
         // Florida: W=8770/.78, using the unchanged funding tolerance.
         assertEquals(new BigDecimal("11243.59"), cents(fl.getAdditionalWithdrawal()));
+        assertEquals(new BigDecimal("11243.59"), cents(il.getAdditionalWithdrawal()));
+        assertEquals(0, il.getStateTaxCalculation().incomeTax().signum());
         assertEquals(0, fl.getStateTaxCalculation().incomeTax().signum());
         assertEquals(new BigDecimal("797.11"), cents(mi.getStateTaxCalculation().incomeTax()));
         assertTrue(mi.getFederalTaxCalculation().getFederalIncomeTax().compareTo(fl.getFederalTaxCalculation().getFederalIncomeTax()) > 0);
@@ -93,6 +102,8 @@ class StateTaxFundingFeedbackTest {
         var flBalance = new BigDecimal("920000").subtract(fl.getAdditionalWithdrawal());
         assertEquals(new BigDecimal("39639.06"), rmd.calculateRmd(miBalance, 77, rules));
         assertEquals(new BigDecimal("39683.69"), rmd.calculateRmd(flBalance, 77, rules));
+        var ilBalance = new BigDecimal("920000").subtract(il.getAdditionalWithdrawal());
+        assertEquals(new BigDecimal("39683.69"), rmd.calculateRmd(ilBalance, 77, rules));
         assertEquals(flBalance.divide(new BigDecimal("22.9"), 2, RoundingMode.HALF_UP),
                 rmd.calculateRmd(flBalance, 77, rules));
         var lines = new ArrayList<String>();

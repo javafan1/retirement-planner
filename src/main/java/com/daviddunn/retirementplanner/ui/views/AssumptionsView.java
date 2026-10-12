@@ -399,7 +399,7 @@ public class AssumptionsView extends VBox {
         filingStatusComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
         stateJurisdictionComboBox.getItems().setAll(com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.values());
         stateJurisdictionComboBox.setId("state-of-residence");
-        InputHelp.install(stateJurisdictionComboBox, "Full-year residence for every projection year. Michigan uses the modeled retirement rules; Florida has no individual state income tax. Part-year moves and income sourced to other states are not modeled.");
+        InputHelp.install(stateJurisdictionComboBox, "Full-year residence for every projection year. Michigan uses the modeled retirement rules; Florida has no individual state income tax. Illinois subtracts assessed federally taxable qualified retirement income; unassessed pension qualification is conservatively taxable. Illinois uses the 2026 baseline without future indexing. Part-year moves and income sourced to other states are not modeled.");
         Label stateLabel = new Label("State of Residence *");
         stateLabel.setLabelFor(stateJurisdictionComboBox);
         grid.add(stateLabel, 0, row);

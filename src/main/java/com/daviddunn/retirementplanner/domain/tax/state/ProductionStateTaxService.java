@@ -9,7 +9,8 @@ import java.util.Objects;
 public final class ProductionStateTaxService {
     private final Map<StateTaxJurisdiction, StateIncomeTaxCalculator> calculators = Map.of(
             StateTaxJurisdiction.MI, new MichiganProductionTaxAdapter(),
-            StateTaxJurisdiction.FL, new FloridaProductionTaxCalculator());
+            StateTaxJurisdiction.FL, new FloridaProductionTaxCalculator(),
+            StateTaxJurisdiction.IL, new IllinoisProductionTaxCalculator());
 
     public ProductionStateTaxResult calculate(StateTaxCalculationRequest request) {
         Objects.requireNonNull(request);

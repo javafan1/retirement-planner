@@ -624,8 +624,18 @@ public class ProjectionYearDetailsPane
 
         if (year.getStateTaxJurisdiction() != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI) {
             row = addSubsectionHeader(grid, row, year.getStateTaxJurisdiction().displayName());
-            return addMoneyComparisonRow(grid, row, year.getStateTaxJurisdiction().displayName() + " State Income Tax",
+            int taxRow = row;
+            int nextRow = addMoneyComparisonRow(grid, row, year.getStateTaxJurisdiction().displayName() + " State Income Tax",
                     year.getStateIncomeTax(), getBaselineValue(ProjectionYear::getStateIncomeTax));
+            year.stateTaxCalculation().ifPresent(result -> {
+                for (var node : grid.getChildren()) {
+                    if (node instanceof javafx.scene.control.Label label
+                            && java.util.Objects.equals(GridPane.getRowIndex(node), taxRow)) {
+                        label.setTooltip(new javafx.scene.control.Tooltip(String.join("\n", result.limitations())));
+                    }
+                }
+            });
+            return nextRow;
         }
 
         row =

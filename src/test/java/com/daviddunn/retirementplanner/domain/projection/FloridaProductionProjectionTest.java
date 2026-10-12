@@ -89,15 +89,16 @@ class FloridaProductionProjectionTest {
         assertThrows(java.io.IOException.class, () -> repository.load(file));
     }
 
-    @Test
-    void savedBaselineKeepsItsStateWhenCurrentPlanChangesState() {
-        var plan = plan(true, StateTaxJurisdiction.FL);
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = StateTaxJurisdiction.class, names = {"FL", "IL"})
+    void savedBaselineKeepsItsStateWhenCurrentPlanChangesState(StateTaxJurisdiction state) {
+        var plan = plan(true, state);
         var expected = new ProjectionEngine().project(plan);
-        var baseline = com.daviddunn.retirementplanner.domain.baseline.ProjectionBaselineFactory.create(plan, "Florida baseline");
+        var baseline = com.daviddunn.retirementplanner.domain.baseline.ProjectionBaselineFactory.create(plan, state + " baseline");
         plan.setPlanningAssumptions(plan.getPlanningAssumptions().withStateTaxAssumptions(StateTaxAssumptions.michigan()));
         var result = new com.daviddunn.retirementplanner.domain.baseline.BaselineProjectionService(new ProjectionEngine()).projectBaseline(baseline);
         assertEquals(financialRows(expected), financialRows(result));
-        assertTrue(result.getYears().stream().allMatch(y -> y.getStateTaxJurisdiction() == StateTaxJurisdiction.FL));
+        assertTrue(result.getYears().stream().allMatch(y -> y.getStateTaxJurisdiction() == state));
     }
 
     @ParameterizedTest

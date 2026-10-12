@@ -3,7 +3,8 @@ package com.daviddunn.retirementplanner.domain.model;
 /** Production-enabled full-year residency choices, independent of the research dataset. */
 public enum StateTaxJurisdiction {
     MI("Michigan"),
-    FL("Florida");
+    FL("Florida"),
+    IL("Illinois");
 
     private final String displayName;
 

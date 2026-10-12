@@ -26,7 +26,7 @@ class StateTaxPerformanceAuditTest {
 
     @org.junit.jupiter.api.Test
     void financialFingerprintsRemainAtTheUnmodifiedStageOneBaseline(@org.junit.jupiter.api.io.TempDir Path directory) throws Exception {
-        run(directory, 0, 1, false, null);
+        run(directory, 0, 1, false, null, false);
         var actual = new TreeMap<String, String>();
         for (String line : Files.readAllLines(directory.resolve("measurements.csv")).stream().skip(1).toList()) {
             String[] columns = line.split(",");
@@ -91,6 +91,9 @@ class StateTaxPerformanceAuditTest {
     }
     public static void main(String[] args) throws Exception { run(Path.of(args[0]), Integer.getInteger("perf.warm", 3), Integer.getInteger("perf.samples", 5), Boolean.getBoolean("perf.profile"), System.getProperty("perf.filter")); }
     static void run(Path out, int warm, int samples, boolean profile, String filter) throws Exception {
+        run(out, warm, samples, profile, filter, Boolean.getBoolean("perf.illinois"));
+    }
+    static void run(Path out, int warm, int samples, boolean profile, String filter, boolean illinois) throws Exception {
         if (warm < 0 || samples <= 0) {
             throw new IllegalArgumentException("Warm-up count must be nonnegative and sample count positive.");
         }
@@ -101,7 +104,8 @@ class StateTaxPerformanceAuditTest {
         var workloads = new LinkedHashMap<String, Supplier<Object>>();
         var units = new LinkedHashMap<String, Integer>();
         var engine = new ProjectionEngine();
-        for (var state : StateTaxJurisdiction.values()) {
+        for (var state : illinois ? List.of(StateTaxJurisdiction.IL)
+                : List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL)) {
             for (boolean couple : new boolean[]{false,true}) {
                 var plan = fixture("com.daviddunn.retirementplanner.domain.projection.FloridaProductionProjectionTest", "plan", new Class<?>[]{boolean.class, StateTaxJurisdiction.class}, couple, state);
                 String name = state+"-projection-"+(couple?"couple":"single");

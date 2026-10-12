@@ -24,7 +24,7 @@ class StateTaxVisualPreviewTest {
 
     @Test
     void inspectWizardTabsValidationNarrowLayoutAndFloridaZero() throws Exception {
-        Path folder = Path.of("target/phase6d1-preview");
+        Path folder = Path.of("target/phase6d2-preview");
         Files.createDirectories(folder);
         var wizard = new java.util.concurrent.atomic.AtomicReference<NewRetirementPlanWizard>();
         fx(() -> {
@@ -81,6 +81,8 @@ class StateTaxVisualPreviewTest {
                     fx(() -> write(scroller.get().snapshot(null, null), folder.resolve("assumptions-" + state.name() + ".png")));
                 }
                 fx(() -> {
+                    plan.setPlanningAssumptions(plan.getPlanningAssumptions().withStateTaxAssumptions(
+                            StateTaxAssumptions.simplified(StateTaxJurisdiction.FL)));
                     var year = new ProjectionEngine().project(plan).getYears().getFirst();
                     assertEquals(0, year.getStateIncomeTax().signum());
                     var details = new ProjectionYearDetailsPane(year, null, java.math.BigDecimal.ZERO, null);
@@ -99,6 +101,51 @@ class StateTaxVisualPreviewTest {
                 });
                 Thread.sleep(200);
                 fx(() -> write(stage.get().getScene().getRoot().snapshot(null, null), folder.resolve("results-FL-zero.png")));
+                fx(() -> {
+                    plan.setPlanningAssumptions(plan.getPlanningAssumptions().withStateTaxAssumptions(
+                            StateTaxAssumptions.simplified(StateTaxJurisdiction.IL)));
+                    var projection = new ProjectionEngine().project(plan);
+                    var details = new ProjectionYearDetailsPane(projection.getYears().getFirst(), null,
+                            java.math.BigDecimal.ZERO, null);
+                    stage.get().setScene(new Scene(details, 1120, 850));
+                    assertTrue(details.lookupAll(".label").stream().filter(Label.class::isInstance)
+                            .map(Label.class::cast).anyMatch(label -> label.getText().equals("Illinois State Income Tax")
+                                    && label.getTooltip() != null));
+                    var summary = new com.daviddunn.retirementplanner.ui.views.ResultsSummaryView(
+                            new com.daviddunn.retirementplanner.ui.controller.ApplicationController());
+                    summary.load(plan, projection, List.of());
+                    new Scene(summary, 1400, 900); summary.applyCss(); summary.layout();
+                    Path pdf = folder.resolve("illinois.pdf");
+                    new com.daviddunn.retirementplanner.app.export.ProjectionPdfExporter().export(plan, projection,
+                            List.of(), summary.prepareProjectionPdfReport(), pdf);
+                    try (var document = org.apache.pdfbox.Loader.loadPDF(pdf.toFile())) {
+                        assertTrue(new org.apache.pdfbox.text.PDFTextStripper().getText(document).contains("Illinois"));
+                        javax.imageio.ImageIO.write(new org.apache.pdfbox.rendering.PDFRenderer(document)
+                                .renderImageWithDPI(0, 90), "png", folder.resolve("illinois-report.png").toFile());
+                        for (int page = 0; page < document.getNumberOfPages(); page++) {
+                            var stripper = new org.apache.pdfbox.text.PDFTextStripper();
+                            stripper.setStartPage(page + 1); stripper.setEndPage(page + 1);
+                            if (stripper.getText(document).contains("Illinois")) {
+                                javax.imageio.ImageIO.write(new org.apache.pdfbox.rendering.PDFRenderer(document)
+                                        .renderImageWithDPI(page, 90), "png", folder.resolve("illinois-report-state.png").toFile());
+                                break;
+                            }
+                        }
+                    }
+                });
+                Thread.sleep(200);
+                fx(() -> {
+                    var details = (ProjectionYearDetailsPane) stage.get().getScene().getRoot();
+                    Label tax = details.lookupAll(".label").stream().filter(Label.class::isInstance).map(Label.class::cast)
+                            .filter(label -> label.getText().equals("Illinois State Income Tax")).findFirst().orElseThrow();
+                    var scroll = (ScrollPane) details.getCenter();
+                    var content = scroll.getContent();
+                    var bounds = content.sceneToLocal(tax.localToScene(tax.getBoundsInLocal()));
+                    scroll.setVvalue(Math.min(1, Math.max(0, (bounds.getMinY() - 300)
+                            / (content.getBoundsInLocal().getHeight() - scroll.getViewportBounds().getHeight()))));
+                });
+                Thread.sleep(200);
+                fx(() -> write(stage.get().getScene().getRoot().snapshot(null, null), folder.resolve("results-IL.png")));
             }
             finally { fx(() -> stage.get().close()); }
         }
@@ -107,9 +154,9 @@ class StateTaxVisualPreviewTest {
         try (var files = Files.list(folder)) {
             images = files.filter(p -> p.toString().endsWith(".png") && !p.getFileName().toString().equals("contact-sheet.png")).sorted().toList();
         }
-        BufferedImage sheet = new BufferedImage(1500, 1000, BufferedImage.TYPE_INT_RGB);
+        BufferedImage sheet = new BufferedImage(1500, ((images.size() + 3) / 4) * 500, BufferedImage.TYPE_INT_RGB);
         var g = sheet.createGraphics();
-        g.setColor(java.awt.Color.WHITE); g.fillRect(0, 0, 1500, 1000);
+        g.setColor(java.awt.Color.WHITE); g.fillRect(0, 0, sheet.getWidth(), sheet.getHeight());
         for (int index = 0; index < images.size(); index++) {
             var file = images.get(index);
             int x = index % 4 * 375;
