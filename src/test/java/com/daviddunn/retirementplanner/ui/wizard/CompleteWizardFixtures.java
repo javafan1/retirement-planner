@@ -20,6 +20,14 @@ final class CompleteWizardFixtures {
     private CompleteWizardFixtures() { }
 
     static void enterThroughReview(DialogPane pane, boolean couple) throws Exception {
+        enterThroughReview(pane, couple, false);
+    }
+
+    static void enterIndividualIraAndCashThroughReview(DialogPane pane, boolean couple) throws Exception {
+        enterThroughReview(pane, couple, true);
+    }
+
+    private static void enterThroughReview(DialogPane pane, boolean couple, boolean individualIraAndCash) throws Exception {
         fill(person(pane, "primary"), "Alex", "Example", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
         if (couple) {
             ((Button) pane.lookup("#wizard-add-spouse")).fire();
@@ -28,19 +36,21 @@ final class CompleteWizardFixtures {
         button(pane, "Next").fire();
         account(pane, "Primary IRA", AccountType.TRADITIONAL_IRA, AccountOwnership.PRIMARY, "800000");
         account(pane, "Primary Roth", AccountType.ROTH_IRA, AccountOwnership.PRIMARY, "200000");
-        account(pane, "Investments", AccountType.BROKERAGE, couple ? AccountOwnership.JOINT : AccountOwnership.PRIMARY,
+        account(pane, "Investments", individualIraAndCash ? AccountType.CHECKING : AccountType.BROKERAGE, couple ? AccountOwnership.JOINT : AccountOwnership.PRIMARY,
                 couple ? "750000" : "500000");
         if (couple) account(pane, "Spouse IRA", AccountType.TRADITIONAL_IRA, AccountOwnership.SPOUSE, "500000");
         button(pane, "Next").fire();
         socialSecurity(pane, "3000");
         if (couple) socialSecurity(pane, "2400");
-        pension(pane, AccountOwnership.PRIMARY, "1000", couple ? "600" : null);
-        if (couple) pension(pane, AccountOwnership.SPOUSE, "900", "400");
+        if (!individualIraAndCash) {
+            pension(pane, AccountOwnership.PRIMARY, "1000", couple ? "600" : null);
+            if (couple) pension(pane, AccountOwnership.SPOUSE, "900", "400");
+        }
         button(pane, "Next").fire();
         expense(pane, "Retirement spending", couple ? "85000" : "60000", GrowthCategory.GENERAL);
         expense(pane, "Healthcare", "6000", GrowthCategory.HEALTHCARE);
         button(pane, "Next").fire();
-        ((DatePicker) pane.lookup("#wizard-assumption-start")).setValue(LocalDate.of(2026, 1, 1));
+        ((DatePicker) pane.lookup("#wizard-assumption-start")).setValue(LocalDate.of(individualIraAndCash ? 2027 : 2026, 1, 1));
         ((TextField) pane.lookup("#wizard-assumption-length")).setText("30");
         ((TextField) pane.lookup("#wizard-assumption-return")).setText("6.5");
         ((TextField) pane.lookup("#wizard-assumption-inflation")).setText("2.5");

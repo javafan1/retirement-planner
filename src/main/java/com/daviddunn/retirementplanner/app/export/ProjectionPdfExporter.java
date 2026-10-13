@@ -633,6 +633,9 @@ public class ProjectionPdfExporter {
     private void writeStateTaxTable(Projection projection) throws IOException {
         currentY -= 12;
         writeSectionHeading("STATE INCOME TAX - FULL-YEAR RESIDENCY", BLUE);
+        writeText("State personal income tax only; local taxes and some credits/relief are outside the estimate.",
+                MARGIN, currentY, FONT_NORMAL, FONT_SIZE, GRAY);
+        currentY -= ROW_HEIGHT;
         float[] widths = {60, 140, 160, 140};
         String[] headers = {"Year", "State", "Calculation", "State Income Tax"};
         writeTableHeader(headers, widths);

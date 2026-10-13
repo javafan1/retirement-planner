@@ -13,7 +13,8 @@ public final class ProductionStateTaxService {
         this(Map.of(
             StateTaxJurisdiction.MI, new MichiganProductionTaxAdapter(),
             StateTaxJurisdiction.FL, new FloridaProductionTaxCalculator(),
-            StateTaxJurisdiction.IL, new IllinoisProductionTaxCalculator()));
+            StateTaxJurisdiction.IL, new IllinoisProductionTaxCalculator(),
+            StateTaxJurisdiction.PA, new PennsylvaniaProductionTaxCalculator()));
     }
 
     /** Immutable calculator configuration, useful for bounded evaluation and contract tests. */

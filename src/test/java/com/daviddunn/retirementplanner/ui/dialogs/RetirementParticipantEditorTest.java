@@ -15,6 +15,46 @@ import static org.junit.jupiter.api.Assertions.*;
 class RetirementParticipantEditorTest {
     @BeforeAll static void init() throws Exception { startFx(); }
 
+    @Test void expandingAccountFactsResizesDialogAndShowsEveryInput() throws Exception {
+        var dialog = new AccountDialog[1];
+        var collapsedHeight = new double[1];
+        try {
+            fx(() -> {
+                dialog[0] = new AccountDialog(new Traditional401K(
+                        "Employer", AccountOwnership.PRIMARY, BigDecimal.TEN));
+                dialog[0].show();
+            });
+            fx(() -> {
+                collapsedHeight[0] = dialog[0].getDialogPane().getHeight();
+                RetirementParticipantFactsEditor editor = field(dialog[0], "participantFactsEditor");
+                editor.setExpanded(true);
+            });
+            // The expansion listener queues sizing on the next JavaFX turn.
+            fx(() -> {
+                var pane = dialog[0].getDialogPane();
+                pane.applyCss();
+                pane.layout();
+                assertTrue(pane.getHeight() > collapsedHeight[0] + 100);
+                RetirementParticipantFactsEditor editor = field(dialog[0], "participantFactsEditor");
+                var content = (javafx.scene.layout.GridPane) editor.getContent();
+                for (var input : content.getChildren()) {
+                    if (input instanceof ComboBox<?> || input instanceof DatePicker) {
+                        var bounds = pane.sceneToLocal(input.localToScene(input.getBoundsInLocal()));
+                        assertTrue(bounds.getMinY() >= 0);
+                        assertTrue(bounds.getMaxY() <= pane.getHeight());
+                        assertTrue(input.getBoundsInParent().getMaxY() <= content.getHeight());
+                    }
+                }
+                var lastInput = (DatePicker) field(editor, "conditionsDate");
+                var inputBounds = lastInput.localToScene(lastInput.getBoundsInLocal());
+                var ok = pane.lookupButton(ButtonType.OK);
+                assertTrue(inputBounds.getMaxY() <= ok.localToScene(ok.getBoundsInLocal()).getMinY());
+            });
+        } finally {
+            fx(() -> { if (dialog[0] != null) dialog[0].close(); });
+        }
+    }
+
     @Test void optionalUnknownInputsHaveDirectTooltipsAndDatesFollowStatus() throws Exception {
         fx(() -> {
             var editor = new RetirementParticipantFactsEditor(RetirementParticipantFacts.UNKNOWN);

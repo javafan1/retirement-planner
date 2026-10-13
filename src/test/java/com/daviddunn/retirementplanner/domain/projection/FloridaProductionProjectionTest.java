@@ -52,7 +52,7 @@ class FloridaProductionProjectionTest {
     @ValueSource(booleans = {false, true})
     void saveReloadCopyAndLegacyAbsentFieldPreserveTheSelectedState(boolean couple, @TempDir Path directory) throws Exception {
         var repository = new JsonRetirementPlanRepository();
-        for (var state : StateTaxJurisdiction.values()) {
+        for (var state : List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL, StateTaxJurisdiction.IL)) {
             var original = plan(couple, state);
             Path file = directory.resolve(state.name() + ".json");
             repository.save(original, file);

@@ -16,7 +16,7 @@ class IllinoisProductionProjectionTest {
     @ValueSource(booleans = {false, true})
     void threeStateProjectionKeepsFederalBenefitsRmdOrderingAndReportsIllinois(boolean couple) throws Exception {
         var results = new EnumMap<StateTaxJurisdiction, Projection>(StateTaxJurisdiction.class);
-        for (var state : StateTaxJurisdiction.values()) {
+        for (var state : List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL, StateTaxJurisdiction.IL)) {
             var plan = FloridaProductionProjectionTest.plan(couple, state);
             var before = plan.getAccountPortfolio().getAccounts().stream().map(a -> a.getCurrentBalance()).toList();
             var projection = new ProjectionEngine().project(plan);
@@ -53,7 +53,7 @@ class IllinoisProductionProjectionTest {
                 "getAfterTaxEstateValue")) {
             var values = new ArrayList<String>();
             values.add(method);
-            for (var state : StateTaxJurisdiction.values()) {
+            for (var state : List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL, StateTaxJurisdiction.IL)) {
                 var year = results.get(state).getYears().getLast();
                 values.add(((BigDecimal) ProjectionYear.class.getMethod(method).invoke(year))
                         .setScale(2, RoundingMode.HALF_UP).toPlainString());

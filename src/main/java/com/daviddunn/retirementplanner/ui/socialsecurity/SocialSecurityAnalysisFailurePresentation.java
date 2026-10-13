@@ -6,6 +6,12 @@ final class SocialSecurityAnalysisFailurePresentation {
     private SocialSecurityAnalysisFailurePresentation() { }
 
     static String message(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof com.daviddunn.retirementplanner.domain.tax.state.StateTaxUnavailableException unavailable) {
+                return unavailable.getMessage() + " No completed state-tax-dependent analysis is available. "
+                        + "The previous result has been preserved.";
+            }
+        }
         String message = failure == null || failure.getMessage() == null ? "" : failure.getMessage();
         if (message.contains("complete") && message.contains("survivor")) {
             return "A complete survivor policy or explicit complete baseline strategy is required. "

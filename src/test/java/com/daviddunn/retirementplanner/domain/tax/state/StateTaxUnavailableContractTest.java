@@ -60,7 +60,7 @@ class StateTaxUnavailableContractTest {
     @Test void employerParticipantFactsDoNotChangeExistingProductionStateTaxRules() throws Exception {
         var account = new com.daviddunn.retirementplanner.domain.financial.Traditional401K(
                 "Employer", AccountOwnership.PRIMARY, new BigDecimal("100000"));
-        for (var jurisdiction : StateTaxJurisdiction.values()) {
+        for (var jurisdiction : List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL, StateTaxJurisdiction.IL)) {
             var amounts = new ArrayList<BigDecimal>();
             for (var facts : List.of(RetirementParticipantFacts.UNKNOWN,
                     new RetirementParticipantFacts(RetirementParticipantFacts.SeparationStatus.SEPARATED,

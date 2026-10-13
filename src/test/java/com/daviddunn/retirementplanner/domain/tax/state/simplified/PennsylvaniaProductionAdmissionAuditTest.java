@@ -233,9 +233,9 @@ class PennsylvaniaProductionAdmissionAuditTest {
     }
 
     @Test
-    void pennsylvaniaRemainsRejectedByProductionJurisdictionAdmission() {
-        assertEquals(List.of("MI", "FL", "IL"), Arrays.stream(StateTaxJurisdiction.values()).map(Enum::name).toList());
-        assertThrows(IllegalArgumentException.class, () -> StateTaxJurisdiction.fromCode("PA"));
+    void boundedPennsylvaniaAdmissionDoesNotExposeOtherResearchStates() {
+        assertEquals(List.of("MI", "FL", "IL", "PA"), Arrays.stream(StateTaxJurisdiction.values()).map(Enum::name).toList());
+        assertEquals(StateTaxJurisdiction.PA, StateTaxJurisdiction.fromCode("PA"));
     }
 
     private static Fixture calculated(String id, Admission admission, String age, String taxable, String tax, String reason, Income... lines) {

@@ -4,7 +4,8 @@ package com.daviddunn.retirementplanner.domain.model;
 public enum StateTaxJurisdiction {
     MI("Michigan"),
     FL("Florida"),
-    IL("Illinois");
+    IL("Illinois"),
+    PA("Pennsylvania");
 
     private final String displayName;
 

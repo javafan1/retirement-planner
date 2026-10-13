@@ -91,9 +91,13 @@ class StateTaxPerformanceAuditTest {
     }
     public static void main(String[] args) throws Exception { run(Path.of(args[0]), Integer.getInteger("perf.warm", 3), Integer.getInteger("perf.samples", 5), Boolean.getBoolean("perf.profile"), System.getProperty("perf.filter")); }
     static void run(Path out, int warm, int samples, boolean profile, String filter) throws Exception {
-        run(out, warm, samples, profile, filter, Boolean.getBoolean("perf.illinois"));
+        run(out, warm, samples, profile, filter, Boolean.getBoolean("perf.illinois"), Boolean.getBoolean("perf.pennsylvania"));
     }
     static void run(Path out, int warm, int samples, boolean profile, String filter, boolean illinois) throws Exception {
+        run(out, warm, samples, profile, filter, illinois, false);
+    }
+    static void run(Path out, int warm, int samples, boolean profile, String filter, boolean illinois,
+            boolean boundedPennsylvania) throws Exception {
         if (warm < 0 || samples <= 0) {
             throw new IllegalArgumentException("Warm-up count must be nonnegative and sample count positive.");
         }
@@ -104,20 +108,24 @@ class StateTaxPerformanceAuditTest {
         var workloads = new LinkedHashMap<String, Supplier<Object>>();
         var units = new LinkedHashMap<String, Integer>();
         var engine = new ProjectionEngine();
-        for (var state : illinois ? List.of(StateTaxJurisdiction.IL)
+        for (var state : boundedPennsylvania ? List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.IL, StateTaxJurisdiction.PA)
+                : illinois ? List.of(StateTaxJurisdiction.IL)
                 : List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL)) {
             for (boolean couple : new boolean[]{false,true}) {
-                var plan = fixture("com.daviddunn.retirementplanner.domain.projection.FloridaProductionProjectionTest", "plan", new Class<?>[]{boolean.class, StateTaxJurisdiction.class}, couple, state);
+                var plan = fixture(boundedPennsylvania
+                        ? "com.daviddunn.retirementplanner.domain.projection.PennsylvaniaProductionProjectionTest"
+                        : "com.daviddunn.retirementplanner.domain.projection.FloridaProductionProjectionTest", "plan", new Class<?>[]{boolean.class, StateTaxJurisdiction.class}, couple, state);
                 String name = state+"-projection-"+(couple?"couple":"single");
                 workloads.put(name, () -> engine.project(plan)); units.put(name, 150);
             }
-            var mc = fixture("com.daviddunn.retirementplanner.app.montecarlo.MonteCarloMortalityExecutionTest", "plan", new Class<?>[]{});
+            var mc = boundedPennsylvania ? PennsylvaniaMonteCarloIntegrationTest.plan(state)
+                    : fixture("com.daviddunn.retirementplanner.app.montecarlo.MonteCarloMortalityExecutionTest", "plan", new Class<?>[]{});
             mc.setPlanningAssumptions(mc.getPlanningAssumptions().withStateTaxAssumptions(StateTaxAssumptions.simplified(state)));
             workloads.put(state+"-fixed-30years", () -> engine.project(mc)); units.put(state+"-fixed-30years", 50);
             var bracket = new RetirementPlanScenarioCopyService().copy(mc);
             bracket.setRothConversionRequest(new RothConversionRequest(true,2027,BigDecimal.ZERO,RothConversionStopRule.FIRST_HOUSEHOLD_RMD,RothConversionStrategy.FILL_22_PERCENT_BRACKET,RothConversionFrequency.ANNUAL));
             workloads.put(state+"-bracket-30years", () -> engine.project(bracket)); units.put(state+"-bracket-30years", 10);
-            var grid = Stage4TestPlans.plan();
+            var grid = boundedPennsylvania ? PennsylvaniaIntegratedAnalysisTest.plan() : Stage4TestPlans.plan();
             grid.setPlanningAssumptions(grid.getPlanningAssumptions().withStateTaxAssumptions(StateTaxAssumptions.simplified(state)));
             var calc = new IntegratedRetirementClaimingGridCalculator();
             workloads.put(state+"-grid81", () -> calc.calculate(grid)); units.put(state+"-grid81", 1);

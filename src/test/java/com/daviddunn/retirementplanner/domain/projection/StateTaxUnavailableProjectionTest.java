@@ -27,7 +27,7 @@ class StateTaxUnavailableProjectionTest {
     }
 
     @Test void knownParticipantMetadataDoesNotChangeAnyExistingStateFinancialRows() {
-        for (var state : StateTaxJurisdiction.values()) {
+        for (var state : List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL, StateTaxJurisdiction.IL)) {
             var plan = FloridaProductionProjectionTest.plan(true, state);
             var baseline = FloridaProductionProjectionTest.financialRows(new ProjectionEngine().project(plan));
             var facts = new RetirementParticipantFacts(RetirementParticipantFacts.SeparationStatus.SEPARATED,

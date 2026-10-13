@@ -274,6 +274,12 @@ public class AccountDialog extends Dialog<Account> {
         InputHelp.linkGridLabels(grid);
         getDialogPane().setContent(grid);
 
+        // Resize after the optional section changes its preferred height.
+        // Without animation the queued resize sees the complete expanded form.
+        participantFactsEditor.setAnimated(false);
+        participantFactsEditor.expandedProperty().addListener(
+                (observable, oldValue, newValue) -> resizeToContent());
+
         getDialogPane().getButtonTypes().addAll(
                 ButtonType.OK,
                 ButtonType.CANCEL);
@@ -380,6 +386,11 @@ public class AccountDialog extends Dialog<Account> {
 
         beneficiaryRelationshipCombo.setVisible(visible);
         beneficiaryRelationshipCombo.setManaged(visible);
+
+        resizeToContent();
+    }
+
+    private void resizeToContent() {
 
         Platform.runLater(() -> {
 
