@@ -47,7 +47,7 @@ class PennsylvaniaProductionVisualTest {
             stage.set(new Stage()); var editor = new AssumptionsView(); editor.load(plan);
             ComboBox<StateTaxJurisdiction> input = field(editor, "stateJurisdictionComboBox");
             assertEquals(StateTaxJurisdiction.PA, input.getValue()); assertNotNull(input.getTooltip());
-            assertEquals(4, input.getItems().size()); assertTrue(editor.lookupAll(".help-icon").isEmpty());
+            assertEquals(StateTaxJurisdiction.alphabeticalChoices(), input.getItems()); assertTrue(editor.lookupAll(".help-icon").isEmpty());
             var scroller = new ScrollPane(editor); scroller.setFitToWidth(true);
             stage.get().setScene(new Scene(scroller, 1080, 800)); stage.get().show();
         });

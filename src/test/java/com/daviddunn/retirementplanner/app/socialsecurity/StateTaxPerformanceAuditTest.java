@@ -19,6 +19,14 @@ class StateTaxPerformanceAuditTest {
     @org.junit.jupiter.api.Test
     @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "state.tax.performance", matches = "true")
     void warmedRealApplicationWorkloads() throws Exception {
+        var selectedStates = System.getProperty("perf.zero.states");
+        if (selectedStates != null) {
+            run(Path.of(System.getProperty("perf.output", "target/phase6d4-benchmark")),
+                    Integer.getInteger("perf.warm", 3), Integer.getInteger("perf.samples", 5),
+                    Boolean.getBoolean("perf.profile"), System.getProperty("perf.filter"), false, false,
+                    Arrays.stream(selectedStates.split(",")).map(StateTaxJurisdiction::fromCode).toList());
+            return;
+        }
         run(Path.of(System.getProperty("perf.output", "target/phase6d1a-benchmark")),
                 Integer.getInteger("perf.warm", 3), Integer.getInteger("perf.samples", 5),
                 Boolean.getBoolean("perf.profile"), System.getProperty("perf.filter"));
@@ -45,6 +53,27 @@ class StateTaxPerformanceAuditTest {
                 "Performance work must not change any captured financial value; do not regenerate this baseline.");
     }
     // Each run keeps only its latest result; no shared mutable calculation state.
+    @org.junit.jupiter.api.Test
+    void illinoisWorkloadHashesRemainAtAcceptedPhase6D2Baseline(@org.junit.jupiter.api.io.TempDir Path directory) throws Exception {
+        run(directory, 0, 1, false, null, true);
+        var actual = new TreeMap<String, String>();
+        for (var line : Files.readAllLines(directory.resolve("measurements.csv")).stream().skip(1).toList()) {
+            var columns = line.split(",");
+            actual.put(columns[0], columns[5]);
+        }
+        var expected = new TreeMap<String, String>();
+        try (var stream = getClass().getResourceAsStream("/tax/state/phase6d2-illinois-financial-fingerprints.txt")) {
+            org.junit.jupiter.api.Assertions.assertNotNull(stream);
+            for (var line : new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).lines().toList()) {
+                if (line.startsWith("#") || line.isBlank()) continue;
+                var columns = line.split("\\|");
+                expected.put(columns[0], columns[1]);
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(expected, actual,
+                "Existing Illinois workload values are frozen; do not regenerate the accepted hashes.");
+    }
+
     static class ResultSink {
         volatile Object value;
     }
@@ -98,6 +127,13 @@ class StateTaxPerformanceAuditTest {
     }
     static void run(Path out, int warm, int samples, boolean profile, String filter, boolean illinois,
             boolean boundedPennsylvania) throws Exception {
+        run(out, warm, samples, profile, filter, illinois, boundedPennsylvania,
+                boundedPennsylvania ? List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.IL, StateTaxJurisdiction.PA)
+                        : illinois ? List.of(StateTaxJurisdiction.IL) : List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL));
+    }
+
+    static void run(Path out, int warm, int samples, boolean profile, String filter, boolean illinois,
+            boolean boundedPennsylvania, List<StateTaxJurisdiction> selectedStates) throws Exception {
         if (warm < 0 || samples <= 0) {
             throw new IllegalArgumentException("Warm-up count must be nonnegative and sample count positive.");
         }
@@ -108,9 +144,7 @@ class StateTaxPerformanceAuditTest {
         var workloads = new LinkedHashMap<String, Supplier<Object>>();
         var units = new LinkedHashMap<String, Integer>();
         var engine = new ProjectionEngine();
-        for (var state : boundedPennsylvania ? List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.IL, StateTaxJurisdiction.PA)
-                : illinois ? List.of(StateTaxJurisdiction.IL)
-                : List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL)) {
+        for (var state : selectedStates) {
             for (boolean couple : new boolean[]{false,true}) {
                 var plan = fixture(boundedPennsylvania
                         ? "com.daviddunn.retirementplanner.domain.projection.PennsylvaniaProductionProjectionTest"

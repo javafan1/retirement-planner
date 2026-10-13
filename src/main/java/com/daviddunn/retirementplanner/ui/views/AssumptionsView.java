@@ -397,9 +397,10 @@ public class AssumptionsView extends VBox {
         grid.add(new Label("Filing Status:"), 0, row);
         grid.add(filingStatusComboBox, 1, row++);
         filingStatusComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
-        stateJurisdictionComboBox.getItems().setAll(com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.values());
+        stateJurisdictionComboBox.getItems().setAll(com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.alphabeticalChoices());
+        stateJurisdictionComboBox.setVisibleRowCount(11);
         stateJurisdictionComboBox.setId("state-of-residence");
-        InputHelp.install(stateJurisdictionComboBox, "Full-year residence for every projection year. Michigan uses the modeled retirement rules; Florida has no individual state income tax. Illinois subtracts assessed federally taxable qualified retirement income; unassessed pension qualification is conservatively taxable. Pennsylvania supports ordinary IRA retirement receipts, complete IRA-to-Roth IRA transfers, Social Security and ordinary investments; missing plan qualification or basis/history makes the projection unavailable. Illinois and Pennsylvania use the 2026 baseline without future indexing. Local taxes, part-year moves and income sourced to other states are not modeled.");
+        InputHelp.install(stateJurisdictionComboBox, "Full-year residence for every projection year. Michigan uses the modeled retirement rules; Alaska, Florida, Nevada, New Hampshire, South Dakota, Tennessee, Texas and Wyoming have no modeled individual state income tax under validated 2026 rules, projected forward without tax-law forecasting. Illinois subtracts assessed federally taxable qualified retirement income; unassessed pension qualification is conservatively taxable. Pennsylvania supports ordinary IRA retirement receipts, complete IRA-to-Roth IRA transfers, Social Security and ordinary investments; missing plan qualification or basis/history makes the projection unavailable. Illinois and Pennsylvania use the 2026 baseline without future indexing. Local taxes, part-year moves and income sourced to other states are not modeled.");
         Label stateLabel = new Label("State of Residence *");
         stateLabel.setLabelFor(stateJurisdictionComboBox);
         grid.add(stateLabel, 0, row);

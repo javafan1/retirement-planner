@@ -10,11 +10,21 @@ public final class ProductionStateTaxService {
     private final Map<StateTaxJurisdiction, StateIncomeTaxCalculator> calculators;
 
     public ProductionStateTaxService() {
-        this(Map.of(
-            StateTaxJurisdiction.MI, new MichiganProductionTaxAdapter(),
-            StateTaxJurisdiction.FL, new FloridaProductionTaxCalculator(),
-            StateTaxJurisdiction.IL, new IllinoisProductionTaxCalculator(),
-            StateTaxJurisdiction.PA, new PennsylvaniaProductionTaxCalculator()));
+        this(defaultCalculators());
+    }
+
+    private static Map<StateTaxJurisdiction, StateIncomeTaxCalculator> defaultCalculators() {
+        var registry = new java.util.EnumMap<StateTaxJurisdiction, StateIncomeTaxCalculator>(StateTaxJurisdiction.class);
+        registry.put(StateTaxJurisdiction.MI, new MichiganProductionTaxAdapter());
+        registry.put(StateTaxJurisdiction.IL, new IllinoisProductionTaxCalculator());
+        registry.put(StateTaxJurisdiction.PA, new PennsylvaniaProductionTaxCalculator());
+        var zeroTax = new NoGeneralIndividualIncomeTaxCalculator();
+        for (var jurisdiction : StateTaxJurisdiction.values()) {
+            if (jurisdiction.usesNoGeneralIndividualIncomeTaxModel()) {
+                registry.put(jurisdiction, zeroTax);
+            }
+        }
+        return registry;
     }
 
     /** Immutable calculator configuration, useful for bounded evaluation and contract tests. */

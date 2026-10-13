@@ -478,8 +478,9 @@ public class ProjectionPdfExporter {
         writeKeyValue("Standard Deduction Growth", percent(tax.getStandardDeductionGrowthRate()), GRAY);
         writeKeyValue("State of Residence", assumptions.getStateTaxAssumptions().jurisdiction().displayName(), GRAY);
         writeKeyValue("State Tax Calculation", "Simplified state estimate; full-year resident", GRAY);
-        if (assumptions.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.FL) {
-            writeKeyValue("Florida State Income Tax", "$0 (no individual income tax)", GRAY);
+        if (assumptions.getStateTaxAssumptions().jurisdiction().usesNoGeneralIndividualIncomeTaxModel()) {
+            writeKeyValue(assumptions.getStateTaxAssumptions().jurisdiction().displayName() + " State Income Tax",
+                    "$0 (no individual income tax)", GRAY);
         }
         writeKeyValue("Estimated Heir Tax Rate", percent(tax.getEstimatedHeirTaxRateOnTaxDeferredAssets()), GRAY);
         writeKeyValue("Future Federal Marginal Adjustment", percent(tax.getFutureFederalMarginalRateAdjustment())

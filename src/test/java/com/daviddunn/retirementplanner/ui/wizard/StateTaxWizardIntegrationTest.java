@@ -20,7 +20,7 @@ class StateTaxWizardIntegrationTest {
     @BeforeAll static void init() throws Exception { startFx(); }
 
     @ParameterizedTest
-    @CsvSource({"false,FL", "true,FL", "false,IL", "true,IL", "false,PA", "true,PA"})
+    @CsvSource({"false,FL", "true,FL", "false,IL", "true,IL", "false,PA", "true,PA", "false,AK", "true,AK", "false,NV", "true,NV", "false,NH", "true,NH", "false,SD", "true,SD", "false,TN", "true,TN", "false,TX", "true,TX", "false,WY", "true,WY"})
     void fileNewActivatesSelectedStateThenSaveReloadPreservesTax(boolean couple, StateTaxJurisdiction state, @TempDir Path directory) throws Exception {
         fx(() -> {
             var window = new com.daviddunn.retirementplanner.ui.MainWindow();
@@ -55,13 +55,13 @@ class StateTaxWizardIntegrationTest {
             assertEquals(couple, controller.getCurrentPlan().getHousehold().hasSpouse());
             for (var year : controller.getCurrentProjection().getYears()) {
                 assertEquals(state, year.getStateTaxJurisdiction());
-                if (state == StateTaxJurisdiction.FL) assertEquals(0, year.getStateIncomeTax().signum());
+                if (state.usesNoGeneralIndividualIncomeTaxModel()) assertEquals(0, year.getStateIncomeTax().signum());
             }
         });
     }
 
     @ParameterizedTest
-    @CsvSource({"false,MI", "false,FL", "true,MI", "true,FL", "false,IL", "true,IL", "false,PA", "true,PA"})
+    @CsvSource({"false,MI", "false,FL", "true,MI", "true,FL", "false,IL", "true,IL", "false,PA", "true,PA", "false,AK", "true,AK", "false,NV", "true,NV", "false,NH", "true,NH", "false,SD", "true,SD", "false,TN", "true,TN", "false,TX", "true,TX", "false,WY", "true,WY"})
     void wizardSaveReloadAndProjectionUseSelectedState(boolean couple, StateTaxJurisdiction state,
             @TempDir Path directory) throws Exception {
         fx(() -> {
@@ -73,7 +73,7 @@ class StateTaxWizardIntegrationTest {
                 else CompleteWizardFixtures.enterThroughReview(pane, couple);
                 ((Button) pane.lookup("#wizard-review-edit-assumptions")).fire();
                 ComboBox<StateTaxJurisdiction> input = (ComboBox<StateTaxJurisdiction>) pane.lookup("#wizard-assumption-state-of-residence");
-                assertEquals(List.of(StateTaxJurisdiction.MI, StateTaxJurisdiction.FL, StateTaxJurisdiction.IL, StateTaxJurisdiction.PA), input.getItems());
+                assertEquals(StateTaxJurisdiction.alphabeticalChoices(), input.getItems());
                 assertNotNull(input.getTooltip());
                 input.setValue(null);
                 button(pane, "Next").fire();
@@ -96,7 +96,7 @@ class StateTaxWizardIntegrationTest {
                 assertFalse(projection.isEmpty());
                 for (var year : projection.getYears()) {
                     assertEquals(state, year.getStateTaxJurisdiction());
-                    if (state == StateTaxJurisdiction.FL) assertEquals(0, year.getStateIncomeTax().signum());
+                    if (state.usesNoGeneralIndividualIncomeTaxModel()) assertEquals(0, year.getStateIncomeTax().signum());
                 }
                 var editor = new AssumptionsView();
                 editor.load(loaded);
@@ -110,7 +110,7 @@ class StateTaxWizardIntegrationTest {
         });
     }
 
-    @org.junit.jupiter.params.provider.EnumSource(value = StateTaxJurisdiction.class, names = {"FL", "IL", "PA"})
+    @org.junit.jupiter.params.provider.EnumSource(value = StateTaxJurisdiction.class, names = {"FL", "IL", "PA", "AK", "NV", "NH", "SD", "TN", "TX", "WY"})
     @ParameterizedTest
     void tabEditsAreAtomicDirtyAndCancelRestoresState(StateTaxJurisdiction state) throws Exception {
         fx(() -> {
@@ -137,7 +137,7 @@ class StateTaxWizardIntegrationTest {
         });
     }
 
-    @org.junit.jupiter.params.provider.EnumSource(value = StateTaxJurisdiction.class, names = {"FL", "IL", "PA"})
+    @org.junit.jupiter.params.provider.EnumSource(value = StateTaxJurisdiction.class, names = {"FL", "IL", "PA", "AK", "NV", "NH", "SD", "TN", "TX", "WY"})
     @ParameterizedTest
     void substantialDraftCancelLeavesActivePlanAndDirtyStateExactlyUnchanged(StateTaxJurisdiction state) throws Exception {
         fx(() -> {
