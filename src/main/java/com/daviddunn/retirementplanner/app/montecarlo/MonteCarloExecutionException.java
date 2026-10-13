@@ -1,10 +1,12 @@
 package com.daviddunn.retirementplanner.app.montecarlo;
 
+import com.daviddunn.retirementplanner.domain.tax.state.StateTaxUnavailableException;
+
 import java.util.Objects;
 import java.util.OptionalInt;
 
 /**
- * Unexpected execution failure. No partial Monte Carlo analysis is published.
+ * Evaluation failure, including typed state-tax unavailability. No partial analysis is published.
  */
 public final class MonteCarloExecutionException extends RuntimeException {
 
@@ -54,5 +56,12 @@ public final class MonteCarloExecutionException extends RuntimeException {
 
     public String returnModel() {
         return returnModel;
+    }
+
+    /** Preserves a meaningful normal unavailability condition through the existing failure boundary. */
+    public java.util.Optional<StateTaxUnavailableException>
+            stateTaxUnavailable() {
+        return getCause() instanceof StateTaxUnavailableException unavailable
+                ? java.util.Optional.of(unavailable) : java.util.Optional.empty();
     }
 }

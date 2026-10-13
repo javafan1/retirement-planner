@@ -1,5 +1,9 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
+import com.daviddunn.retirementplanner.ui.controls.RetirementParticipantFactsEditor;
+
+import com.daviddunn.retirementplanner.domain.model.RetirementParticipantFacts;
+
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Field;
@@ -22,6 +26,7 @@ public class PensionDialog extends Dialog<Pension> {
     private final TextField monthlyBenefitField;
     private final TextField survivorMonthlyBenefitField;
     private final TextField colaRateField;
+    private final RetirementParticipantFactsEditor participantFactsEditor;
 
     public PensionDialog(Pension pension) {
         this(pension, true);
@@ -35,6 +40,8 @@ public class PensionDialog extends Dialog<Pension> {
                          boolean guidedCreation) {
         this(pension, household);
         if (guidedCreation) {
+            participantFactsEditor.setVisible(false);
+            participantFactsEditor.setManaged(false);
             var converter = getResultConverter();
             WizardDialogSupport.install(this, java.util.List.of(
                     new Field("Name", nameField, Kind.TEXT, false),
@@ -93,6 +100,9 @@ public class PensionDialog extends Dialog<Pension> {
          */
         colaRateField =
                 new TextField("0.0");
+        participantFactsEditor = new RetirementParticipantFactsEditor(
+                pension == null ? RetirementParticipantFacts.UNKNOWN
+                        : pension.getRetirementParticipantFacts());
 
         /*
          * Populate controls when editing
@@ -214,6 +224,8 @@ public class PensionDialog extends Dialog<Pension> {
 
         getDialogPane()
                 .setContent(grid);
+        grid.add(participantFactsEditor, 0, row + 1, 2, 1);
+        setResizable(true);
 
         getDialogPane()
                 .getButtonTypes()
@@ -287,7 +299,7 @@ public class PensionDialog extends Dialog<Pension> {
                                     .getText()
                                     .trim());
 
-            return new Pension(
+            Pension result = new Pension(
                     name,
                     ownership,
                     startDate,
@@ -295,6 +307,8 @@ public class PensionDialog extends Dialog<Pension> {
                     monthlyBenefit,
                     annualColaRate,
                     survivorMonthlyBenefit);
+            result.setRetirementParticipantFacts(participantFactsEditor.value());
+            return result;
         });
     }
 }

@@ -155,6 +155,6 @@ public final class IllinoisProductionTaxCalculator implements StateIncomeTaxCalc
         BigDecimal tax = base.subtract(exemption).max(BigDecimal.ZERO)
                 .multiply(RULES.rate()).setScale(2, RoundingMode.HALF_UP);
         return new ProductionStateTaxResult(StateTaxJurisdiction.IL, request.assumptions().calculationMethod(),
-                ProductionStateTaxResult.Status.CALCULATED, tax, List.copyOf(warnings), Optional.empty());
+                StateTaxCalculationStatus.CALCULATED, tax, List.copyOf(warnings), Optional.empty());
     }
 }

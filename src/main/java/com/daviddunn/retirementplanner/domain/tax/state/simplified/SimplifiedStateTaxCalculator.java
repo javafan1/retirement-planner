@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax.state.simplified;
 
+import com.daviddunn.retirementplanner.domain.tax.state.StateTaxCalculationStatus;
+
 import com.daviddunn.retirementplanner.domain.tax.state.simplified.StateTaxRequest.*;
 import com.daviddunn.retirementplanner.domain.tax.state.simplified.StateTaxResult.*;
 import com.daviddunn.retirementplanner.domain.tax.state.simplified.StateTaxRules.*;
@@ -37,7 +39,7 @@ public final class SimplifiedStateTaxCalculator {
             List<String> warnings = new ArrayList<>(rules.limitations());
             warnings.add(exception.getMessage());
             return new StateTaxResult(request.jurisdiction(), request.taxYear(), request.filingStatus(),
-                    rules.datasetVersion(), Status.UNSUPPORTED, Optional.empty(), warnings);
+                    rules.datasetVersion(), StateTaxCalculationStatus.UNSUPPORTED, Optional.empty(), warnings);
         }
     }
 
@@ -160,7 +162,7 @@ public final class SimplifiedStateTaxCalculator {
         }
         return new StateTaxResult(request.jurisdiction(), request.taxYear(), request.filingStatus(),
                 rules.datasetVersion(), rules.readiness().equals("REVIEW_REQUIRED")
-                ? Status.PROVISIONAL : Status.CALCULATED,
+                ? StateTaxCalculationStatus.PROVISIONAL : StateTaxCalculationStatus.CALCULATED,
                 Optional.of(new Estimate(starting, incomeAdjustments, exclusions, seniors,
                         standard, personal, taxable, beforeCredits, credits, additional, finalTax)), warnings);
     }
@@ -372,7 +374,7 @@ public final class SimplifiedStateTaxCalculator {
 
     private static StateTaxResult unsupported(StateTaxRequest request, String version, String message) {
         return new StateTaxResult(request.jurisdiction(), request.taxYear(), request.filingStatus(),
-                version, Status.UNSUPPORTED, Optional.empty(), List.of(message));
+                version, StateTaxCalculationStatus.UNSUPPORTED, Optional.empty(), List.of(message));
     }
 
     private static final class Component {

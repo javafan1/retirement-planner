@@ -41,7 +41,7 @@ class IllinoisProductionTaxCalculatorTest {
                 BigDecimal.ZERO, new BigDecimal(investment), List.of(source)));
         assertEquals(new BigDecimal(expected).setScale(2), result.incomeTax().setScale(2));
         assertEquals(StateTaxJurisdiction.IL, result.jurisdiction());
-        assertEquals(ProductionStateTaxResult.Status.CALCULATED, result.calculationStatus());
+        assertEquals(StateTaxCalculationStatus.CALCULATED, result.calculationStatus());
         assertTrue(result.michiganDetails().isEmpty());
     }
 

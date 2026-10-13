@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.financial;
 
+import com.daviddunn.retirementplanner.domain.model.RetirementParticipantFacts;
+
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.AccountType;
 
@@ -57,6 +59,8 @@ public abstract class Account {
     private final AccountOwnership ownership;
     private BigDecimal currentBalance;
     private OpeningRmdAccountData openingRmdAccountData;
+    private RetirementParticipantFacts retirementParticipantFacts =
+            RetirementParticipantFacts.UNKNOWN;
 
     protected Account(
             String name,
@@ -72,6 +76,35 @@ public abstract class Account {
             throw new IllegalArgumentException(
                     accountType + " must be owned by PRIMARY or SPOUSE; JOINT ownership is not permitted.");
         }
+    }
+
+    @JsonIgnore
+    public boolean supportsRetirementParticipantFacts() {
+        return getType() == AccountType.TRADITIONAL_401K
+                || getType() == AccountType.TRADITIONAL_403B
+                || getType() == AccountType.ROTH_401K;
+    }
+
+    @JsonIgnore
+    public RetirementParticipantFacts getRetirementParticipantFacts() {
+        return retirementParticipantFacts;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("retirementParticipantFacts")
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public RetirementParticipantFacts getPersistedRetirementParticipantFacts() {
+        return supportsRetirementParticipantFacts() ? retirementParticipantFacts : null;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("retirementParticipantFacts")
+    public void setRetirementParticipantFacts(
+            RetirementParticipantFacts facts) {
+        Objects.requireNonNull(facts, "retirementParticipantFacts");
+        if (!supportsRetirementParticipantFacts()
+                && !facts.equals(RetirementParticipantFacts.UNKNOWN)) {
+            throw new IllegalArgumentException("Participant facts belong to employer retirement accounts.");
+        }
+        retirementParticipantFacts = facts;
     }
 
     public String getName() {

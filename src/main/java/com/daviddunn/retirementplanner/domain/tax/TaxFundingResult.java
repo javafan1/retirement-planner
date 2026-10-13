@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
+import com.daviddunn.retirementplanner.domain.tax.state.StateTaxCalculationStatus;
+
 import com.daviddunn.retirementplanner.domain.tax.state.michigan.MichiganTaxCalculation;
 import com.daviddunn.retirementplanner.domain.tax.state.ProductionStateTaxResult;
 
@@ -61,6 +63,11 @@ public final class TaxFundingResult {
                 Objects.requireNonNull(
                         stateTaxCalculation,
                         "State tax calculation is required.");
+
+        if (stateTaxCalculation.calculationStatus()
+                != StateTaxCalculationStatus.CALCULATED) {
+            throw new IllegalArgumentException("A successful funding result requires calculated state tax.");
+        }
 
         if (additionalWithdrawal.signum() < 0) {
             throw new IllegalArgumentException(

@@ -50,7 +50,7 @@ class ProductionStateTaxServiceTest {
                 List.of(source));
         var result = calculate(couple, StateTaxJurisdiction.FL, income);
         assertEquals(StateTaxJurisdiction.FL, result.jurisdiction());
-        assertEquals(ProductionStateTaxResult.Status.CALCULATED, result.calculationStatus());
+        assertEquals(StateTaxCalculationStatus.CALCULATED, result.calculationStatus());
         assertEquals(0, result.incomeTax().signum());
         assertTrue(result.michiganDetails().isEmpty());
     }

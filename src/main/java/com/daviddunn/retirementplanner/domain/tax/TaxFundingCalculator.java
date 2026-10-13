@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
+import com.daviddunn.retirementplanner.domain.tax.state.StateTaxUnavailableException;
+
 import java.util.Optional;
 import java.util.List;
 import java.util.ArrayList;
@@ -46,6 +48,10 @@ public final class TaxFundingCalculator {
             withdrawalAllocator;
 
     public TaxFundingCalculator() {
+        this(new ProductionStateTaxService());
+    }
+
+    public TaxFundingCalculator(ProductionStateTaxService stateTaxService) {
 
         this.taxIncomeCalculator =
                 new TaxIncomeCalculator();
@@ -54,7 +60,7 @@ public final class TaxFundingCalculator {
                 new FederalTaxCalculator();
 
         this.stateTaxService =
-                new ProductionStateTaxService();
+                Objects.requireNonNull(stateTaxService);
 
         this.withdrawalAllocator =
                 new ProjectedWithdrawalAllocator();
@@ -465,6 +471,8 @@ public final class TaxFundingCalculator {
             ProductionStateTaxResult stateTaxCalculation = stateTaxService.calculate(new StateTaxCalculationRequest(
                     projectionDate.getYear(), filingStatus, taxContext, taxIncome,
                     federalTaxCalculation, projectedGovernmentRules, stateTaxAssumptions));
+            StateTaxUnavailableException.requireCalculated(
+                    stateTaxCalculation, projectionDate.getYear());
 
             BigDecimal requiredWithdrawal =
                     federalTaxCalculation
@@ -526,6 +534,8 @@ public final class TaxFundingCalculator {
                 ProductionStateTaxResult finalStateTaxCalculation = stateTaxService.calculate(new StateTaxCalculationRequest(
                         projectionDate.getYear(), filingStatus, taxContext, finalTaxIncome,
                         finalFederalTaxCalculation, projectedGovernmentRules, stateTaxAssumptions));
+                StateTaxUnavailableException.requireCalculated(
+                        finalStateTaxCalculation, projectionDate.getYear());
 
                 return new TaxFundingResult(
                         requiredWithdrawal,

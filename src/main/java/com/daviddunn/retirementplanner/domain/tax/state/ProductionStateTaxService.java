@@ -7,10 +7,19 @@ import java.util.Objects;
 
 /** The single production routing boundary; the eight-state research catalog is not an activation registry. */
 public final class ProductionStateTaxService {
-    private final Map<StateTaxJurisdiction, StateIncomeTaxCalculator> calculators = Map.of(
+    private final Map<StateTaxJurisdiction, StateIncomeTaxCalculator> calculators;
+
+    public ProductionStateTaxService() {
+        this(Map.of(
             StateTaxJurisdiction.MI, new MichiganProductionTaxAdapter(),
             StateTaxJurisdiction.FL, new FloridaProductionTaxCalculator(),
-            StateTaxJurisdiction.IL, new IllinoisProductionTaxCalculator());
+            StateTaxJurisdiction.IL, new IllinoisProductionTaxCalculator()));
+    }
+
+    /** Immutable calculator configuration, useful for bounded evaluation and contract tests. */
+    public ProductionStateTaxService(Map<StateTaxJurisdiction, StateIncomeTaxCalculator> calculators) {
+        this.calculators = Map.copyOf(calculators);
+    }
 
     public ProductionStateTaxResult calculate(StateTaxCalculationRequest request) {
         Objects.requireNonNull(request);
@@ -21,6 +30,11 @@ public final class ProductionStateTaxService {
         if (calculator == null) {
             throw new IllegalArgumentException("Unsupported production state tax jurisdiction.");
         }
-        return calculator.calculate(request);
+        var result = Objects.requireNonNull(calculator.calculate(request));
+        if (result.jurisdiction() != request.assumptions().jurisdiction()
+                || result.calculationMethod() != request.assumptions().calculationMethod()) {
+            throw new IllegalStateException("State calculator returned inconsistent routing metadata.");
+        }
+        return result;
     }
 }

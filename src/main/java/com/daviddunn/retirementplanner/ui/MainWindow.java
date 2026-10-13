@@ -821,6 +821,17 @@ public class MainWindow {
     private void handleProjectionFailure(
             Exception exception) {
 
+        var unavailableMessage = ProjectionFailureMessages.stateTaxUnavailableMessage(exception);
+        if (unavailableMessage.isPresent()) {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("State Tax Unavailable");
+            alert.setHeaderText("State income tax could not be estimated.");
+            alert.setContentText(unavailableMessage.orElseThrow());
+            alert.showAndWait();
+            statusLabel.setText("Projection unavailable: state income tax could not be estimated.");
+            return;
+        }
+
         if (ProjectionFailureMessages.isOpeningRmdValidation(exception)) {
 
             String message = exception.getMessage();

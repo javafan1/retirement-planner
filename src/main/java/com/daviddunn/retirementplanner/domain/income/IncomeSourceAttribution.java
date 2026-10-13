@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.income;
 
+import com.daviddunn.retirementplanner.domain.model.RetirementParticipantFacts;
+
 import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.financial.InheritedTraditionalIRA;
 import com.daviddunn.retirementplanner.domain.financial.InheritedRothIRA;
@@ -124,7 +126,8 @@ public record IncomeSourceAttribution(
             Pension source, AccountOwnership recipient, BigDecimal amount, int year) {
         PensionFacts facts = new PensionFacts(source.getOwnership(), source.getMonthlyBenefit(),
                 Optional.ofNullable(source.getSurvivorMonthlyBenefit()), source.getAnnualColaRate(),
-                Optional.ofNullable(source.getStartDate()), Optional.ofNullable(source.getEndDate()));
+                Optional.ofNullable(source.getStartDate()), Optional.ofNullable(source.getEndDate()),
+                source.getRetirementParticipantFacts());
         return new IncomeSourceAttribution(Kind.PENSION, Purpose.INCOME, Optional.of(recipient),
                 Optional.empty(), Optional.empty(), source.getName(), amount, Optional.of(amount),
                 OptionalInt.of(year), Optional.of(facts));
@@ -136,8 +139,17 @@ public record IncomeSourceAttribution(
             Optional<BigDecimal> survivorMonthlyBenefit,
             BigDecimal annualColaRate,
             Optional<LocalDate> startDate,
-            Optional<LocalDate> endDate) {
+            Optional<LocalDate> endDate,
+            RetirementParticipantFacts participantFacts) {
+        public PensionFacts(AccountOwnership originalOwner, BigDecimal monthlyBenefit,
+                Optional<BigDecimal> survivorMonthlyBenefit, BigDecimal annualColaRate,
+                Optional<LocalDate> startDate, Optional<LocalDate> endDate) {
+            this(originalOwner, monthlyBenefit, survivorMonthlyBenefit, annualColaRate, startDate, endDate,
+                    RetirementParticipantFacts.UNKNOWN);
+        }
+
         public PensionFacts {
+            Objects.requireNonNull(participantFacts);
             Objects.requireNonNull(originalOwner);
             Objects.requireNonNull(monthlyBenefit);
             Objects.requireNonNull(survivorMonthlyBenefit);
@@ -154,6 +166,7 @@ public record IncomeSourceAttribution(
      */
     public static final class AccountReference {
         private final Account identity;
+        private final RetirementParticipantFacts participantFacts;
         private final String name;
         private final AccountOwnership owner;
         private final AccountType type;
@@ -161,6 +174,7 @@ public record IncomeSourceAttribution(
 
         private AccountReference(Account account) {
             identity = Objects.requireNonNull(account);
+            participantFacts = account.getRetirementParticipantFacts();
             name = account.getName();
             owner = account.getOwnership();
             type = account.getType();
@@ -173,6 +187,10 @@ public record IncomeSourceAttribution(
 
         public static AccountReference capture(Account account) {
             return new AccountReference(account);
+        }
+
+        public RetirementParticipantFacts participantFacts() {
+            return participantFacts;
         }
 
         public String name() {

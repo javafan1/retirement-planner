@@ -10,7 +10,7 @@ final class FloridaProductionTaxCalculator implements StateIncomeTaxCalculator {
     @Override
     public ProductionStateTaxResult calculate(StateTaxCalculationRequest request) {
         return new ProductionStateTaxResult(StateTaxJurisdiction.FL, request.assumptions().calculationMethod(),
-                ProductionStateTaxResult.Status.CALCULATED, BigDecimal.ZERO,
+                StateTaxCalculationStatus.CALCULATED, BigDecimal.ZERO,
                 List.of("Full-year Florida resident. Florida does not impose individual state income tax."), Optional.empty());
     }
 }

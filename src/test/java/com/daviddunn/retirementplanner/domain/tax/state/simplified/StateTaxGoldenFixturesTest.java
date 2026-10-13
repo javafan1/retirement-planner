@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax.state.simplified;
 
+import com.daviddunn.retirementplanner.domain.tax.state.StateTaxCalculationStatus;
+
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.tax.state.simplified.StateTaxRequest.*;
 import com.daviddunn.retirementplanner.domain.tax.state.simplified.StateTaxRules.*;
@@ -23,7 +25,7 @@ class StateTaxGoldenFixturesTest {
 
     record Fixture(String id, StateTaxRequest request, String incomeAdjustment,
                    String retirementExclusion, String taxableIncome, String tax,
-                   StateTaxResult.Status status, Confidence confidence, String source, String rationale) {
+                   StateTaxCalculationStatus status, Confidence confidence, String source, String rationale) {
         @Override public String toString() { return id; }
     }
 
@@ -34,7 +36,7 @@ class StateTaxGoldenFixturesTest {
         assertFalse(fixture.rationale().isBlank());
         StateTaxResult result = calculator.calculate(fixture.request());
         assertEquals(fixture.status(), result.status(), result.warnings().toString());
-        if (fixture.status() == StateTaxResult.Status.UNSUPPORTED) {
+        if (fixture.status() == StateTaxCalculationStatus.UNSUPPORTED) {
             assertTrue(result.estimate().isEmpty());
             return;
         }
@@ -116,11 +118,11 @@ class StateTaxGoldenFixturesTest {
     }
 
     private static Fixture fixture(String id,StateTaxRequest request,String adjustment,String exclusion,String taxable,String tax,String rationale) {
-        return new Fixture(id,request,adjustment,exclusion,taxable,tax,StateTaxResult.Status.CALCULATED,Confidence.HIGH,source(request.jurisdiction()),rationale);
+        return new Fixture(id,request,adjustment,exclusion,taxable,tax,StateTaxCalculationStatus.CALCULATED,Confidence.HIGH,source(request.jurisdiction()),rationale);
     }
 
     private static void unsupported(List<Fixture> fixtures,String id,StateTaxRequest request,String rationale) {
-        fixtures.add(new Fixture(id,request,null,null,null,null,StateTaxResult.Status.UNSUPPORTED,Confidence.UNSUPPORTED_AMBIGUOUS,source(request.jurisdiction()),rationale));
+        fixtures.add(new Fixture(id,request,null,null,null,null,StateTaxCalculationStatus.UNSUPPORTED,Confidence.UNSUPPORTED_AMBIGUOUS,source(request.jurisdiction()),rationale));
     }
 
     private static String source(String state) {

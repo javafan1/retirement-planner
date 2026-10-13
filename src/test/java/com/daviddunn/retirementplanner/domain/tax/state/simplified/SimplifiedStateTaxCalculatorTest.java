@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax.state.simplified;
 
+import com.daviddunn.retirementplanner.domain.tax.state.StateTaxCalculationStatus;
+
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.tax.state.simplified.StateTaxRequest.*;
 import com.daviddunn.retirementplanner.domain.tax.state.simplified.StateTaxRules.*;
@@ -28,7 +30,7 @@ class SimplifiedStateTaxCalculatorTest {
         assertEquals(2026, rules.taxYear());
         assertEquals(Set.of("FL", "IL").contains(code) ? "READY_FOR_SIMPLIFIED_MODEL" : "READY_WITH_LIMITATIONS", rules.readiness());
         StateTaxResult result = calculator.calculate(single(code, "0", "0", "70"));
-        assertEquals(StateTaxResult.Status.CALCULATED, result.status());
+        assertEquals(StateTaxCalculationStatus.CALCULATED, result.status());
         tax(result, "0.00");
     }
 
@@ -347,12 +349,12 @@ class SimplifiedStateTaxCalculatorTest {
     }
 
     private static void tax(StateTaxResult result, String expected) {
-        assertNotEquals(StateTaxResult.Status.UNSUPPORTED, result.status(), result.warnings().toString());
+        assertNotEquals(StateTaxCalculationStatus.UNSUPPORTED, result.status(), result.warnings().toString());
         amount(result.estimate().orElseThrow().finalEstimatedTax(), expected);
     }
 
     private static void unsupported(StateTaxResult result) {
-        assertEquals(StateTaxResult.Status.UNSUPPORTED, result.status());
+        assertEquals(StateTaxCalculationStatus.UNSUPPORTED, result.status());
         assertTrue(result.estimate().isEmpty());
         assertFalse(result.warnings().isEmpty());
     }

@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.ui;
 
+import com.daviddunn.retirementplanner.domain.tax.state.StateTaxUnavailableException;
+
 import java.util.Objects;
 
 /**
@@ -25,5 +27,18 @@ public final class ProjectionFailureMessages {
     public static String unexpectedProjectionFailureMessage() {
         return "The projection could not be completed because of an unexpected error.\n\n"
                 + "Your plan data has not been changed.";
+    }
+
+    public static java.util.Optional<String> stateTaxUnavailableMessage(Exception exception) {
+        Objects.requireNonNull(exception);
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (cause instanceof StateTaxUnavailableException unavailable) {
+                return java.util.Optional.of("State income tax cannot be reliably estimated for "
+                        + unavailable.result().jurisdiction() + " in " + unavailable.taxYear() + ".\n\n"
+                        + String.join("\n", unavailable.result().limitations())
+                        + "\n\nNo projection was completed. Your plan data has not been changed.");
+            }
+        }
+        return java.util.Optional.empty();
     }
 }

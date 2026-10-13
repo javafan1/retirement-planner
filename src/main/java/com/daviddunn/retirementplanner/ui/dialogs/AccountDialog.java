@@ -1,5 +1,9 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
+import com.daviddunn.retirementplanner.ui.controls.RetirementParticipantFactsEditor;
+
+import com.daviddunn.retirementplanner.domain.model.RetirementParticipantFacts;
+
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport;
 import com.daviddunn.retirementplanner.domain.financial.Account;
@@ -27,6 +31,8 @@ public class AccountDialog extends Dialog<Account> {
     private final ComboBox<AccountType> typeCombo;
     private final ComboBox<AccountOwnership> ownershipCombo;
     private final TextField balanceField;
+    private final RetirementParticipantFactsEditor participantFactsEditor;
+    private boolean guidedCreation;
 
     private final Label originalOwnerDobLabel;
     private final DatePicker originalOwnerDobPicker;
@@ -50,6 +56,8 @@ public class AccountDialog extends Dialog<Account> {
                          boolean guidedCreation) {
         this(account, household.hasSpouse());
         if (guidedCreation) {
+            this.guidedCreation = true;
+            updateForAccountTypeChange();
             var converter = getResultConverter();
             var fields = java.util.List.of(
                     new WizardDialogSupport.Field("Name", nameField,
@@ -96,6 +104,9 @@ public class AccountDialog extends Dialog<Account> {
         updateOwnershipChoices();
 
         balanceField = new TextField();
+        participantFactsEditor = new RetirementParticipantFactsEditor(
+                account == null ? RetirementParticipantFacts.UNKNOWN
+                        : account.getRetirementParticipantFacts());
 
         /*
          * Inherited-account fields
@@ -242,6 +253,7 @@ public class AccountDialog extends Dialog<Account> {
                 beneficiaryRelationshipCombo,
                 1,
                 row);
+        grid.add(participantFactsEditor, 0, row + 1, 2, 1);
 
         /*
          * Show inherited fields only when appropriate.
@@ -323,11 +335,15 @@ public class AccountDialog extends Dialog<Account> {
                         inheritedInfo);
             }
 
-            return AccountFactory.create(
+            Account result = AccountFactory.create(
                     type,
                     name,
                     ownership,
                     balance);
+            if (result.supportsRetirementParticipantFacts()) {
+                result.setRetirementParticipantFacts(participantFactsEditor.value());
+            }
+            return result;
         });
     }
 
@@ -379,6 +395,12 @@ public class AccountDialog extends Dialog<Account> {
     }
 
     private void updateForAccountTypeChange() {
+
+        AccountType type = typeCombo.getValue();
+        boolean employer = type == AccountType.TRADITIONAL_401K
+                || type == AccountType.TRADITIONAL_403B || type == AccountType.ROTH_401K;
+        participantFactsEditor.setVisible(employer && !guidedCreation);
+        participantFactsEditor.setManaged(employer && !guidedCreation);
 
         updateOwnershipChoices();
         updateInheritedFieldsVisibility();

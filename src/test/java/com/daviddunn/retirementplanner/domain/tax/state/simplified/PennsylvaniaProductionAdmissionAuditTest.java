@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax.state.simplified;
 
+import com.daviddunn.retirementplanner.domain.tax.state.StateTaxCalculationStatus;
+
 import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
 import com.daviddunn.retirementplanner.domain.financial.RothIRA;
 import com.daviddunn.retirementplanner.domain.financial.TraditionalIRA;
@@ -62,11 +64,11 @@ class PennsylvaniaProductionAdmissionAuditTest {
         assertFalse(fixture.reason().isBlank());
         StateTaxResult result = new SimplifiedStateTaxCalculator().calculate(fixture.request());
         if (fixture.expectedTax() == null) {
-            assertEquals(StateTaxResult.Status.UNSUPPORTED, result.status());
+            assertEquals(StateTaxCalculationStatus.UNSUPPORTED, result.status());
             assertTrue(result.estimate().isEmpty(), "Unknown facts must not become a zero estimate");
             assertFalse(result.warnings().isEmpty());
         } else {
-            assertEquals(StateTaxResult.Status.CALCULATED, result.status());
+            assertEquals(StateTaxCalculationStatus.CALCULATED, result.status());
             var estimate = result.estimate().orElseThrow();
             amount(fixture.expectedTaxableIncome(), estimate.taxableIncome());
             amount(fixture.expectedTax(), estimate.finalEstimatedTax());
@@ -204,7 +206,7 @@ class PennsylvaniaProductionAdmissionAuditTest {
         var request = new StateTaxRequest("PA", 2026, FilingStatus.MARRIED_FILING_JOINTLY,
                 bd("50000"), bd("0"), List.of(primary, spouse));
         var result = new SimplifiedStateTaxCalculator().calculate(request);
-        assertEquals(StateTaxResult.Status.UNSUPPORTED, result.status());
+        assertEquals(StateTaxCalculationStatus.UNSUPPORTED, result.status());
         assertTrue(result.estimate().isEmpty());
     }
 

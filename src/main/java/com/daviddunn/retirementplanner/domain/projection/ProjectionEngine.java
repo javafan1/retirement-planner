@@ -111,6 +111,11 @@ public class ProjectionEngine {
 
 
     public ProjectionEngine() {
+        this(new TaxFundingCalculator());
+    }
+
+    /** Supplies the same annual funding boundary for deterministic and structured evaluations. */
+    public ProjectionEngine(TaxFundingCalculator taxFundingCalculator) {
 
         this.withdrawalCalculator =
                 new WithdrawalCalculator();
@@ -128,7 +133,7 @@ public class ProjectionEngine {
                 new GovernmentRuleProjectionService();
 
         this.taxFundingCalculator =
-                new TaxFundingCalculator();
+                java.util.Objects.requireNonNull(taxFundingCalculator);
 
         this.medicarePremiumCalculator =
                 new MedicarePremiumCalculator();

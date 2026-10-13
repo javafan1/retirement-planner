@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.income;
 
+import com.daviddunn.retirementplanner.domain.model.RetirementParticipantFacts;
+
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -17,6 +19,18 @@ public class Pension extends IncomeSource {
     private final BigDecimal survivorMonthlyBenefit;
 
     private final BigDecimal annualColaRate;
+
+    private RetirementParticipantFacts retirementParticipantFacts =
+            RetirementParticipantFacts.UNKNOWN;
+
+    public RetirementParticipantFacts getRetirementParticipantFacts() {
+        return retirementParticipantFacts;
+    }
+
+    public void setRetirementParticipantFacts(
+            RetirementParticipantFacts facts) {
+        retirementParticipantFacts = Objects.requireNonNull(facts, "retirementParticipantFacts");
+    }
 
     @JsonCreator
     public Pension(

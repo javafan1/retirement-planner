@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax.state.simplified;
 
+import com.daviddunn.retirementplanner.domain.tax.state.StateTaxCalculationStatus;
+
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.tax.state.simplified.StateTaxRequest.*;
 import com.daviddunn.retirementplanner.domain.tax.state.simplified.StateTaxRules.*;
@@ -119,5 +121,5 @@ class StateTaxHardeningTest {
     private static Income qualified(IncomeType type,String value,String qualification) { return new Income(type,bd(value),bd(value),PensionSource.PRIVATE,Map.of(qualification,Qualification.ELIGIBLE)); }
     private static BigDecimal bd(String value) { return new BigDecimal(value); }
     private static void amount(String expected,BigDecimal actual) { assertEquals(0,bd(expected).compareTo(actual)); }
-    private static void unsupported(StateTaxResult result) { assertEquals(StateTaxResult.Status.UNSUPPORTED,result.status()); assertTrue(result.estimate().isEmpty()); }
+    private static void unsupported(StateTaxResult result) { assertEquals(StateTaxCalculationStatus.UNSUPPORTED,result.status()); assertTrue(result.estimate().isEmpty()); }
 }
