@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.math.BigDecimal;
 import java.util.Objects;
 
@@ -62,6 +63,11 @@ public final class FederalTaxCalculation {
 
     public BigDecimal getFederalIncomeTax() {
         return federalIncomeTax;
+    }
+
+    @JsonIgnore
+    public FederalTaxBaseBreakdown getModeledBaseBreakdown() {
+        return FederalTaxBaseBreakdown.fromModeledResult(this);
     }
 
     private static BigDecimal requireNonNegative(

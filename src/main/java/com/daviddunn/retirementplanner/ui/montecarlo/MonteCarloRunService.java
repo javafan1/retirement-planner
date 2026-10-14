@@ -55,13 +55,17 @@ public final class MonteCarloRunService {
 
     private static String planDetails(RetirementPlan plan) {
         var p = plan.getPlanningAssumptions();
+        String iowa = p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA
+                ? "\nIowa planning estimate: " + String.join(" ", new com.daviddunn.retirementplanner.domain.tax.state.IowaProductionTaxCalculator()
+                        .planningLimitations(p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1))
+                : "";
         return "Projection start: " + p.getProjectionStartDate()
                 + "\nConfigured planning horizon: " + (p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1)
                 + "\nPlan general inflation: " + percent(p.getGeneralInflationRate())
                 + "\nHealthcare inflation (deterministic): " + percent(p.getHealthcareInflationRate())
                 + "\nConfigured deterministic reference return: " + percent(p.getExpectedAnnualInvestmentReturn())
                 + "\nState of residence: " + p.getStateTaxAssumptions().jurisdiction()
-                + "; simplified state estimate; full-year resident";
+                + "; simplified state estimate; full-year resident" + iowa;
     }
 
     private static String percent(java.math.BigDecimal value) {

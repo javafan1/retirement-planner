@@ -95,6 +95,12 @@ record SocialSecurityAnalyzerInputSummary(List<Row> rows) {
                 + "; estimated heir tax rate " + percent(tax.getEstimatedHeirTaxRateOnTaxDeferredAssets()), "Tax Assumptions"));
         rows.add(new Row("State / local tax jurisdiction", assumptions.getStateTaxAssumptions().jurisdiction()
                 + "; simplified state estimate; full-year residency; local income tax not modeled", "Tax Assumptions"));
+        if (assumptions.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA) {
+            int firstYear = assumptions.getProjectionStartDate().getYear();
+            rows.add(new Row("Iowa planning estimate limitations", String.join(" ",
+                    new com.daviddunn.retirementplanner.domain.tax.state.IowaProductionTaxCalculator().planningLimitations(
+                            firstYear, firstYear + assumptions.getProjectionLengthYears() - 1)), "Tax Assumptions"));
+        }
         rows.add(new Row("Medicare / IRMAA assumptions", "Modeled automatically for alive, age-eligible people using annual federal tax results, filing status and projected government rules; no separate enrollment setting.", "Retirement Plan / Government rules"));
         rows.add(new Row("RMD assumptions", "Owner DOB, eligible account types and prior December 31 balances; "
                 + portfolio.getAccounts().stream().filter(account -> account.getOpeningRmdAccountData() != null).count()

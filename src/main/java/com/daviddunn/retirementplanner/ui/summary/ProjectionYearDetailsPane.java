@@ -631,7 +631,12 @@ public class ProjectionYearDetailsPane
                 for (var node : grid.getChildren()) {
                     if (node instanceof javafx.scene.control.Label label
                             && java.util.Objects.equals(GridPane.getRowIndex(node), taxRow)) {
-                        label.setTooltip(new javafx.scene.control.Tooltip(String.join("\n", result.limitations())));
+                        var tooltip = new javafx.scene.control.Tooltip(String.join("\n", result.limitations()));
+                        if (result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA) {
+                            tooltip.setWrapText(true);
+                            tooltip.setMaxWidth(650);
+                        }
+                        label.setTooltip(tooltip);
                     }
                 }
             });

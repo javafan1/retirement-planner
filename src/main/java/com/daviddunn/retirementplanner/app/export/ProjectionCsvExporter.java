@@ -36,7 +36,9 @@ public class ProjectionCsvExporter {
                      Files.newBufferedWriter(file)) {
 
             boolean individual = !projection.getYears().getFirst().getSocialSecurityResult().hasSpouse();
-            if (individual) writeIndividualHeader(writer); else writeHeader(writer);
+            boolean iowa = projection.getYears().getFirst().getStateTaxJurisdiction()
+                    == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA;
+            if (individual) writeIndividualHeader(writer, iowa); else writeHeader(writer, iowa);
 
             for (ProjectionYear year :
                     projection.getYears()) {
@@ -51,7 +53,7 @@ public class ProjectionCsvExporter {
 
 
     private void writeHeader(
-            BufferedWriter writer)
+            BufferedWriter writer, boolean iowa)
             throws IOException {
 
         writer.write(
@@ -108,6 +110,7 @@ public class ProjectionCsvExporter {
                         + "Estimated Heir Tax,"
                         + "After-Tax Estate Value,State of Residence,State Tax Calculation");
 
+        if (iowa) writer.write(",Iowa Planning Limitations");
         writer.newLine();
     }
 
@@ -130,6 +133,7 @@ public class ProjectionCsvExporter {
 
         writeRow(
                 writer,
+                year,
 
                 year.getProjectionYear(),
                 year.getCalendarYear(),
@@ -202,7 +206,7 @@ public class ProjectionCsvExporter {
 
 
     private void writeIndividualHeader(
-            BufferedWriter writer)
+            BufferedWriter writer, boolean iowa)
             throws IOException {
 
         writer.write(
@@ -254,6 +258,7 @@ public class ProjectionCsvExporter {
                         + "Estimated Heir Tax,"
                         + "After-Tax Estate Value,State of Residence,State Tax Calculation");
 
+        if (iowa) writer.write(",Iowa Planning Limitations");
         writer.newLine();
     }
 
@@ -276,6 +281,7 @@ public class ProjectionCsvExporter {
 
         writeRow(
                 writer,
+                year,
 
                 year.getProjectionYear(),
                 year.getCalendarYear(),
@@ -356,6 +362,7 @@ public class ProjectionCsvExporter {
 
     private void writeRow(
             BufferedWriter writer,
+            ProjectionYear year,
             Object... values)
             throws IOException {
 
@@ -372,6 +379,10 @@ public class ProjectionCsvExporter {
                             values[i]));
         }
 
+        if (year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA) {
+            writer.write(",");
+            writer.write(escape(String.join(" ", year.stateTaxCalculation().orElseThrow().limitations())));
+        }
         writer.newLine();
     }
 

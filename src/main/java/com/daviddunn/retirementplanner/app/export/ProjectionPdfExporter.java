@@ -634,6 +634,23 @@ public class ProjectionPdfExporter {
     private void writeStateTaxTable(Projection projection) throws IOException {
         currentY -= 12;
         writeSectionHeading("STATE INCOME TAX - FULL-YEAR RESIDENCY", BLUE);
+        var iowa = projection.getYears().stream()
+                .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA)
+                .findFirst();
+        if (iowa.isPresent()) {
+            var disclosures = projection.getYears().stream()
+                    .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA)
+                    .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream().limit(3))
+                    .distinct().toList();
+            for (var limitation : disclosures) {
+                for (var line : PdfReportSupport.wrap(limitation, CONTENT_WIDTH, 9)) {
+                    ensureSpace(14);
+                    writeText(line, MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+                    currentY -= 12;
+                }
+                currentY -= 4;
+            }
+        }
         writeText("State personal income tax only; local taxes and some credits/relief are outside the estimate.",
                 MARGIN, currentY, FONT_NORMAL, FONT_SIZE, GRAY);
         currentY -= ROW_HEIGHT;

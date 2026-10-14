@@ -1,0 +1,23 @@
+{
+  "validatedYear": 2026,
+  "version": "iowa-bounded-2026-v1",
+  "rate": 0.038,
+  "alternativeRate": 0.043,
+  "ordinaryThresholds": {"SINGLE": 9000, "MARRIED_FILING_JOINTLY": 13500},
+  "seniorThresholds": {"SINGLE": 24000, "MARRIED_FILING_JOINTLY": 32000},
+  "personalCredits": {"SINGLE": 40, "MARRIED_FILING_JOINTLY": 80},
+  "ageCredit": 20,
+  "retirementAge": 55,
+  "reliefAge": 65,
+  "creditAge": 65,
+  "basePolicy": "MODELED_STANDARD_DEDUCTION_ONLY_V1",
+  "sources": [
+    "2026 Iowa Code 422.5: https://www.legis.iowa.gov/docs/code/2026/422.5.pdf",
+    "2026 Iowa Code 422.7: https://www.legis.iowa.gov/docs/code/2026/422.7.pdf",
+    "2026 Iowa Code 422.12: https://www.legis.iowa.gov/docs/code/2026/422.12.pdf",
+    "2026 rate, published 2025-10-21: https://revenue.iowa.gov/press-release/2025-10-21/idr-announces-2026-individual-income-tax-and-interest-rates",
+    "Latest located instructions 2025; Single after-credit worksheet revised 2025-08-19: https://revenue.iowa.gov/media/4387/download?inline=",
+    "Latest located instructions 2025; MFJ before-credit comparison: https://revenue.iowa.gov/taxes/tax-guidance/individual-income-tax/1040-expanded-instructions/iowa-tax",
+    "Retirement guidance published 2025-03-13: https://revenue.iowa.gov/taxes/tax-guidance/individual-income-tax/retirement-income-tax-guidance"
+  ]
+}

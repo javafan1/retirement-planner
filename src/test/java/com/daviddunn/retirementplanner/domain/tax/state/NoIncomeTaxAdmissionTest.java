@@ -119,9 +119,9 @@ class NoIncomeTaxAdmissionTest {
         assertEquals(StateTaxCalculationStatus.UNSUPPORTED, result.calculationStatus());
         assertTrue(result.estimatedIncomeTax().isEmpty());
         assertTrue(result.unavailableReasons().contains(StateTaxUnavailableReason.MISSING_RETIREMENT_QUALIFICATION));
-        for (var code : List.of("WA", "CA", "IA", "MS", "NY", "CO", "NJ", "UNKNOWN")) {
+        for (var code : List.of("WA", "CA", "MS", "NY", "CO", "NJ", "UNKNOWN")) {
             assertThrows(IllegalArgumentException.class, () -> StateTaxJurisdiction.fromCode(code));
         }
-        assertEquals(11, StateTaxJurisdiction.values().length);
+        assertEquals(12, StateTaxJurisdiction.values().length);
     }
 }

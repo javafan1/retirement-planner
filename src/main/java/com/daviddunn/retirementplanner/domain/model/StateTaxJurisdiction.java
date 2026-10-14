@@ -12,7 +12,8 @@ public enum StateTaxJurisdiction {
     SD("South Dakota", true),
     TN("Tennessee", true),
     TX("Texas", true),
-    WY("Wyoming", true);
+    WY("Wyoming", true),
+    IA("Iowa");
 
     private final String displayName;
     private final boolean noGeneralIndividualIncomeTax;

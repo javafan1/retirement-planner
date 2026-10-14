@@ -2492,6 +2492,15 @@ public class ResultsSummaryView extends BorderPane {
                         + years.size()
                         + " years | " + first.getStateTaxJurisdiction() + " State Income Tax"
                         + (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.FL ? ": $0" : ""));
+        if (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA) {
+            var tooltip = new Tooltip(String.join("\n", new com.daviddunn.retirementplanner.domain.tax.state.IowaProductionTaxCalculator()
+                    .planningLimitations(first.getCalendarYear(), last.getCalendarYear())));
+            tooltip.setWrapText(true);
+            tooltip.setMaxWidth(650);
+            projectionRangeLabel.setTooltip(tooltip);
+        } else {
+            projectionRangeLabel.setTooltip(null);
+        }
 
         updateMetrics(years);
         updateCharts(years);

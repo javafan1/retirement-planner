@@ -20,7 +20,7 @@ class StateTaxWizardIntegrationTest {
     @BeforeAll static void init() throws Exception { startFx(); }
 
     @ParameterizedTest
-    @CsvSource({"false,FL", "true,FL", "false,IL", "true,IL", "false,PA", "true,PA", "false,AK", "true,AK", "false,NV", "true,NV", "false,NH", "true,NH", "false,SD", "true,SD", "false,TN", "true,TN", "false,TX", "true,TX", "false,WY", "true,WY"})
+    @CsvSource({"false,FL", "true,FL", "false,IL", "true,IL", "false,PA", "true,PA", "false,AK", "true,AK", "false,NV", "true,NV", "false,NH", "true,NH", "false,SD", "true,SD", "false,TN", "true,TN", "false,TX", "true,TX", "false,WY", "true,WY", "false,IA", "true,IA"})
     void fileNewActivatesSelectedStateThenSaveReloadPreservesTax(boolean couple, StateTaxJurisdiction state, @TempDir Path directory) throws Exception {
         fx(() -> {
             var window = new com.daviddunn.retirementplanner.ui.MainWindow();
@@ -31,7 +31,7 @@ class StateTaxWizardIntegrationTest {
             javafx.application.Platform.runLater(() -> {
                 var pane = activeWizardPane();
                 try {
-                    if (state == StateTaxJurisdiction.PA) CompleteWizardFixtures.enterIndividualIraAndCashThroughReview(pane, couple);
+                    if (state == StateTaxJurisdiction.PA || state == StateTaxJurisdiction.IA) CompleteWizardFixtures.enterIndividualIraAndCashThroughReview(pane, couple);
                     else CompleteWizardFixtures.enterThroughReview(pane, couple);
                     ((Button) pane.lookup("#wizard-review-edit-assumptions")).fire();
                     ((ComboBox<StateTaxJurisdiction>) pane.lookup("#wizard-assumption-state-of-residence")).setValue(state);
@@ -61,7 +61,7 @@ class StateTaxWizardIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"false,MI", "false,FL", "true,MI", "true,FL", "false,IL", "true,IL", "false,PA", "true,PA", "false,AK", "true,AK", "false,NV", "true,NV", "false,NH", "true,NH", "false,SD", "true,SD", "false,TN", "true,TN", "false,TX", "true,TX", "false,WY", "true,WY"})
+    @CsvSource({"false,MI", "false,FL", "true,MI", "true,FL", "false,IL", "true,IL", "false,PA", "true,PA", "false,AK", "true,AK", "false,NV", "true,NV", "false,NH", "true,NH", "false,SD", "true,SD", "false,TN", "true,TN", "false,TX", "true,TX", "false,WY", "true,WY", "false,IA", "true,IA"})
     void wizardSaveReloadAndProjectionUseSelectedState(boolean couple, StateTaxJurisdiction state,
             @TempDir Path directory) throws Exception {
         fx(() -> {
@@ -69,7 +69,7 @@ class StateTaxWizardIntegrationTest {
             wizard.show();
             try {
                 var pane = wizard.getDialogPane();
-                if (state == StateTaxJurisdiction.PA) CompleteWizardFixtures.enterIndividualIraAndCashThroughReview(pane, couple);
+                if (state == StateTaxJurisdiction.PA || state == StateTaxJurisdiction.IA) CompleteWizardFixtures.enterIndividualIraAndCashThroughReview(pane, couple);
                 else CompleteWizardFixtures.enterThroughReview(pane, couple);
                 ((Button) pane.lookup("#wizard-review-edit-assumptions")).fire();
                 ComboBox<StateTaxJurisdiction> input = (ComboBox<StateTaxJurisdiction>) pane.lookup("#wizard-assumption-state-of-residence");

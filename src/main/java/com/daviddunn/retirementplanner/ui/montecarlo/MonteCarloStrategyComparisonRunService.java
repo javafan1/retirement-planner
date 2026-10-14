@@ -99,6 +99,14 @@ public final class MonteCarloStrategyComparisonRunService {
                 + ", Saved Baseline " + b.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
                 + "; simplified state estimate; full-year resident"
                 + "\nAfter-Tax Estate excludes non-investable assets. Lifetime Modeled Income Taxes includes federal and selected-state income taxes.";
+        for (var candidate : java.util.List.of(a, b)) {
+            var p = candidate.getPlanningAssumptions();
+            if (p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA) {
+                details += "\nIowa planning estimate: " + String.join(" ",
+                        new com.daviddunn.retirementplanner.domain.tax.state.IowaProductionTaxCalculator().planningLimitations(
+                                p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1));
+            }
+        }
         return new Prepared(request, mode, details);
     }
 
