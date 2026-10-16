@@ -12,15 +12,25 @@ import java.nio.file.Path;
 public class JsonApplicationSettingsRepository
         implements ApplicationSettingsRepository {
 
-    private static final Path SETTINGS_FILE =
-            Path.of(
-                    System.getProperty("user.home"),
-                    ".retirement-planner",
-                    "settings.json");
+    private final Path settingsFile;
+    private final AtomicFileWriter writer;
+    private final java.util.List<String> warnings = new java.util.ArrayList<>();
+    private boolean damaged;
+    private Exception loadFailure;
 
     private final ObjectMapper objectMapper;
 
     public JsonApplicationSettingsRepository() {
+        this(Path.of(System.getProperty("user.home"), ".retirement-planner", "settings.json"));
+    }
+
+    public JsonApplicationSettingsRepository(Path settingsFile) {
+        this(settingsFile, new AtomicFileWriter());
+    }
+
+    JsonApplicationSettingsRepository(Path settingsFile, AtomicFileWriter writer) {
+        this.settingsFile = java.util.Objects.requireNonNull(settingsFile);
+        this.writer = java.util.Objects.requireNonNull(writer);
 
         objectMapper = new ObjectMapper();
 
@@ -29,38 +39,50 @@ public class JsonApplicationSettingsRepository
     }
 
     @Override
-    public ApplicationSettings load() {
+    public synchronized ApplicationSettings load() {
 
-        if (!Files.exists(SETTINGS_FILE)) {
+        if (Files.notExists(settingsFile)) {
+            damaged = false;
+            loadFailure = null;
             return new ApplicationSettings();
         }
 
         try {
 
-            return objectMapper.readValue(
-                    SETTINGS_FILE.toFile(),
-                    ApplicationSettings.class);
+            ApplicationSettings settings = objectMapper.readValue(settingsFile.toFile(), ApplicationSettings.class);
+            if (settings == null) {
+                throw new IOException("Empty settings.");
+            }
+            damaged = false;
+            loadFailure = null;
+            return settings;
 
-        } catch (IOException ex) {
-
-            throw new RuntimeException(
-                    "Failed to load application settings.",
-                    ex);
+        } catch (IOException | SecurityException ex) {
+            loadFailure = ex;
+            damaged = true;
+            warnings.add("Application settings could not be loaded; defaults were used. The original settings were preserved. Back up and rename the damaged settings file, then restart to enable preference saving.");
+            return new ApplicationSettings();
         }
     }
 
     @Override
-    public void save(
+    public synchronized void save(
             ApplicationSettings settings) {
 
         try {
+            if (damaged) {
+                throw new IOException("Damaged settings are preserved; preference saving is disabled until recovery.");
+            }
 
             Files.createDirectories(
-                    SETTINGS_FILE.getParent());
+                    settingsFile.toAbsolutePath().getParent());
 
-            objectMapper.writeValue(
-                    SETTINGS_FILE.toFile(),
-                    settings);
+            byte[] captured = objectMapper.writeValueAsBytes(settings);
+            warnings.addAll(writer.write(settingsFile, captured, path -> {
+                if (objectMapper.readValue(path.toFile(), ApplicationSettings.class) == null) {
+                    throw new IOException("Invalid settings.");
+                }
+            }, false));
 
         } catch (IOException ex) {
 
@@ -68,5 +90,16 @@ public class JsonApplicationSettingsRepository
                     "Failed to save application settings.",
                     ex);
         }
+    }
+
+    public synchronized java.util.List<String> takeWarnings() {
+        var result = java.util.List.copyOf(warnings);
+        warnings.clear();
+        return result;
+    }
+
+    /** Debugging only; never displayed or transmitted. */
+    synchronized Exception loadFailure() {
+        return loadFailure;
     }
 }

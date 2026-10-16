@@ -18,6 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RothConversionPersistenceTest {
+    @org.junit.jupiter.api.io.TempDir
+    Path directory;
 
     @Test
     void rothConversionSurvivesJsonRoundTrip()
@@ -28,9 +30,7 @@ class RothConversionPersistenceTest {
                         .createRetirementPlan();
 
         Path file =
-                Files.createTempFile(
-                        "roth-conversion-test",
-                        ".json");
+                directory.resolve("roth-conversion-test.json");
 
         try {
 
@@ -78,9 +78,7 @@ class RothConversionPersistenceTest {
                 request);
 
         Path file =
-                Files.createTempFile(
-                        "roth-conversion-test",
-                        ".json");
+                directory.resolve("roth-conversion-test.json");
 
         try {
 
@@ -160,9 +158,7 @@ class RothConversionPersistenceTest {
                 request);
 
         Path file =
-                Files.createTempFile(
-                        "roth-conversion-test",
-                        ".json");
+                directory.resolve("roth-conversion-test.json");
 
         try {
 
@@ -243,9 +239,7 @@ class RothConversionPersistenceTest {
                 request);
 
         Path file =
-                Files.createTempFile(
-                        "roth-conversion-test",
-                        ".json");
+                directory.resolve("roth-conversion-test.json");
 
         try {
 
@@ -324,9 +318,7 @@ class RothConversionPersistenceTest {
                         target));
 
         Path file =
-                Files.createTempFile(
-                        "roth-conversion-test",
-                        ".json");
+                directory.resolve("roth-conversion-test.json");
 
         try {
 

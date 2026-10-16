@@ -37,6 +37,7 @@ public class MainApplication extends Application {
         stage.setScene(scene);
 
         stage.show();
+        javafx.application.Platform.runLater(window::showStartupPersistenceNotices);
     }
 
     public static void main(String[] args) {

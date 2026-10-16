@@ -146,13 +146,16 @@ class SinglePersonPlanPersistenceTest {
         account.put("ownership", "SPOUSE");
         json.writeValue(file.toFile(), tree);
         assertTrue(assertThrows(java.io.IOException.class, () -> repository.load(file)).getMessage().contains("absent spouse"));
-        repository.save(plan(false), file);
-        tree = (ObjectNode) json.readTree(file.toFile());
+        // Normal Save now preserves a damaged destination rather than erasing recovery evidence.
+        assertThrows(java.io.IOException.class, () -> repository.save(plan(false), file));
+        var scenarioFile = directory.resolve("death-scenario-invalid.json");
+        repository.save(plan(false), scenarioFile);
+        tree = (ObjectNode) json.readTree(scenarioFile.toFile());
         var death = (ObjectNode) tree.path("planningAssumptions").path("deathScenarioAssumptions");
         death.put("deathScenario", "SPOUSE_DIES");
         death.put("deathYear", 2030);
         death.put("survivorClaimingAge", 67);
-        json.writeValue(file.toFile(), tree);
-        assertTrue(assertThrows(java.io.IOException.class, () -> repository.load(file)).getMessage().contains("Couple death scenarios"));
+        json.writeValue(scenarioFile.toFile(), tree);
+        assertTrue(assertThrows(java.io.IOException.class, () -> repository.load(scenarioFile)).getMessage().contains("Couple death scenarios"));
     }
 }

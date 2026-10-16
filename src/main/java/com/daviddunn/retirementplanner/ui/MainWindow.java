@@ -508,13 +508,14 @@ public class MainWindow {
 
             statusLabel.setText(
                     "Plan saved.");
+            showPersistenceWarnings();
 
         } catch (Exception ex) {
 
             statusLabel.setText(
                     "Save failed.");
 
-            ex.printStackTrace();
+            showSaveFailure();
             return false;
         }
         return true;
@@ -533,18 +534,7 @@ public class MainWindow {
             return false;
         }
 
-        FileChooser fileChooser = new FileChooser();
-
-        fileChooser.setTitle("Save Retirement Plan");
-
-        fileChooser.setInitialFileName("RetirementPlan.json");
-
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter(
-                        "JSON Files",
-                        "*.json"));
-
-        File file = fileChooser.showSaveDialog(root.getScene().getWindow());
+        File file = choosePlanSaveFile();
 
         if (file == null) {
             return false;
@@ -560,12 +550,13 @@ public class MainWindow {
             statusLabel.setText("Plan saved.");
 
             updateWindowTitle();
+            showPersistenceWarnings();
 
         } catch (Exception ex) {
 
             statusLabel.setText("Save failed.");
 
-            ex.printStackTrace();
+            showSaveFailure();
             return false;
         }
         return true;
@@ -600,12 +591,72 @@ public class MainWindow {
 
             updateWindowTitle();
 
-            statusLabel.setText("Plan opened.");
+            statusLabel.setText(controller.getRecoveredBackupPath() == null
+                    ? "Plan opened." : "Recovered backup — unsaved. Review, then Save As to a different filename.");
+            showPersistenceWarnings();
         } catch (Exception ex) {
 
             statusLabel.setText("Open failed.");
 
-            ex.printStackTrace();
+            offerPlanRecovery(file.toPath());
+        }
+    }
+
+    /** Native chooser retains platform overwrite confirmation; overridable for cancellation tests. */
+    protected File choosePlanSaveFile() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Save Retirement Plan");
+        chooser.setInitialFileName("RetirementPlan.json");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files", "*.json"));
+        return chooser.showSaveDialog(root.getScene().getWindow());
+    }
+
+    private void showSaveFailure() {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Unable to save plan");
+        alert.setHeaderText("The plan was not saved.");
+        alert.setContentText("Existing plan data was preserved. Check folder permissions, read-only or locked files, available space and adjacent backup ownership. The location must support atomic replacement. If the existing file is damaged, use Open to review its backup, or Save As to a different filename.");
+        alert.showAndWait();
+    }
+
+    public void showPersistenceWarnings() {
+        var warnings = controller.takePersistenceWarnings();
+        if (!warnings.isEmpty()) {
+            statusLabel.setText(statusLabel.getText() + " Local storage notice (details in tooltip).");
+            var details = new javafx.scene.control.Tooltip(String.join("\n\n", warnings));
+            details.setWrapText(true);
+            details.setMaxWidth(520);
+            statusLabel.setTooltip(details);
+        }
+    }
+
+    /** Called once after the stage is visible; no automatic backup activation. */
+    public void showStartupPersistenceNotices() {
+        showPersistenceWarnings();
+        if (controller.getFailedOpenPath() != null) {
+            offerPlanRecovery(controller.getFailedOpenPath());
+        }
+    }
+
+    private void offerPlanRecovery(java.nio.file.Path original) {
+        boolean available = controller.hasValidBackup(original);
+        Alert alert = new Alert(available ? Alert.AlertType.CONFIRMATION : Alert.AlertType.WARNING);
+        alert.setTitle("Unable to open plan");
+        alert.setHeaderText("The original file was preserved.");
+        ButtonType recover = new ButtonType("Review backup");
+        alert.setContentText(available
+                ? "A validated adjacent backup is available. Open it as an unsaved plan for review? Save As will be required; the damaged original will not be overwritten automatically."
+                : "No valid adjacent backup is available. Use Open to select another plan. No plan file was changed.");
+        if (available) alert.getButtonTypes().setAll(recover, ButtonType.CANCEL);
+        if (alert.showAndWait().orElse(ButtonType.CANCEL) == recover) {
+            try {
+                controller.openRecoveredPlan(original);
+                loadCurrentPlan();
+                updateWindowTitle();
+                statusLabel.setText("Recovered backup — unsaved. Review, then Save As to a different filename.");
+            } catch (Exception failure) {
+                statusLabel.setText("Backup could not be opened. Original files were preserved.");
+            }
         }
     }
 

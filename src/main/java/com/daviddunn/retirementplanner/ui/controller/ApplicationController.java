@@ -89,6 +89,10 @@ public class ApplicationController {
     private final ProjectionSummaryService projectionSummaryService;
     private final RetirementPlanRepository repository;
     private boolean modified;
+    private final java.util.List<String> persistenceWarnings = new java.util.ArrayList<>();
+    private Path failedOpenPath;
+    private Path recoveredOriginalPath;
+    private Path recoveredBackupPath;
 
     private final JsonApplicationSettingsRepository
             applicationSettingsRepository;
@@ -100,6 +104,11 @@ public class ApplicationController {
             nonInvestableAssetProjectionService;
 
     public ApplicationController() {
+        this(new JsonRetirementPlanRepository(), new JsonApplicationSettingsRepository());
+    }
+
+    public ApplicationController(RetirementPlanRepository repository,
+            JsonApplicationSettingsRepository settingsRepository) {
 
         projectionEngine =
                 new ProjectionEngine();
@@ -119,14 +128,13 @@ public class ApplicationController {
         projectionComparisonService =
                 new ProjectionComparisonService();
 
-        repository =
-                new JsonRetirementPlanRepository();
+        this.repository = java.util.Objects.requireNonNull(repository);
 
-        applicationSettingsRepository =
-                new JsonApplicationSettingsRepository();
+        applicationSettingsRepository = java.util.Objects.requireNonNull(settingsRepository);
 
         applicationSettings =
                 applicationSettingsRepository.load();
+        persistenceWarnings.addAll(applicationSettingsRepository.takeWarnings());
 
         newPlan();
     }
@@ -408,6 +416,8 @@ public class ApplicationController {
         sourcePlanChanged();
 
         currentFile = null;
+        recoveredOriginalPath = null;
+        recoveredBackupPath = null;
 
         modified = false;
 
@@ -419,6 +429,14 @@ public class ApplicationController {
     public RetirementPlan open(
             Path file)
             throws IOException {
+
+        if (repository instanceof JsonRetirementPlanRepository json) {
+            var original = json.originalForBackup(file);
+            if (original.isPresent()) {
+                openRecoveredPlan(original.orElseThrow());
+                return currentPlan;
+            }
+        }
 
         currentPlan =
                 repository.load(file);
@@ -438,14 +456,16 @@ public class ApplicationController {
 
         currentFile =
                 file;
+        recoveredOriginalPath = null;
+        recoveredBackupPath = null;
+        failedOpenPath = null;
 
         modified = false;
 
         applicationSettings.setLastOpenedPlan(
                 file.toString());
 
-        applicationSettingsRepository.save(
-                applicationSettings);
+        saveSettingsQuietly();
 
         projectionChanged();
 
@@ -489,13 +509,13 @@ public class ApplicationController {
 
             return true;
 
-        } catch (IOException ex) {
-
-            applicationSettings.setLastOpenedPlan(null);
-
-            applicationSettingsRepository.save(
-                    applicationSettings);
-
+        } catch (IOException | RuntimeException ex) {
+            try {
+                failedOpenPath = Path.of(applicationSettings.getLastOpenedPlan());
+            } catch (RuntimeException invalidPath) {
+                failedOpenPath = null;
+            }
+            persistenceWarnings.add("The last plan could not be opened. Its original file was preserved. Use Open to select a plan or review an available backup.");
             return false;
         }
     }
@@ -518,13 +538,18 @@ public class ApplicationController {
         applicationSettings.setLastOpenedPlan(
                 currentFile.toString());
 
-        applicationSettingsRepository.save(
-                applicationSettings);
+        saveSettingsQuietly();
+        collectSaveWarnings();
     }
 
     public void saveAs(
             Path file)
             throws IOException {
+
+        if (recoveredBackupPath != null
+                && recoveredBackupPath.equals(file.toAbsolutePath().normalize())) {
+            throw new IOException("Choose a different filename; the recovery backup must be preserved.");
+        }
 
         repository.save(
                 currentPlan,
@@ -538,8 +563,57 @@ public class ApplicationController {
         applicationSettings.setLastOpenedPlan(
                 file.toString());
 
-        applicationSettingsRepository.save(
-                applicationSettings);
+        recoveredOriginalPath = null;
+        recoveredBackupPath = null;
+        saveSettingsQuietly();
+        collectSaveWarnings();
+    }
+
+    private void saveSettingsQuietly() {
+        try {
+            applicationSettingsRepository.save(applicationSettings);
+            persistenceWarnings.addAll(applicationSettingsRepository.takeWarnings());
+        } catch (RuntimeException failure) {
+            persistenceWarnings.add("The plan operation succeeded, but application settings could not be saved. The application remains usable.");
+        }
+    }
+
+    private void collectSaveWarnings() {
+        if (repository instanceof JsonRetirementPlanRepository json) {
+            persistenceWarnings.addAll(json.takeWarnings());
+        }
+    }
+
+    public List<String> takePersistenceWarnings() {
+        var result = List.copyOf(persistenceWarnings);
+        persistenceWarnings.clear();
+        return result;
+    }
+
+    public Path getFailedOpenPath() { return failedOpenPath; }
+    public Path getRecoveredOriginalPath() { return recoveredOriginalPath; }
+    public Path getRecoveredBackupPath() { return recoveredBackupPath; }
+
+    public boolean hasValidBackup(Path original) {
+        if (!(repository instanceof JsonRetirementPlanRepository json)) return false;
+        try {
+            json.loadBackup(original);
+            return true;
+        } catch (IOException | RuntimeException unavailable) {
+            return false;
+        }
+    }
+
+    /** Explicit UI-approved recovery. Save must use Save As, never the backup source. */
+    public void openRecoveredPlan(Path original) throws IOException {
+        if (!(repository instanceof JsonRetirementPlanRepository json)) {
+            throw new IOException("Backup recovery is unavailable.");
+        }
+        var recovered = json.loadBackup(original);
+        newPlan(recovered);
+        recoveredOriginalPath = original.toAbsolutePath().normalize();
+        recoveredBackupPath = json.backupPath(original);
+        modified = true;
     }
 
     public boolean hasCurrentFile() {

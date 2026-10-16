@@ -12,10 +12,17 @@ public class JsonRetirementPlanRepository
         implements RetirementPlanRepository {
 
     private final ObjectMapper mapper;
+    private final AtomicFileWriter writer;
+    private java.util.List<String> warnings = java.util.List.of();
 
     public JsonRetirementPlanRepository() {
+        this(new AtomicFileWriter(), new ObjectMapper());
+    }
 
-        mapper = new ObjectMapper();
+    JsonRetirementPlanRepository(AtomicFileWriter writer, ObjectMapper mapper) {
+
+        this.writer = java.util.Objects.requireNonNull(writer);
+        this.mapper = java.util.Objects.requireNonNull(mapper);
 
         mapper.registerModule(new JavaTimeModule());
 
@@ -26,8 +33,45 @@ public class JsonRetirementPlanRepository
     public void save(RetirementPlan plan,
                      Path file) throws IOException {
 
-        plan.validateHouseholdReferences();
-        mapper.writeValue(file.toFile(), plan);
+        synchronized (AtomicFileWriter.SAVE_LOCK) {
+            if (originalForBackup(file).isPresent()) {
+                throw new IOException("Application backups are recovery sources. Use Save As to a different filename.");
+            }
+            plan.validateHouseholdReferences();
+            byte[] captured = mapper.writeValueAsBytes(plan);
+            warnings = writer.write(file, captured, this::verify, true);
+        }
+    }
+
+    private void verify(Path path) throws IOException {
+        try {
+            load(path);
+        } catch (RuntimeException invalid) {
+            throw new IOException("The plan file failed validation. Existing data was preserved.", invalid);
+        }
+    }
+
+    public java.util.List<String> takeWarnings() {
+        synchronized (AtomicFileWriter.SAVE_LOCK) {
+            var result = warnings;
+            warnings = java.util.List.of();
+            return java.util.List.copyOf(result);
+        }
+    }
+
+    public Path backupPath(Path file) {
+        return AtomicFileWriter.backup(file.toAbsolutePath().normalize());
+    }
+
+    public java.util.Optional<Path> originalForBackup(Path file) throws IOException {
+        return AtomicFileWriter.originalForBackup(file);
+    }
+
+    /** Read-only validation; never makes a backup authoritative or writes over the primary. */
+    public RetirementPlan loadBackup(Path primary) throws IOException {
+        Path backup = backupPath(primary);
+        AtomicFileWriter.regularOrMissing(backup);
+        return load(backup);
     }
 
     @Override
