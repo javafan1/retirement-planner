@@ -102,7 +102,10 @@ public final class ReviewWizardStep implements NewPlanWizardStep {
             return owner + " Social Security: gross FRA $"
                     + ss.getFullRetirementMonthlyBenefit().toPlainString() + "/month (" + ss.getBenefitValuationYear()
                     + " dollars), claim at " + ss.getClaimingAge() + ", starts " + ss.getStartDate();
-        }).collect(Collectors.joining("\n")));
+        }).collect(Collectors.joining("\n")), plan.getHousehold().members().stream()
+                .flatMap(person -> person.getIncomeSources().stream()).filter(SocialSecurityIncome.class::isInstance)
+                .map(SocialSecurityIncome.class::cast).map(source -> SocialSecurityWizardStep.valuationWarning(plan, source))
+                .filter(message -> !message.isEmpty()).distinct().toList());
         section("Pensions", StepKey.PENSIONS, plan.getHousehold().members().stream()
                 .flatMap(person -> person.getIncomeSources().stream()).filter(Pension.class::isInstance).map(income -> {
             String owner = AccountsWizardStep.displayOwner(income.getOwnership());
@@ -112,12 +115,8 @@ public final class ReviewWizardStep implements NewPlanWizardStep {
                     + (pension.getEndDate() == null ? "" : ", ends " + pension.getEndDate())
                     + (pension.getSurvivorMonthlyBenefit() == null ? "" : ", survivor " + CurrencyFormatter.format(pension.getSurvivorMonthlyBenefit()) + "/month");
         }).collect(Collectors.joining("\n")));
-        section("Spending", StepKey.EXPENSES, plan.getHousehold().getExpenses().stream().map(expense -> expense.getDescription() + ": "
-                + CurrencyFormatter.format(expense.getAnnualAmount()) + (expense.isOneTimeExpense() ? " purchase" : "/year")
-                + ", " + (expense.isHealthcareExpense() && !expense.isOneTimeExpense() ? "Healthcare" : "General") + " inflation"
-                + (expense.getStartDate() == null ? "" : ", starts " + expense.getStartDate())
-                + (expense.getEndDate() == null || expense.isOneTimeExpense() ? "" : ", ends " + expense.getEndDate()))
-                .collect(Collectors.joining("\n")));
+        section("Spending", StepKey.EXPENSES, plan.getHousehold().getExpenses().stream()
+                .map(ExpensesWizardStep::describe).collect(Collectors.joining("\n\n")));
         section("Assumptions", StepKey.ASSUMPTIONS, "Starts " + assumptions.getProjectionStartDate() + "; " + assumptions.getProjectionLengthYears()
                 + " years through " + (assumptions.getProjectionStartDate().getYear() + assumptions.getProjectionLengthYears() - 1)
                 + "\nInvestment return " + UIFormatters.percent(economic.getExpectedAnnualInvestmentReturn())
@@ -130,6 +129,10 @@ public final class ReviewWizardStep implements NewPlanWizardStep {
     }
 
     private void section(String title, StepKey key, String text) {
+        section(title, key, text, List.of());
+    }
+
+    private void section(String title, StepKey key, String text, List<String> warnings) {
         Label heading = new Label(title.toUpperCase(java.util.Locale.ROOT));
         heading.getStyleClass().add("wizard-person-heading");
         heading.setMaxWidth(Double.MAX_VALUE);
@@ -142,6 +145,12 @@ public final class ReviewWizardStep implements NewPlanWizardStep {
         header.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         VBox card = new VBox(6, header, wrapped(text.isBlank() ? "None entered (optional)" : text));
         card.getStyleClass().add("wizard-review-section");
+        for (String warning : warnings) {
+            Label notice = wrapped(warning);
+            notice.getStyleClass().add("wizard-review-warning");
+            notice.getStyleClass().add("wizard-valuation-notice");
+            card.getChildren().add(notice);
+        }
         content.getChildren().add(card);
     }
 

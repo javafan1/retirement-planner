@@ -24,7 +24,7 @@ class CompleteWizardPreviewTest {
     @BeforeAll static void init() throws Exception { startFx(); }
 
     @Test void inspectCompleteWizardStatesAndInputHover() throws Exception {
-        Path folder = Path.of("target/phase7c3-wizard-preview");
+        Path folder = Path.of("target/phase7c4-wizard-preview");
         Files.createDirectories(folder);
         var states = List.of("household-single", "household-couple", "accounts-empty", "accounts-single", "accounts-couple",
                 "social-security-single", "social-security-couple", "pensions-single", "pensions-couple", "spending-empty", "spending-populated", "assumptions-defaults",
@@ -84,12 +84,14 @@ class CompleteWizardPreviewTest {
                     if (state.contains("assumptions")) {
                         double left = -1;
                         for (String id : List.of("start", "length", "return", "inflation", "healthcare", "cola", "filing-status")) {
+                            if (List.of("healthcare", "cola").contains(id)
+                                    && !((TitledPane) pane.lookup("#wizard-advanced-assumptions")).isExpanded()) continue;
                             Control input = (Control) pane.lookup("#wizard-assumption-" + id);
                             assertNotNull(input.getTooltip());
                             var bounds = page.getContent().sceneToLocal(input.localToScene(input.getLayoutBounds()));
                             assertTrue(bounds.getMaxX() <= page.getViewportBounds().getWidth() + 1, state + " clipped input " + id);
                             // The first three guided fields now have stacked labels and visible units.
-                            if (!List.of("start", "length", "return").contains(id)) {
+                            if (!List.of("start", "length", "return", "healthcare", "cola").contains(id)) {
                                 if (left < 0) left = bounds.getMinX();
                                 assertEquals(left, bounds.getMinX(), 1);
                             }
@@ -223,5 +225,94 @@ class CompleteWizardPreviewTest {
         BufferedImage png = new BufferedImage((int) image.getWidth(), (int) image.getHeight(), BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < png.getHeight(); y++) for (int x = 0; x < png.getWidth(); x++) png.setRGB(x, y, image.getPixelReader().getArgb(x, y));
         javax.imageio.ImageIO.write(png, "png", path.toFile());
+    }
+
+    @Test void inspectSpendingAssumptionsAndValuationClarity() throws Exception {
+        Path folder = Path.of("target/phase7c4-clarity-preview");
+        Files.createDirectories(folder);
+        var states = List.of("spending-empty", "spending-recurring", "spending-one-time", "spending-long",
+                "assumptions-collapsed", "assumptions-expanded", "assumptions-invalid", "ss-matching", "ss-earlier",
+                "ss-later", "ss-couple", "review", "review-empty", "narrow-assumptions", "narrow-spending", "narrow-review", "narrow-ss");
+        for (String state : states) {
+            var reference = new AtomicReference<NewRetirementPlanWizard>();
+            fx(() -> {
+                boolean couple = state.contains("review") || state.equals("ss-couple");
+                var draft = WizardClarityTest.draft(couple);
+                var plan = draft.getPlan();
+                boolean review = state.contains("review");
+                if (state.contains("ss-") || state.equals("narrow-ss") || review && !state.endsWith("empty")) {
+                    int year = state.equals("ss-matching") ? 2026 : state.equals("ss-later") ? 2028 : 2024;
+                    plan.getHousehold().getPrimaryPerson().addIncomeSource(WizardClarityTest.source(
+                            com.daviddunn.retirementplanner.domain.model.AccountOwnership.PRIMARY, year));
+                    if (couple) plan.getHousehold().getSpouse().addIncomeSource(WizardClarityTest.source(
+                            com.daviddunn.retirementplanner.domain.model.AccountOwnership.SPOUSE, 2028));
+                }
+                if (state.contains("spending") && !state.endsWith("empty") || review && !state.endsWith("empty")) {
+                    int count = state.endsWith("long") || state.equals("narrow-spending") ? 20 : 1;
+                    for (int index = 0; index < count; index++) plan.getHousehold().addExpense(new com.daviddunn.retirementplanner.domain.financial.Expense(
+                            "Recurring healthcare " + index, new java.math.BigDecimal("12345.6700"),
+                            com.daviddunn.retirementplanner.domain.financial.GrowthCategory.HEALTHCARE,
+                            LocalDate.of(2027, 1, 1), LocalDate.of(2040, 12, 31), com.daviddunn.retirementplanner.domain.financial.ExpenseType.RECURRING));
+                    if (state.contains("one-time") || review) plan.getHousehold().addExpense(new com.daviddunn.retirementplanner.domain.financial.Expense(
+                            "One-time purchase", new java.math.BigDecimal("9876.5400"), com.daviddunn.retirementplanner.domain.financial.GrowthCategory.GENERAL,
+                            LocalDate.of(2030, 5, 6), LocalDate.of(2030, 5, 6), com.daviddunn.retirementplanner.domain.financial.ExpenseType.ONE_TIME));
+                }
+                var wizard = new NewRetirementPlanWizard(null, draft, SevenStepWizardTest.pages(draft));
+                reference.set(wizard); wizard.show();
+                int destination = review ? 6 : state.contains("assumptions") ? 5 : state.contains("spending") ? 4 : 2;
+                for (int index = 0; index < destination; index++) button(wizard.getDialogPane(), "Next").fire();
+                var pane = wizard.getDialogPane();
+                pane.applyCss(); pane.layout();
+                if (destination == 4) {
+                    var table = (TableView<?>) pane.lookup("#wizard-expenses");
+                    table.getSelectionModel().selectLast(); table.scrollTo(table.getItems().size() - 1);
+                }
+                if (destination == 5) {
+                    var editor = WizardClarityTest.editor(wizard);
+                    if (state.endsWith("expanded")) ((TitledPane) field(editor, "guidedAdvanced")).setExpanded(true);
+                    if (state.endsWith("invalid")) {
+                        ((TextField) field(editor, "healthcareInflationField")).setText("bad healthcare");
+                        button(pane, "Next").fire();
+                    }
+                }
+                if (state.startsWith("narrow")) {
+                    pane.getScene().getWindow().setWidth(490);
+                    pane.getScene().getWindow().setHeight(570);
+                }
+            });
+            try {
+                pulses();
+                fx(() -> {
+                    var pane = reference.get().getDialogPane();
+                    pane.applyCss(); pane.layout();
+                    for (String action : List.of("Back", "Next", "Create Plan", "Cancel")) {
+                        var button = button(pane, action);
+                        if (!button.isVisible()) continue;
+                        var bounds = button.localToScene(button.getBoundsInLocal());
+                        assertTrue(bounds.getMinX() >= 0 && bounds.getMaxX() <= pane.getScene().getWidth());
+                        assertTrue(bounds.getMinY() >= 0 && bounds.getMaxY() <= pane.getScene().getHeight());
+                    }
+                    write(pane.snapshot(null, null), folder.resolve(state + ".png"));
+                    var page = (ScrollPane) pane.lookup("#wizard-page");
+                    page.setVvalue(1); pane.layout(); page.layout();
+                    write(pane.snapshot(null, null), folder.resolve(state + "-bottom.png"));
+                });
+            }
+            finally { fx(() -> reference.get().close()); }
+        }
+        for (int group = 0; group < (states.size() + 5) / 6; group++) {
+            BufferedImage sheet = new BufferedImage(1200, 900, BufferedImage.TYPE_INT_RGB);
+            var graphics = sheet.createGraphics();
+            graphics.setColor(java.awt.Color.WHITE); graphics.fillRect(0, 0, 1200, 900);
+            for (int cell = 0; cell < 6 && group * 6 + cell < states.size(); cell++) {
+                String state = states.get(group * 6 + cell);
+                var snapshot = javax.imageio.ImageIO.read(folder.resolve(state + ".png").toFile());
+                int x = cell % 3 * 400; int y = cell / 3 * 450;
+                graphics.setColor(java.awt.Color.BLACK); graphics.drawString(state, x + 8, y + 16);
+                graphics.drawImage(snapshot, x, y + 25, 390, 410, null);
+            }
+            graphics.dispose();
+            javax.imageio.ImageIO.write(sheet, "png", folder.resolve("contact-sheet-" + group + ".png").toFile());
+        }
     }
 }

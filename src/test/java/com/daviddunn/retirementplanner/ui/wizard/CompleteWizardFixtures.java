@@ -55,6 +55,9 @@ final class CompleteWizardFixtures {
         ((TextField) pane.lookup("#wizard-assumption-length")).setText("30");
         ((TextField) pane.lookup("#wizard-assumption-return")).setText("6.5");
         ((TextField) pane.lookup("#wizard-assumption-inflation")).setText("2.5");
+        pane.applyCss(); pane.layout();
+        ((TitledPane) pane.lookup("#wizard-advanced-assumptions")).setExpanded(true);
+        pane.applyCss(); pane.layout();
         ((TextField) pane.lookup("#wizard-assumption-healthcare")).setText("4");
         ((TextField) pane.lookup("#wizard-assumption-cola")).setText("2");
         ((ComboBox<FilingStatus>) pane.lookup("#wizard-assumption-filing-status")).setValue(

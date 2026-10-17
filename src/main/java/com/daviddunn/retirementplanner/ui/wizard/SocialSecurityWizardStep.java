@@ -27,7 +27,9 @@ public final class SocialSecurityWizardStep implements NewPlanWizardStep {
         error.managedProperty().bind(error.visibleProperty());
         content.getChildren().setAll(text("Social Security is optional. Enter a gross monthly estimate at Full Retirement Age (FRA). "
                 + "Claiming age is a provisional plan election and is not necessarily FRA. Claiming strategy analysis is available after creation."),
-                text("Social Security COLA is a plan-level assumption, shown in Assumptions. Benefits keep their actual stored valuation year."), cards, error);
+                text("The valuation year is the dollar basis of the FRA estimate, not the claiming year or derived benefit start. "
+                        + "Projection start is a separate plan date. The plan-level Social Security COLA applies under the existing calculation rules; "
+                        + "no amount or valuation year is changed here."), cards, error);
         onEntering();
     }
 
@@ -65,10 +67,31 @@ public final class SocialSecurityWizardStep implements NewPlanWizardStep {
                         onEntering();
                     });
                     card.getChildren().addAll(summary, new FlowPane(10, 8, edit, remove));
+                    String mismatch = valuationWarning(draft.getPlan(), source);
+                    if (!mismatch.isEmpty()) {
+                        Label warning = text(mismatch);
+                        warning.setId("wizard-valuation-warning-" + suffix);
+                        warning.getStyleClass().add("wizard-review-warning");
+                        card.getChildren().add(warning);
+                    }
                 }
             }
             cards.getChildren().add(card);
         });
+    }
+
+    static String valuationWarning(com.daviddunn.retirementplanner.domain.model.RetirementPlan plan,
+                                   SocialSecurityIncome source) {
+        int startYear = plan.getPlanningAssumptions().getProjectionStartDate().getYear();
+        int valuationYear = source.getBenefitValuationYear();
+        if (valuationYear == startYear) return "";
+        var person = plan.getHousehold().peopleByOwner().get(source.getOwnership());
+        String who = AccountsWizardStep.displayOwner(source.getOwnership())
+                + (person == null || person.getFullName().isBlank() ? "" : " — " + person.getFullName().trim());
+        return who + ": Your Social Security benefit estimate is expressed in " + valuationYear
+                + " dollars, while your projection begins in " + startYear
+                + ". The planner will use the stored valuation year and its existing Social Security calculation rules. "
+                + "Review this estimate if you intended a different year's benefit amount. This notice does not prevent creation.";
     }
 
     private void edit(AccountOwnership owner, SocialSecurityIncome original) {

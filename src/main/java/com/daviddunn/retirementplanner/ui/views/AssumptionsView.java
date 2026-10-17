@@ -21,6 +21,7 @@ import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -78,6 +79,7 @@ public class AssumptionsView extends VBox {
 
     private final Label statusLabel;
     private final java.util.Map<Control, WizardFieldRow> guidedRows = new java.util.HashMap<>();
+    private final TitledPane guidedAdvanced = new TitledPane();
     private final Button openingRmdButton;
 
     private final Button applyButton = new Button("Apply");
@@ -537,6 +539,9 @@ public class AssumptionsView extends VBox {
         fullGrid.setVisible(false);
         fullGrid.setManaged(false);
         GridPane compact = new GridPane();
+        compact.setId("wizard-basic-assumptions");
+        VBox advancedFields = new VBox(10);
+        advancedFields.setId("wizard-advanced-fields");
         compact.setHgap(12);
         compact.setVgap(10);
         var labels = new javafx.scene.layout.ColumnConstraints();
@@ -551,6 +556,7 @@ public class AssumptionsView extends VBox {
                 "Investment return (%)", "General inflation (%)", "Healthcare inflation (%)",
                 "Social Security COLA (%)", "Filing status", "State of Residence");
         List<String> ids = List.of("start", "length", "return", "inflation", "healthcare", "cola", "filing-status", "state-of-residence");
+        int basicRow = 0;
         for (int row = 0; row < controls.size(); row++) {
             Control input = controls.get(row);
             ((javafx.scene.layout.Pane) input.getParent()).getChildren().remove(input);
@@ -558,16 +564,22 @@ public class AssumptionsView extends VBox {
             input.setMaxWidth(Double.MAX_VALUE);
             Label label = new Label(names.get(row) + " *");
             label.setLabelFor(input);
-            if (row < 3) {
+            if (row == 4 || row == 5) {
+                var field = new WizardFieldRow(names.get(row), WizardFieldRow.Requiredness.REQUIRED,
+                        input, "Percentage per year", input.getTooltip().getText());
+                guidedRows.put(input, field);
+                advancedFields.getChildren().add(field);
+            }
+            else if (row < 3) {
                 var field = new WizardFieldRow(names.get(row), WizardFieldRow.Requiredness.REQUIRED,
                         input, List.of("Calendar date", "Years", "Percentage per year").get(row),
                         input.getTooltip().getText());
                 guidedRows.put(input, field);
-                compact.add(field, 0, row, 2, 1);
+                compact.add(field, 0, basicRow++, 2, 1);
             }
             else {
-                compact.add(label, 0, row);
-                compact.add(input, 1, row);
+                compact.add(label, 0, basicRow);
+                compact.add(input, 1, basicRow++);
             }
         }
         Label required = new Label("* Required. Existing defaults are shown; review them for your plan.");
@@ -578,7 +590,30 @@ public class AssumptionsView extends VBox {
         statusLabel.getStyleClass().add("wizard-field-error");
         statusLabel.visibleProperty().bind(statusLabel.textProperty().isNotEmpty());
         statusLabel.managedProperty().bind(statusLabel.visibleProperty());
-        getChildren().setAll(required, compact, fullGrid, statusLabel);
+        Label basicHeading = new Label("Basic Assumptions");
+        basicHeading.getStyleClass().add("wizard-person-heading");
+        Label interpretation = new Label("Return is an assumed annual percentage, not guaranteed. General inflation affects applicable spending and rule amounts. "
+                + "The horizon includes the opening calendar year, which may be partial. Filing status and state select tax rules; household choice does not set them.");
+        interpretation.setWrapText(true);
+        interpretation.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        guidedAdvanced.setId("wizard-advanced-assumptions");
+        guidedAdvanced.setText("Advanced Assumptions");
+        guidedAdvanced.setAccessibleText("Advanced Assumptions: Healthcare inflation and plan-level Social Security COLA");
+        guidedAdvanced.setContent(advancedFields);
+        guidedAdvanced.setAnimated(false);
+        guidedAdvanced.setFocusTraversable(true);
+        guidedAdvanced.setExpanded(false);
+        Label summary = new Label();
+        summary.setId("wizard-advanced-summary");
+        summary.setWrapText(true);
+        summary.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        summary.textProperty().bind(javafx.beans.binding.Bindings.createStringBinding(() ->
+                "Healthcare inflation (entered %): " + pendingText(healthcareInflationField)
+                        + " · Social Security COLA (entered %): " + pendingText(socialSecurityColaField),
+                healthcareInflationField.textProperty(), socialSecurityColaField.textProperty()));
+        summary.visibleProperty().bind(guidedAdvanced.expandedProperty().not());
+        summary.managedProperty().bind(summary.visibleProperty());
+        getChildren().setAll(required, basicHeading, interpretation, compact, summary, guidedAdvanced, fullGrid, statusLabel);
         setPadding(new Insets(8));
     }
 
@@ -590,8 +625,13 @@ public class AssumptionsView extends VBox {
         statusLabel.setText("");
     }
 
+    private static String pendingText(TextField field) {
+        return field.getText().isBlank() ? "Needs attention (blank)" : field.getText();
+    }
+
     private void showGuidedError(Control input, String message) {
         if (!guidedCreation) return;
+        if (input == healthcareInflationField || input == socialSecurityColaField) guidedAdvanced.setExpanded(true);
         input.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), true);
         if (guidedRows.containsKey(input)) guidedRows.get(input).setIssue(message);
     }

@@ -245,6 +245,10 @@ public class ExpenseDialog extends Dialog<Expense> {
                         return result;
                     });
             updateExpenseTypeControls(expenseTypeComboBox.getValue());
+            WizardDialogSupport.guidance(this, "Amount is required in the projection's opening-year spending base: "
+                    + "dollars/year for Recurring, single-purchase dollars for One Time. There is no monthly conversion. "
+                    + "Recurring dates are optional restrictions on active calendar years. A one-time purchase date is required; "
+                    + "this editor uses General inflation and the purchase is not repeated annually.");
         }
 
     }

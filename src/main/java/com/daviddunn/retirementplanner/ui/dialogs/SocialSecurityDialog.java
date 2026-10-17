@@ -46,7 +46,8 @@ public class SocialSecurityDialog
                 new Field("Claiming Age", claimingAgeCombo, Kind.CHOICE, true)),
                 () -> converter.call(ButtonType.OK));
         WizardDialogSupport.guidance(this, "Name is optional. Required FRA benefit: gross dollars/month at Full Retirement Age, "
-                + "in the displayed valuation year's dollars. Claiming age is a separate election; start date is derived from the actual owner's DOB.");
+                + "in the displayed valuation year's dollars, not necessarily the projection or claiming year. Claiming age is a separate election; "
+                + "start date is derived from the actual owner's DOB. Social Security COLA is a plan-level assumption in Assumptions.");
     }
 
     public SocialSecurityDialog(
@@ -139,7 +140,7 @@ public class SocialSecurityDialog
         grid.add(startDateValidationLabel, 1, row++);
 
         grid.add(new Label(
-                "FRA Monthly Benefit (Today's Dollars):"), 0, row);
+                "Gross FRA Monthly Benefit ($/month):"), 0, row);
         grid.add(fraBenefitField, 1, row++);
 
         Label valuationYearLabel = new Label(
@@ -152,9 +153,8 @@ public class SocialSecurityDialog
         grid.add(claimingAgeCombo, 1, row++);
 
         Label help = new Label(
-                "Enter the FRA benefit in today's dollars. "
-                        + "Future benefits are projected using the "
-                        + "Social Security COLA assumption.");
+                "Enter the gross monthly FRA estimate in the displayed benefit valuation year's dollars. "
+                        + "Plan-level Social Security COLA, claiming age and the derived benefit start are separate concepts.");
         help.setWrapText(true);
         grid.add(help, 0, row, 2, 1);
         row++;
@@ -164,8 +164,8 @@ public class SocialSecurityDialog
                 != planProjectionStartYear) {
 
             Label conventionNote = new Label(
-                    "This legacy source does not use the plan's "
-                            + "today's-dollar valuation year ("
+                    "The stored benefit dollar basis differs from the plan's "
+                            + "projection start year ("
                             + planProjectionStartYear + ").");
             conventionNote.setWrapText(true);
 
