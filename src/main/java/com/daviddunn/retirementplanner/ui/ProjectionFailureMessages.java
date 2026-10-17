@@ -29,6 +29,18 @@ public final class ProjectionFailureMessages {
                 + "Your plan data has not been changed.";
     }
 
+    public static String insufficientFundingMessage(
+            com.daviddunn.retirementplanner.domain.projection.FundingFailure failure) {
+        Objects.requireNonNull(failure, "Funding failure is required.");
+        return "The projection could not be completed because required withdrawals exceeded eligible funds in "
+                + failure.calendarYear() + ". First unsatisfied allocation: required "
+                + com.daviddunn.retirementplanner.util.CurrencyFormatter.format(failure.requiredAmount())
+                + ", eligible funds " + com.daviddunn.retirementplanner.util.CurrencyFormatter.format(failure.availableAmount())
+                + ", shortfall " + com.daviddunn.retirementplanner.util.CurrencyFormatter.format(failure.shortfallAmount())
+                + ". This is the first allocation shortfall, not total lifetime unmet spending. "
+                + "Your plan is preserved. Edit the plan and retry; no completed projection is available.";
+    }
+
     public static java.util.Optional<String> stateTaxUnavailableMessage(Exception exception) {
         Objects.requireNonNull(exception);
         for (Throwable cause = exception; cause != null; cause = cause.getCause()) {

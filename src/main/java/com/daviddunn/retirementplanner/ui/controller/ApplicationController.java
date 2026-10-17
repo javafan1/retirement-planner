@@ -7,6 +7,8 @@ import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionExecutionResult;
+import com.daviddunn.retirementplanner.domain.projection.FundingFailure;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionReadiness;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionYear;
 import com.daviddunn.retirementplanner.domain.projection.statistics.ProjectionStatisticsService;
@@ -49,6 +51,7 @@ public class ApplicationController {
     private ProjectionSummary currentProjectionSummary;
     private Path currentFile;
     private Projection currentProjection;
+    private FundingFailure currentFundingFailure;
     private Projection baselineProjection;
     private ProjectionBaseline cachedBaselineIdentity;
     private BreakEvenPlanSummary baselineProjectionAssumptions;
@@ -194,11 +197,18 @@ public class ApplicationController {
             return null;
         }
 
+        if (currentFundingFailure != null) {
+            return null;
+        }
+
         if (currentProjection == null) {
 
-            currentProjection =
-                    projectionEngine.project(
-                            currentPlan);
+            var outcome = projectionEngine.projectWithOutcome(currentPlan);
+            if (outcome instanceof ProjectionExecutionResult.InsufficientFunds insufficient) {
+                currentFundingFailure = insufficient.fundingFailure();
+                return null; // Never expose a completed-year prefix as a complete projection.
+            }
+            currentProjection = ((ProjectionExecutionResult.Completed) outcome).projection();
             currentProjectionAssumptions = BreakEvenPlanSummary.from(currentPlan.getHousehold());
         }
 
@@ -208,6 +218,11 @@ public class ApplicationController {
     /** Read-only cache lookup; never starts financial work on the JavaFX thread. */
     public Projection peekCurrentProjection() {
         return currentProjection;
+    }
+
+    /** Read-only cached failure, cleared with projection invalidation; never starts another projection. */
+    public java.util.Optional<FundingFailure> getCurrentFundingFailure() {
+        return java.util.Optional.ofNullable(currentFundingFailure);
     }
 
     public boolean isCurrentPlanReadyForProjection() {
@@ -627,6 +642,7 @@ public class ApplicationController {
     private void projectionChanged() {
 
         currentProjection = null;
+        currentFundingFailure = null;
         currentProjectionSummary = null;
         currentProjectionAssumptions = null;
         currentNonInvestableAssetProjections = null;

@@ -60,6 +60,7 @@ public class MainWindow {
     private Stage stage;
     private boolean collectingViewEdits;
     private final Label statusLabel;
+    private final Label projectionFundingNotice = new Label();
 
     public MainWindow() {
 
@@ -408,9 +409,17 @@ public class MainWindow {
         return tab;
     }
 
-    private HBox createStatusBar() {
+    private javafx.scene.layout.VBox createStatusBar() {
 
-        HBox statusBar = new HBox(statusLabel);
+        projectionFundingNotice.setId("projection-funding-notice");
+        projectionFundingNotice.setWrapText(true);
+        projectionFundingNotice.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        projectionFundingNotice.setFocusTraversable(true);
+        projectionFundingNotice.accessibleTextProperty().bind(projectionFundingNotice.textProperty());
+        projectionFundingNotice.visibleProperty().bind(projectionFundingNotice.textProperty().isNotEmpty());
+        projectionFundingNotice.managedProperty().bind(projectionFundingNotice.visibleProperty());
+        projectionFundingNotice.setStyle("-fx-background-color: #fff6dc; -fx-text-fill: #493000; -fx-padding: 8;");
+        var statusBar = new javafx.scene.layout.VBox(5, projectionFundingNotice, statusLabel);
         statusBar.setPadding(new Insets(5));
 
         return statusBar;
@@ -725,6 +734,7 @@ public class MainWindow {
         resultsSummaryView.setBreakEvenAnalysis(null);
 
         controller.invalidateProjection();
+        projectionFundingNotice.setText("");
 
         try {
             Projection projection =
@@ -751,8 +761,11 @@ public class MainWindow {
             resultsView.setBreakEvenAnalysis(breakEven);
             resultsSummaryView.setBreakEvenAnalysis(breakEven);
 
-            statusLabel.setText(
-                    projection == null
+            var funding = controller.getCurrentFundingFailure();
+            funding.ifPresent(failure -> projectionFundingNotice.setText(
+                    ProjectionFailureMessages.insufficientFundingMessage(failure)));
+            statusLabel.setText(funding.isPresent() ? "Projection not completed: insufficient eligible funds."
+                    : projection == null
                             ? "Complete the required plan information to run a projection."
                             : "Projection updated.");
         }
@@ -824,9 +837,15 @@ public class MainWindow {
                     }
                     TabPane tabs = (TabPane) root.getCenter();
                     tabs.getSelectionModel().select(tabs.getTabs().stream()
-                            .filter(tab -> tab.getContent() == householdView)
+                            .filter(tab -> tab.getContent() == resultsSummaryView)
                             .findFirst().orElseThrow());
-                    statusLabel.setText("New plan. Continue editing using the tabs.");
+                    if (controller.getCurrentFundingFailure().isPresent()) {
+                        projectionFundingNotice.setText("Plan created successfully. " + projectionFundingNotice.getText());
+                        statusLabel.setText("New plan created; projection not completed. Continue editing using the tabs.");
+                    }
+                    else {
+                        statusLabel.setText("New plan. Continue editing using the tabs.");
+                    }
                 });
     }
 

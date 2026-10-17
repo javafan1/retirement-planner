@@ -117,7 +117,7 @@ class NewPlanWizardLifecycleTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void validCreateActivatesUnsavedPlanLoadsHouseholdAndProjectsWhenFunded(boolean couple) throws Exception {
+    void validCreateActivatesUnsavedPlanSelectsSummaryAndProjectsWhenFunded(boolean couple) throws Exception {
         fx(() -> {
             Fixture f = new Fixture();
             var before = f.controller.getCurrentPlan();
@@ -151,7 +151,7 @@ class NewPlanWizardLifecycleTest {
                 assertEquals(MortalityCategory.MALE, ((ComboBox<?>) field(spouse, "mortalityCategory")).getValue());
             }
             var tabs = (TabPane) f.root.getCenter();
-            assertSame(f.household, tabs.getSelectionModel().getSelectedItem().getContent());
+            assertSame(field(f.window, "resultsSummaryView"), tabs.getSelectionModel().getSelectedItem().getContent());
             assertFalse(f.household.isDirty());
             assertFalse(f.assumptions.isDirty());
             plan.getAccountPortfolio().addAccount(new BrokerageAccount("Funding", AccountOwnership.PRIMARY,

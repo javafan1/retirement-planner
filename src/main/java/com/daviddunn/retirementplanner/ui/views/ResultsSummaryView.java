@@ -2431,8 +2431,9 @@ public class ResultsSummaryView extends BorderPane {
         else InputHelp.install(projectionLengthField, HelpText.PLANNING_HORIZON);
         InputHelp.link(horizonLabel, projectionLengthField);
         planningHorizonValue.setTooltip(new Tooltip(horizonLabel.getText()));
-        exportButton.setDisable(false);
-        exportButton.setTooltip(new Tooltip("Export the completed projection."));
+        boolean projectionAvailable = projection != null && !projection.isEmpty();
+        exportButton.setDisable(!projectionAvailable);
+        exportButton.setTooltip(new Tooltip(projectionAvailable ? "Export the completed projection." : "A completed projection is required to export results."));
         currentProjection = projection;
 
         loadAssumptions(plan);
