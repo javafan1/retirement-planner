@@ -47,6 +47,21 @@ public final class NewPlanWizardTestSupport {
         void run() throws Exception;
     }
 
+    /** Wait for real FX layout pulses, rather than sleeping for a guessed window-manager delay. */
+    public static void pulses() throws Exception {
+        var completed = new java.util.concurrent.CompletableFuture<Void>();
+        fx(() -> new javafx.animation.AnimationTimer() {
+            private int count;
+            @Override public void handle(long now) {
+                if (++count == 2) {
+                    stop();
+                    completed.complete(null);
+                }
+            }
+        }.start());
+        completed.get(20, TimeUnit.SECONDS);
+    }
+
     @SuppressWarnings("unchecked")
     public static <T> T field(Object owner, String name) throws Exception {
         var field = owner.getClass().getDeclaredField(name);
@@ -103,7 +118,7 @@ public final class NewPlanWizardTestSupport {
                                 button(dialog, departureChoice).fire();
                             }));
                 }
-                for (int step = 0; step < 6 && button(pane, "Next").isVisible(); step++) {
+                for (int step = 0; step < 7 && button(pane, "Next").isVisible(); step++) {
                     button(pane, "Next").fire();
                 }
                 button(pane, "Create Plan").fire();
@@ -114,5 +129,12 @@ public final class NewPlanWizardTestSupport {
             }
         });
         return prompts;
+    }
+
+    public static void answerSpouseRemoval(boolean confirm) {
+        Platform.runLater(() -> List.copyOf(Window.getWindows()).stream().filter(Window::isShowing)
+                .map(window -> window.getScene().getRoot()).filter(DialogPane.class::isInstance).map(DialogPane.class::cast)
+                .filter(pane -> "wizard-remove-spouse-confirmation".equals(pane.getId())).findFirst()
+                .ifPresent(pane -> button(pane, confirm ? "Remove Spouse" : "Cancel").fire()));
     }
 }

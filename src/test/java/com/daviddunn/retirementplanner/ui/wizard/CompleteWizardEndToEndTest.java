@@ -113,7 +113,7 @@ class CompleteWizardEndToEndTest {
         });
     }
 
-    @ParameterizedTest @ValueSource(ints = {0, 1, 2, 3, 4, 5})
+    @ParameterizedTest @ValueSource(ints = {0, 1, 2, 3, 4, 5, 6})
     void fileNewCancelFromEveryStepPreservesActiveDirtyPlan(int target) throws Exception {
         fx(() -> {
             var window = new MainWindow();
@@ -160,6 +160,7 @@ class CompleteWizardEndToEndTest {
                 var mapper = new ObjectMapper().registerModule(new JavaTimeModule());
                 var before = mapper.valueToTree(draft.getPlan());
                 ((Button) pane.lookup("#wizard-review-edit-household")).fire();
+                answerSpouseRemoval(true);
                 ((Button) pane.lookup("#wizard-remove-spouse")).fire();
                 String error = ((Label) pane.lookup("#wizard-validation")).getText();
                 assertTrue(error.contains("Spouse IRA"));

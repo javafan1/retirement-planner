@@ -45,6 +45,8 @@ public class SocialSecurityDialog
                 new Field("FRA Monthly Benefit", fraBenefitField, Kind.NUMBER, true),
                 new Field("Claiming Age", claimingAgeCombo, Kind.CHOICE, true)),
                 () -> converter.call(ButtonType.OK));
+        WizardDialogSupport.guidance(this, "Name is optional. Required FRA benefit: gross dollars/month at Full Retirement Age, "
+                + "in the displayed valuation year's dollars. Claiming age is a separate election; start date is derived from the actual owner's DOB.");
     }
 
     public SocialSecurityDialog(

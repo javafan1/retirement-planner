@@ -25,6 +25,35 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class NewRetirementPlanWizardTest {
 
+    @Test
+    void birthDateTwoDigitYearsUse1900sWhileFourDigitYearsStayUnchanged() throws Exception {
+        fx(() -> {
+            var previous = java.util.Locale.getDefault(java.util.Locale.Category.FORMAT);
+            try {
+                for (var locale : List.of(java.util.Locale.US, java.util.Locale.UK)) {
+                    java.util.Locale.setDefault(java.util.Locale.Category.FORMAT, locale);
+                    for (boolean guided : List.of(false, true)) {
+                        var card = new com.daviddunn.retirementplanner.ui.components.PersonCard(guided);
+                        DatePicker date = field(card, "birthDatePicker");
+                        ((ComboBox<MortalityCategory>) field(card, "mortalityCategory")).setValue(MortalityCategory.MALE);
+                        String prefix = locale.equals(java.util.Locale.US) ? "5/6/" : "6/5/";
+                        for (String year : List.of("63", "00", "99", "1963", "2000", "2063")) {
+                            date.getEditor().setText(prefix + year);
+                            date.commitValue();
+                            int expected = year.length() == 2 ? 1900 + Integer.parseInt(year) : Integer.parseInt(year);
+                            assertEquals(LocalDate.of(expected, 5, 6), date.getValue());
+                            assertEquals(date.getValue(), card.readValidated().birthDate());
+                        }
+                        assertNull(date.getConverter().fromString(""));
+                        assertThrows(java.time.format.DateTimeParseException.class,
+                                () -> date.getConverter().fromString("invalid date"));
+                    }
+                }
+            }
+            finally { java.util.Locale.setDefault(java.util.Locale.Category.FORMAT, previous); }
+        });
+    }
+
     private static final LocalDate PRIMARY_DATE = LocalDate.of(1964, 5, 6);
     private static final LocalDate SPOUSE_DATE = LocalDate.of(1966, 7, 8);
     @TempDir Path directory;
@@ -54,7 +83,7 @@ class NewRetirementPlanWizardTest {
                 assertFalse(button(pane, "Back").isVisible());
                 assertFalse(button(pane, "Next").isVisible());
                 assertTrue(button(pane, "Create Plan").isVisible());
-                assertTrue(labels.contains("Step 1 of 1 — Household"));
+                assertTrue(labels.contains("Step 1 of 1 — Welcome and Household"));
             }
             finally { wizard.close(); }
         });
@@ -168,11 +197,13 @@ class NewRetirementPlanWizardTest {
             fill(person(pane, "primary"), "Alex", "Example", PRIMARY_DATE, MortalityCategory.MALE);
             ((Button) pane.lookup("#wizard-add-spouse")).fire();
             fill(person(pane, "spouse"), "Sam", "Example", SPOUSE_DATE, MortalityCategory.FEMALE);
+            answerSpouseRemoval(true);
             ((Button) pane.lookup("#wizard-remove-spouse")).fire();
             assertNull(person(pane, "spouse"));
             assertTrue(pane.lookup("#wizard-add-spouse").isVisible());
             ((Button) pane.lookup("#wizard-add-spouse")).fire();
             assertEquals("", ((TextField) field(person(pane, "spouse"), "firstNameField")).getText());
+            answerSpouseRemoval(true);
             ((Button) pane.lookup("#wizard-remove-spouse")).fire();
             button(pane, "Create Plan").fire();
             assertEquals(1, wizard.getResult().getHousehold().members().size());

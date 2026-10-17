@@ -42,6 +42,7 @@ final class CompleteWizardFixtures {
         button(pane, "Next").fire();
         socialSecurity(pane, "3000");
         if (couple) socialSecurity(pane, "2400");
+        button(pane, "Next").fire();
         if (!individualIraAndCash) {
             pension(pane, AccountOwnership.PRIMARY, "1000", couple ? "600" : null);
             if (couple) pension(pane, AccountOwnership.SPOUSE, "900", "400");
@@ -72,7 +73,9 @@ final class CompleteWizardFixtures {
     }
 
     static void socialSecurity(DialogPane wizard, String benefit) {
-        edit(wizard, "wizard-add-social-security", "wizard-input-fra-monthly-benefit", pane -> {
+        String action = wizard.lookup("#wizard-add-social-security-primary") != null
+                ? "wizard-add-social-security-primary" : "wizard-add-social-security-spouse";
+        edit(wizard, action, "wizard-input-fra-monthly-benefit", pane -> {
             ((TextField) pane.lookup("#wizard-input-fra-monthly-benefit")).setText(benefit);
             ((ComboBox<Integer>) pane.lookup("#wizard-input-claiming-age")).setValue(67);
         });

@@ -22,6 +22,23 @@ public final class NewPlanDraft {
         return plan;
     }
 
+    /** UI edits use the existing person's ordered collection, never a shadow income model. */
+    void replaceIncomeSource(com.daviddunn.retirementplanner.domain.income.IncomeSource original,
+                             com.daviddunn.retirementplanner.domain.income.IncomeSource updated) {
+        var destination = java.util.Objects.requireNonNull(plan.getHousehold().peopleByOwner().get(updated.getOwnership()));
+        if (original == null) destination.addIncomeSource(updated);
+        else if (original.getOwnership() == updated.getOwnership()) destination.replaceIncomeSource(original, updated);
+        else {
+            removeIncomeSource(original);
+            destination.addIncomeSource(updated);
+        }
+    }
+
+    void removeIncomeSource(com.daviddunn.retirementplanner.domain.income.IncomeSource source) {
+        java.util.Objects.requireNonNull(plan.getHousehold().peopleByOwner().get(source.getOwnership()))
+                .removeIncomeSource(source);
+    }
+
     /** Keep the same DOB/claiming-age election convention as the existing Social Security editor. */
     public void refreshSocialSecurityDates() {
         plan.getHousehold().members().forEach(person -> {

@@ -20,22 +20,22 @@ import static org.junit.jupiter.api.Assertions.*;
 class CompleteWizardTest {
     @BeforeAll static void init() throws Exception { startFx(); }
 
-    @Test void sixStepsHaveCorrectOrderProgressButtonsAndValuesSurviveNavigation() throws Exception {
+    @Test void sevenStepsHaveCorrectOrderProgressButtonsAndValuesSurviveNavigation() throws Exception {
         fx(() -> {
             var wizard = new NewRetirementPlanWizard(null);
             wizard.show();
             try {
                 var pane = wizard.getDialogPane();
                 fill(person(pane, "primary"), "Alex", "Example", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
-                String[] steps = {"Household", "Accounts", "Income", "Expenses", "Assumptions", "Review"};
+                String[] steps = {"Welcome and Household", "Accounts", "Social Security", "Pensions", "Spending", "Assumptions", "Review and Create"};
                 for (int index = 0; index < steps.length; index++) {
-                    assertEquals(index == 5, button(pane, "Create Plan").isVisible());
-                    assertEquals(index < 5, button(pane, "Next").isVisible());
+                    assertEquals(index == 6, button(pane, "Create Plan").isVisible());
+                    assertEquals(index < 6, button(pane, "Next").isVisible());
                     assertEquals(index == 0, button(pane, "Back").isDisabled());
-                    assertEquals((index + 1.0) / 6, ((ProgressBar) pane.lookup("#wizard-progress")).getProgress());
+                    assertEquals((index + 1.0) / 7, ((ProgressBar) pane.lookup("#wizard-progress")).getProgress());
                     Label label = field(wizard, "stepLabel");
                     assertTrue(label.getText().endsWith(steps[index]));
-                    if (index < 5) button(pane, "Next").fire();
+                    if (index < 6) button(pane, "Next").fire();
                 }
                 ((Button) pane.lookup("#wizard-review-edit-household")).fire();
                 assertEquals("Alex", ((TextField) field(person(pane, "primary"), "firstNameField")).getText());
@@ -48,7 +48,7 @@ class CompleteWizardTest {
         });
     }
 
-    @ParameterizedTest @ValueSource(ints = {0, 1, 2, 3, 4, 5})
+    @ParameterizedTest @ValueSource(ints = {0, 1, 2, 3, 4, 5, 6})
     void cancelFromEveryStepProducesNoCompletedPlan(int target) throws Exception {
         fx(() -> {
             var wizard = new NewRetirementPlanWizard(null);
@@ -68,7 +68,7 @@ class CompleteWizardTest {
             wizard.show();
             var pane = wizard.getDialogPane();
             fill(person(pane, "primary"), "Alex", "Example", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
-            for (int index = 0; index < 5; index++) button(pane, "Next").fire();
+            for (int index = 0; index < 6; index++) button(pane, "Next").fire();
             var warnings = (Label) pane.lookup("#wizard-review-warnings");
             assertTrue(warnings.getText().contains("No accounts"));
             assertTrue(warnings.getText().contains("No retirement spending"));
@@ -86,7 +86,7 @@ class CompleteWizardTest {
             try {
                 var pane = wizard.getDialogPane();
                 fill(person(pane, "primary"), "Alex", "Example", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
-                for (int index = 0; index < 5; index++) button(pane, "Next").fire();
+                for (int index = 0; index < 6; index++) button(pane, "Next").fire();
                 ((Button) pane.lookup("#wizard-review-edit-assumptions")).fire();
                 ((TextField) pane.lookup("#wizard-assumption-return")).setText("6.5");
                 ((TextField) pane.lookup("#wizard-assumption-length")).setText("25");

@@ -3,7 +3,7 @@ package com.daviddunn.retirementplanner.ui.wizard;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.scene.Node;
 import javafx.scene.control.*;
-import javafx.scene.layout.HBox;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.VBox;
 
 import java.util.function.Function;
@@ -47,7 +47,17 @@ abstract class WizardListStep<T> implements NewPlanWizardStep {
     }
 
     protected void actions(Button... buttons) {
-        content.getChildren().add(content.getChildren().size() - 1, new HBox(10, buttons));
+        content.getChildren().add(content.getChildren().size() - 1, new FlowPane(10, 8, buttons));
+    }
+
+    protected void details(String id, Function<T, String> describe) {
+        Label details = new Label("Select a row to see its full details.");
+        details.setId(id);
+        details.setWrapText(true);
+        details.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        table.getSelectionModel().selectedItemProperty().addListener((observable, previous, selected) ->
+                details.setText(selected == null ? "Select a row to see its full details." : describe.apply(selected)));
+        content.getChildren().add(content.getChildren().size() - 1, details);
     }
 
     protected <R> void editDialog(Dialog<R> dialog, java.util.function.Consumer<R> apply) {

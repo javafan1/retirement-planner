@@ -121,24 +121,24 @@ class IncomeWizardStepTest {
     @Test void addEditRemoveIncomeAndNoDuplicateInitialSocialSecurityRecords() throws Exception {
         fx(() -> {
             var draft = populatedHousehold(false);
-            var step = new IncomeWizardStep(draft);
+            var step = new SocialSecurityWizardStep(draft);
             var stage = new Stage();
             stage.setScene(new Scene((javafx.scene.Parent) step.content(), 680, 450));
             stage.show();
             try {
                 answerSocialSecurity("3000");
-                ((Button) step.content().lookup("#wizard-add-social-security")).fire();
+                ((Button) step.content().lookup("#wizard-add-social-security-primary")).fire();
                 assertEquals(1, draft.getPlan().getHousehold().getPrimaryPerson().getIncomeSources().size());
-                assertTrue(step.content().lookup("#wizard-add-social-security").isDisabled());
-                TableView<?> table = (TableView<?>) step.content().lookup("#wizard-income");
-                table.getSelectionModel().select(0);
+                assertNull(step.content().lookup("#wizard-add-social-security-primary"));
+
+
                 answerSocialSecurity("3100");
-                ((Button) step.content().lookup("#wizard-edit-income")).fire();
-                assertEquals(new BigDecimal("3100"), ((SocialSecurityIncome) table.getItems().getFirst()).getFullRetirementMonthlyBenefit());
-                table.getSelectionModel().select(0);
-                ((Button) step.content().lookup("#wizard-remove-income")).fire();
+                ((Button) step.content().lookup("#wizard-edit-social-security-primary")).fire();
+                assertEquals(new BigDecimal("3100"), ((SocialSecurityIncome) draft.getPlan().getHousehold().getPrimaryPerson().getIncomeSources().getFirst()).getFullRetirementMonthlyBenefit());
+
+                ((Button) step.content().lookup("#wizard-remove-social-security-primary")).fire();
                 assertTrue(draft.getPlan().getHousehold().getPrimaryPerson().getIncomeSources().isEmpty());
-                assertFalse(step.content().lookup("#wizard-add-social-security").isDisabled());
+                assertFalse(step.content().lookup("#wizard-add-social-security-primary").isDisabled());
             }
             finally { stage.close(); }
         });
@@ -159,6 +159,7 @@ class IncomeWizardStepTest {
             var wizard = new NewRetirementPlanWizard(null, draft, List.of(new HouseholdWizardStep(draft)));
             wizard.show();
             try {
+                answerSpouseRemoval(true);
                 ((Button) wizard.getDialogPane().lookup("#wizard-remove-spouse")).fire();
                 String message = ((Label) wizard.getDialogPane().lookup("#wizard-validation")).getText();
                 assertTrue(message.contains("pension") || message.contains("Social Security"));

@@ -8,13 +8,19 @@ import javafx.scene.control.Button;
 public final class AccountsWizardStep extends WizardListStep<Account> {
 
     public AccountsWizardStep(NewPlanDraft draft) {
-        super(draft, "Add the retirement, investment and cash accounts you want included in this plan. You can add or edit more accounts later.",
+        super(draft, "Accounts are optional. Enter opening balances in dollars as of the plan's projection start. "
+                        + "Account names are optional; choose the actual type and owner. A retirement account belongs to one person, not jointly. "
+                        + "Account labels do not establish retirement tax eligibility. You can edit details later.",
                 "No accounts yet. Adding accounts is optional.");
         table.setId("wizard-accounts");
         column("Name", Account::getName);
         column("Type", account -> account.getType().toString());
         column("Owner", account -> displayOwner(account.getOwnership()));
-        column("Balance", account -> CurrencyFormatter.format(account.getCurrentBalance()));
+        column("Opening balance", account -> CurrencyFormatter.format(account.getCurrentBalance()));
+        details("wizard-account-details", account -> "Name: " + account.getName() + "\nType: " + account.getType()
+                + "\nOwner: " + displayOwner(account.getOwnership()) + "\nOpening balance: $" + account.getCurrentBalance().toPlainString()
+                + "\nAs of projection start: " + draft.getPlan().getPlanningAssumptions().getProjectionStartDate()
+                + "\nOpening RMD history: " + (account.getOpeningRmdAccountData() == null ? "Not entered; Review shows applicable reminders" : "Recorded"));
         Button add = action("Add Account", "wizard-add-account", () -> edit(null));
         Button edit = action("Edit", "wizard-edit-account", () -> edit(table.getSelectionModel().getSelectedItem()));
         Button remove = action("Remove", "wizard-remove-account", () -> {
@@ -22,13 +28,21 @@ public final class AccountsWizardStep extends WizardListStep<Account> {
             refresh();
         });
         edit.disableProperty().bind(table.getSelectionModel().selectedItemProperty().isNull());
+        edit.setAccessibleText("Edit selected account");
+        remove.setAccessibleText("Remove selected account from draft");
         remove.disableProperty().bind(table.getSelectionModel().selectedItemProperty().isNull());
         actions(add, edit, remove);
         refresh();
     }
 
     @Override
+    public StepKey key() { return StepKey.ACCOUNTS; }
+
+    @Override
     public String title() { return "Accounts"; }
+
+    @Override
+    public void onEntering() { refresh(); }
 
     private void edit(Account original) {
         editDialog(new AccountDialog(original, draft.getPlan().getHousehold(), true), updated -> {
@@ -43,7 +57,9 @@ public final class AccountsWizardStep extends WizardListStep<Account> {
     }
 
     private void refresh() {
+        var selected = table.getSelectionModel().getSelectedItem();
         table.getItems().setAll(draft.getPlan().getAccountPortfolio().getAccounts());
+        if (selected != null && table.getItems().contains(selected)) table.getSelectionModel().select(selected);
     }
 
     static String displayOwner(com.daviddunn.retirementplanner.domain.model.AccountOwnership owner) {

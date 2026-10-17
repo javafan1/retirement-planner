@@ -5,6 +5,11 @@ import javafx.scene.Node;
 /** An implemented page validates its controls before writing to the isolated draft. */
 public interface NewPlanWizardStep {
 
+    /** Wizard-local identity, never serialized. CUSTOM preserves lightweight test pages. */
+    enum StepKey { HOUSEHOLD, ACCOUNTS, INCOME, EXPENSES, ASSUMPTIONS, REVIEW, SOCIAL_SECURITY, PENSIONS, CUSTOM }
+
+    default StepKey key() { return StepKey.CUSTOM; }
+
     String title();
 
     Node content();

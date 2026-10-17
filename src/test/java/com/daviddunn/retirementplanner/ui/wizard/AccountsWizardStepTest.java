@@ -130,6 +130,7 @@ class AccountsWizardStepTest {
                 ((Button) wizard.getDialogPane().lookup("#wizard-add-spouse")).fire();
                 var account = new BrokerageAccount("Joint savings", AccountOwnership.JOINT, BigDecimal.TEN);
                 draft.getPlan().getAccountPortfolio().addAccount(account);
+                answerSpouseRemoval(true);
                 ((Button) wizard.getDialogPane().lookup("#wizard-remove-spouse")).fire();
                 assertTrue(draft.getPlan().getHousehold().hasSpouse());
                 assertSame(account, draft.getPlan().getAccountPortfolio().getAccounts().getFirst());

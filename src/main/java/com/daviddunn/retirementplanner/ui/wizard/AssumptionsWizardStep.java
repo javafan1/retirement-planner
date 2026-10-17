@@ -21,6 +21,9 @@ public final class AssumptionsWizardStep implements NewPlanWizardStep {
     }
 
     @Override
+    public StepKey key() { return StepKey.ASSUMPTIONS; }
+
+    @Override
     public String title() { return "Assumptions"; }
 
     @Override

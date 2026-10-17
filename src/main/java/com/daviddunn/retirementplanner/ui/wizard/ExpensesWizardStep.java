@@ -30,7 +30,10 @@ public final class ExpensesWizardStep extends WizardListStep<Expense> {
     }
 
     @Override
-    public String title() { return "Expenses"; }
+    public StepKey key() { return StepKey.EXPENSES; }
+
+    @Override
+    public String title() { return "Spending"; }
 
     private void edit(Expense original) {
         editDialog(new ExpenseDialog(original, true), updated -> {

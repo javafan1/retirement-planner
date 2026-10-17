@@ -15,7 +15,7 @@ import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.IntConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /** Presentation of current draft values, never a second projection or financial model. */
@@ -24,7 +24,7 @@ public final class ReviewWizardStep implements NewPlanWizardStep {
     private final NewPlanDraft draft;
     private final VBox content = new VBox(10);
     private final Label error = new Label();
-    private IntConsumer editStep = index -> { };
+    private Consumer<StepKey> editStep = index -> { };
 
     public ReviewWizardStep(NewPlanDraft draft) {
         this.draft = java.util.Objects.requireNonNull(draft);
@@ -36,10 +36,13 @@ public final class ReviewWizardStep implements NewPlanWizardStep {
         error.managedProperty().bind(error.visibleProperty());
     }
 
-    void setEditStep(IntConsumer editStep) { this.editStep = editStep; }
+    void setEditStep(Consumer<StepKey> editStep) { this.editStep = editStep; }
 
     @Override
-    public String title() { return "Review"; }
+    public StepKey key() { return StepKey.REVIEW; }
+
+    @Override
+    public String title() { return "Review and Create"; }
 
     @Override
     public Node content() { return content; }
@@ -88,28 +91,34 @@ public final class ReviewWizardStep implements NewPlanWizardStep {
                             + " — DOB " + person.getBirthDate() + ", "
                             + (person.getMortalityCategory() == null ? "category not entered" : person.getMortalityCategory().name().toLowerCase(java.util.Locale.ROOT));
                 }).collect(Collectors.joining("\n"));
-        section("Household", 0, household);
-        section("Accounts", 1, plan.getAccountPortfolio().getAccounts().stream().map(account ->
+        section("Household", StepKey.HOUSEHOLD, household);
+        section("Accounts", StepKey.ACCOUNTS, plan.getAccountPortfolio().getAccounts().stream().map(account ->
                 account.getName() + " — " + account.getType() + ", " + AccountsWizardStep.displayOwner(account.getOwnership())
                         + ", " + CurrencyFormatter.format(account.getCurrentBalance())).collect(Collectors.joining("\n")));
-        section("Income", 2, plan.getHousehold().members().stream().flatMap(person -> person.getIncomeSources().stream()).map(income -> {
+        section("Social Security", StepKey.SOCIAL_SECURITY, plan.getHousehold().members().stream()
+                .flatMap(person -> person.getIncomeSources().stream()).filter(SocialSecurityIncome.class::isInstance).map(income -> {
             String owner = AccountsWizardStep.displayOwner(income.getOwnership());
-            if (income instanceof SocialSecurityIncome ss) return owner + " Social Security: FRA "
-                    + CurrencyFormatter.format(ss.getFullRetirementMonthlyBenefit()) + "/month (" + ss.getBenefitValuationYear()
+            SocialSecurityIncome ss = (SocialSecurityIncome) income;
+            return owner + " Social Security: gross FRA $"
+                    + ss.getFullRetirementMonthlyBenefit().toPlainString() + "/month (" + ss.getBenefitValuationYear()
                     + " dollars), claim at " + ss.getClaimingAge() + ", starts " + ss.getStartDate();
+        }).collect(Collectors.joining("\n")));
+        section("Pensions", StepKey.PENSIONS, plan.getHousehold().members().stream()
+                .flatMap(person -> person.getIncomeSources().stream()).filter(Pension.class::isInstance).map(income -> {
+            String owner = AccountsWizardStep.displayOwner(income.getOwnership());
             Pension pension = (Pension) income;
-            return owner + ": " + pension.getName() + ", " + CurrencyFormatter.format(pension.getMonthlyBenefit())
+            return owner + ": " + pension.getName() + ", gross $" + pension.getMonthlyBenefit().toPlainString()
                     + "/month from " + pension.getStartDate() + ", COLA " + UIFormatters.percent(pension.getAnnualColaRate())
                     + (pension.getEndDate() == null ? "" : ", ends " + pension.getEndDate())
                     + (pension.getSurvivorMonthlyBenefit() == null ? "" : ", survivor " + CurrencyFormatter.format(pension.getSurvivorMonthlyBenefit()) + "/month");
         }).collect(Collectors.joining("\n")));
-        section("Expenses", 3, plan.getHousehold().getExpenses().stream().map(expense -> expense.getDescription() + ": "
+        section("Spending", StepKey.EXPENSES, plan.getHousehold().getExpenses().stream().map(expense -> expense.getDescription() + ": "
                 + CurrencyFormatter.format(expense.getAnnualAmount()) + (expense.isOneTimeExpense() ? " purchase" : "/year")
                 + ", " + (expense.isHealthcareExpense() && !expense.isOneTimeExpense() ? "Healthcare" : "General") + " inflation"
                 + (expense.getStartDate() == null ? "" : ", starts " + expense.getStartDate())
                 + (expense.getEndDate() == null || expense.isOneTimeExpense() ? "" : ", ends " + expense.getEndDate()))
                 .collect(Collectors.joining("\n")));
-        section("Assumptions", 4, "Starts " + assumptions.getProjectionStartDate() + "; " + assumptions.getProjectionLengthYears()
+        section("Assumptions", StepKey.ASSUMPTIONS, "Starts " + assumptions.getProjectionStartDate() + "; " + assumptions.getProjectionLengthYears()
                 + " years through " + (assumptions.getProjectionStartDate().getYear() + assumptions.getProjectionLengthYears() - 1)
                 + "\nInvestment return " + UIFormatters.percent(economic.getExpectedAnnualInvestmentReturn())
                 + "; inflation " + UIFormatters.percent(economic.getGeneralInflationRate())
@@ -120,17 +129,18 @@ public final class ReviewWizardStep implements NewPlanWizardStep {
                 + "; simplified state estimate; full-year residency");
     }
 
-    private void section(String title, int index, String text) {
+    private void section(String title, StepKey key, String text) {
         Label heading = new Label(title.toUpperCase(java.util.Locale.ROOT));
         heading.getStyleClass().add("wizard-person-heading");
         heading.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(heading, Priority.ALWAYS);
         Button edit = new Button("Edit");
-        edit.setId("wizard-review-edit-" + title.toLowerCase(java.util.Locale.ROOT));
-        edit.setOnAction(event -> editStep.accept(index));
+        edit.setId("wizard-review-edit-" + title.toLowerCase(java.util.Locale.ROOT).replace(' ', '-'));
+        edit.setAccessibleText("Edit " + title);
+        edit.setOnAction(event -> editStep.accept(key));
         HBox header = new HBox(10, heading, edit);
         header.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        VBox card = new VBox(6, header, wrapped(text.isBlank() ? "None entered" : text));
+        VBox card = new VBox(6, header, wrapped(text.isBlank() ? "None entered (optional)" : text));
         card.getStyleClass().add("wizard-review-section");
         content.getChildren().add(card);
     }

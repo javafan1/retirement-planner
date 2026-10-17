@@ -24,12 +24,13 @@ class CompleteWizardPreviewTest {
     @BeforeAll static void init() throws Exception { startFx(); }
 
     @Test void inspectCompleteWizardStatesAndInputHover() throws Exception {
-        Path folder = Path.of("target/phase5b-wizard-preview");
+        Path folder = Path.of("target/phase7c3-wizard-preview");
         Files.createDirectories(folder);
         var states = List.of("household-single", "household-couple", "accounts-empty", "accounts-single", "accounts-couple",
-                "income-single", "income-couple", "expenses-empty", "expenses-populated", "assumptions-defaults",
+                "social-security-single", "social-security-couple", "pensions-single", "pensions-couple", "spending-empty", "spending-populated", "assumptions-defaults",
                 "assumptions-validation", "review-single", "review-couple", "review-warning", "review-error",
-                "narrow-household", "narrow-accounts", "narrow-assumptions", "narrow-review");
+                "narrow-household", "narrow-accounts", "narrow-assumptions", "narrow-review",
+                "social-security-empty", "pensions-empty", "narrow-social-security", "narrow-pensions");
         StringBuilder geometry = new StringBuilder();
         for (String state : states) {
             AtomicReference<NewRetirementPlanWizard> reference = new AtomicReference<>();
@@ -43,10 +44,12 @@ class CompleteWizardPreviewTest {
                 if (populated) CompleteWizardFixtures.enterThroughReview(pane, state.endsWith("couple") || state.startsWith("narrow-"));
                 else {
                     fill(person(pane, "primary"), "Alex", "Example", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
-                    for (int index = 0; index < 5; index++) button(pane, "Next").fire();
+                    for (int index = 0; index < 6; index++) button(pane, "Next").fire();
                 }
-                String section = state.startsWith("narrow-") ? state.substring(7) : state.substring(0, state.indexOf('-'));
+                String section = state.startsWith("narrow-") ? state.substring(7) : state.startsWith("social-security-") ? "social-security" : state.substring(0, state.indexOf('-'));
                 if (!section.equals("review")) ((Button) pane.lookup("#wizard-review-edit-" + section)).fire();
+                if (section.equals("pensions")) ((TableView<?>) pane.lookup("#wizard-pensions")).getSelectionModel().selectFirst();
+                if (section.equals("accounts")) ((TableView<?>) pane.lookup("#wizard-accounts")).getSelectionModel().selectFirst();
                 if (state.equals("assumptions-validation")) {
                     ((TextField) pane.lookup("#wizard-assumption-length")).setText("0");
                     button(pane, "Next").fire();
@@ -54,7 +57,7 @@ class CompleteWizardPreviewTest {
                 if (state.equals("review-error")) {
                     NewPlanDraft draft = field(wizard, "draft");
                     draft.getPlan().getHousehold().getPrimaryPerson().setBirthDate(null);
-                    ((ReviewWizardStep) ((List<?>) field(wizard, "steps")).get(5)).onEntering();
+                    ((ReviewWizardStep) ((List<?>) field(wizard, "steps")).get(6)).onEntering();
                 }
                 if (state.startsWith("narrow-")) {
                     pane.getScene().getWindow().setWidth(490);
@@ -85,15 +88,18 @@ class CompleteWizardPreviewTest {
                             assertNotNull(input.getTooltip());
                             var bounds = page.getContent().sceneToLocal(input.localToScene(input.getLayoutBounds()));
                             assertTrue(bounds.getMaxX() <= page.getViewportBounds().getWidth() + 1, state + " clipped input " + id);
-                            if (left < 0) left = bounds.getMinX();
-                            assertEquals(left, bounds.getMinX(), 1);
+                            // The first three guided fields now have stacked labels and visible units.
+                            if (!List.of("start", "length", "return").contains(id)) {
+                                if (left < 0) left = bounds.getMinX();
+                                assertEquals(left, bounds.getMinX(), 1);
+                            }
                         }
                     }
                     write(pane.snapshot(null, null), folder.resolve(state + ".png"));
                     geometry.append(state).append(": ").append(pane.getWidth()).append(" x ").append(pane.getHeight())
                             .append("; viewport height ").append(page.getViewportBounds().getHeight())
                             .append("; page height ").append(page.getContent().getBoundsInLocal().getHeight()).append("\n");
-                    if (state.equals("review-couple") || state.equals("narrow-review")) {
+                    if (state.equals("review-couple") || state.equals("narrow-review") || state.contains("pensions")) {
                         page.setVvalue(1); pane.layout();
                         write(pane.snapshot(null, null), folder.resolve(state + "-bottom.png"));
                     }
@@ -121,7 +127,7 @@ class CompleteWizardPreviewTest {
             finally { fx(() -> reference.get().close()); }
         }
         Files.writeString(folder.resolve("geometry.txt"), geometry.toString());
-        for (int group = 0; group < 4; group++) {
+        for (int group = 0; group < (states.size() + 5) / 6; group++) {
             BufferedImage sheet = new BufferedImage(1200, 900, BufferedImage.TYPE_INT_RGB);
             var graphics = sheet.createGraphics();
             graphics.setColor(java.awt.Color.WHITE); graphics.fillRect(0, 0, 1200, 900);
@@ -135,6 +141,82 @@ class CompleteWizardPreviewTest {
             graphics.dispose();
             javax.imageio.ImageIO.write(sheet, "png", folder.resolve("contact-sheet-" + group + ".png").toFile());
         }
+    }
+
+    @Test void inspectConfirmationBlockedRemovalAndLongAccountDetails() throws Exception {
+        Path folder = Path.of("target/phase7c3-wizard-preview");
+        Files.createDirectories(folder);
+        AtomicReference<NewRetirementPlanWizard> reference = new AtomicReference<>();
+        fx(() -> {
+            var draft = IncomeWizardStepTest.populatedHousehold(true);
+            draft.getPlan().getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.BrokerageAccount(
+                    "Joint account blocks removal", com.daviddunn.retirementplanner.domain.model.AccountOwnership.JOINT,
+                    new java.math.BigDecimal("12345.6700")));
+            var wizard = new NewRetirementPlanWizard(null, draft, SevenStepWizardTest.pages(draft));
+            reference.set(wizard);
+            wizard.show();
+        });
+        try {
+            pulses();
+            fx(() -> {
+                var wizard = reference.get();
+                var pane = wizard.getDialogPane();
+                AtomicReference<Throwable> failure = new AtomicReference<>();
+                javafx.application.Platform.runLater(() -> {
+                    var confirmation = SevenStepWizardTest.confirmation();
+                    try {
+                        confirmation.applyCss(); confirmation.layout();
+                        write(confirmation.snapshot(null, null), folder.resolve("spouse-removal-confirmation.png"));
+                    }
+                    catch (Throwable exception) { failure.set(exception); }
+                    finally { button(confirmation, "Cancel").fire(); }
+                });
+                ((Button) pane.lookup("#wizard-remove-spouse")).fire();
+                if (failure.get() != null) throw new AssertionError(failure.get());
+                assertNotNull(person(pane, "spouse"));
+                answerSpouseRemoval(true);
+                ((Button) pane.lookup("#wizard-remove-spouse")).fire();
+            });
+            pulses();
+            fx(() -> {
+                var wizard = reference.get();
+                var pane = wizard.getDialogPane();
+                assertTrue(((Label) pane.lookup("#wizard-validation")).getText().contains("Joint account blocks removal"));
+                write(pane.snapshot(null, null), folder.resolve("spouse-removal-blocked.png"));
+                NewPlanDraft draft = field(wizard, "draft");
+                for (int index = 0; index < 20; index++) draft.getPlan().getAccountPortfolio().addAccount(
+                        new com.daviddunn.retirementplanner.domain.financial.BrokerageAccount("Long account description " + index,
+                                com.daviddunn.retirementplanner.domain.model.AccountOwnership.PRIMARY, new java.math.BigDecimal("12345.6700")));
+                button(pane, "Next").fire();
+                pane.getScene().getWindow().setWidth(490);
+                pane.getScene().getWindow().setHeight(570);
+            });
+            pulses();
+            fx(() -> {
+                var pane = reference.get().getDialogPane();
+                TableView<?> table = (TableView<?>) pane.lookup("#wizard-accounts");
+                table.getSelectionModel().select(20);
+                table.scrollTo(20);
+                assertEquals(21, table.getItems().size());
+                assertTrue(((Label) pane.lookup("#wizard-account-details")).getText().contains("12345.6700"));
+            });
+            pulses();
+            fx(() -> {
+                var pane = reference.get().getDialogPane();
+                var page = (ScrollPane) pane.lookup("#wizard-page");
+                page.setVvalue(1);
+                pane.layout(); page.layout();
+                write(pane.snapshot(null, null), folder.resolve("narrow-long-accounts.png"));
+                var bounds = button(pane, "Next").localToScene(button(pane, "Next").getBoundsInLocal());
+                assertTrue(bounds.getMaxY() <= pane.getScene().getHeight());
+                for (String id : List.of("wizard-add-account", "wizard-edit-account", "wizard-remove-account")) {
+                    var action = pane.lookup("#" + id);
+                    var actionBounds = page.sceneToLocal(action.localToScene(action.getBoundsInLocal()));
+                    assertTrue(actionBounds.getMinY() >= 0 && actionBounds.getMaxY() <= page.getHeight());
+                }
+            });
+        }
+        finally { fx(() -> reference.get().close()); }
     }
 
     private static void write(WritableImage image, Path path) throws Exception {

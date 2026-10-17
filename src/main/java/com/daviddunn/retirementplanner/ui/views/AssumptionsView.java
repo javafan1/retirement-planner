@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.views;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.wizard.WizardFieldRow;
 import com.daviddunn.retirementplanner.ui.help.PlanningInputHelp;
 import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
@@ -76,6 +77,7 @@ public class AssumptionsView extends VBox {
     private final TextField estimatedHeirTaxRateField;
 
     private final Label statusLabel;
+    private final java.util.Map<Control, WizardFieldRow> guidedRows = new java.util.HashMap<>();
     private final Button openingRmdButton;
 
     private final Button applyButton = new Button("Apply");
@@ -556,11 +558,17 @@ public class AssumptionsView extends VBox {
             input.setMaxWidth(Double.MAX_VALUE);
             Label label = new Label(names.get(row) + " *");
             label.setLabelFor(input);
-            compact.add(label, 0, row);
-            compact.add(input, 1, row);
-            if (input instanceof TextField text) text.textProperty().addListener((o, a, b) -> clearGuidedError(input));
-            if (input instanceof DatePicker date) date.getEditor().textProperty().addListener((o, a, b) -> clearGuidedError(input));
-            if (input instanceof ComboBox<?> combo) combo.valueProperty().addListener((o, a, b) -> clearGuidedError(input));
+            if (row < 3) {
+                var field = new WizardFieldRow(names.get(row), WizardFieldRow.Requiredness.REQUIRED,
+                        input, List.of("Calendar date", "Years", "Percentage per year").get(row),
+                        input.getTooltip().getText());
+                guidedRows.put(input, field);
+                compact.add(field, 0, row, 2, 1);
+            }
+            else {
+                compact.add(label, 0, row);
+                compact.add(input, 1, row);
+            }
         }
         Label required = new Label("* Required. Existing defaults are shown; review them for your plan.");
         required.setWrapText(true);
@@ -574,9 +582,18 @@ public class AssumptionsView extends VBox {
         setPadding(new Insets(8));
     }
 
-    private void clearGuidedError(Control input) {
-        input.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), false);
+    private void clearGuidedErrors() {
+        if (!guidedCreation) return;
+        lookupAll(":invalid").forEach(input -> input.pseudoClassStateChanged(
+                javafx.css.PseudoClass.getPseudoClass("invalid"), false));
+        guidedRows.values().forEach(WizardFieldRow::clearIssue);
         statusLabel.setText("");
+    }
+
+    private void showGuidedError(Control input, String message) {
+        if (!guidedCreation) return;
+        input.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), true);
+        if (guidedRows.containsKey(input)) guidedRows.get(input).setIssue(message);
     }
 
     public void load(
@@ -776,13 +793,14 @@ public class AssumptionsView extends VBox {
         if (currentPlan == null) {
             return false;
         }
+        clearGuidedErrors();
         try {
             readValidated();
             return true;
         }
         catch (InputException exception) {
             statusLabel.setText(exception.getMessage());
-            if (guidedCreation) exception.control.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), true);
+            showGuidedError(exception.control, exception.getMessage());
             exception.control.requestFocus();
             return false;
         }
@@ -792,13 +810,14 @@ public class AssumptionsView extends VBox {
         if (currentPlan == null) {
             return false;
         }
+        clearGuidedErrors();
         PlanningAssumptions updated;
         try {
             updated = readValidated();
         }
         catch (InputException exception) {
             statusLabel.setText(exception.getMessage());
-            if (guidedCreation) exception.control.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), true);
+            showGuidedError(exception.control, exception.getMessage());
             exception.control.requestFocus();
             updateDirty();
             return false;

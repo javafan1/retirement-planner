@@ -52,6 +52,8 @@ public class PensionDialog extends Dialog<Pension> {
                     new Field("Survivor Monthly Benefit", survivorMonthlyBenefitField, Kind.NUMBER, false),
                     new Field("Annual COLA Rate", colaRateField, Kind.NUMBER, true)),
                     () -> converter.call(ButtonType.OK));
+            WizardDialogSupport.guidance(this, "Name and end date are optional. Monthly benefit is required: gross dollars/month. "
+                    + "Annual COLA is a decimal fraction: 0.02 = 2% annually. Survivor amount, when applicable, is optional dollars/month.");
         }
     }
 

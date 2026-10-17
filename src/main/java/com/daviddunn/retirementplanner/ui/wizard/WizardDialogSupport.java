@@ -24,6 +24,15 @@ public final class WizardDialogSupport {
 
     private WizardDialogSupport() { }
 
+    /** Visible units around existing editors; no control reparenting or parser changes. */
+    public static void guidance(Dialog<?> dialog, String text) {
+        Label guidance = new Label(text);
+        guidance.setWrapText(true);
+        guidance.setMinHeight(Region.USE_PREF_SIZE);
+        guidance.getStyleClass().add("wizard-description");
+        ((VBox) dialog.getDialogPane().getContent()).getChildren().add(0, guidance);
+    }
+
     public static <T> void install(Dialog<T> dialog, List<Field> fields, Supplier<T> build) {
 
         GridPane grid = (GridPane) dialog.getDialogPane().getContent();
@@ -48,13 +57,6 @@ public final class WizardDialogSupport {
                         label.setText(field.name() + (field.required() ? " *" : ""));
                         label.setLabelFor(input);
                     });
-            Runnable clear = () -> {
-                input.pseudoClassStateChanged(PseudoClass.getPseudoClass("invalid"), false);
-                error.setText("");
-            };
-            if (input instanceof TextField text) text.textProperty().addListener((o, a, b) -> clear.run());
-            if (input instanceof DatePicker date) date.getEditor().textProperty().addListener((o, a, b) -> clear.run());
-            if (input instanceof ComboBox<?> combo) combo.valueProperty().addListener((o, a, b) -> clear.run());
         }
         ColumnConstraints labels = new ColumnConstraints();
         labels.setMinWidth(Region.USE_PREF_SIZE);
@@ -74,6 +76,8 @@ public final class WizardDialogSupport {
             if (event.getTarget() != dialog.getDialogPane().lookupButton(ButtonType.OK)) return;
             Field affected = null;
             try {
+                error.setText("");
+                fields.forEach(field -> field.input().pseudoClassStateChanged(PseudoClass.getPseudoClass("invalid"), false));
                 for (Field field : fields) {
                     if (!field.input().isManaged() || !field.input().isVisible()) continue;
                     affected = field;
@@ -98,6 +102,7 @@ public final class WizardDialogSupport {
                         date.setValue(value);
                     }
                 }
+                affected = null; // Builder errors are cross-field unless explicitly identifiable below.
                 result[0] = build.get();
                 error.setText("");
             }

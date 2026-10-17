@@ -36,6 +36,7 @@ public class PersonCard extends GridPane {
     public PersonCard(boolean guidedCreation) {
 
         this.guidedCreation = guidedCreation;
+        configureBirthDateConverter();
 
         mortalityCategory.getItems().setAll(MortalityCategory.values());
         mortalityCategory.setPromptText("Required");
@@ -95,12 +96,31 @@ public class PersonCard extends GridPane {
             configureError(mortalityCategoryError);
             add(birthDateError, 1, 3);
             add(mortalityCategoryError, 1, 5);
-            birthDatePicker.getEditor().textProperty().addListener((observable, oldValue, newValue) ->
-                    clearError(birthDatePicker, birthDateError));
-            mortalityCategory.valueProperty().addListener((observable, oldValue, newValue) ->
-                    clearError(mortalityCategory, mortalityCategoryError));
         }
         InputHelp.linkGridLabels(this);
+    }
+
+    /** Birth-date entry uses 19xx for two-digit years, retaining localized date order and display. */
+    private void configureBirthDateConverter() {
+        var locale = java.util.Locale.getDefault(java.util.Locale.Category.FORMAT);
+        String pattern = java.time.format.DateTimeFormatterBuilder.getLocalizedDateTimePattern(
+                java.time.format.FormatStyle.SHORT, null, java.time.chrono.IsoChronology.INSTANCE, locale);
+        var year = java.util.regex.Pattern.compile("'(?:[^']|'')*'|y+").matcher(pattern);
+        while (year.find()) {
+            if (year.group().startsWith("'")) continue;
+            var parser = new java.time.format.DateTimeFormatterBuilder().parseLenient()
+                    .appendPattern(pattern.substring(0, year.start()))
+                    .appendValueReduced(java.time.temporal.ChronoField.YEAR, 2, 4, 1900)
+                    .appendPattern(pattern.substring(year.end())).toFormatter(locale);
+            var display = birthDatePicker.getConverter();
+            birthDatePicker.setConverter(new StringConverter<>() {
+                @Override public String toString(LocalDate value) { return display.toString(value); }
+                @Override public LocalDate fromString(String value) {
+                    return value == null || value.isBlank() ? null : LocalDate.parse(value.trim(), parser);
+                }
+            });
+            return;
+        }
     }
 
     public void load(Person person) {
@@ -152,6 +172,10 @@ public class PersonCard extends GridPane {
 
     public Edit readValidated() {
 
+        if (guidedCreation) {
+            clearError(birthDatePicker, birthDateError);
+            clearError(mortalityCategory, mortalityCategoryError);
+        }
         LocalDate birthDate;
         try {
             birthDate = readBirthDate();

@@ -76,6 +76,8 @@ public class AccountDialog extends Dialog<Account> {
                             WizardDialogSupport.Kind.CHOICE, true));
             WizardDialogSupport.install(this, fields,
                     () -> converter.call(ButtonType.OK));
+            WizardDialogSupport.guidance(this, "Name is optional. Balance is required when adding an account: enter dollars as of projection start. "
+                    + "Choose the actual owner; retirement accounts cannot be Joint.");
         }
     }
 
