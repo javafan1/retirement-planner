@@ -88,10 +88,10 @@ class SinglePersonIntegratedViewTest {
                     assertNotNull(stage.getScene().lookup("#single-claiming-strategies"));
                     assertTrue(stage.getScene().getRoot().lookupAll(".heat-map-cell").isEmpty());
                     assertEquals(0, jobs.generation());
-                    var tabs = (TabPane) stage.getScene().getRoot().lookup(".tab-pane");
+                    var navigation = ((SinglePersonIntegratedView) stage.getScene().getRoot()).navigation;
                     assertEquals(java.util.List.of("Deterministic Integrated", "Social Security Only", "Longevity-Weighted Integrated"),
-                            tabs.getTabs().stream().map(Tab::getText).toList());
-                    assertInstanceOf(SinglePersonMortalityView.class, tabs.getTabs().get(1).getContent());
+                            navigation.choices().stream().map(AnalyzerNavigationView.Choice::title).toList());
+                    assertInstanceOf(SinglePersonMortalityView.class, navigation.choices().get(1).workspace());
                 } finally { stage.close(); }
             }
             return null;
@@ -153,8 +153,7 @@ class SinglePersonIntegratedViewTest {
                 var view = new SinglePersonIntegratedView(SinglePersonDeterministicStrategyTest.plan(), jobs);
                 view.render(completed);
                 var stage = new Stage();
-                stage.setScene(new Scene(new ScrollPane(view), 1180, 820));
-                ((ScrollPane) stage.getScene().getRoot()).setFitToWidth(true);
+                stage.setScene(new Scene(view, 1180, 820));
                 stage.show();
                 try {
                     stage.getScene().getRoot().applyCss(); stage.getScene().getRoot().layout();
@@ -209,7 +208,10 @@ class SinglePersonIntegratedViewTest {
     }
 
     private static void selectTabs(javafx.scene.Node node) {
-        if (node instanceof TabPane tabs) {
+        if (node instanceof AnalyzerNavigationView navigation) {
+            navigation.select(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE);
+            selectTabs(navigation.selected().workspace());
+        } else if (node instanceof TabPane tabs) {
             for (var tab : tabs.getTabs()) {
                 if (java.util.Set.of("Integrated Retirement Plan", "Deterministic", "Deterministic Exhaustive Search", "Ranked Strategies")
                         .contains(tab.getText())) tabs.getSelectionModel().select(tab);

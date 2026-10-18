@@ -19,6 +19,7 @@ import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Modality;
@@ -51,7 +52,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private final SocialSecurityAnalyzerInputView inputSummary = new SocialSecurityAnalyzerInputView();
     private final TitledPane inputSection = new TitledPane("Analysis Inputs and Plan Assumptions", inputSummary);
     private final VBox header = new VBox(8);
-    private final TabPane modes = new TabPane();
+    private AnalyzerNavigationView navigation;
+    private final Label quickPrerequisite = new Label();
+    private final Button goToSocialSecurity = new Button("Go to Social Security Only");
     private final Button runButton = new Button("Run Social Security Analysis");
     private final AnalysisProgressView socialSecurityProgress = new AnalysisProgressView();
     private final Label status = new Label("Mortality categories come from Person information.");
@@ -137,9 +140,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             stage.setScene(new Scene(content()));
         } else {
             singlePersonView = new SinglePersonIntegratedView(plan, jobs);
-            var scroll = new ScrollPane(singlePersonView);
-            scroll.setFitToWidth(true);
-            stage.setScene(new Scene(scroll));
+            stage.setScene(new Scene(singlePersonView));
         }
         stage.setOnCloseRequest(event -> close());
         stage.setOnHidden(event -> close());
@@ -245,16 +246,17 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 inputs(), new HBox(10, sharedCancel, sharedStatus), sharedProgress);
         header.setPadding(new Insets(12));
 
-        modes.getTabs().setAll(
-                tab("Social Security Only", socialSecurityContent()),
-                tab("Integrated Retirement Plan", integratedContent()));
-        modes.setMinHeight(Region.USE_PREF_SIZE);
-        modes.setMaxHeight(Region.USE_PREF_SIZE);
-        VBox body = new VBox(header, modes);
-        ScrollPane outer = new ScrollPane(body);
-        outer.setFitToWidth(true);
-        outer.setFitToHeight(false);
-        BorderPane root = new BorderPane(outer);
+        prepareWeightedBaseline();
+        navigation = new AnalyzerNavigationView(header, List.of(
+                new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY,
+                        "Social Security Only", "Compare claiming choices by expected Social Security present value.", socialSecurityContent()),
+                new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.QUICK,
+                        "Deterministic Quick Comparison", "Evaluate top Social Security-only strategies through your retirement plan.", deterministicContent(quickComparisonContent())),
+                new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
+                        "Deterministic Exhaustive Search", "Test all supported strategies using configured plan assumptions.", deterministicContent(exhaustiveSearchContent())),
+                new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
+                        "Longevity-Weighted Search", "Rank expected PV after-tax investable estate across modeled lifetimes.", weightedView)));
+        BorderPane root = navigation;
         Button closeButton = new Button("Close");
         closeButton.setOnAction(event -> { close(); stage.close(); });
         Label scope = new Label(
@@ -291,34 +293,35 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         return content;
     }
 
-    private VBox integratedContent() {
+    private void prepareWeightedBaseline() {
         var baselineSection = new TitledPane("Current Strategy Baseline", baselineInputs);
         baselineSection.setAnimated(false);
         baselineSection.setMinHeight(Region.USE_PREF_SIZE);
         baselineSection.setMaxHeight(Region.USE_PREF_SIZE);
         weightedView.getChildren().addFirst(baselineSection);
         weightedView.initialCurrent(baselineInputs.snapshot());
-        TabPane tabs = new TabPane(tab("Deterministic", deterministicIntegratedContent()),
-                tab("Longevity-Weighted", weightedView));
-        VBox content = new VBox(tabs);
-        VBox.setVgrow(tabs, Priority.ALWAYS);
-        return content;
     }
 
-    private VBox deterministicIntegratedContent() {
-        TabPane tabs = new TabPane(
-                tab("Quick Comparison", quickComparisonContent()),
-                tab("Deterministic Exhaustive Search", exhaustiveSearchContent()));
+    private VBox deterministicContent(Node workspace) {
         VBox content = new VBox(8, heading("Deterministic Integrated Retirement Plan"),
                 wrappedLabel("Deterministic integrated analysis uses the retirement plan's configured "
                         + "death scenario for full-plan outcomes. It does not use the longevity "
-                        + "assumptions above to weight full retirement-plan projections."), tabs);
+                        + "assumptions above to weight full retirement-plan projections."), workspace);
         content.setPadding(new Insets(12));
-        VBox.setVgrow(tabs, Priority.ALWAYS);
+        VBox.setVgrow(workspace, Priority.ALWAYS);
         return content;
     }
 
     private VBox quickComparisonContent() {
+        quickPrerequisite.setWrapText(true);
+        quickPrerequisite.setMinHeight(Region.USE_PREF_SIZE);
+        quickPrerequisite.setAccessibleText("Quick Comparison prerequisite");
+        goToSocialSecurity.setAccessibleText("Go to Social Security Only");
+        goToSocialSecurity.setAccessibleHelp("Navigate to Social Security Only without running an analysis.");
+        goToSocialSecurity.setOnAction(event -> {
+            navigation.select(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY);
+            navigation.focusSelector();
+        });
         configureIntegratedTable();
         integratedDetails.setEditable(false);
         integratedDetails.setWrapText(true);
@@ -355,7 +358,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 new VBox(8, heading("Selected Candidate"), integratedDetails));
         details.setDividerPositions(0.45);
         VBox content = new VBox(10,
-                explanation,
+                explanation, quickPrerequisite, goToSocialSecurity,
                 wrappedLabel("Candidate selection and Social Security Expected PV use the longevity "
                         + "assumptions above. Integrated retirement-plan outcome columns remain deterministic."),
                 actions, integratedProgress, integratedStale,
@@ -1153,6 +1156,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             markIntegratedStale(
                     "Social Security inputs changed - rerun Social Security analysis and Quick Comparison.");
         }
+        refreshQuickPrerequisite();
     }
 
     private void markIntegratedStale(String message) {
@@ -1167,7 +1171,14 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         }
     }
 
+    private void refreshQuickPrerequisite() {
+        quickPrerequisite.setText(socialSecurityResultCurrent
+                ? "Prerequisite satisfied: a current Social Security Only result is available."
+                : "Run Social Security Only with the current inputs before running Quick Comparison.");
+    }
+
     private void setAnalysisBusy(boolean disabled) {
+        refreshQuickPrerequisite();
         refreshExportActions();
         if (disabled) {
             deterministicExportPdf.setDisable(true);
@@ -1333,6 +1344,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private void refreshJobState() {
         var state = jobs.state();
         boolean busy = state != SocialSecurityAnalyzerJobController.State.IDLE;
+        navigation.showActivity(busy ? jobs.mode() : null, jobs.status());
         setAnalysisBusy(busy);
         sharedCancel.setVisible(busy);
         sharedCancel.setManaged(busy);

@@ -127,22 +127,17 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
             var stage = field(dialog, "stage", Stage.class);
             stage.setWidth(1880);
             stage.setHeight(1000);
-            var modes = field(dialog, "modes", TabPane.class);
-            modes.getSelectionModel().selectLast();
-            var integrated = (TabPane) ((javafx.scene.layout.VBox) modes.getTabs().getLast().getContent()).getChildren().getFirst();
+            var navigation = field(dialog, "navigation", AnalyzerNavigationView.class);
             var view = field(dialog, "weightedView", LongevityWeightedIntegratedView.class);
             if (deterministic) {
-                integrated.getSelectionModel().selectFirst();
-                var deterministicTabs = (TabPane) ((javafx.scene.layout.VBox) integrated.getTabs().getFirst().getContent())
-                        .getChildren().stream().filter(TabPane.class::isInstance).findFirst().orElseThrow();
-                deterministicTabs.getSelectionModel().selectLast();
+                navigation.select(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE);
                 var source = DeterministicHeatMapAdapterTest.fixture();
                 set(dialog, "exhaustivePresentation", source);
                 var render = dialog.getClass().getDeclaredMethod("renderExhaustive", ExhaustiveIntegratedSearchPresentation.class);
                 render.setAccessible(true);
                 render.invoke(dialog, source);
             } else {
-                integrated.getSelectionModel().selectLast();
+                navigation.select(SocialSecurityAnalyzerJobController.Mode.WEIGHTED);
                 view.render(ClaimingStrategyHeatMapViewTest.fixture(), "Current elections");
             }
             stage.show();
@@ -522,10 +517,8 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
             var stage = field(dialog, "stage", Stage.class);
             stage.setWidth(width);
             stage.setHeight(height);
-            var modes = field(dialog, "modes", TabPane.class);
-            modes.getSelectionModel().selectLast();
-            var integrated = (TabPane) ((javafx.scene.layout.VBox) modes.getTabs().getLast().getContent()).getChildren().getFirst();
-            integrated.getSelectionModel().selectLast();
+            var navigation = field(dialog, "navigation", AnalyzerNavigationView.class);
+            navigation.select(SocialSecurityAnalyzerJobController.Mode.WEIGHTED);
             stage.show();
             var root = stage.getScene().getRoot();
             settle(root);
@@ -551,7 +544,7 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
             assertTrue(outer.getContent().getLayoutBounds().getHeight() > outer.getViewportBounds().getHeight());
             assertTrue(outer.getContent().getLayoutBounds().getWidth() <= outer.getViewportBounds().getWidth() + 1);
             var header = field(dialog, "header", javafx.scene.layout.VBox.class);
-            assertTrue(header.getBoundsInParent().getMaxY() <= modes.getBoundsInParent().getMinY() + 1);
+            assertTrue(header.getBoundsInParent().getMaxY() <= field(navigation, "workspace", javafx.scene.layout.VBox.class).getBoundsInParent().getMinY() + 1);
             section.setExpanded(false);
             settle(root);
             assertTrue(section.getHeight() < expanded);
@@ -633,13 +626,13 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
             assertTrue(text(field(dialog, "header", javafx.scene.layout.VBox.class)).contains("Valuation date:"));
             assertFalse(text(field(dialog, "header", javafx.scene.layout.VBox.class)).contains("Run "));
             assertFalse(text(root).contains("PV base date"));
-            TabPane modes = field(dialog, "modes", TabPane.class);
-            assertEquals(List.of("Social Security Only", "Integrated Retirement Plan"),
-                    modes.getTabs().stream().map(Tab::getText).toList());
-            String ss = text(modes.getTabs().getFirst().getContent());
+            var navigation = field(dialog, "navigation", AnalyzerNavigationView.class);
+            assertEquals(List.of("Social Security Only", "Deterministic Quick Comparison", "Deterministic Exhaustive Search", "Longevity-Weighted Search"),
+                    navigation.choices().stream().map(AnalyzerNavigationView.Choice::title).toList());
+            String ss = text(navigation.choices().getFirst().workspace());
             assertTrue(ss.contains("Run Social Security Analysis"));
             assertTrue(ss.contains("Uses the longevity assumptions above to weight Social Security benefits."));
-            String integrated = text(modes.getTabs().getLast().getContent());
+            String integrated = navigation.choices().stream().skip(1).map(choice -> text(choice.workspace())).reduce("", String::concat);
             assertTrue(integrated.contains("Deterministic Integrated Retirement Plan"));
             assertTrue(integrated.contains("Deterministic integrated analysis uses the retirement plan's configured "
                     + "death scenario for full-plan outcomes. It does not use the longevity "
@@ -875,11 +868,9 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
             assertTrue(field(view, "current", Label.class).getText().contains("No survivor age has been assumed"));
             assertTrue(field(view, "detail", Label.class).getText().contains("Evaluated probability coverage"));
             var stage = field(dialog, "stage", Stage.class);
-            var top = field(dialog, "modes", TabPane.class);
-            top.getSelectionModel().selectLast();
-            var inner = (TabPane) ((javafx.scene.layout.VBox) top.getSelectionModel().getSelectedItem().getContent()).getChildren().getFirst();
-            inner.getSelectionModel().selectLast();
-            assertSame(view, inner.getSelectionModel().getSelectedItem().getContent());
+            var navigation = field(dialog, "navigation", AnalyzerNavigationView.class);
+            navigation.select(SocialSecurityAnalyzerJobController.Mode.WEIGHTED);
+            assertSame(view, navigation.selected().workspace());
             var weightedScroll = (ScrollPane) ((BorderPane) stage.getScene().getRoot()).getCenter();
             assertTrue(weightedScroll.isFitToWidth());
             assertFalse(weightedScroll.isFitToHeight());
@@ -1038,6 +1029,28 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
         set(dialog, "socialSecurityResultCurrent", true);
         field(dialog, "stale", Label.class).setText("");
         field(dialog, "integratedStale", Label.class).setText("");
+    }
+
+    @Test
+    void directQuickNavigationReflectsCurrentResultAndExistingInvalidation() throws Exception {
+        onFx(dialog -> {
+            installResults(dialog);
+            var refresh = dialog.getClass().getDeclaredMethod("refreshJobState");
+            refresh.setAccessible(true);
+            refresh.invoke(dialog);
+            var navigation = field(dialog, "navigation", AnalyzerNavigationView.class);
+            navigation.select(SocialSecurityAnalyzerJobController.Mode.QUICK);
+            assertFalse(field(dialog, "integratedRunButton", Button.class).isDisabled());
+            assertTrue(field(dialog, "quickPrerequisite", Label.class).getText().contains("satisfied"));
+            var before = field(dialog, "presentation", SocialSecurityStrategyAnalyzerPresentation.class);
+            field(dialog, "primaryMortalityAdjustment", TextField.class).setText("0.75");
+            assertTrue(field(dialog, "integratedRunButton", Button.class).isDisabled());
+            assertTrue(field(dialog, "quickPrerequisite", Label.class).getText().contains("Run Social Security Only"));
+            field(dialog, "goToSocialSecurity", Button.class).fire();
+            assertEquals(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY, navigation.selected().mode());
+            assertSame(before, field(dialog, "presentation", SocialSecurityStrategyAnalyzerPresentation.class));
+            assertEquals(0, field(dialog, "jobs", SocialSecurityAnalyzerJobController.class).generation());
+        });
     }
 
     private static String text(Node node) {

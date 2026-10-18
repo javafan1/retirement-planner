@@ -35,6 +35,7 @@ class IowaIntegratedVisualTest {
                 var stage = (Stage) field.get(dialog); stage.setWidth(1500); stage.setHeight(1000); stage.show();
                 try {
                     var root = stage.getScene().getRoot(); root.applyCss(); root.layout();
+                    ((AnalyzerNavigationView) root).select(SocialSecurityAnalyzerJobController.Mode.QUICK);
                     for (var node : root.lookupAll(".tab-pane")) if (node instanceof TabPane tabs) {
                         for (var tab : tabs.getTabs()) if (List.of("Integrated Retirement Plan", "Deterministic", "Quick Comparison").contains(tab.getText()))
                             tabs.getSelectionModel().select(tab);

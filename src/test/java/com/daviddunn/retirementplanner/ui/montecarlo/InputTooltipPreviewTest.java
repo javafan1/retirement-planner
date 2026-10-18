@@ -132,10 +132,17 @@ class InputTooltipPreviewTest {
             case "ss-deterministic", "ss-weighted" -> {
                 var d = new SocialSecurityStrategyAnalyzerDialog(null, p);
                 Stage w = field(d, "stage");
-                TabPane modes = field(d, "modes"); modes.getSelectionModel().select(1);
-                var integrated = (VBox) modes.getTabs().get(1).getContent();
-                var tabs = (TabPane) integrated.getChildren().getFirst();
-                if (name.equals("ss-weighted")) tabs.getSelectionModel().select(1);
+                Object navigation = field(d, "navigation");
+                try {
+                    var select = navigation.getClass().getDeclaredMethod("select",
+                        com.daviddunn.retirementplanner.ui.socialsecurity.SocialSecurityAnalyzerJobController.Mode.class);
+                    select.setAccessible(true);
+                    select.invoke(navigation, name.equals("ss-weighted")
+                        ? com.daviddunn.retirementplanner.ui.socialsecurity.SocialSecurityAnalyzerJobController.Mode.WEIGHTED
+                        : com.daviddunn.retirementplanner.ui.socialsecurity.SocialSecurityAnalyzerJobController.Mode.QUICK);
+                } catch (ReflectiveOperationException failure) {
+                    throw new AssertionError("Unable to select analyzer preview workspace", failure);
+                }
                 w.setX(30); w.setY(30); w.setWidth(1250); w.setHeight(950); w.show();
                 yield new Preview(w, control(d, name.equals("ss-weighted") ? "mortalityDate" : "discountRate"), w::close);
             }

@@ -70,6 +70,10 @@ class IntegratedAnalyzerPdfStateTest {
             ClaimingStrategyHeatMapViewTest.button(map, 70, 70).fire();
             map.metric.setValue(ClaimingStrategyHeatMapMetric.DIFFERENCE_FROM_CURRENT);
             var cell = map.reportSelection();
+            var navigation = field(f.dialog, "navigation", AnalyzerNavigationView.class);
+            for (var choice : navigation.choices()) navigation.select(choice.mode());
+            navigation.select(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE);
+            assertSame(cell, map.reportSelection());
             var source = field(f.dialog, "exhaustivePresentation", ExhaustiveIntegratedSearchPresentation.class);
             var report = (IntegratedAnalyzerReport) invoke(f.dialog, "capturePdfReport", false);
             assertEquals(ClaimingStrategyHeatMapMetric.DIFFERENCE_FROM_CURRENT.toString(), report.heatMap().metric());
@@ -87,6 +91,9 @@ class IntegratedAnalyzerPdfStateTest {
             weighted.table.getSelectionModel().selectLast();
             var entry = weighted.table.getSelectionModel().getSelectedItem();
             weighted.heatMap.metric.setValue(ClaimingStrategyHeatMapMetric.FUTURE_DOLLAR_ESTATE);
+            for (var choice : navigation.choices()) navigation.select(choice.mode());
+            navigation.select(SocialSecurityAnalyzerJobController.Mode.WEIGHTED);
+            assertSame(entry, weighted.table.getSelectionModel().getSelectedItem());
             report = (IntegratedAnalyzerReport) invoke(f.dialog, "capturePdfReport", true);
             assertTrue(report.selectedSummary().toString().contains("Rank: 2"));
             assertEquals(ClaimingStrategyHeatMapMetric.FUTURE_DOLLAR_ESTATE.toString(), report.heatMap().metric());
@@ -108,6 +115,8 @@ class IntegratedAnalyzerPdfStateTest {
             var stage = new Stage();
             // The existing dialog owns the map, so apply CSS through its scene.
             var root = field(f.dialog, "stage", Stage.class).getScene().getRoot();
+            ((AnalyzerNavigationView) root).select(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE);
+            field(f.dialog, "deterministicResultTabs", TabPane.class).getSelectionModel().selectLast();
             root.applyCss();
             var color = (javafx.scene.paint.Color) button.getBackground().getFills().getFirst().getFill();
             assertEquals(javafx.scene.paint.Color.web(com.daviddunn.retirementplanner.util.ClaimingHeatMapPalette.ESSENTIALLY_OPTIMAL.color), color);

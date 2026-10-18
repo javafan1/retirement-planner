@@ -45,6 +45,7 @@ final class SinglePersonIntegratedView extends VBox {
     }
     final SinglePersonMortalityView ssView;
     final SinglePersonMortalityView weightedView;
+    final AnalyzerNavigationView navigation;
 
     SinglePersonIntegratedView(RetirementPlan plan, SocialSecurityAnalyzerJobController jobs) {
         super(10);
@@ -111,10 +112,16 @@ final class SinglePersonIntegratedView extends VBox {
                 label("Read-only analysis. PDF export uses the completed frozen result."));
         ssView = new SinglePersonMortalityView(plan, jobs, SinglePersonMortalityAnalysis.Mode.SOCIAL_SECURITY_ONLY);
         weightedView = new SinglePersonMortalityView(plan, jobs, SinglePersonMortalityAnalysis.Mode.INTEGRATED);
-        var tabs = new TabPane(new Tab("Deterministic Integrated", deterministic),
-                new Tab("Social Security Only", ssView), new Tab("Longevity-Weighted Integrated", weightedView));
-        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        getChildren().add(tabs);
+        navigation = new AnalyzerNavigationView(null, List.of(
+                new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
+                        "Deterministic Integrated", "Nine claiming strategies through the configured retirement plan.", deterministic),
+                new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY,
+                        "Social Security Only", "Nine claiming strategies ranked by expected Social Security present value.", ssView),
+                new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
+                        "Longevity-Weighted Integrated", "Nine claiming strategies ranked by expected PV after-tax estate.", weightedView)));
+        getChildren().add(navigation);
+        VBox.setVgrow(navigation, Priority.ALWAYS);
+        setMinSize(0, 0);
         jobs.onChanged(this::refresh);
         refresh();
     }
@@ -194,6 +201,7 @@ final class SinglePersonIntegratedView extends VBox {
         weightedView.refresh();
         boolean busy = jobs.state() == SocialSecurityAnalyzerJobController.State.RUNNING
                 || jobs.state() == SocialSecurityAnalyzerJobController.State.CANCELLING;
+        navigation.showActivity(busy ? jobs.mode() : null, jobs.status());
         if (busy) progress.show(jobs.progress()); else progress.hide();
         if (!jobs.status().isBlank()) status.setText(jobs.status());
         refreshControls();
