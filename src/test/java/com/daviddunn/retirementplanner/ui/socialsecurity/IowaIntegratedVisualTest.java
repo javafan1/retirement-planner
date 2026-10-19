@@ -48,7 +48,7 @@ class IowaIntegratedVisualTest {
                     Files.createDirectories(Path.of("target/phase6d5b-preview"));
                     javax.imageio.ImageIO.write(output, "png", Path.of("target/phase6d5b-preview/integrated-Iowa.png").toFile());
                     for (var node : root.lookupAll(".titled-pane")) if (node instanceof javafx.scene.control.TitledPane pane
-                            && pane.getText().equals("Analysis Inputs and Plan Assumptions")) {
+                            && pane.getText().equals("Input Reference — Complete Dependencies and Plan Assumptions")) {
                         pane.setAnimated(false); pane.setExpanded(true);
                     }
                     root.applyCss(); root.layout();

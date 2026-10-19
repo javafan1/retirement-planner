@@ -25,6 +25,7 @@ final class SinglePersonIntegratedView extends VBox {
     final TextArea details = new TextArea();
     final Label status = new Label();
     final Label summary = new Label();
+    private final Label inheritedPlan = AnalyzerConfigurationLayout.note("");
     private final AnalysisProgressView progress = new AnalysisProgressView();
     private final SocialSecurityAnalyzerJobController jobs;
     private RetirementPlan plan;
@@ -107,8 +108,16 @@ final class SinglePersonIntegratedView extends VBox {
             }
         });
         var deterministic = new VBox(10);
-        deterministic.getChildren().addAll(title, explanation, new HBox(10, deathLabel, deathYear, run, cancel, pdf.button()),
-                status, progress, summary, table, details, breakEven,
+        status.setWrapText(true);
+        status.setMinHeight(Region.USE_PREF_SIZE);
+        deterministic.getChildren().addAll(title, explanation,
+                AnalyzerConfigurationLayout.heading("From Retirement Plan"), inheritedPlan,
+                AnalyzerConfigurationLayout.heading("Inputs for Next Run"),
+                AnalyzerConfigurationLayout.note("Optional analysis-only death year; the saved plan is unchanged."),
+                AnalyzerConfigurationLayout.field(deathLabel, deathYear),
+                AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"), AnalyzerConfigurationLayout.flow(run, cancel),
+                status, progress, AnalyzerConfigurationLayout.heading("Completed Results"), pdf.button(),
+                AnalyzerConfigurationLayout.note("Completed Result Assumptions and metrics below belong to the frozen completed run."), summary, table, details, breakEven,
                 label("Read-only analysis. PDF export uses the completed frozen result."));
         ssView = new SinglePersonMortalityView(plan, jobs, SinglePersonMortalityAnalysis.Mode.SOCIAL_SECURITY_ONLY);
         weightedView = new SinglePersonMortalityView(plan, jobs, SinglePersonMortalityAnalysis.Mode.INTEGRATED);
@@ -208,6 +217,7 @@ final class SinglePersonIntegratedView extends VBox {
     }
 
     private void refreshControls() {
+        inheritedPlan.setText(AnalyzerConfigurationLayout.individualPlan(plan));
         boolean busy = jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE;
         run.setDisable(busy || plan.getHousehold().hasSpouse());
         cancel.setDisable(!busy);

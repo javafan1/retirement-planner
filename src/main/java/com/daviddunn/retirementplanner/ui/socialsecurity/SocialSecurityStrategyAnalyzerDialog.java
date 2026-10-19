@@ -9,9 +9,7 @@ import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecuri
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityCompleteStrategySearchRequest;
 
 
-import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
-import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionMetrics;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.*;
 import com.daviddunn.retirementplanner.ui.util.UIFormatters;
@@ -19,7 +17,6 @@ import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
-import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Modality;
@@ -52,6 +49,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private final SocialSecurityAnalyzerInputView inputSummary = new SocialSecurityAnalyzerInputView();
     private final TitledPane inputSection = new TitledPane("Analysis Inputs and Plan Assumptions", inputSummary);
     private final VBox header = new VBox(8);
+    private final VBox sharedConfiguration = new VBox(6);
+    private final Label inheritedPlan = AnalyzerConfigurationLayout.note("");
+    private SocialSecurityAnalyzerInputSummary currentInputSummary;
     private AnalyzerNavigationView navigation;
     private final Label quickPrerequisite = new Label();
     private final Button goToSocialSecurity = new Button("Go to Social Security Only");
@@ -234,16 +234,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         inputSection.setMaxHeight(Region.USE_PREF_SIZE);
         refreshInputSummary();
         header.getChildren().setAll(
-                new Label("Social Security Strategy Analyzer"),
-                householdSummary(),
-                inputSection,
-                heading("Longevity and Valuation Assumptions"),
-                wrappedLabel("Used for Social Security-only analysis and Longevity-Weighted Integrated analysis. "
-                        + "Quick Comparison uses these assumptions for candidate selection and Social Security expected PV; "
-                        + "its retirement-plan outcomes remain deterministic. Deterministic Exhaustive Search uses the plan's configured death scenario."),
-                wrappedLabel("Mortality conditioning assumes survival through that date. Valuation date sets PV dollars. "
-                        + "These dates are independent; neither changes the plan's projection start."),
-                inputs(), new HBox(10, sharedCancel, sharedStatus), sharedProgress);
+                AnalyzerConfigurationLayout.heading("From Retirement Plan"), inheritedPlan, inputSection, sharedConfiguration);
+        inputSection.setText("Input Reference — Complete Dependencies and Plan Assumptions");
+        sharedConfiguration.getChildren().setAll(AnalyzerConfigurationLayout.heading("Inputs for Next Run"),
+                wrappedLabel("Required temporary analyzer settings. Mortality conditioning and valuation are independent dates; neither changes the plan's projection start."),
+                inputs());
         header.setPadding(new Insets(12));
 
         prepareWeightedBaseline();
@@ -251,11 +246,16 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY,
                         "Social Security Only", "Compare claiming choices by expected Social Security present value.", socialSecurityContent()),
                 new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.QUICK,
-                        "Deterministic Quick Comparison", "Evaluate top Social Security-only strategies through your retirement plan.", deterministicContent(quickComparisonContent())),
+                        "Deterministic Quick Comparison", "Evaluate top Social Security-only strategies through your retirement plan.", quickComparisonContent()),
                 new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
-                        "Deterministic Exhaustive Search", "Test all supported strategies using configured plan assumptions.", deterministicContent(exhaustiveSearchContent())),
+                        "Deterministic Exhaustive Search", "Test all supported strategies using configured plan assumptions.", exhaustiveSearchContent()),
                 new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
                         "Longevity-Weighted Search", "Rank expected PV after-tax investable estate across modeled lifetimes.", weightedView)));
+        navigation.onSelected(mode -> refreshContextualInputs());
+        VBox activeExecution = new VBox(4, AnalyzerConfigurationLayout.flow(sharedCancel, sharedStatus), sharedProgress);
+        activeExecution.managedProperty().bind(sharedCancel.managedProperty());
+        activeExecution.visibleProperty().bind(activeExecution.managedProperty());
+        navigation.addExecutionStatus(activeExecution);
         BorderPane root = navigation;
         Button closeButton = new Button("Close");
         closeButton.setOnAction(event -> { close(); stage.close(); });
@@ -286,30 +286,23 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 tab("Top Strategies", strategyBox),
                 tab("Assumptions", assumptions));
         VBox content = new VBox(8,
-                wrappedLabel("Uses the longevity assumptions above to weight Social Security benefits."),
-                new HBox(10, runButton, socialSecurityCancelButton, status), socialSecurityProgress, stale, socialSecurityTabs);
+                AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"),
+                AnalyzerConfigurationLayout.flow(runButton, socialSecurityCancelButton), status, socialSecurityProgress, stale,
+                AnalyzerConfigurationLayout.heading("Completed Results"),
+                wrappedLabel("Completed Result Assumptions are retained in the result-time Assumptions tab; next-run edits do not rewrite them."), socialSecurityTabs);
+        status.setWrapText(true);
         content.setPadding(new Insets(12));
         VBox.setVgrow(socialSecurityTabs, Priority.ALWAYS);
         return content;
     }
 
     private void prepareWeightedBaseline() {
-        var baselineSection = new TitledPane("Current Strategy Baseline", baselineInputs);
+        var baselineSection = new TitledPane("Current Strategy Baseline — Optional Comparison Settings", baselineInputs);
         baselineSection.setAnimated(false);
         baselineSection.setMinHeight(Region.USE_PREF_SIZE);
         baselineSection.setMaxHeight(Region.USE_PREF_SIZE);
         weightedView.getChildren().addFirst(baselineSection);
         weightedView.initialCurrent(baselineInputs.snapshot());
-    }
-
-    private VBox deterministicContent(Node workspace) {
-        VBox content = new VBox(8, heading("Deterministic Integrated Retirement Plan"),
-                wrappedLabel("Deterministic integrated analysis uses the retirement plan's configured "
-                        + "death scenario for full-plan outcomes. It does not use the longevity "
-                        + "assumptions above to weight full retirement-plan projections."), workspace);
-        content.setPadding(new Insets(12));
-        VBox.setVgrow(workspace, Priority.ALWAYS);
-        return content;
     }
 
     private VBox quickComparisonContent() {
@@ -347,10 +340,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         + "Rows remain in Social Security analyzer order; no integrated winner is selected.");
         explanation.setWrapText(true);
         InputHelp.install(integratedCandidateCount, "Number of top Social Security-only strategies to evaluate through the deterministic retirement plan, from 1 to 20. This affects Quick Comparison only; it does not limit Exhaustive Search or change the saved plan.");
-        HBox actions = new HBox(10,
-                new Label("Integrated candidates (1-20):"), integratedCandidateCount,
-                integratedRunButton, integratedCancelButton, integratedStatus);
-        InputHelp.link((Label) actions.getChildren().getFirst(), integratedCandidateCount);
+        VBox candidates = AnalyzerConfigurationLayout.field(new Label("Integrated candidates (1-20):"), integratedCandidateCount);
+        FlowPane actions = AnalyzerConfigurationLayout.flow(integratedRunButton, integratedCancelButton);
+        integratedStatus.setWrapText(true);
         VBox tableBox = new VBox(8, heading("Candidate Comparison"), integratedTable);
         VBox.setVgrow(integratedTable, Priority.ALWAYS);
         SplitPane details = new SplitPane(
@@ -358,11 +350,14 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 new VBox(8, heading("Selected Candidate"), integratedDetails));
         details.setDividerPositions(0.45);
         VBox content = new VBox(10,
-                explanation, quickPrerequisite, goToSocialSecurity,
-                wrappedLabel("Candidate selection and Social Security Expected PV use the longevity "
-                        + "assumptions above. Integrated retirement-plan outcome columns remain deterministic."),
-                actions, integratedProgress, integratedStale,
-                details, tableBox, heading("Methodology and Assumptions"), integratedMethodology);
+                AnalyzerConfigurationLayout.heading("Inputs for Next Run"),
+                quickPrerequisite, goToSocialSecurity,
+                wrappedLabel("Candidate selection uses the completed Social Security Only ranking, including its mortality and valuation assumptions. "
+                        + "To change those inputs, go to Social Security Only and rerun it. Full-plan outcomes remain deterministic under the configured plan death scenario."),
+                candidates, AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"),
+                actions, integratedStatus, integratedProgress, integratedStale,
+                AnalyzerConfigurationLayout.heading("Completed Results"),
+                explanation, details, tableBox, heading("Methodology and Assumptions"), integratedMethodology);
         content.setPadding(new Insets(12));
         VBox.setVgrow(tableBox, Priority.ALWAYS);
         return content;
@@ -377,7 +372,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 "Current-plan and exhaustive-search summary will appear after a successful run."));
         Label explanation = new Label(
                 "Exhaustive Search evaluates all tested claiming strategies against the "
-                        + "deterministic full retirement plan. Longevity assumptions above are not "
+                        + "deterministic full retirement plan. Analyzer longevity and valuation inputs are not "
                         + "used in this search. The ranking "
                         + "shown is deterministic After-Tax Estate Ranking under current projection "
                         + "assumptions. It is not a universal recommendation.");
@@ -387,7 +382,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         + "Roth, RMD, Medicare, withdrawal, portfolio, and estate assumptions. It is "
                         + "independent of SS-only mortality-weighted ranking and does not apply a strategy.");
         methodology.setWrapText(true);
-        HBox actions = new HBox(10, exhaustiveRunButton, exhaustiveCancelButton, exhaustiveStatus);
+        FlowPane actions = AnalyzerConfigurationLayout.flow(exhaustiveRunButton, exhaustiveCancelButton);
+        exhaustiveStatus.setWrapText(true);
         VBox tableBox = new VBox(8, heading("Grouped Top Tested Outcomes"), exhaustiveTable);
         tableBox.setMaxHeight(Region.USE_PREF_SIZE);
         VBox.setVgrow(exhaustiveTable, Priority.ALWAYS);
@@ -397,44 +393,16 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         details.setDividerPositions(0.45);
         deterministicRankedContent.getChildren().setAll(details, tableBox, heading("Methodology"), methodology);
         deterministicHeatMap.resultNotice.textProperty().bind(exhaustiveStale.textProperty());
-        VBox content = new VBox(10, explanation, actions, exhaustiveProgress, exhaustiveStale,
+        VBox content = new VBox(10, explanation, AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"),
+                actions, exhaustiveStatus, exhaustiveProgress, exhaustiveStale,
+                AnalyzerConfigurationLayout.heading("Completed Results"),
                 new HBox(10, heading("Completed Analysis"), deterministicExportPdf), deterministicResultTabs);
+        content.setPadding(new Insets(12));
         VBox.setVgrow(tableBox, Priority.NEVER);
         return content;
     }
 
-    private GridPane householdSummary() {
-        GridPane grid = new GridPane();
-        grid.setHgap(16);
-        grid.setVgap(4);
-        Person primary = plan.getHousehold().getPrimaryPerson();
-        Person spouse = plan.getHousehold().getSpouse();
-        grid.addRow(0, new Label("Primary:"),
-                new Label(personText(primary)));
-        grid.addRow(1, new Label("Spouse:"),
-                new Label(personText(spouse)));
-        return grid;
-    }
-
-    private String personText(Person person) {
-        if (person == null) {
-            return "Not configured";
-        }
-        String text = person.getFullName() + " — DOB "
-                + (person.getBirthDate() == null ? "missing" : DATE.format(person.getBirthDate()));
-        return person.getIncomeSources().stream()
-                .filter(SocialSecurityIncome.class::isInstance)
-                .map(SocialSecurityIncome.class::cast)
-                .findFirst()
-                .map(source -> text
-                        + " — FRA monthly benefit "
-                        + money(source.getFullRetirementMonthlyBenefit())
-                        + " (valuation year " + source.getBenefitValuationYear() + ")"
-                        + " — current claim " + DATE.format(source.getStartDate()))
-                .orElse(text + " — Social Security source missing");
-    }
-
-    private GridPane inputs() {
+    private VBox inputs() {
         String adjustmentHelp = "Mortality risk multiplier: 1.00 means standard table mortality; 0.75 means 75% "
                 + "and 1.25 means 125% of the table's underlying mortality hazard. Annual death probabilities "
                 + "are adjusted through survival probabilities, not multiplied directly. This does not shorten "
@@ -453,23 +421,17 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 "Annual real discount percentage (enter 1 for 1%) used to discount inflation-adjusted future values back to the valuation date. "
                         + "It represents time preference after removing general inflation. Higher values place less "
                         + "present value on more distant future amounts."));
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(6);
-        grid.addRow(0,
-                new Label("Primary mortality adjustment:"), primaryMortalityAdjustment,
-                new Label("Spouse mortality adjustment:"), spouseMortalityAdjustment);
         Label help = new Label(
                 "1.00x uses standard SSA mortality; above 1.00x increases modeled mortality and below 1.00x decreases it. "
                         + "Planning assumption only, not a medical or actuarial assessment.");
         help.setWrapText(true);
-        grid.add(help, 0, 1, 4, 1);
-        grid.addRow(2,
-                new Label("Real discount rate (%):"), discountRate,
-                new Label("Valuation date:"), pvDate);
-        grid.addRow(3, new Label("Mortality conditioning date:"), mortalityDate);
-        InputHelp.linkGridLabels(grid);
-        return grid;
+        help.setMinHeight(Region.USE_PREF_SIZE);
+        return new VBox(6, AnalyzerConfigurationLayout.flow(
+                AnalyzerConfigurationLayout.field(new Label("Primary mortality adjustment:"), primaryMortalityAdjustment),
+                AnalyzerConfigurationLayout.field(new Label("Spouse mortality adjustment:"), spouseMortalityAdjustment),
+                AnalyzerConfigurationLayout.field(new Label("Mortality conditioning date:"), mortalityDate),
+                AnalyzerConfigurationLayout.field(new Label("Valuation date:"), pvDate),
+                AnalyzerConfigurationLayout.field(new Label("Real discount rate (%):"), discountRate)), help);
     }
 
     private void runAnalysis() {
@@ -1173,8 +1135,14 @@ public final class SocialSecurityStrategyAnalyzerDialog {
 
     private void refreshQuickPrerequisite() {
         quickPrerequisite.setText(socialSecurityResultCurrent
-                ? "Prerequisite satisfied: a current Social Security Only result is available."
-                : "Run Social Security Only with the current inputs before running Quick Comparison.");
+                ? "Social Security Only result current — prerequisite satisfied. This completed ranking supplies candidates for the next Quick Comparison."
+                : "Social Security Only result required — Run Social Security Only with the current inputs before running Quick Comparison.");
+        if (socialSecurityResultCurrent && presentation != null) {
+            var basis = presentation.result().request().retirementGridRequest();
+            quickPrerequisite.setText(quickPrerequisite.getText() + "\nCompleted SS candidate basis: conditioned "
+                    + basis.mortalityBaseDate() + "; valued " + basis.presentValueBaseDate()
+                    + "; real discount " + basis.realDiscountRate().movePointRight(2).stripTrailingZeros().toPlainString() + "%.");
+        }
     }
 
     private void setAnalysisBusy(boolean disabled) {
@@ -1312,11 +1280,32 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void refreshInputSummary() {
-        inputSummary.show(SocialSecurityAnalyzerInputSummary.from(plan,
+        currentInputSummary = SocialSecurityAnalyzerInputSummary.from(plan,
                 new SocialSecurityAnalyzerInputSummary.AnalyzerValues(
                         validAdjustment(primaryMortalityAdjustment.getText()),
                         validAdjustment(spouseMortalityAdjustment.getText()), mortalityDate.getValue(), pvDate.getValue(),
-                        validDiscountRate(discountRate.getText())), baselineInputs.snapshot()));
+                        validDiscountRate(discountRate.getText())), baselineInputs.snapshot());
+        inputSummary.show(currentInputSummary);
+        if (navigation != null) refreshContextualInputs();
+    }
+
+    private void refreshContextualInputs() {
+        var mode = navigation.selected().mode();
+        boolean longevity = mode == SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY
+                || mode == SocialSecurityAnalyzerJobController.Mode.WEIGHTED;
+        sharedConfiguration.setVisible(longevity);
+        sharedConfiguration.setManaged(longevity);
+        var rows = switch (mode) {
+            case SOCIAL_SECURITY -> List.of("Social Security COLA");
+            case QUICK, EXHAUSTIVE -> List.of("Projection start date", "Planning Horizon - calendar years",
+                    "Configured plan death scenario", "Investment return assumptions", "General inflation", "State / local tax jurisdiction");
+            case WEIGHTED -> List.of("Projection start date", "Weighted scenario horizon", "Social Security COLA");
+        };
+        inheritedPlan.setText(AnalyzerConfigurationLayout.household(plan, longevity)
+                + "\n" + currentInputSummary.rows().stream().filter(row -> rows.contains(row.input()))
+                        .map(row -> row.input() + ": " + (row.input().equals("Weighted scenario horizon")
+                                ? "Household second death; configured horizon is reference only. See Input Reference for the snapshot convention."
+                                : row.value())).collect(java.util.stream.Collectors.joining("\n")));
     }
 
     private static BigDecimal validAdjustment(String text) {

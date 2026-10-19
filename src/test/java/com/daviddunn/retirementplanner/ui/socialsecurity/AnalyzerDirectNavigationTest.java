@@ -227,6 +227,28 @@ class AnalyzerDirectNavigationTest {
                     write(f.navigation, "couple-" + mode + "-" + width + "x" + height);
                 });
             }
+            if (Boolean.getBoolean("analyzer.context.preview")) {
+                apply(fixture, f -> {
+                    f.navigation.select(SOCIAL_SECURITY);
+                    field(f.dialog, "inputSection", TitledPane.class).setExpanded(true);
+                    layout(f.stage);
+                });
+                com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport.pulses();
+                apply(fixture, f -> {
+                    write(f.navigation, "couple-reference-expanded-" + width + "x" + height);
+                    field(f.dialog, "inputSection", TitledPane.class).setExpanded(false);
+                    field(f.dialog, "primaryMortalityAdjustment", TextField.class).setText("unfinished");
+                    f.navigation.select(WEIGHTED);
+                    layout(f.stage);
+                });
+                com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport.pulses();
+                apply(fixture, f -> {
+                    assertEquals("unfinished", field(f.dialog, "primaryMortalityAdjustment", TextField.class).getText());
+                    write(f.navigation, "couple-pending-invalid-" + width + "x" + height);
+                    field(f.dialog, "primaryMortalityAdjustment", TextField.class).setText("1.00");
+                });
+            }
+            apply(fixture, f -> f.navigation.select(WEIGHTED));
             apply(fixture, f -> {
                 var weighted = field(f.dialog, "weightedView", LongevityWeightedIntegratedView.class);
                 weighted.resultTabs.getSelectionModel().select(weighted.heatMapTab);
@@ -278,7 +300,7 @@ class AnalyzerDirectNavigationTest {
         var output = new java.awt.image.BufferedImage((int) image.getWidth(), (int) image.getHeight(), java.awt.image.BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < output.getHeight(); y++) for (int x = 0; x < output.getWidth(); x++)
             output.setRGB(x, y, image.getPixelReader().getArgb(x, y));
-        var directory = Path.of("target/phase8b-navigation-preview"); Files.createDirectories(directory);
+        var directory = Path.of(System.getProperty("analyzer.preview.output", "target/phase8b-navigation-preview")); Files.createDirectories(directory);
         javax.imageio.ImageIO.write(output, "png", directory.resolve(name + ".png").toFile());
     }
 

@@ -33,6 +33,7 @@ final class AnalyzerNavigationView extends BorderPane {
     private final EnumMap<SocialSecurityAnalyzerJobController.Mode, Double> positions =
             new EnumMap<>(SocialSecurityAnalyzerJobController.Mode.class);
     private Choice selected;
+    private java.util.function.Consumer<SocialSecurityAnalyzerJobController.Mode> selectedAction = mode -> { };
 
     AnalyzerNavigationView(Node header, List<Choice> choices) {
         this.choices = List.copyOf(choices);
@@ -111,7 +112,8 @@ final class AnalyzerNavigationView extends BorderPane {
 
     void select(SocialSecurityAnalyzerJobController.Mode mode) {
         Choice choice = choices.stream().filter(item -> item.mode() == mode).findFirst().orElseThrow();
-        if (selected != choice) {
+        boolean changed = selected != choice;
+        if (changed) {
             if (selected != null) positions.put(selected.mode(), scroll.getVvalue());
             selected = choice;
             workspace.getChildren().setAll(choice.workspace());
@@ -121,6 +123,16 @@ final class AnalyzerNavigationView extends BorderPane {
         buttons.get(mode).setSelected(true);
         description.setText(choice.title() + " — " + choice.description());
         description.setAccessibleText("Selected analysis: " + description.getText());
+        if (changed) selectedAction.accept(mode);
+    }
+
+    void onSelected(java.util.function.Consumer<SocialSecurityAnalyzerJobController.Mode> action) {
+        selectedAction = Objects.requireNonNull(action);
+        selectedAction.accept(selected.mode());
+    }
+
+    void addExecutionStatus(Node status) {
+        ((VBox) getTop()).getChildren().add(status);
     }
 
     void focusSelector() {

@@ -394,14 +394,14 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
             Tooltip reference = new com.daviddunn.retirementplanner.ui.controls.HelpIcon("Reference").getTooltip();
             var names = List.of("primaryMortalityAdjustment",
                     "spouseMortalityAdjustment", "mortalityDate", "pvDate", "discountRate");
-            var grid = (javafx.scene.layout.GridPane) field(dialog, "primaryMortalityAdjustment", Control.class).getParent();
-            assertEquals(5, grid.getChildren().stream().filter(node -> node instanceof Control
-                    && !(node instanceof Label)).count());
-            assertEquals(11, grid.getChildren().size());
-            assertEquals(10, grid.getHgap());
-            assertEquals(6, grid.getVgap());
+            var fieldRow = (javafx.scene.layout.VBox) field(dialog, "primaryMortalityAdjustment", Control.class).getParent();
+            var fields = (javafx.scene.layout.FlowPane) fieldRow.getParent();
+            assertEquals(5, fields.getChildren().size());
+            assertEquals(12, fields.getHgap());
+            assertEquals(8, fields.getVgap());
             for (String name : names) {
                 Control control = field(dialog, name, Control.class);
+                assertSame(control, ((Label) ((javafx.scene.layout.VBox) control.getParent()).getChildren().getFirst()).getLabelFor());
                 Tooltip tooltip = control.getTooltip();
                 assertNotNull(tooltip, name);
                 assertTrue(tooltip.isWrapText());
@@ -622,30 +622,26 @@ class SocialSecurityStrategyAnalyzerDialogStateTest {
     void labelsAndActionsAreScopedToTheirAnalysis() throws Exception {
         onFx(dialog -> {
             BorderPane root = (BorderPane) field(dialog, "stage", Stage.class).getScene().getRoot();
-            assertTrue(text(field(dialog, "header", javafx.scene.layout.VBox.class)).contains("Longevity and Valuation Assumptions"));
+            assertTrue(text(field(dialog, "header", javafx.scene.layout.VBox.class)).contains("Inputs for Next Run"));
             assertTrue(text(field(dialog, "header", javafx.scene.layout.VBox.class)).contains("Valuation date:"));
-            assertFalse(text(field(dialog, "header", javafx.scene.layout.VBox.class)).contains("Run "));
+            assertFalse(text(field(dialog, "header", javafx.scene.layout.VBox.class)).contains("Run Social Security Analysis"));
             assertFalse(text(root).contains("PV base date"));
             var navigation = field(dialog, "navigation", AnalyzerNavigationView.class);
             assertEquals(List.of("Social Security Only", "Deterministic Quick Comparison", "Deterministic Exhaustive Search", "Longevity-Weighted Search"),
                     navigation.choices().stream().map(AnalyzerNavigationView.Choice::title).toList());
             String ss = text(navigation.choices().getFirst().workspace());
             assertTrue(ss.contains("Run Social Security Analysis"));
-            assertTrue(ss.contains("Uses the longevity assumptions above to weight Social Security benefits."));
+            assertTrue(ss.contains("Completed Result Assumptions"));
             String integrated = navigation.choices().stream().skip(1).map(choice -> text(choice.workspace())).reduce("", String::concat);
-            assertTrue(integrated.contains("Deterministic Integrated Retirement Plan"));
-            assertTrue(integrated.contains("Deterministic integrated analysis uses the retirement plan's configured "
-                    + "death scenario for full-plan outcomes. It does not use the longevity "
-                    + "assumptions above to weight full retirement-plan projections."));
-            assertTrue(integrated.contains("Candidate selection and Social Security Expected PV use the longevity "
-                    + "assumptions above. Integrated retirement-plan outcome columns remain deterministic."));
+            assertTrue(integrated.contains("Full-plan outcomes remain deterministic under the configured plan death scenario."));
+            assertTrue(integrated.contains("Candidate selection uses the completed Social Security Only ranking"));
             assertTrue(integrated.contains("Exhaustive Search evaluates all tested claiming strategies against the "
-                    + "deterministic full retirement plan. Longevity assumptions above are not used in this search."));
+                    + "deterministic full retirement plan. Analyzer longevity and valuation inputs are not used in this search."));
             assertTrue(integrated.contains("Longevity-Weighted"));
             assertTrue(integrated.contains("Run Longevity-Weighted Exhaustive Search"));
             assertTrue(integrated.contains("Run Deterministic Exhaustive Search"));
             assertTrue(text(field(dialog, "header", javafx.scene.layout.VBox.class)).contains("Mortality conditioning date"));
-            assertTrue(text(field(dialog, "header", javafx.scene.layout.VBox.class)).contains("Quick Comparison uses these assumptions for candidate selection"));
+            assertTrue(text(field(dialog, "inputSummary", SocialSecurityAnalyzerInputView.class)).contains("Quick Comparison uses SS-only mortality and valuation inputs"));
         });
     }
 

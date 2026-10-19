@@ -48,7 +48,9 @@ final class LongevityWeightedIntegratedView extends VBox {
         Label limitation = label(LIMITATION);
         limitation.setStyle("-fx-border-color: #9a6700; -fx-padding: 6;");
         getChildren().addAll(label("Rank complete claiming strategies by Expected PV After-Tax Estate across modeled household lifespans."),
-                run, status, stale, limitation);
+                AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"),
+                AnalyzerConfigurationLayout.flow(run), status, stale,
+                AnalyzerConfigurationLayout.heading("Completed Results"), limitation);
         HBox cards = new HBox(12, card("Highest Longevity-Weighted Tested Strategy", highest), card("Current Strategy", current));
         rankedContent.getChildren().add(fold("Highest and Current Strategy", cards, false));
         configureTable();

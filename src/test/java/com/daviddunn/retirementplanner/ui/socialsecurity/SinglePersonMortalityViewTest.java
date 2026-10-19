@@ -35,8 +35,10 @@ class SinglePersonMortalityViewTest {
                     jobs.onChanged(view::refresh);
                     view.render(result);
                     var stage = new Stage();
-                    stage.setScene(new Scene(view, 1180, 900));
-                    stage.show(); view.applyCss(); view.layout();
+                    var scroll = new javafx.scene.control.ScrollPane(view);
+                    scroll.setFitToWidth(true);
+                    stage.setScene(new Scene(scroll, 1180, 900));
+                    stage.show(); stage.getScene().getRoot().applyCss(); stage.getScene().getRoot().layout();
                     try {
                         assertEquals(9, view.table.getItems().size());
                         assertNotNull(view.factor.getTooltip());
@@ -46,7 +48,10 @@ class SinglePersonMortalityViewTest {
                         assertEquals(0, jobs.generation());
                         assertTrue(view.details.getText().contains("individual death scenarios"));
                         assertTrue(view.summary.getText().contains("FEMALE"));
-                        assertTrue(view.details.localToScene(view.details.getBoundsInLocal()).getMaxY() <= 900);
+                        IntegratedAnalysisResultTabs.reveal(view.details);
+                        stage.getScene().getRoot().layout();
+                        assertTrue(view.details.localToScene(view.details.getBoundsInLocal()).getMaxY()
+                                <= scroll.lookup(".viewport").localToScene(scroll.lookup(".viewport").getBoundsInLocal()).getMaxY() + 1);
                         assertTrue(view.table.localToScene(view.table.getBoundsInLocal()).getMaxX() <= 1180);
                         if (Boolean.getBoolean("single.stage4a.preview")) write(view, result.mode().name() + ".png");
                         var frozen = view.summary.getText();

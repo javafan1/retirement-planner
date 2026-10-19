@@ -159,7 +159,11 @@ class SinglePersonIntegratedViewTest {
                     stage.getScene().getRoot().applyCss(); stage.getScene().getRoot().layout();
                     assertTrue(view.table.getWidth() > 1050);
                     assertTrue(view.table.localToScene(view.table.getBoundsInLocal()).getMaxX() <= 1180);
-                    assertTrue(view.details.localToScene(view.details.getBoundsInLocal()).getMaxY() <= 820);
+                    IntegratedAnalysisResultTabs.reveal(view.details);
+                    stage.getScene().getRoot().layout();
+                    var viewport = view.navigation.lookup(".viewport");
+                    assertTrue(view.details.localToScene(view.details.getBoundsInLocal()).getMaxY()
+                            <= viewport.localToScene(viewport.getBoundsInLocal()).getMaxY() + 1);
                     if (Boolean.getBoolean("single.stage3.preview")) {
                         write(stage.getScene().getRoot(), "single-integrated-1180.png");
                         var comparison = completed.breakEvenByClaimingAge().get(62);

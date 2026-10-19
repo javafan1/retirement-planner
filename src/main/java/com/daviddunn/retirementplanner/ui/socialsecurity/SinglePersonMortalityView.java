@@ -59,18 +59,16 @@ final class SinglePersonMortalityView extends VBox {
         var explanation = label(mode == SinglePersonMortalityAnalysis.Mode.SOCIAL_SECURITY_ONLY
                 ? "Nine primary claiming ages, ranked by mortality-weighted expected PV of own Social Security. Benefits begin at the conditioning month; no spouse or survivor benefit is modeled."
                 : "Nine primary claiming ages, ranked by expected PV After-Tax Estate at the person's death. Each lifetime uses the full retirement projection, ending December 31 before the modeled January 1 death. Non-investable property is excluded.");
-        var inputs = new GridPane();
-        inputs.setHgap(12);
-        inputs.setVgap(8);
+        var inputs = AnalyzerConfigurationLayout.flow();
         factor.setPrefColumnCount(8);
         discount.setPrefColumnCount(8);
-        input(inputs, 0, "Primary Longevity Factor", factor,
+        input(inputs, "Primary Longevity Factor", factor,
                 "Mortality multiplier: 1.00 uses the baseline table. Below 1 lowers mortality and increases later survival; above 1 increases mortality. Analysis only; the saved plan is unchanged.");
-        input(inputs, 1, "Mortality Conditioning Date", conditioning,
+        input(inputs, "Mortality Conditioning Date", conditioning,
                 "Conditions on Primary being alive at this date. Uses the existing next complete birthday interval convention. Independent of the valuation date.");
-        input(inputs, 2, "PV Valuation Date", valuation,
+        input(inputs, "PV Valuation Date", valuation,
                 "Date whose purchasing power is used for present values. Does not move the projection start or mortality conditioning date.");
-        input(inputs, 3, "Real Discount Rate (%)", discount,
+        input(inputs, "Real Discount Rate (%)", discount,
                 "Annual real discount percentage, after inflation. Used only to value analysis outcomes; does not change investment returns or the saved plan.");
         table.setId(mode == SinglePersonMortalityAnalysis.Mode.SOCIAL_SECURITY_ONLY ? "single-ss-weighted" : "single-integrated-weighted");
         table.setAccessibleText("Nine primary claiming strategies ranked by mortality-weighted expected present value");
@@ -104,7 +102,16 @@ final class SinglePersonMortalityView extends VBox {
         discount.textProperty().addListener((o, a, b) -> edited());
         conditioning.valueProperty().addListener((o, a, b) -> edited());
         valuation.valueProperty().addListener((o, a, b) -> edited());
-        getChildren().addAll(heading, explanation, assumptions, inputs, new HBox(10, run, cancel, pdf.button()), status, progress, summary, table, details,
+        status.setWrapText(true);
+        status.setMinHeight(Region.USE_PREF_SIZE);
+        getChildren().addAll(heading, explanation,
+                AnalyzerConfigurationLayout.heading("From Retirement Plan"), assumptions,
+                AnalyzerConfigurationLayout.heading("Inputs for Next Run"),
+                AnalyzerConfigurationLayout.note("Required temporary inputs for this analysis only; the other individual analysis retains its own settings."),
+                inputs, AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"),
+                AnalyzerConfigurationLayout.flow(run, cancel), status, progress,
+                AnalyzerConfigurationLayout.heading("Completed Results"), pdf.button(),
+                AnalyzerConfigurationLayout.note("Completed Result Assumptions below are frozen for the displayed run."), summary, table, details,
                 label("Read-only analysis. Mortality uses the SSA period table with terminal residual at age 120. PDF export uses the completed frozen result."));
         refresh();
     }
@@ -153,7 +160,9 @@ final class SinglePersonMortalityView extends VBox {
         cancel.setDisable(!busy);
         pdf.refresh();
         factor.setDisable(busy); discount.setDisable(busy); conditioning.setDisable(busy); valuation.setDisable(busy);
-        assumptions.setText("Mortality category from Person: " + plan.getHousehold().getPrimaryPerson().getMortalityCategory());
+        assumptions.setText(AnalyzerConfigurationLayout.individualPlan(plan));
+        assumptions.setWrapText(true);
+        assumptions.setMinHeight(Region.USE_PREF_SIZE);
         if (busy) status.setText("Evaluating " + (mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED ? "individual lifetime scenarios" : "own-benefit claiming strategies")
                 + " - " + jobs.status());
         table.setAccessibleHelp(current ? "Completed frozen results. Row selection does not rerun analysis." : "Results are stale or unavailable.");
@@ -163,12 +172,12 @@ final class SinglePersonMortalityView extends VBox {
         column.setCellValueFactory(v -> new ReadOnlyStringWrapper(format.apply(v.getValue())));
         table.getColumns().add(column);
     }
-    private static void input(GridPane grid, int row, String name, Control control, String help) {
+    private static void input(FlowPane inputs, String name, Control control, String help) {
         var label = new Label(name);
         InputHelp.install(control, help);
         InputHelp.link(label, control);
         control.setAccessibleText(name);
-        grid.addRow(row, label, control);
+        inputs.getChildren().add(AnalyzerConfigurationLayout.field(label, control));
     }
     private static Label label(String text) { var label = new Label(text); label.setWrapText(true); return label; }
     private static String money(BigDecimal value) {
