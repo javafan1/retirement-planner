@@ -31,7 +31,9 @@ public final class AnalysisCompatibilityPolicy {
             if ((s.shape() == AnalysisKind.Shape.COUPLE) != plan.getHousehold().hasSpouse())
                 return new Assessment(State.OUTDATED, "Historical copy belongs to the previous household shape.");
             AnalysisFingerprintService.Inputs inputs;
-            if (s.payload() instanceof CoupleSocialSecuritySnapshot ss) {
+            if (s.payload() instanceof ExhaustiveSnapshot) {
+                inputs = AnalysisFingerprintService.Inputs.none();
+            } else if (s.payload() instanceof CoupleSocialSecuritySnapshot ss) {
                 var r = ss.request(); var longevity = ss.frozen().longevity();
                 inputs = new AnalysisFingerprintService.Inputs(longevity.primaryAdjustment().factor(), longevity.spouseAdjustment().factor(),
                         r.conditioning(), r.valuation(), r.discount(), null, null, List.of(), List.of(), null);

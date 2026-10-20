@@ -173,8 +173,12 @@ public record IncomeSourceAttribution(
         private final Optional<InheritedAccountInformation> inheritedInformation;
 
         private AccountReference(Account account) {
+            this(Objects.requireNonNull(account), account.getRetirementParticipantFacts());
+        }
+
+        private AccountReference(Account account, RetirementParticipantFacts frozenParticipantFacts) {
             identity = Objects.requireNonNull(account);
-            participantFacts = account.getRetirementParticipantFacts();
+            participantFacts = Objects.requireNonNull(frozenParticipantFacts);
             name = account.getName();
             owner = account.getOwnership();
             type = account.getType();
@@ -187,6 +191,11 @@ public record IncomeSourceAttribution(
 
         public static AccountReference capture(Account account) {
             return new AccountReference(account);
+        }
+
+        /** Reconstruct immutable historical facts without mutating or exposing the identity account. */
+        public static AccountReference restore(Account identity, RetirementParticipantFacts frozenParticipantFacts) {
+            return new AccountReference(identity, frozenParticipantFacts);
         }
 
         public RetirementParticipantFacts participantFacts() {

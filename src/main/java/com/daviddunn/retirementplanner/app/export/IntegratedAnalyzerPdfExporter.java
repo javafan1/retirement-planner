@@ -183,11 +183,18 @@ public final class IntegratedAnalyzerPdfExporter {
                     content.addRect(x + 1, bottom + 1, cellWidth - 5, cellHeight - 5);
                     content.stroke();
                 }
-                var lines = wrap(cell.value(), 7.5f, cellWidth - 7);
-                float baseline = bottom + (cellHeight - 3 + lines.size() * 8.5f) / 2 - 7;
+                float valueSize = 7.5f;
+                var lines = wrap(cell.value(), valueSize, cellWidth - 7);
+                // Preserve the existing grid and ordinary text size; fit unusually large displayed amounts.
+                while (valueSize > 5.5f && lines.size() * (valueSize + 1) > cellHeight - 6) {
+                    valueSize -= 0.25f;
+                    lines = wrap(cell.value(), valueSize, cellWidth - 7);
+                }
+                float lineHeight = valueSize + 1;
+                float baseline = bottom + (cellHeight - 3 + lines.size() * lineHeight) / 2 - (valueSize - 0.5f);
                 for (String line : lines) {
-                    centered(line, x, baseline, cellWidth - 3, 7.5f, cell.optimal());
-                    baseline -= 8.5f;
+                    centered(line, x, baseline, cellWidth - 3, valueSize, cell.optimal());
+                    baseline -= lineHeight;
                 }
                 if (cell.optimal()) star(x + cellWidth - 8, bottom + cellHeight - 8, 3);
             }

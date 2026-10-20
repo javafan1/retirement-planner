@@ -34,6 +34,8 @@ final class IntegratedAnalyzerReportAdapter {
                 "Grouped table includes all " + orderedRows.size() + " represented outcome groups, in screen order. "
                         + "Grouping is presentation only; equivalent strategy counts are preserved.", socialSecurityReference)));
         sections.add(new Section("Current Plan Financial Metrics", metrics(result.currentPlanBaseline().metrics())));
+        if (!result.currentPlanBaseline().warnings().isEmpty())
+            sections.add(new Section("Current Plan Projection Warnings", result.currentPlanBaseline().warnings()));
         result.rankedSuccessfulEntries().stream().findFirst().ifPresent(best -> {
             sections.add(new Section("Highest Tested Strategy", deterministicDetails(best)));
             var gap = best.metrics().orElseThrow().afterTaxEstate().subtract(result.currentPlanBaseline().metrics().afterTaxEstate());
@@ -218,6 +220,7 @@ final class IntegratedAnalyzerReportAdapter {
             lines.add("Candidate minus current plan:");
             lines.addAll(metrics(entry.differencesFromCurrentPlan().orElseThrow()));
             lines.add("Projection detail retained: " + entry.retainedDetail().isPresent());
+            entry.retainedDetail().ifPresent(detail -> detail.warnings().forEach(warning -> lines.add("Projection warning: " + warning)));
         } else lines.add("Unavailable: " + entry.failure().orElseThrow().message());
         return lines;
     }

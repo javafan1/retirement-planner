@@ -32,6 +32,7 @@ final class WeightedResultPersistence implements AutoCloseable {
     private boolean loading;
     private boolean metadataPending;
     private boolean changingSource;
+    private boolean replacing;
 
     WeightedResultPersistence(ApplicationController source, AnalysisKind kind,
             Supplier<AnalysisFingerprintService.Inputs> inputs, Function<AnalysisSnapshot, Runnable> reconstruct,
@@ -77,6 +78,7 @@ final class WeightedResultPersistence implements AutoCloseable {
             loaded = false;
             loading = false;
             metadataPending = false;
+            replacing = false;
             clear.run();
         }
     }
@@ -84,6 +86,7 @@ final class WeightedResultPersistence implements AutoCloseable {
     void load() {
         if (closed || changingSource) return;
         binding();
+        if (replacing) { reassess(); return; }
         if (loaded || loading) {
             if (loaded && snapshot == null) source.getAnalysisResults().inMemory(slot).ifPresent(c -> metadata(c, generation));
             reassess(); return;
@@ -93,7 +96,8 @@ final class WeightedResultPersistence implements AutoCloseable {
         if (!source.canPersistAnalysisResults() && memory.isEmpty()) { show(); return; }
         long expected = generation;
         loading = true;
-        notice.setText(kind == AnalysisKind.COUPLE_SOCIAL_SECURITY ? "Loading previous Social Security results…" : "Loading previous longevity-weighted results…");
+        notice.setText(kind == AnalysisKind.COUPLE_EXHAUSTIVE ? "Loading previous exhaustive results…"
+                : kind == AnalysisKind.COUPLE_SOCIAL_SECURITY ? "Loading previous Social Security results…" : "Loading previous longevity-weighted results…");
         var file = source.getCurrentFile();
         var read = source.canPersistAnalysisResults() ? store.load(slot, file)
                 : store.background(() -> Optional.of(memory.orElseThrow().presentationSnapshot(new com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec())));
@@ -124,8 +128,20 @@ final class WeightedResultPersistence implements AutoCloseable {
 
     private record Restored(AnalysisSnapshot snapshot, Runnable attach, Map<String, String> references) { }
 
+    /** Exhaustive replacement guard: a pending older load cannot attach during a replacement. */
+    void beginReplacement() {
+        if (loading) { generation++; loading = false; loaded = false; }
+        replacing = true;
+    }
+    void finishReplacement() {
+        if (!replacing || closed) return;
+        replacing = false;
+        load();
+    }
+
     /** Called only inside the existing eligible, accepted financial completion callback. */
     void accept(AcceptedAnalysisCompletion completion) {
+        replacing = false;
         generation++;
         loading = false;
         loaded = true;
@@ -203,6 +219,7 @@ final class WeightedResultPersistence implements AutoCloseable {
     boolean exportable() { return sameBinding() && snapshot != null && assessment != null
             && assessment.state() != AnalysisCompatibilityPolicy.State.INCOMPATIBLE_OR_UNAVAILABLE; }
     boolean current() { return sameBinding() && assessment != null && assessment.state() == AnalysisCompatibilityPolicy.State.CURRENT; }
+    AnalysisSnapshot resultMetadata() { return sameBinding() ? snapshot : null; }
     static java.time.LocalDate date(DatePicker picker) {
         var value = Objects.requireNonNull(picker.getValue());
         var text = picker.getEditor().getText();

@@ -23,6 +23,7 @@ public final class AnalysisSnapshotCodec {
     public static final int MAX_NUMBER_LENGTH = 4096;
     private static final Logger LOG = Logger.getLogger(AnalysisSnapshotCodec.class.getName());
     private final ObjectMapper mapper;
+    private final ObjectMapper exactTrees;
 
     public AnalysisSnapshotCodec() {
         var factory = JsonFactory.builder().streamReadConstraints(StreamReadConstraints.builder()
@@ -44,6 +45,8 @@ public final class AnalysisSnapshotCodec {
                 var kind = (AnalysisKind) context.getAttribute("snapshot-kind");
                 if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY)
                     return context.readValue(parser, CoupleSocialSecuritySnapshot.class);
+                if (kind == AnalysisKind.COUPLE_EXHAUSTIVE)
+                    return context.readValue(parser, ExhaustiveSnapshot.class);
                 if (kind != AnalysisKind.COUPLE_WEIGHTED && kind != AnalysisKind.INDIVIDUAL_WEIGHTED
                         && kind != AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY)
                     throw new IOException("Unsupported analysis payload family.");
@@ -52,12 +55,19 @@ public final class AnalysisSnapshotCodec {
             }
         });
         mapper.registerModule(families);
+        exactTrees = mapper.copy().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+        exactTrees.setNodeFactory(com.fasterxml.jackson.databind.node.JsonNodeFactory.withExactBigDecimals(true));
     }
 
     public record Content(AnalysisPayload payload, SnapshotContext context) { }
     public String digest(AnalysisPayload payload, SnapshotContext context) {
-        try { return sha256(mapper.writeValueAsBytes(new Content(payload, context))); }
-        catch (IOException e) { throw new IllegalArgumentException("Invalid snapshot content.", e); }
+        try {
+            var digest = MessageDigest.getInstance("SHA-256");
+            try (var output = new DigestOutputStream(OutputStream.nullOutputStream(), digest)) {
+                mapper.writeValue(output, new Content(payload, context));
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (IOException | NoSuchAlgorithmException e) { throw new IllegalArgumentException("Invalid snapshot content.", e); }
     }
     public static String sha256(byte[] bytes) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
@@ -67,8 +77,23 @@ public final class AnalysisSnapshotCodec {
         try { validate(snapshot); }
         catch (Exception failure) { throw AnalysisSnapshotSaveException.at(AnalysisSnapshotSaveException.Stage.DTO_VALIDATION, -1, -1, failure); }
         byte[] raw;
-        try { raw = mapper.writeValueAsBytes(snapshot); }
+        try {
+            if (snapshot.kind() == AnalysisKind.COUPLE_EXHAUSTIVE) {
+                com.fasterxml.jackson.databind.node.ObjectNode tree = exactTrees.valueToTree(snapshot);
+                tree.set("payload", new ExhaustiveSnapshotInterning(exactTrees).encode(
+                        (com.fasterxml.jackson.databind.node.ObjectNode) tree.get("payload")));
+                raw = exactTrees.writeValueAsBytes(tree);
+            } else raw = mapper.writeValueAsBytes(snapshot);
+        }
         catch (Exception failure) { throw AnalysisSnapshotSaveException.at(AnalysisSnapshotSaveException.Stage.SERIALIZATION, -1, -1, failure); }
+        if (snapshot.kind() == AnalysisKind.COUPLE_EXHAUSTIVE && (raw.length > MAX_RAW_BYTES
+                || Boolean.getBoolean("retirementplanner.snapshot.sizeDiagnostics"))) {
+            try { LOG.warning("Exhaustive snapshot size breakdown: " + AnalysisSnapshotSizeDiagnostics.measure(raw)); }
+            catch (Exception diagnosticFailure) {
+                LOG.warning("Exhaustive snapshot size breakdown unavailable: category=" + diagnosticFailure.getClass().getSimpleName()
+                        + " rawBytes=" + raw.length + " maxRawBytes=" + MAX_RAW_BYTES);
+            }
+        }
         if (raw.length > MAX_RAW_BYTES) throw new AnalysisSnapshotSaveException(AnalysisSnapshotSaveException.Stage.SIZE_LIMIT,
                 raw.length, -1, new IOException("Snapshot exceeds the uncompressed size limit."));
         try { checkDocument(raw); }
@@ -82,7 +107,19 @@ public final class AnalysisSnapshotCodec {
         return encodeMeasured(snapshot).bytes();
     }
     public Encoded encodeMeasured(AnalysisSnapshot snapshot) throws IOException {
-        byte[] raw = raw(snapshot);
+        return compress(raw(snapshot));
+    }
+    /** Package-local document operations for explicit DTO codecs; no additional analysis kind is enabled. */
+    Encoded encodeDocument(Object document) throws IOException {
+        byte[] raw = mapper.writeValueAsBytes(document);
+        if (raw.length > MAX_RAW_BYTES) throw new IOException("Uncompressed snapshot is too large.");
+        checkDocument(raw);
+        return compress(raw);
+    }
+    <T> T decodeDocument(byte[] compressed, Class<T> explicitlyAllowedType) throws IOException {
+        return mapper.readValue(readDocument(compressed), explicitlyAllowedType);
+    }
+    private Encoded compress(byte[] raw) throws IOException {
         var output = new ByteArrayOutputStream();
         try (var gzip = new GZIPOutputStream(output)) { gzip.write(raw); }
         catch (Exception failure) { throw AnalysisSnapshotSaveException.at(AnalysisSnapshotSaveException.Stage.COMPRESSION, raw.length, output.size(), failure); }
@@ -91,6 +128,10 @@ public final class AnalysisSnapshotCodec {
         return new Encoded(output.toByteArray(), raw.length);
     }
     public AnalysisSnapshot decode(byte[] compressed) throws IOException {
+        byte[] raw = readDocument(compressed);
+        return decodeSnapshot(raw);
+    }
+    private byte[] readDocument(byte[] compressed) throws IOException {
         if (compressed.length > MAX_COMPRESSED_BYTES) throw new IOException("Compressed snapshot is too large.");
         byte[] raw;
         try (var gzip = new GZIPInputStream(new ByteArrayInputStream(compressed))) {
@@ -98,8 +139,11 @@ public final class AnalysisSnapshotCodec {
         }
         if (raw.length > MAX_RAW_BYTES) throw new IOException("Uncompressed snapshot is too large.");
         checkDocument(raw);
+        return raw;
+    }
+    private AnalysisSnapshot decodeSnapshot(byte[] raw) throws IOException {
         // Schema check is independent of financial compatibility. Never rewrite an unknown schema.
-        var tree = mapper.readTree(raw);
+        var tree = exactTrees.readTree(raw);
         if (tree == null || tree.path("schemaVersion").asInt(-1) != AnalysisSnapshot.SCHEMA)
             throw new IOException("Unsupported analysis snapshot schema; the file was preserved.");
         for (String key : List.of("planId", "runId", "originPlanId")) {
@@ -109,7 +153,19 @@ public final class AnalysisSnapshotCodec {
         }
         try {
             var kind = AnalysisKind.valueOf(tree.path("kind").asText());
-            AnalysisSnapshot snapshot = mapper.readerFor(AnalysisSnapshot.class).withAttribute("snapshot-kind", kind).readValue(raw);
+            AnalysisSnapshot snapshot;
+            if (kind == AnalysisKind.COUPLE_EXHAUSTIVE) {
+                // Exact decimal tree parsing is scoped to this wire representation; legacy families are untouched.
+                var exact = (com.fasterxml.jackson.databind.node.ObjectNode) tree;
+                if (exact.path("payload").has("exhaustiveRepresentation")) {
+                    exact.set("payload", new ExhaustiveSnapshotInterning(exactTrees).decode(
+                            (com.fasterxml.jackson.databind.node.ObjectNode) exact.get("payload")));
+                }
+                // Traverse shared immutable values directly: never materialize an expanded JSON byte document.
+                try (var parser = exact.traverse(exactTrees)) {
+                    snapshot = mapper.readerFor(AnalysisSnapshot.class).withAttribute("snapshot-kind", kind).readValue(parser);
+                }
+            } else snapshot = mapper.readerFor(AnalysisSnapshot.class).withAttribute("snapshot-kind", kind).readValue(raw);
             validate(snapshot);
             return snapshot;
         } catch (RuntimeException e) { throw new IOException("Invalid analysis snapshot; the file was preserved.", e); }
@@ -152,10 +208,19 @@ public final class AnalysisSnapshotCodec {
     private static final Set<String> NUMERIC_PATH_FIELDS = numericPathFields();
     private static Set<String> numericPathFields() {
         var fields = new HashSet<String>();
+        fields.addAll(Set.of("exhaustiveRepresentation", "tables", "document", "$ref"));
         var types = new ArrayList<Class<?>>();
         types.addAll(List.of(WeightedSnapshots.class.getDeclaredClasses()));
         types.addAll(List.of(CoupleSocialSecuritySnapshot.class.getDeclaredClasses()));
         types.add(CoupleSocialSecuritySnapshot.class);
+        types.add(ExhaustiveSnapshot.class);
+        types.addAll(List.of(ExhaustiveSnapshot.class.getDeclaredClasses()));
+        types.addAll(List.of(RetainedProjectionSnapshot.class.getDeclaredClasses()));
+        types.addAll(List.of(RetainedProjectionSnapshot.class,
+                com.daviddunn.retirementplanner.domain.projection.HouseholdCashSettlement.class,
+                com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult.class,
+                com.daviddunn.retirementplanner.domain.projection.summary.ProjectionMetrics.class,
+                com.daviddunn.retirementplanner.domain.model.RetirementParticipantFacts.class));
         types.addAll(List.of(
                 com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityMortalityWeightedStrategyValue.class,
                 com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityMortalityWeightedClaimingGridCell.class,
@@ -188,6 +253,8 @@ public final class AnalysisSnapshotCodec {
     }
     private void validate(AnalysisSnapshot s) throws IOException {
         s.payload().validate(s.kind());
+        if (s.payload() instanceof ExhaustiveSnapshot exhaustive && !s.completedAt().equals(exhaustive.completedAt()))
+            throw new IOException("Exhaustive completion timestamp does not match its envelope.");
         if (!digest(s.payload(), s.context()).equals(s.payloadDigest())) throw new IOException("Snapshot integrity check failed.");
     }
 }
