@@ -23,6 +23,13 @@ final class SinglePersonMortalityView extends VBox {
     final Label status = new Label();
     final Label assumptions = new Label();
     final Label summary = new Label();
+    final Label persistenceNotice = new Label();
+    WeightedResultPersistence persistence;
+    record CompletionInput(RetirementPlan plan, IndividualReportContext context,
+            IndividualLongevityScenarios mortality, java.time.LocalDate valuation, BigDecimal rate) { }
+    java.util.function.Function<CompletionInput, java.util.function.Consumer<SinglePersonMortalityAnalysis.Result>>
+            acceptedCompletion = input -> result -> { };
+    boolean displays(SinglePersonMortalityAnalysis.Result result) { return completed == result; }
     final TextArea details = new TextArea();
     final TableView<SinglePersonMortalityAnalysis.Entry> table = new TableView<>();
     private final SinglePersonMortalityAnalysis.Mode mode;
@@ -33,18 +40,22 @@ final class SinglePersonMortalityView extends VBox {
     private IndividualReportContext reportContext;
     private final IndividualPdfExportAction pdf;
 
-    boolean canExportPdf() { return current && completed != null && reportContext != null
+    boolean canExportPdf() { return (persistence == null ? current : persistence.exportable()) && completed != null && reportContext != null
             && jobs.state() == SocialSecurityAnalyzerJobController.State.IDLE; }
     com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport preparePdfReport() {
         if (!canExportPdf()) throw new IllegalStateException("A current completed analysis is required.");
         var selected = table.getSelectionModel().getSelectedItem();
-        return IndividualAnalyzerReportAdapter.mortality(reportContext, completed,
+        var report = IndividualAnalyzerReportAdapter.mortality(reportContext, completed,
                 selected == null ? completed.currentAge() : selected.strategy().primaryRetirementAge());
+        return persistence != null && persistence.exportable() ? persistence.report(report) : report;
     }
     private final AnalysisProgressView progress = new AnalysisProgressView();
 
     SinglePersonMortalityView(RetirementPlan plan, SocialSecurityAnalyzerJobController jobs, SinglePersonMortalityAnalysis.Mode mode) {
         super(10);
+        persistenceNotice.visibleProperty().bind(persistenceNotice.textProperty().isNotEmpty());
+        persistenceNotice.managedProperty().bind(persistenceNotice.visibleProperty());
+        persistenceNotice.setWrapText(true);
         this.plan = plan;
         this.jobs = jobs;
         this.mode = mode;
@@ -110,7 +121,7 @@ final class SinglePersonMortalityView extends VBox {
                 AnalyzerConfigurationLayout.note("Required temporary inputs for this analysis only; the other individual analysis retains its own settings."),
                 inputs, AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"),
                 AnalyzerConfigurationLayout.flow(run, cancel), status, progress,
-                AnalyzerConfigurationLayout.heading("Completed Results"), pdf.button(),
+                AnalyzerConfigurationLayout.heading("Completed Results"), persistenceNotice, pdf.button(),
                 AnalyzerConfigurationLayout.note("Completed Result Assumptions below are frozen for the displayed run."), summary, table, details,
                 label("Read-only analysis. Mortality uses the SSA period table with terminal residual at age 120. PDF export uses the completed frozen result."));
         refresh();
@@ -122,6 +133,29 @@ final class SinglePersonMortalityView extends VBox {
         jobs.invalidate(SocialSecurityAnalyzerJobController.Change.ASSUMPTIONS);
         status.setText("Inputs changed - displayed results are stale. Run analysis again.");
         refresh();
+        if (persistence != null) persistence.reassess();
+    }
+    void restore(SinglePersonMortalityAnalysis.Result result, IndividualReportContext context) {
+        reportContext = context;
+        render(result);
+    }
+    void clearSavedResult() {
+        completed = null;
+        reportContext = null;
+        current = false;
+        table.getItems().clear();
+        summary.setText("");
+        details.clear();
+        status.setText("No completed result loaded for this plan.");
+        refresh();
+    }
+    void refreshSavedState() {
+        refresh();
+        if (persistence != null && persistence.exportable() && jobs.state() == SocialSecurityAnalyzerJobController.State.IDLE
+                && status.getText().startsWith("Inputs changed")) {
+            status.setText(persistence.current() ? "Completed results match current inputs."
+                    : "Previous completed results remain available. Run analysis to replace them.");
+        }
     }
     void start() {
         try {
@@ -131,11 +165,17 @@ final class SinglePersonMortalityView extends VBox {
                     SocialSecurityMortalityAdjustment.of(new BigDecimal(factor.getText().trim())), conditioning.getValue());
             var date = valuation.getValue();
             var rate = new BigDecimal(discount.getText().trim()).movePointLeft(2);
+            var accepted = acceptedCompletion.apply(new CompletionInput(frozen, captured, mortality, date, rate));
             current = false;
             boolean admitted = jobs.start(mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED
                             ? SocialSecurityAnalyzerJobController.Mode.WEIGHTED : SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY,
                     (p, c) -> new SinglePersonMortalityAnalysis().calculate(frozen, mortality, date, rate, mode, p, c),
-                    result -> { reportContext = captured; render(result); }, failure -> status.setText("Analysis failed: " + failure.getMessage()));
+                    result -> {
+                        // This callback is reached only after the original generation/revision/cancellation gates.
+                        try { accepted.accept(result); }
+                        catch (RuntimeException persistenceFailure) { persistenceNotice.setText("Analysis completed, but result saving could not start. The previous saved result was retained."); }
+                        reportContext = captured; render(result);
+                    }, failure -> status.setText("Analysis failed: " + failure.getMessage()));
             if (!admitted) status.setText("Another analysis is running.");
         } catch (RuntimeException invalid) { current = false; status.setText("Check inputs: " + invalid.getMessage()); }
         refresh();
@@ -165,7 +205,10 @@ final class SinglePersonMortalityView extends VBox {
         assumptions.setMinHeight(Region.USE_PREF_SIZE);
         if (busy) status.setText("Evaluating " + (mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED ? "individual lifetime scenarios" : "own-benefit claiming strategies")
                 + " - " + jobs.status());
-        table.setAccessibleHelp(current ? "Completed frozen results. Row selection does not rerun analysis." : "Results are stale or unavailable.");
+        table.setAccessibleHelp(persistence != null && persistence.exportable()
+                ? (persistence.current() ? "Current completed frozen results." : "Previous completed results; inspect original assumptions.")
+                        + " Row selection does not rerun analysis."
+                : current ? "Completed frozen results. Row selection does not rerun analysis." : "Results are stale or unavailable.");
     }
     private void column(String name, Function<SinglePersonMortalityAnalysis.Entry, String> format) {
         var column = new TableColumn<SinglePersonMortalityAnalysis.Entry, String>(name);

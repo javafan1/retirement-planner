@@ -16,6 +16,7 @@ public class MainApplication extends Application {
     @Override
     public void stop() {
         ANALYSIS_JOBS.close();
+        com.daviddunn.retirementplanner.app.socialsecurity.results.ApplicationAnalysisResults.store().shutdownIfIdle();
     }
 
     @Override

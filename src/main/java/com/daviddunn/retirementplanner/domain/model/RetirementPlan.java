@@ -14,6 +14,26 @@ import java.util.Objects;
 
 public class RetirementPlan {
 
+    private static final java.util.regex.Pattern PLAN_ID_PATTERN = java.util.regex.Pattern.compile(
+            "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    private String planId;
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public String getPlanId() { return planId; }
+
+    /** Persistence identity only; never consulted by financial calculations. */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void assignPlanId(java.util.UUID identity) {
+        planId = Objects.requireNonNull(identity).toString();
+    }
+
+    public static java.util.UUID validatedPlanId(String value) {
+        if (value == null || !PLAN_ID_PATTERN.matcher(value).matches()) {
+            throw new IllegalArgumentException("Plan identity must be a canonical UUID.");
+        }
+        return java.util.UUID.fromString(value);
+    }
+
     private Household household;
     private final AccountPortfolio accountPortfolio;
 
@@ -41,7 +61,10 @@ public class RetirementPlan {
             RothConversionRequest rothConversionRequest,
 
             @JsonProperty("nonInvestableAssets")
-            List<NonInvestableAsset> nonInvestableAssets) {
+            List<NonInvestableAsset> nonInvestableAssets,
+            @JsonProperty("planId") String planId) {
+
+        this.planId = planId == null ? null : validatedPlanId(planId).toString();
 
         this.household =
                 Objects.requireNonNull(
@@ -64,6 +87,12 @@ public class RetirementPlan {
                     nonInvestableAssets);
         }
         validateHouseholdReferences();
+    }
+
+    public RetirementPlan(Household household, AccountPortfolio portfolio,
+            PlanningAssumptions assumptions, RothConversionRequest roth,
+            List<NonInvestableAsset> assets) {
+        this(household, portfolio, assumptions, roth, assets, java.util.UUID.randomUUID().toString());
     }
 
     /** Recheck at persistence/admission boundaries because account and income lists are mutable. */

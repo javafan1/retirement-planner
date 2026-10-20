@@ -555,6 +555,11 @@ public class MainWindow {
 
         try {
             controller.saveAs(file.toPath());
+            controller.getSnapshotCopyCompletion().thenAccept(warnings -> {
+                if (!warnings.isEmpty()) javafx.application.Platform.runLater(() -> {
+                    if (stage != null && stage.isShowing()) showPersistenceWarnings();
+                });
+            });
 
             statusLabel.setText("Plan saved.");
 
@@ -700,7 +705,42 @@ public class MainWindow {
             return;
         }
 
-        root.getScene().getWindow().hide();
+        finishExitAfterResultWrites(() -> root.getScene().getWindow().hide());
+    }
+
+    private boolean drainingAnalysisResults;
+
+    /** Preserve the existing plan-departure decision, then drain accepted result I/O off FX. */
+    private void finishExitAfterResultWrites(Runnable closeWindow) {
+        if (drainingAnalysisResults) return;
+        var store = controller.getAnalysisResults();
+        if (!store.needsDrain()) { closeWindow.run(); return; }
+        drainingAnalysisResults = true;
+        var notice = new Alert(Alert.AlertType.INFORMATION, "Saving completed analysis results before exit…", ButtonType.CANCEL);
+        notice.setHeaderText("Finishing result saves");
+        if (stage != null) notice.initOwner(stage);
+        notice.show();
+        notice.setOnHidden(event -> {
+            if (notice.getResult() == ButtonType.CANCEL) store.resumeAfterCancelledExit();
+        });
+        Thread.ofVirtual().name("analysis-result-exit-drain").start(() -> {
+            var outcome = store.drain(java.time.Duration.ofSeconds(30));
+            javafx.application.Platform.runLater(() -> {
+                boolean cancelled = notice.getResult() == ButtonType.CANCEL;
+                notice.setOnHidden(null); notice.close(); drainingAnalysisResults = false;
+                if (outcome.safeToExit() && !cancelled) { closeWindow.run(); return; }
+                store.resumeAfterCancelledExit();
+                if (cancelled) return;
+                var retry = new ButtonType("Retry result saves");
+                var warning = new Alert(Alert.AlertType.WARNING,
+                        "The application remains open because completed results are not durably saved. Previous saved results were preserved.", retry, ButtonType.CANCEL);
+                warning.setHeaderText("Analysis results could not be saved");
+                if (stage != null) warning.initOwner(stage);
+                if (warning.showAndWait().orElse(ButtonType.CANCEL) == retry) {
+                    store.retryFailed(); finishExitAfterResultWrites(closeWindow);
+                }
+            });
+        });
     }
     private void showProjectionYearSummary(
             ProjectionYearDetailsRequest request) {
@@ -781,6 +821,9 @@ public class MainWindow {
         stage.setOnCloseRequest(event -> {
             if (!confirmPlanDeparture()) {
                 event.consume();
+            } else if (controller.getAnalysisResults().needsDrain()) {
+                event.consume();
+                finishExitAfterResultWrites(stage::hide);
             }
         });
 

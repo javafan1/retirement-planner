@@ -81,6 +81,16 @@ final class IntegratedAnalyzerReportAdapter {
             List<LongevityWeightedIntegratedStrategyComparisonEntry> orderedRows,
             List<IntegratedAnalysisComparisonPresentation.Row> comparisons,
             IntegratedSocialSecurityCompleteStrategySearchResult deterministicReference) {
+        return weighted(context, model, map, metric, selectedCell, selected, orderedRows, comparisons, deterministicReference, null);
+    }
+    static IntegratedAnalyzerReport weighted(IntegratedReportContext context,
+            LongevityWeightedIntegratedPresentation model, ClaimingStrategyHeatMapModel map,
+            ClaimingStrategyHeatMapMetric metric, ClaimingStrategyHeatMapCell selectedCell,
+            LongevityWeightedIntegratedStrategyComparisonEntry selected,
+            List<LongevityWeightedIntegratedStrategyComparisonEntry> orderedRows,
+            List<IntegratedAnalysisComparisonPresentation.Row> comparisons,
+            IntegratedSocialSecurityCompleteStrategySearchResult deterministicReference,
+            java.util.function.Function<SocialSecurityHouseholdClaimingStrategy, OptionalInt> historicalRanks) {
         var result = model.result();
         var metadata = result.metadata();
         var longevity = metadata.longevityAssumptions();
@@ -113,7 +123,7 @@ final class IntegratedAnalyzerReportAdapter {
         result.baseline().ifPresent(base -> sections.add(new Section("Current Strategy Financial Result", weightedDetails(model, base))));
         if (selected != null) {
             var details = new ArrayList<>(weightedDetails(model, selected));
-            details.add("Deterministic rank: " + (deterministicReference == null ? "Unavailable - requires a current compatible deterministic result"
+            details.add("Deterministic rank: " + (historicalRanks != null ? rank(historicalRanks.apply(selected.strategy())) : deterministicReference == null ? "Unavailable - requires a current compatible deterministic result"
                     : rank(deterministicReference.rankOf(selected.strategy()))));
             sections.add(new Section("Selected Strategy - Complete Aggregate Details", details));
         }

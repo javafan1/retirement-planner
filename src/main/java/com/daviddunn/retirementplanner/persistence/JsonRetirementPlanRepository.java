@@ -33,13 +33,54 @@ public class JsonRetirementPlanRepository
     public void save(RetirementPlan plan,
                      Path file) throws IOException {
 
+        saveWithIdentity(plan, file, plan.getPlanId() == null
+                ? java.util.UUID.randomUUID() : RetirementPlan.validatedPlanId(plan.getPlanId()));
+    }
+
+    /** Identity is published to memory only after the verified file has committed. */
+    public void saveWithIdentity(RetirementPlan plan, Path file, java.util.UUID identity) throws IOException {
+
         synchronized (AtomicFileWriter.SAVE_LOCK) {
             if (originalForBackup(file).isPresent()) {
                 throw new IOException("Application backups are recovery sources. Use Save As to a different filename.");
             }
             plan.validateHouseholdReferences();
-            byte[] captured = mapper.writeValueAsBytes(plan);
+            byte[] original = mapper.writeValueAsBytes(plan);
+            byte[] captured = original;
+            if (!identity.toString().equals(plan.getPlanId())) {
+                // Preserve original numeric tokens; a tree round trip could change monetary scale.
+                com.fasterxml.jackson.core.JsonFactory factory = mapper.getFactory();
+                var output = new java.io.ByteArrayOutputStream();
+                try (var parser = factory.createParser(original); var generator = factory.createGenerator(output)) {
+                    generator.setPrettyPrinter(new com.fasterxml.jackson.core.util.DefaultPrettyPrinter());
+                    parser.nextToken();
+                    generator.writeStartObject();
+                    while (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.END_OBJECT) {
+                        String name = parser.currentName();
+                        parser.nextToken();
+                        if (name.equals("planId")) parser.skipChildren();
+                        else {
+                            generator.writeFieldName(name);
+                            int depth = 0;
+                            do {
+                                var token = parser.currentToken();
+                                if (token == com.fasterxml.jackson.core.JsonToken.START_OBJECT
+                                        || token == com.fasterxml.jackson.core.JsonToken.START_ARRAY) depth++;
+                                if (token == com.fasterxml.jackson.core.JsonToken.END_OBJECT
+                                        || token == com.fasterxml.jackson.core.JsonToken.END_ARRAY) depth--;
+                                if (token.isNumeric()) generator.writeNumber(parser.getText());
+                                else generator.copyCurrentEvent(parser);
+                                if (depth > 0) parser.nextToken();
+                            } while (depth > 0);
+                        }
+                    }
+                    generator.writeStringField("planId", identity.toString());
+                    generator.writeEndObject();
+                }
+                captured = output.toByteArray();
+            }
             warnings = writer.write(file, captured, this::verify, true);
+            plan.assignPlanId(identity);
         }
     }
 

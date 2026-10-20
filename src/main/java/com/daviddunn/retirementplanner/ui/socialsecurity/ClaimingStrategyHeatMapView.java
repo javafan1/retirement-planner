@@ -288,6 +288,11 @@ final class ClaimingStrategyHeatMapView extends VBox {
     }
 
     ClaimingStrategyHeatMapModel reportModel() { return model; }
+    void restoreStrategy(com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityHouseholdClaimingStrategy strategy) {
+        if (model != null && strategy.hasSpouse()) model.cells().stream().filter(cell ->
+                cell.primaryClaimingAge() == strategy.primaryRetirementAge()
+                        && cell.spouseClaimingAge() == strategy.spouseRetirementAge()).findFirst().ifPresent(this::select);
+    }
     ClaimingStrategyHeatMapCell reportSelection() { return selected; }
 
     private static Label label(String text) {

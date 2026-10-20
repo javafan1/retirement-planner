@@ -60,6 +60,8 @@ class WizardFinancialEquivalenceTest {
         fx(() -> created.set(throughWizard(scenario)));
         RetirementPlan wizard = created.get();
         RetirementPlan established = throughEstablishedBuilders(scenario);
+        String wizardIdentity = wizard.getPlanId();
+        assertNotEquals(established.getPlanId(), wizardIdentity, "Independent construction paths create independent plan identities");
 
         assertInputs(established, wizard, scenario + " inputs");
         assertProjections(established, wizard, scenario + " projection");
@@ -68,7 +70,9 @@ class WizardFinancialEquivalenceTest {
         var repository = new JsonRetirementPlanRepository();
         Path file = directory.resolve(scenario + ".json");
         repository.save(wizard, file);
+        assertEquals(wizardIdentity, repository.load(file).getPlanId());
         repository.save(wizard, file);
+        assertEquals(wizardIdentity, repository.loadBackup(file).getPlanId());
         assertInputs(established, repository.load(file), scenario + " reload");
         assertInputs(established, repository.loadBackup(file), scenario + " backup");
         assertProjections(established, repository.load(file), scenario + " reload projection");
@@ -81,6 +85,7 @@ class WizardFinancialEquivalenceTest {
             assertEquals(expected, actual, scenario + " entire seeded output contract");
         }
         assertInputs(established, wizard, scenario + " calculation must not mutate inputs");
+        assertEquals(wizardIdentity, wizard.getPlanId(), "Calculations must not change persistence identity");
     }
 
     private static RetirementPlan throughWizard(Scenario scenario) throws Exception {
@@ -262,7 +267,11 @@ class WizardFinancialEquivalenceTest {
     }
 
     private static void assertInputs(RetirementPlan expected, RetirementPlan actual, String context) {
-        assertEquals(MAPPER.valueToTree(expected), MAPPER.valueToTree(actual), context + " complete persisted input contract");
+        var expectedInputs = (com.fasterxml.jackson.databind.node.ObjectNode) MAPPER.valueToTree(expected);
+        var actualInputs = (com.fasterxml.jackson.databind.node.ObjectNode) MAPPER.valueToTree(actual);
+        // Identity is deliberately different for independently created plans; all financial fields remain exact.
+        expectedInputs.remove("planId"); actualInputs.remove("planId");
+        assertEquals(expectedInputs, actualInputs, context + " complete financial persisted input contract");
         var accounts = expected.getAccountPortfolio().getAccounts();
         for (int index = 0; index < accounts.size(); index++) {
             Account left = accounts.get(index), right = actual.getAccountPortfolio().getAccounts().get(index);

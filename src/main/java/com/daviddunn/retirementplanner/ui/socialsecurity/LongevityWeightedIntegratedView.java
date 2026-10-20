@@ -42,6 +42,7 @@ final class LongevityWeightedIntegratedView extends VBox {
     private LongevityWeightedIntegratedPresentation model;
     private LongevityWeightedIntegratedStrategyComparisonEntry selectedEntry;
     private IntegratedSocialSecurityCompleteStrategySearchResult deterministicReference;
+    private java.util.function.Function<SocialSecurityHouseholdClaimingStrategy, OptionalInt> historicalRanks;
 
     LongevityWeightedIntegratedView() {
         super(6);
@@ -221,7 +222,13 @@ final class LongevityWeightedIntegratedView extends VBox {
     }
 
     void deterministicReference(IntegratedSocialSecurityCompleteStrategySearchResult result) {
+        historicalRanks = null;
         deterministicReference = result;
+        showDetail(table.getSelectionModel().getSelectedItem());
+    }
+    void historicalRanks(java.util.function.Function<SocialSecurityHouseholdClaimingStrategy, OptionalInt> ranks) {
+        deterministicReference = null;
+        historicalRanks = ranks;
         showDetail(table.getSelectionModel().getSelectedItem());
     }
 
@@ -258,7 +265,7 @@ final class LongevityWeightedIntegratedView extends VBox {
                 + "\nPV Difference vs Current: " + entry.pvDifferenceFromBaseline().map(LongevityWeightedIntegratedView::signed).orElse("Unavailable")
                 + "\nProven-equivalence group size: " + model.provenEquivalentCount(entry.inputOrder())
                 + " (equal rounded values do not establish ties or equivalence)";
-        text += "\nDeterministic rank: " + (deterministicReference == null ? "Unavailable"
+        text += "\nDeterministic rank: " + (historicalRanks != null ? rank(historicalRanks.apply(entry.strategy())) : deterministicReference == null ? "Unavailable"
                 : rank(deterministicReference.rankOf(entry.strategy())))
                 + "\n\n" + METHODOLOGY + "\n\n" + LIMITATION
                 + "\n\nScenario detail loading is not available in this release; compact aggregates are shown.";

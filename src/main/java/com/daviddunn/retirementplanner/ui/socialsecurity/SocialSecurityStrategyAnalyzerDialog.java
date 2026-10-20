@@ -28,6 +28,7 @@ import java.time.LocalDate;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import com.daviddunn.retirementplanner.app.socialsecurity.results.*;
 
 /** Resizable, read-only Social Security strategy analysis window. */
 public final class SocialSecurityStrategyAnalyzerDialog {
@@ -36,6 +37,13 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private IntegratedReportContext weightedReportContext;
     private IntegratedSocialSecurityCompleteStrategySearchEntry deterministicSelectedEntry;
     private boolean exportBusy;
+    java.util.function.Function<com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedIntegratedStrategyComparisonRequest,
+            com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedIntegratedStrategyComparisonResult> weightedCalculation =
+            request -> new com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedIntegratedStrategyComparisonService().compare(request);
+    private WeightedResultPersistence weightedPersistence;
+    private com.daviddunn.retirementplanner.ui.controller.ApplicationController analysisSource;
+    private List<IntegratedAnalysisComparisonPresentation.Row> historicalWeightedComparison;
+    private java.util.function.Function<SocialSecurityHouseholdClaimingStrategy, java.util.OptionalInt> historicalWeightedRanks;
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMM d, uuuu");
 
@@ -152,13 +160,32 @@ public final class SocialSecurityStrategyAnalyzerDialog {
 
     public SocialSecurityStrategyAnalyzerDialog(Window owner,
             com.daviddunn.retirementplanner.ui.controller.ApplicationController source) {
-        this(owner, source.getCurrentPlan());
+        this(owner, source, new SocialSecurityAnalyzerJobController(com.daviddunn.retirementplanner.ui.MainApplication.analysisJobs()));
+    }
+    SocialSecurityStrategyAnalyzerDialog(Window owner,
+            com.daviddunn.retirementplanner.ui.controller.ApplicationController source, SocialSecurityAnalyzerJobController jobs) {
+        this(owner, source.getCurrentPlan(), jobs);
+        analysisSource = source;
         if (singlePersonView != null) {
-            detachPlanListener = source.addSourcePlanRevisionListener(() -> {
+            IndividualCompletionPersistence.attach(singlePersonView.weightedView, source);
+            singlePersonView.navigation.onSelected(mode -> {
+                if (mode == SocialSecurityAnalyzerJobController.Mode.WEIGHTED) singlePersonView.weightedView.persistence.load();
+            });
+            if (!source.canPersistAnalysisResults()) {
+                var notice = new Label("This plan is not saved. Analyses remain runnable in memory; save the plan before running a longevity-weighted analysis intended for persistence.");
+                notice.setWrapText(true);
+                singlePersonView.getChildren().addFirst(notice);
+                singlePersonView.ssView.persistenceNotice.setText("Social Security Only results remain in memory; persistent restoration is not enabled for this analysis.");
+                singlePersonView.ssView.persistenceNotice.setWrapText(true);
+            }
+            detachPlanListener = source.addSourcePlanRevisionListener(() -> singlePersonView.weightedView.persistence.sourceChanged(() -> {
                 plan = source.getCurrentPlan();
                 singlePersonView.invalidate(plan);
-            });
+            }));
             return;
+        }
+        if (!source.canPersistAnalysisResults()) {
+            status.setText("Save the retirement plan before running a longevity-weighted analysis intended for persistence. Analyses remain runnable in memory; no plan is autosaved.");
         }
         var sharedLongevity = source.getLongevitySessionSettings();
         mortalityDate.setValue(sharedLongevity.conditioningDate());
@@ -175,7 +202,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         observe(mortalityDate.valueProperty(), shareLongevity);
         observe(primaryMortalityAdjustment.textProperty(), shareLongevity);
         observe(spouseMortalityAdjustment.textProperty(), shareLongevity);
-        detachPlanListener = source.addSourcePlanRevisionListener(() -> {
+        detachPlanListener = source.addSourcePlanRevisionListener(() -> weightedPersistence.sourceChanged(() -> {
             boolean differentPlan = plan != source.getCurrentPlan();
             plan = source.getCurrentPlan();
             if (differentPlan) {
@@ -192,7 +219,79 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             if (exhaustivePresentation != null) {
                 exhaustiveStale.setText("Plan changed - run exhaustive search again.");
             }
-        });
+        }));
+        weightedPersistence = new WeightedResultPersistence(source, AnalysisKind.COUPLE_WEIGHTED,
+                this::weightedInputs, saved -> {
+                    var model = new LongevityWeightedIntegratedPresentation(saved.payload().couple().restore(), 0, 0);
+                    var context = saved.context();
+                    var b = context.baseline();
+                    var baseline = new CurrentStrategyBaseline(b.elections().stream()
+                            .map(e -> new CurrentStrategyBaseline.Election(e.name(), e.value(), e.source())).toList(),
+                            java.util.Optional.ofNullable(b.strategy()).map(WeightedSnapshots.Strategy::restore), b.problem());
+                    var report = new IntegratedReportContext(context.household(), context.primary(), context.spouse(), context.startedAt(),
+                            context.assumptions().stream().map(s -> new com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport.Section(s.title(), s.lines())).toList(),
+                            baseline.summary() + "\n" + baseline.problem());
+                    var comparisons = context.historicalComparisons().stream().filter(c -> !c.explanation().equals("Frozen strategy-detail ranks"))
+                            .flatMap(c -> c.rows().stream())
+                            .map(AnalysisSnapshotPresentationMapper::restore).toList();
+                    var ranks = AnalysisSnapshotPresentationMapper.ranks(context.historicalComparisons().stream()
+                            .filter(c -> c.explanation().equals("Frozen strategy-detail ranks")).flatMap(c -> c.rows().stream()).toList());
+                    return () -> {
+                        weightedPresentation = model;
+                        weightedReportContext = report;
+                        weightedCurrent = false;
+                        historicalWeightedComparison = comparisons;
+                        historicalWeightedRanks = ranks;
+                        weightedView.render(model, baseline);
+                        weightedView.comparisons(comparisons);
+                        weightedView.deterministicReference(null);
+                        weightedView.historicalRanks(historicalWeightedRanks);
+                        weightedView.resultTabs.setVisible(true);
+                        weightedView.resultTabs.setManaged(true);
+                        var preferences = context.preferences();
+                        if (preferences.containsKey("metric")) {
+                            var metric = ClaimingStrategyHeatMapMetric.valueOf(preferences.get("metric"));
+                            if (weightedView.heatMap.metric.getItems().contains(metric)) weightedView.heatMap.metric.setValue(metric);
+                        }
+                        if (preferences.containsKey("occurrence")) {
+                            int occurrence = Integer.parseInt(preferences.get("occurrence"));
+                            model.result().orderedEntries().stream().filter(e -> e.inputOrder() == occurrence).findFirst()
+                                    .ifPresent(entry -> {
+                                        weightedView.table.getSelectionModel().select(entry);
+                                        weightedView.heatMap.restoreStrategy(entry.strategy());
+                                    });
+                        }
+                        if ("heat-map".equals(preferences.get("tab"))) weightedView.resultTabs.getSelectionModel().select(weightedView.heatMapTab);
+                    };
+                }, this::refreshWeightedResultStatus, () -> {
+                    weightedPresentation = null;
+                    weightedReportContext = null;
+                    historicalWeightedComparison = null;
+                    historicalWeightedRanks = null;
+                    weightedView.table.getItems().clear();
+                    weightedView.resultTabs.setVisible(false);
+                    weightedView.resultTabs.setManaged(false);
+                    weightedView.exportPdf.setDisable(true);
+                    weightedView.status.setText("No saved result loaded for this plan.");
+                    weightedView.stale.setText("");
+                });
+        weightedView.getChildren().add(5, weightedPersistence.controls);
+        observe(mortalityDate.getEditor().textProperty(), () -> { WeightedResultPersistence.dateEdited(mortalityDate); weightedPersistence.reassess(); });
+        observe(pvDate.getEditor().textProperty(), () -> { WeightedResultPersistence.dateEdited(pvDate); weightedPersistence.reassess(); });
+    }
+    private AnalysisFingerprintService.Inputs weightedInputs() {
+        var baseline = baselineInputs.snapshot();
+        var rows = baseline.elections().stream().map(e -> new SnapshotContext.Section(e.name(), List.of(e.value(), e.source()))).toList();
+        return new AnalysisFingerprintService.Inputs(adjustment(primaryMortalityAdjustment.getText(), "Primary").factor(),
+                adjustment(spouseMortalityAdjustment.getText(), "Spouse").factor(), WeightedResultPersistence.date(mortalityDate),
+                WeightedResultPersistence.date(pvDate), WeightedResultPersistence.rate(discountRate),
+                null, null, List.of(), rows, null);
+    }
+    private void refreshWeightedResultStatus() {
+        if (weightedPersistence != null && weightedPersistence.exportable()) {
+            weightedView.stale.setText(weightedPersistence.current() ? "" : WeightedResultPersistence.OUTDATED);
+        }
+        refreshExportActions();
     }
     public void show() {
         stage.showAndWait();
@@ -578,15 +677,70 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     new BigDecimal(discountRate.getText().trim()).movePointLeft(2), planRevision, assumptionsRevision,
                     baselineInputs.snapshot());
             var reportContext = captureReportContext(true);
+            var completedPlanId = analysisSource == null ? null : analysisSource.getAnalysisSessionId();
+            var completedFile = analysisSource != null && analysisSource.canPersistAnalysisResults() ? analysisSource.getCurrentFile() : null;
+            var fingerprints = new AnalysisFingerprintService();
+            // Fingerprint the effective accepted request, without adding validation to the existing Run path.
+            var capturedInputs = new AnalysisFingerprintService.Inputs(snapshot.longevity.primaryAdjustment().factor(),
+                    snapshot.longevity.spouseAdjustment().factor(), snapshot.longevity.mortalityBaseDate(), snapshot.valuationDate,
+                    snapshot.discountRate, null, null, List.of(), snapshot.baseline.elections().stream()
+                    .map(e -> new SnapshotContext.Section(e.name(), List.of(e.value(), e.source()))).toList(), null);
+            var inputFingerprint = weightedPersistence == null ? null : fingerprints.fingerprint(AnalysisKind.COUPLE_WEIGHTED, plan, capturedInputs);
+            var contextFingerprint = weightedPersistence == null ? null : fingerprints.effectiveContextFingerprint(AnalysisKind.COUPLE_WEIGHTED, plan);
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
-                    (progress, cancellation) -> new com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedIntegratedStrategyComparisonService()
-                            .compare(factory.create(snapshot, progress, cancellation)), result -> {
+                    (progress, cancellation) -> weightedCalculation.apply(factory.create(snapshot, progress, cancellation)), result -> {
+                        if (!AnalysisSuccessPolicy.accepted(result)) {
+                            weightedView.status.setText("No candidate completed successfully. Previous successful results were retained.");
+                            return;
+                        }
                         weightedPresentation = new LongevityWeightedIntegratedPresentation(result,
                                 snapshot.planRevision, snapshot.assumptionsRevision);
                         weightedCurrent = true;
                         weightedReportContext = reportContext;
+                        historicalWeightedComparison = null;
+                        historicalWeightedRanks = null;
                         weightedView.render(weightedPresentation, snapshot.baseline);
+                        weightedView.resultTabs.setVisible(true);
+                        weightedView.resultTabs.setManaged(true);
                         refreshWeightedComparison();
+                        if (weightedPersistence != null) {
+                            var b = snapshot.baseline;
+                            var baseline = new SnapshotContext.Baseline(b.elections().stream()
+                                    .map(e -> new SnapshotContext.Election(e.name(), e.value(), e.source())).toList(),
+                                    b.strategy().map(WeightedSnapshots.Strategy::from).orElse(null), b.problem());
+                            var rows = IntegratedAnalysisComparisonPresentation.create(weightedPresentation,
+                                    exhaustivePresentation == null ? null : exhaustivePresentation.result(), exhaustiveRevision, planRevision, weightedCurrent);
+                            var deterministic = exhaustivePresentation == null ? null : exhaustivePresentation.result();
+                            boolean compatible = IntegratedAnalysisComparisonPresentation.compatible(weightedPresentation, deterministic,
+                                    exhaustiveRevision, planRevision, weightedCurrent);
+                            var deterministicRanks = new java.util.HashMap<List<Object>, java.util.OptionalInt>();
+                            if (compatible) deterministic.entries().forEach(e -> deterministicRanks.putIfAbsent(
+                                    LongevityWeightedIntegratedPresentation.identity(e.strategy()), e.afterTaxEstateRank()));
+                            var detailRanks = result.orderedEntries().stream().map(e -> {
+                                var rank = deterministicRanks.getOrDefault(LongevityWeightedIntegratedPresentation.identity(e.strategy()), java.util.OptionalInt.empty());
+                                return new SnapshotContext.ComparisonRow("Strategy detail", WeightedSnapshots.Strategy.from(e.strategy()),
+                                        rank.isPresent() ? rank.getAsInt() : null, null, null, null, null, null, null);
+                            }).toList();
+                            var context = new SnapshotContext(reportContext.household(), reportContext.primary(), reportContext.spouse(),
+                                    reportContext.runStarted(), reportContext.assumptions().stream()
+                                    .map(s -> new SnapshotContext.Section(s.title(), s.lines())).toList(), List.of(), List.of(), java.util.Map.of(), baseline,
+                                    List.of(new SnapshotContext.HistoricalComparison(AnalysisKind.COUPLE_EXHAUSTIVE, null, null,
+                                            "Comparison captured at original weighted completion.", rows.stream().map(AnalysisSnapshotPresentationMapper::capture).toList()),
+                                            new SnapshotContext.HistoricalComparison(AnalysisKind.COUPLE_EXHAUSTIVE, null, null,
+                                                    "Frozen strategy-detail ranks", detailRanks)));
+                            historicalWeightedComparison = rows;
+                            historicalWeightedRanks = AnalysisSnapshotPresentationMapper.ranks(detailRanks);
+                            weightedView.comparisons(rows);
+                            weightedView.historicalRanks(historicalWeightedRanks);
+                            try {
+                                weightedPersistence.accept(new AcceptedAnalysisCompletion(completedPlanId, completedFile, AnalysisKind.COUPLE_WEIGHTED,
+                                        java.util.UUID.randomUUID(), java.time.Instant.now(), inputFingerprint, contextFingerprint,
+                                        AnalysisVersions.algorithms(AnalysisKind.COUPLE_WEIGHTED), java.util.Map.of(),
+                                        new WeightedSnapshots.Payload(WeightedSnapshots.Couple.from(result), null), context));
+                            } catch (RuntimeException saving) {
+                                weightedView.status.setText("Analysis completed, but result saving could not start. Previous saved results were retained.");
+                            }
+                        }
                         refreshExportActions();
                     }, failure -> weightedView.status.setText(SocialSecurityAnalysisFailurePresentation.message(failure)));
             if (!accepted) {
@@ -601,6 +755,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
 
     private void refreshWeightedComparison() {
         if (weightedPresentation != null) {
+            if (historicalWeightedComparison != null) {
+                weightedView.comparisons(historicalWeightedComparison);
+                return;
+            }
             var deterministic = exhaustivePresentation == null ? null : exhaustivePresentation.result();
             weightedView.comparisons(IntegratedAnalysisComparisonPresentation.create(weightedPresentation,
                     deterministic,
@@ -1098,6 +1256,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         } else {
             weightedView.initialCurrent(baselineInputs.snapshot());
         }
+        if (weightedPersistence != null) weightedPersistence.reassess();
     }
 
     private void markStale(SocialSecurityAnalyzerJobController.Change change) {
@@ -1119,6 +1278,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     "Social Security inputs changed - rerun Social Security analysis and Quick Comparison.");
         }
         refreshQuickPrerequisite();
+        if (weightedPersistence != null) weightedPersistence.reassess();
     }
 
     private void markIntegratedStale(String message) {
@@ -1188,6 +1348,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
 
     private boolean canExportPdf(boolean weighted) {
         if (exportBusy || jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE) return false;
+        if (weighted && weightedPersistence != null)
+            return weightedPersistence.exportable() && weightedPresentation != null && weightedReportContext != null;
         return weighted ? weightedCurrent && weightedPresentation != null && weightedReportContext != null
                 && weightedPresentation.planRevision() == planRevision && weightedView.stale.getText().isEmpty()
                 && weightedPresentation.assumptionsRevision() == assumptionsRevision
@@ -1214,10 +1376,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             var deterministic = exhaustivePresentation == null ? null : exhaustivePresentation.result();
             boolean compatible = IntegratedAnalysisComparisonPresentation.compatible(weightedPresentation,
                     deterministic, exhaustiveRevision, planRevision, weightedCurrent);
-            return IntegratedAnalyzerReportAdapter.weighted(weightedReportContext, weightedPresentation,
+            var report = IntegratedAnalyzerReportAdapter.weighted(weightedReportContext, weightedPresentation,
                     heatMap.reportModel(), heatMap.metric.getValue(), selectedCell, selected,
-                    List.copyOf(weightedView.table.getItems()), IntegratedAnalysisComparisonPresentation.create(weightedPresentation,
-                            deterministic, exhaustiveRevision, planRevision, weightedCurrent), compatible ? deterministic : null);
+                    List.copyOf(weightedView.table.getItems()), historicalWeightedComparison != null ? historicalWeightedComparison : IntegratedAnalysisComparisonPresentation.create(weightedPresentation,
+                            deterministic, exhaustiveRevision, planRevision, weightedCurrent), compatible ? deterministic : null, historicalWeightedRanks);
+            return weightedPersistence != null && weightedPersistence.exportable() ? weightedPersistence.report(report) : report;
         }
         var selectedCell = deterministicHeatMap.reportSelection();
         var selected = deterministicResultTabs.getSelectionModel().getSelectedItem() == deterministicHeatMapTab
@@ -1291,6 +1454,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
 
     private void refreshContextualInputs() {
         var mode = navigation.selected().mode();
+        if (weightedPersistence != null && mode == SocialSecurityAnalyzerJobController.Mode.WEIGHTED) weightedPersistence.load();
         boolean longevity = mode == SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY
                 || mode == SocialSecurityAnalyzerJobController.Mode.WEIGHTED;
         sharedConfiguration.setVisible(longevity);
@@ -1376,6 +1540,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void close() {
+        if (weightedPersistence != null) weightedPersistence.close();
+        if (singlePersonView != null && singlePersonView.weightedView.persistence != null) singlePersonView.weightedView.persistence.close();
         jobs.close();
         detachPlanListener.run();
         detachPlanListener = () -> { };

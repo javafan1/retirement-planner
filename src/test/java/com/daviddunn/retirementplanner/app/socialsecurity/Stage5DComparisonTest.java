@@ -184,6 +184,9 @@ class Stage5DComparisonTest {
     @Test
     void concurrentJobsAndDeterministicAnalysisStayIsolatedAcrossRepeatedRuns() throws Exception {
         var plan=Stage4TestPlans.plan();var other=Stage4TestPlans.plan();var json=Stage4TestPlans.json(plan);
+        // Independent new plans now have distinct durable IDs; each source graph must remain unchanged.
+        var otherJson=Stage4TestPlans.json(other);
+        assertNotEquals(plan.getPlanId(),other.getPlanId());
         var req=request(plan,List.of(strategy(plan,62,62),strategy(plan,70,70)));
         var req2=request(other,req.candidates());var service=new LongevityWeightedIntegratedStrategyComparisonService(2);
         var expected=service.compareSequential(req);
@@ -197,7 +200,7 @@ class Stage5DComparisonTest {
                 gate.countDown();sameResult(expected,first.get());sameResult(expected,second.get());assertEquals(deterministic,third.get());
             }
         }
-        assertEquals(json,Stage4TestPlans.json(plan));assertEquals(json,Stage4TestPlans.json(other));
+        assertEquals(json,Stage4TestPlans.json(plan));assertEquals(otherJson,Stage4TestPlans.json(other));
     }
 
     @Test

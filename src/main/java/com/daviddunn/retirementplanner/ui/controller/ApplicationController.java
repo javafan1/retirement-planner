@@ -91,6 +91,23 @@ public class ApplicationController {
     private final ProjectionEngine projectionEngine;
     private final ProjectionSummaryService projectionSummaryService;
     private final RetirementPlanRepository repository;
+    private final com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultStore analysisResults;
+    private java.util.concurrent.CompletionStage<List<String>> snapshotCopy = java.util.concurrent.CompletableFuture.completedFuture(List.of());
+
+    public java.util.concurrent.CompletionStage<List<String>> getSnapshotCopyCompletion() { return snapshotCopy; }
+
+    public com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultStore getAnalysisResults() { return analysisResults; }
+
+    public boolean canPersistAnalysisResults() { return currentFile != null && currentPlan.getPlanId() != null; }
+    private RetirementPlan analysisSessionOwner;
+    private java.util.UUID legacyAnalysisSession;
+    public java.util.UUID getAnalysisSessionId() {
+        if (currentPlan.getPlanId() != null) return RetirementPlan.validatedPlanId(currentPlan.getPlanId());
+        if (analysisSessionOwner != currentPlan) {
+            analysisSessionOwner = currentPlan; legacyAnalysisSession = java.util.UUID.randomUUID();
+        }
+        return legacyAnalysisSession;
+    }
     private boolean modified;
     private final java.util.List<String> persistenceWarnings = new java.util.ArrayList<>();
     private Path failedOpenPath;
@@ -112,6 +129,15 @@ public class ApplicationController {
 
     public ApplicationController(RetirementPlanRepository repository,
             JsonApplicationSettingsRepository settingsRepository) {
+        this(repository, settingsRepository,
+                com.daviddunn.retirementplanner.app.socialsecurity.results.ApplicationAnalysisResults.store());
+    }
+
+    public ApplicationController(RetirementPlanRepository repository,
+            JsonApplicationSettingsRepository settingsRepository,
+            com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultStore analysisResults) {
+
+        this.analysisResults = java.util.Objects.requireNonNull(analysisResults);
 
         projectionEngine =
                 new ProjectionEngine();
@@ -566,9 +592,19 @@ public class ApplicationController {
             throw new IOException("Choose a different filename; the recovery backup must be preserved.");
         }
 
-        repository.save(
-                currentPlan,
-                file);
+        String originalId = currentPlan.getPlanId();
+        Path identitySource = currentFile != null ? currentFile : recoveredOriginalPath;
+        boolean fork = identitySource != null && !identitySource.toAbsolutePath().normalize().equals(file.toAbsolutePath().normalize());
+        java.util.UUID proposed = fork || originalId == null ? java.util.UUID.randomUUID() : RetirementPlan.validatedPlanId(originalId);
+        if (repository instanceof JsonRetirementPlanRepository json) {
+            json.saveWithIdentity(currentPlan, file, proposed);
+        } else {
+            // Keep alternate repositories/test seams transactional with respect to active identity too.
+            var copy = new com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService().copy(currentPlan);
+            copy.assignPlanId(proposed);
+            repository.save(copy, file);
+            currentPlan.assignPlanId(proposed);
+        }
 
         currentFile =
                 file;
@@ -582,6 +618,16 @@ public class ApplicationController {
         recoveredBackupPath = null;
         saveSettingsQuietly();
         collectSaveWarnings();
+        if (fork && originalId != null) {
+            try {
+                var isolated = new com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService().copy(currentPlan);
+                snapshotCopy = analysisResults.cloneSnapshots(RetirementPlan.validatedPlanId(originalId), proposed, file, isolated);
+            } catch (RuntimeException failure) {
+                var warning = "The new plan was saved, but historical analysis copying could not start.";
+                persistenceWarnings.add(warning);
+                snapshotCopy = java.util.concurrent.CompletableFuture.completedFuture(List.of(warning));
+            }
+        } else snapshotCopy = java.util.concurrent.CompletableFuture.completedFuture(List.of());
     }
 
     private void saveSettingsQuietly() {
@@ -600,6 +646,7 @@ public class ApplicationController {
     }
 
     public List<String> takePersistenceWarnings() {
+        persistenceWarnings.addAll(analysisResults.takeOperationWarnings());
         var result = List.copyOf(persistenceWarnings);
         persistenceWarnings.clear();
         return result;
