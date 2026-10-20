@@ -10,7 +10,7 @@ import java.util.*;
 public final class WeightedSnapshots {
     private WeightedSnapshots() { }
 
-    public record Payload(Couple couple, Individual individual) {
+    public record Payload(Couple couple, Individual individual) implements AnalysisPayload {
         public void validate(AnalysisKind kind) {
             if ((couple == null) == (individual == null)) throw new IllegalArgumentException("Exactly one payload family is required.");
             if (couple != null) {

@@ -9,7 +9,7 @@ import java.util.*;
 public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKind kind, UUID runId,
         Instant completedAt, String inputFingerprint, String contextFingerprint,
         Map<String, String> algorithms, Map<String, String> references,
-        WeightedSnapshots.Payload payload, SnapshotContext context) {
+        AnalysisPayload payload, SnapshotContext context) {
     public AcceptedAnalysisCompletion {
         Objects.requireNonNull(planId); Objects.requireNonNull(kind); Objects.requireNonNull(runId);
         if (planFile != null) planFile = planFile.toAbsolutePath().normalize();

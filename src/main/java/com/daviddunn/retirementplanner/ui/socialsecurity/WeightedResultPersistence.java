@@ -53,8 +53,8 @@ final class WeightedResultPersistence implements AutoCloseable {
         this.changed = changed;
         this.clear = clear;
         notice.accessibleTextProperty().bind(notice.textProperty());
-        notice.setAccessibleHelp("Status and original completion time for the displayed longevity-weighted analysis.");
-        retry.setAccessibleText("Retry saving the completed longevity-weighted analysis without recalculation");
+        notice.setAccessibleHelp("Status and original completion time for the displayed completed analysis.");
+        retry.setAccessibleText("Retry saving the completed analysis without recalculation");
         retry.visibleProperty().bind(retry.managedProperty());
         retry.setManaged(false);
         retry.setOnAction(event -> {
@@ -93,7 +93,7 @@ final class WeightedResultPersistence implements AutoCloseable {
         if (!source.canPersistAnalysisResults() && memory.isEmpty()) { show(); return; }
         long expected = generation;
         loading = true;
-        notice.setText("Loading previous longevity-weighted results…");
+        notice.setText(kind == AnalysisKind.COUPLE_SOCIAL_SECURITY ? "Loading previous Social Security results…" : "Loading previous longevity-weighted results…");
         var file = source.getCurrentFile();
         var read = source.canPersistAnalysisResults() ? store.load(slot, file)
                 : store.background(() -> Optional.of(memory.orElseThrow().presentationSnapshot(new com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec())));

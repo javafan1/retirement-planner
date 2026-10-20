@@ -10,7 +10,7 @@ import java.util.*;
 import java.util.zip.*;
 import java.util.logging.Logger;
 
-/** Explicit weighted v1 codec; unsupported families are refused, never partially serialized. */
+/** Explicit kind-dispatched v1 codec; unsupported families are refused, never partially serialized. */
 public final class AnalysisSnapshotCodec {
     public static final int MAX_RAW_BYTES = 32 * 1024 * 1024;
     public static final int MAX_COMPRESSED_BYTES = 16 * 1024 * 1024;
@@ -38,10 +38,24 @@ public final class AnalysisSnapshotCodec {
         mapper.enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         mapper.disable(SerializationFeature.WRITE_DURATIONS_AS_TIMESTAMPS);
+        var families = new com.fasterxml.jackson.databind.module.SimpleModule();
+        families.addDeserializer(AnalysisPayload.class, new JsonDeserializer<AnalysisPayload>() {
+            @Override public AnalysisPayload deserialize(JsonParser parser, DeserializationContext context) throws IOException {
+                var kind = (AnalysisKind) context.getAttribute("snapshot-kind");
+                if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY)
+                    return context.readValue(parser, CoupleSocialSecuritySnapshot.class);
+                if (kind != AnalysisKind.COUPLE_WEIGHTED && kind != AnalysisKind.INDIVIDUAL_WEIGHTED
+                        && kind != AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY)
+                    throw new IOException("Unsupported analysis payload family.");
+                // Decode one nested value; the enclosing ObjectReader enforces document trailing tokens.
+                return context.readValue(parser, WeightedSnapshots.Payload.class);
+            }
+        });
+        mapper.registerModule(families);
     }
 
-    public record Content(WeightedSnapshots.Payload payload, SnapshotContext context) { }
-    public String digest(WeightedSnapshots.Payload payload, SnapshotContext context) {
+    public record Content(AnalysisPayload payload, SnapshotContext context) { }
+    public String digest(AnalysisPayload payload, SnapshotContext context) {
         try { return sha256(mapper.writeValueAsBytes(new Content(payload, context))); }
         catch (IOException e) { throw new IllegalArgumentException("Invalid snapshot content.", e); }
     }
@@ -94,7 +108,8 @@ public final class AnalysisSnapshotCodec {
             catch (IllegalArgumentException malformed) { throw new IOException("Invalid snapshot identity.", malformed); }
         }
         try {
-            var snapshot = mapper.readValue(raw, AnalysisSnapshot.class);
+            var kind = AnalysisKind.valueOf(tree.path("kind").asText());
+            AnalysisSnapshot snapshot = mapper.readerFor(AnalysisSnapshot.class).withAttribute("snapshot-kind", kind).readValue(raw);
             validate(snapshot);
             return snapshot;
         } catch (RuntimeException e) { throw new IOException("Invalid analysis snapshot; the file was preserved.", e); }
@@ -139,6 +154,18 @@ public final class AnalysisSnapshotCodec {
         var fields = new HashSet<String>();
         var types = new ArrayList<Class<?>>();
         types.addAll(List.of(WeightedSnapshots.class.getDeclaredClasses()));
+        types.addAll(List.of(CoupleSocialSecuritySnapshot.class.getDeclaredClasses()));
+        types.add(CoupleSocialSecuritySnapshot.class);
+        types.addAll(List.of(
+                com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityMortalityWeightedStrategyValue.class,
+                com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityMortalityWeightedClaimingGridCell.class,
+                com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecuritySurvivorClaimingOptimizationCell.class,
+                com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityJointMortalityScenario.class,
+                com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityMortalityProbability.class,
+                com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityStrategyRequest.class,
+                com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityClaimingElection.class,
+                com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecuritySurvivorClaimingCandidate.class,
+                com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityHouseholdClaimingStrategy.class));
         types.addAll(List.of(SnapshotContext.class.getDeclaredClasses()));
         types.addAll(List.of(AnalysisSnapshot.class, SnapshotContext.class,
                 com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedStrategyAggregate.class,

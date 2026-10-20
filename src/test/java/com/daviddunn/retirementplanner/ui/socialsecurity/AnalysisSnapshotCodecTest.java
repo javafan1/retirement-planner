@@ -67,6 +67,17 @@ class AnalysisSnapshotCodecTest {
         try (var gzip = new java.util.zip.GZIPOutputStream(out)) { gzip.write(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
         return out.toByteArray();
     }
+    @Test void completeSnapshotRejectsUnexpectedTrailingJson() throws Exception {
+        String raw = new String(codec.raw(SnapshotFixtures.snapshot(UUID.randomUUID())),
+                java.nio.charset.StandardCharsets.UTF_8);
+        for (String trailing : List.of(" {}", " []", " null", " 42")) {
+            var failure = assertThrows(com.fasterxml.jackson.databind.exc.MismatchedInputException.class,
+                    () -> codec.decode(gzip(raw + trailing)));
+            assertTrue(failure.getMessage().contains("Trailing token"));
+        }
+        // Whitespace is valid after the enclosing document, and its nested payload remains readable.
+        assertEquals(codec.decode(gzip(raw)), codec.decode(gzip(raw + " \r\n\t")));
+    }
     @Test void compressedBombAndExcessiveNestingAreRejected() throws Exception {
         assertThrows(java.io.IOException.class, () -> codec.decode(gzip("[".repeat(90) + "0" + "]".repeat(90))));
         assertThrows(java.io.IOException.class, () -> codec.decode(gzip("x".repeat(AnalysisSnapshotCodec.MAX_RAW_BYTES + 1))));

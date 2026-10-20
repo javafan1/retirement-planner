@@ -7,7 +7,7 @@ public record AnalysisSnapshot(int schemaVersion, int fingerprintVersion, UUID p
         AnalysisKind kind, AnalysisKind.Shape shape, UUID runId, Instant completedAt,
         String applicationBuild, Map<String, String> algorithms, Map<String, String> references,
         String inputFingerprint, String contextFingerprint, String payloadDigest,
-        WeightedSnapshots.Payload payload, SnapshotContext context, UUID originPlanId) {
+        AnalysisPayload payload, SnapshotContext context, UUID originPlanId) {
     public static final int SCHEMA = 1;
     public AnalysisSnapshot {
         Objects.requireNonNull(planId); Objects.requireNonNull(kind); Objects.requireNonNull(shape);
