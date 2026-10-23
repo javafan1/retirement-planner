@@ -31,6 +31,16 @@ public class ApplicationController {
 
     private long sourcePlanRevision;
     private final java.util.List<Runnable> sourcePlanListeners = new java.util.ArrayList<>();
+    private final java.util.List<Runnable> analysisBindingListeners = new java.util.ArrayList<>();
+
+    /** File/UUID changes are distinct from financial revisions, including successful first Save and Save As. */
+    public Runnable addAnalysisBindingListener(Runnable listener) {
+        analysisBindingListeners.add(java.util.Objects.requireNonNull(listener));
+        return () -> analysisBindingListeners.remove(listener);
+    }
+    private void analysisBindingChanged() {
+        java.util.List.copyOf(analysisBindingListeners).forEach(Runnable::run);
+    }
 
     public long getSourcePlanRevision() {
         return sourcePlanRevision;
@@ -581,6 +591,7 @@ public class ApplicationController {
 
         saveSettingsQuietly();
         collectSaveWarnings();
+        analysisBindingChanged();
     }
 
     public void saveAs(
@@ -628,6 +639,7 @@ public class ApplicationController {
                 snapshotCopy = java.util.concurrent.CompletableFuture.completedFuture(List.of(warning));
             }
         } else snapshotCopy = java.util.concurrent.CompletableFuture.completedFuture(List.of());
+        analysisBindingChanged();
     }
 
     private void saveSettingsQuietly() {

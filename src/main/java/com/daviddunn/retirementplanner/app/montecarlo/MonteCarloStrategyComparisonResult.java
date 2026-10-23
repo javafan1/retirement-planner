@@ -14,6 +14,12 @@ public final class MonteCarloStrategyComparisonResult {
 
     public MonteCarloStrategyComparisonResult(MonteCarloStrategyComparisonRequest request,
             WorldSource worldSource, List<MonteCarloPairedOutcome> outcomes) {
+        this(request, worldSource, outcomes, null);
+    }
+
+    /** Codec-only pure reconstruction; never reduces historical observations again. */
+    MonteCarloStrategyComparisonResult(MonteCarloStrategyComparisonRequest request,
+            WorldSource worldSource, List<MonteCarloPairedOutcome> outcomes, MonteCarloStrategyComparisonSummary frozen) {
         this.request = Objects.requireNonNull(request);
         this.worldSource = Objects.requireNonNull(worldSource);
         this.outcomes = List.copyOf(outcomes);
@@ -26,7 +32,7 @@ public final class MonteCarloStrategyComparisonResult {
                 throw new IllegalArgumentException("Pairs must retain scenario order.");
             }
         }
-        summary = MonteCarloStrategyComparisonAccumulator.reduce(request.assumptions(), outcomes);
+        summary = frozen == null ? MonteCarloStrategyComparisonAccumulator.reduce(request.assumptions(), outcomes) : frozen;
     }
 
     public MonteCarloStrategyComparisonRequest request() { return request; }

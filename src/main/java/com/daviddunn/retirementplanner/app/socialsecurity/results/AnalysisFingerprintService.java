@@ -43,6 +43,7 @@ public final class AnalysisFingerprintService {
         catch (RuntimeException invalid) { return new Assessment(null, null, "Inputs need attention."); }
     }
     public String fingerprint(AnalysisKind kind, RetirementPlan plan, Inputs next) {
+        if (kind.isMonteCarlo()) throw new IllegalArgumentException("Monte Carlo currency requires its own effective-input assessment.");
         Objects.requireNonNull(kind); Objects.requireNonNull(plan); Objects.requireNonNull(next);
         if ((kind.shape() == AnalysisKind.Shape.COUPLE) != plan.getHousehold().hasSpouse())
             throw new IllegalArgumentException("Household shape mismatch.");

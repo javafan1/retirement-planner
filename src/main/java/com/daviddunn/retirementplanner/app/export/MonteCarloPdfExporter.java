@@ -21,7 +21,8 @@ public final class MonteCarloPdfExporter {
             try (var document = new PDDocument()) {
                 var metadata = document.getDocumentInformation();
                 metadata.setTitle(report.title() + " — " + report.type());
-                metadata.setSubject("Completed frozen Monte Carlo results; no analysis rerun for export.");
+                metadata.setSubject((historical(report) ? "Historical Analysis — Outdated. " : "")
+                        + "Completed frozen Monte Carlo results; no analysis rerun for export.");
                 metadata.setCreator("Retirement Planner");
                 try (var writer = new Pages(document, report)) { writer.render(); }
                 pageNumbers(document);
@@ -29,6 +30,10 @@ public final class MonteCarloPdfExporter {
             }
             Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
         } finally { Files.deleteIfExists(temporary); }
+    }
+
+    private static boolean historical(MonteCarloPdfReport report) {
+        return !report.context().isEmpty() && report.context().getFirst().startsWith("Historical Analysis");
     }
 
     private static final class Pages implements AutoCloseable {
@@ -42,7 +47,7 @@ public final class MonteCarloPdfExporter {
             close();
             var page = new PDPage(PDRectangle.LETTER); document.addPage(page); out = new PDPageContentStream(document, page);
             text(out, "Retirement Planner", 36, 765, 9, true, INK);
-            text(out, report.type(), 350, 765, 9, false, INK);
+            text(out, report.type() + (historical(report) ? " | Outdated" : ""), 350, 765, 9, false, INK);
             line(out, 36, 755, 576, 755, new Color(205, 214, 225), .6f);
             y = 735;
         }
@@ -50,7 +55,9 @@ public final class MonteCarloPdfExporter {
         void render() throws IOException {
             page(); paragraph(report.title(), 20, true); paragraph(report.type(), 13, true);
             paragraph("Exported: " + DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm 'UTC'").withZone(ZoneOffset.UTC).format(report.exportedAt()), 8, false);
-            for (String line : report.context()) paragraph(line, 9, false);
+            for (String line : report.context()) paragraph(line,
+                    line.startsWith("Historical Analysis") || line.equals("Current Results") ? 10 : 9,
+                    line.startsWith("Historical Analysis") || line.equals("Current Results"));
             ensure(310);
             heading(report.chart().title());
             new MonteCarloPdfChart(report.chart(), out, y - 8).draw(); y -= 260;

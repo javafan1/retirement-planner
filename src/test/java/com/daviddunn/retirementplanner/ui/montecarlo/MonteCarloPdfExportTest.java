@@ -32,7 +32,7 @@ class MonteCarloPdfExportTest {
     }
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
-    void singleExportNeverInvokesAnalysisAgainAndDisablesWhenStale(boolean mortality) throws Exception {
+    void singleExportNeverInvokesAnalysisAgainAndPreservesHistoricalDataWhenStale(boolean mortality) throws Exception {
         var calls = new AtomicInteger(); var queue = new ArrayDeque<Runnable>();
         var plan = MonteCarloMortalityUiFixtures.plan(); var controller = new Controller(plan);
         var view = fx(() -> {
@@ -50,20 +50,23 @@ class MonteCarloPdfExportTest {
             fx(() -> {
                 assertTrue(view.canExportPdf()); assertFalse(view.lookup("#mc-export-pdf").isDisabled());
                 var frozen = view.session().result(); var report = view.preparePdfReport();
+                var financial = MonteCarloPdfReportAdapter.from(frozen);
                 view.exportPdf(directory.resolve("first.pdf")); view.exportPdf(directory.resolve("second.pdf")); view.exportPdf(directory.resolve("first.pdf"));
                 assertEquals(1, calls.get()); assertSame(frozen, view.session().result());
                 assertTrue(report.context().toString().contains("Seed: 417"));
                 assertTrue(report.context().toString().contains("Healthcare inflation (deterministic)"));
                 assertTrue(report.context().toString().contains("Projection start: 2027-01-01"));
                 ((TextField) view.lookup("#mc-seed")).setText("999");
-                assertTrue(view.session().stale()); assertFalse(view.canExportPdf()); assertTrue(view.lookup("#mc-export-pdf").isDisabled());
-                assertThrows(IllegalStateException.class, view::preparePdfReport);
+                assertTrue(view.session().stale()); assertTrue(view.canExportPdf()); assertFalse(view.lookup("#mc-export-pdf").isDisabled());
+                var historical = view.preparePdfReport();
+                assertTrue(historical.context().getFirst().startsWith("Historical Analysis"));
+                assertEquals(report.sections(), historical.sections()); assertEquals(report.chart(), historical.chart());
                 plan.getHousehold().getPrimaryPerson().setBirthDate(java.time.LocalDate.of(1961, 1, 1));
                 plan.setPlanningAssumptions(new com.daviddunn.retirementplanner.domain.model.PlanningAssumptions(
                         new BigDecimal("0.99"), new BigDecimal("0.88"), 5, java.time.LocalDate.of(2035, 1, 1)));
                 controller.markModified();
                 var after = MonteCarloPdfReportAdapter.from(frozen);
-                assertEquals(report.context(), after.context()); assertEquals(report.sections(), after.sections()); assertEquals(report.chart(), after.chart());
+                assertEquals(financial.context(), after.context()); assertEquals(report.sections(), after.sections()); assertEquals(report.chart(), after.chart());
                 new MonteCarloPdfExporter().export(after, directory.resolve("frozen.pdf")); assertEquals(1, calls.get());
                 assertThrows(java.io.IOException.class, () -> new MonteCarloPdfExporter().export(report, directory.resolve("missing/destination.pdf")));
                 assertSame(frozen, view.session().result());
@@ -93,13 +96,17 @@ class MonteCarloPdfExportTest {
             queue.remove().run(); waitForFx();
             fx(() -> {
                 assertTrue(view.canExportPdf()); var frozen = view.session().result(); var report = view.preparePdfReport();
+                var financial = MonteCarloPdfReportAdapter.from(frozen);
                 view.exportPdf(directory.resolve("first.pdf")); view.exportPdf(directory.resolve("second.pdf")); view.exportPdf(directory.resolve("first.pdf"));
                 assertEquals(1, calls.get());
                 ((TextField) view.lookup("#mcc-seed")).setText("999");
-                assertTrue(view.lookup("#mcc-export-pdf").isDisabled()); assertThrows(IllegalStateException.class, view::preparePdfReport);
+                assertFalse(view.lookup("#mcc-export-pdf").isDisabled());
+                var historical = view.preparePdfReport();
+                assertTrue(historical.context().getFirst().startsWith("Historical Analysis"));
+                assertEquals(report.sections(), historical.sections()); assertEquals(report.chart(), historical.chart());
                 plan.setBaseline(null); controller.markModified();
                 var after = MonteCarloPdfReportAdapter.from(frozen);
-                assertEquals(report.context(), after.context()); assertEquals(report.sections(), after.sections()); assertEquals(report.chart(), after.chart());
+                assertEquals(financial.context(), after.context()); assertEquals(report.sections(), after.sections()); assertEquals(report.chart(), after.chart());
                 new MonteCarloPdfExporter().export(after, directory.resolve("frozen.pdf")); assertEquals(1, calls.get());
                 assertThrows(UnsupportedOperationException.class, () -> report.sections().clear());
                 assertThrows(UnsupportedOperationException.class, () -> report.sections().getFirst().tables().getFirst().rows().getFirst().clear());

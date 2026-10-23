@@ -47,6 +47,9 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     private final MortalityWork mortalityWork;
     private final MonteCarloSession session;
     private final Runnable detach;
+    private final MonteCarloResultLifecycle<MonteCarloRun> persistence;
+    private final Label savedStatus = label("", "mc-muted");
+    private final Button retrySave = new Button("Retry Save");
     private final ComboBox<Integer> simulations = new ComboBox<>();
     private final ComboBox<MonteCarloMode> mode = new ComboBox<>();
     private final ComboBox<String> inflationMode = new ComboBox<>();
@@ -110,6 +113,14 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         this.work = work;
         this.mortalityWork = mortalityWork;
         this.session = new MonteCarloSession(worker, Platform::runLater);
+        persistence = new MonteCarloResultLifecycle<>(controller.getAnalysisResults(), Platform::runLater,
+                MonteCarloSnapshotPresentationMapper::restoreRun, restored -> session.restore(restored, true),
+                session::clearResult, this::refreshPersistence, session::busy);
+        savedStatus.setId("mc-saved-status");
+        savedStatus.accessibleTextProperty().bind(savedStatus.textProperty());
+        retrySave.setId("mc-retry-save");
+        retrySave.setAccessibleText("Retry saving the accepted Monte Carlo result without recalculation");
+        retrySave.setOnAction(event -> persistence.retry());
         setId("monte-carlo-analysis");
         setPadding(new Insets(14, 20, 12, 20));
         setMinWidth(0);
@@ -247,7 +258,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         heading.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         getChildren().addAll(heading,
                 label("Tests the current retirement plan across simulated investment-return paths.", "mc-muted"),
-                planTitle, summary, transactions, inputs, mortalityContext, validation, progressRow, results, details);
+                planTitle, summary, transactions, inputs, mortalityContext, validation, progressRow, savedStatus, retrySave, results, details);
         run.setOnAction(event -> start());
         cancel.setOnAction(event -> session.cancel());
         simulations.valueProperty().addListener((observable, previous, value) -> inputsChanged());
@@ -263,21 +274,80 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                 inputsChanged();
             });
         }
-        session.onChanged(this::refresh);
-        detach = controller.addSourcePlanRevisionListener(() -> {
+        session.onChanged(() -> {
+            if (!session.busy()) persistence.finishReplacement();
+            refresh();
+        });
+        var detachSource = controller.addSourcePlanRevisionListener(() -> {
+            if (persistence.binding() != null && (settingsOwner != controller.getCurrentPlan()
+                    || !persistence.binding().planId().equals(controller.getAnalysisSessionId())))
+                persistence.unbind();
             if (settingsOwner != controller.getCurrentPlan()) {
                 restoreLongevitySettings();
             }
             session.invalidate();
+            persistence.assess(this::currencyInputs);
+            Platform.runLater(this::syncPersistence);
             refresh();
         });
+        var detachBinding = controller.addAnalysisBindingListener(this::syncPersistence);
+        detach = () -> { detachSource.run(); detachBinding.run(); };
+        syncPersistence();
         refresh();
     }
 
     private void inputsChanged() {
         session.invalidate();
         validation.setText("");
+        syncPersistence();
         refresh();
+    }
+
+    private void refreshPersistence() {
+        savedStatus.setText(persistence.status());
+        show(retrySave, persistence.retryAvailable());
+        refresh();
+    }
+
+    private void syncPersistence() {
+        var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.valueOf(
+                (controller.getCurrentPlan().getHousehold().hasSpouse() ? "COUPLE" : "INDIVIDUAL")
+                        + "_MONTE_CARLO_" + (mode.getValue() == MonteCarloMode.FIXED_LIFESPAN ? "FIXED" : "LONGEVITY"));
+        persistence.bind(new MonteCarloResultLifecycle.Binding(controller.getAnalysisSessionId(),
+                controller.canPersistAnalysisResults() ? controller.getCurrentFile() : null, kind));
+        persistence.assess(this::currencyInputs);
+        refreshPersistence();
+    }
+
+    private java.util.function.Supplier<com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService.Inputs> currencyInputs() {
+        var settings = new MonteCarloInputs(simulations.getValue(), expected.getText(), volatility.getText(), seed.getText())
+                .settings("Stochastic".equals(inflationMode.getValue()), inflationMean.getText(), inflationVolatility.getText(), inflationFloor.getText());
+        var plan = new RetirementPlanScenarioCopyService().copy(controller.getCurrentPlan());
+        MonteCarloMortalityRequest mortality = null;
+        if (mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED) {
+            mortality = plan.getHousehold().hasSpouse()
+                    ? new MonteCarloMortalityRequest(plan, settings, MonteCarloMortalityPresentation.settings(plan,
+                    primaryAdjustment.getText(), spouseAdjustment.getText()), MonteCarloMortalityPresentation.survivorClaimingAge(survivorAge.getText()))
+                    : MonteCarloMortalityRequest.individual(plan, settings,
+                    MonteCarloMortalityPresentation.adjustment(primaryAdjustment.getText(), "Primary"));
+        }
+        var frozen = mortality;
+        return () -> com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService.standalone(plan, settings, frozen);
+    }
+
+    private void startPersisted(RetirementPlan frozenPlan, MonteCarloSession.Work task) {
+        syncPersistence();
+        var binding = persistence.binding();
+        var started = java.time.Instant.now();
+        var completion = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion>();
+        persistence.beginReplacement();
+        session.start((updates, token) -> {
+            var result = task.run(updates, token);
+            token.throwIfCancellationRequested();
+            var payload = MonteCarloSnapshotPresentationMapper.capture(result, frozenPlan, started, java.time.Instant.now());
+            completion.set(MonteCarloResultLifecycle.completion(binding, payload));
+            return result;
+        }, accepted -> persistence.accept(completion.get()));
     }
 
     private void start() {
@@ -304,7 +374,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                             MonteCarloMortalityPresentation.adjustment(primaryAdjustment.getText(), "Primary"));
                 }
                 validation.setText("");
-                session.start((updates, cancellation) -> mortalityWork.run(snapshot, request, updates, cancellation));
+                startPersisted(snapshot, (updates, cancellation) -> mortalityWork.run(snapshot, request, updates, cancellation));
                 return;
             }
             Projection cached = controller.peekCurrentProjection();
@@ -315,7 +385,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             }
             final Projection frozenReference = reference;
             validation.setText("");
-            session.start((updates, cancellation) -> work.run(snapshot, settings, frozenReference, updates, cancellation));
+            startPersisted(snapshot, (updates, cancellation) -> work.run(snapshot, settings, frozenReference, updates, cancellation));
         } catch (RuntimeException exception) {
             validation.setText(exception.getMessage());
             validation.setManaged(true);
@@ -342,8 +412,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         boolean couple = controller.getCurrentPlan().getHousehold().hasSpouse();
         if (spouseAdjustment.getParent() != null) show(spouseAdjustment.getParent(), couple);
         if (survivorAge.getParent() != null) show(survivorAge.getParent(), couple);
-        pdf.button().setTooltip(new Tooltip(couple ? "Export the completed frozen result. Run again if the result is stale."
-                : "Export the completed frozen result. Run again if stale."));
+        pdf.button().setTooltip(new Tooltip("Export the completed frozen result. Historical results retain their original assumptions and are labeled Outdated."));
         show(longevityInputs, mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED);
         show(mortalityContext, mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED);
         updateMortalityContext();
@@ -363,7 +432,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             case COMPLETED -> "Analysis complete.";
             case CLOSED -> "";
         };
-        if (session.stale()) {
+        if (session.stale() && !persistence.current()) {
             text = "Inputs or plan changed — run analysis again. " + text;
         }
         status.setText(text);
@@ -378,7 +447,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         validation.setManaged(!validation.getText().isBlank());
         if (hasResult) {
             var completed = session.result();
-            planTitle.setText(session.stale() ? "ANALYZED PLAN · STALE RESULT" : "CURRENT PLAN");
+            planTitle.setText(session.stale() && !persistence.current() ? "ANALYZED PLAN · STALE RESULT" : "CURRENT PLAN");
             boolean mortality = completed.mode() == MonteCarloMode.LONGEVITY_ADJUSTED;
             summary.setText(mortality ? "Longevity-Adjusted result · " + completed.people().primary().name()
                     + (completed.people().hasSpouse() ? " / " + completed.people().spouse().name() : "") + " · "
@@ -565,12 +634,13 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     }
 
     public boolean canExportPdf() {
-        return session != null && session.state() == MonteCarloSession.State.COMPLETED && !session.stale() && session.result() != null;
+        return session != null && !session.busy() && session.state() != MonteCarloSession.State.CLOSED
+                && session.result() != null && persistence.exportable();
     }
 
     public com.daviddunn.retirementplanner.app.export.MonteCarloPdfReport preparePdfReport() {
-        if (!canExportPdf()) throw new IllegalStateException("A current completed Monte Carlo result is required for PDF export.");
-        return MonteCarloPdfReportAdapter.from(session.result());
+        if (!canExportPdf()) throw new IllegalStateException("A compatible completed Monte Carlo result is required for PDF export.");
+        return persistence.report(MonteCarloPdfReportAdapter.from(session.result()));
     }
 
     public void exportPdf(java.nio.file.Path destination) throws java.io.IOException {
@@ -618,6 +688,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     @Override
     public void close() {
+        persistence.close();
         session.close();
         detach.run();
         if (worker instanceof ExecutorService service) {

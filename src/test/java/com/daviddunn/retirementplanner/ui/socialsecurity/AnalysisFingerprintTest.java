@@ -28,9 +28,17 @@ class AnalysisFingerprintTest {
     RetirementPlan plan(AnalysisKind kind) {
         return kind.shape() == AnalysisKind.Shape.COUPLE ? LongevityWeightedAnalysisRequestFactoryTest.plan() : SinglePersonMortalityAnalysisTest.plan();
     }
+    boolean assertsMonteCarloDelegationGuard(AnalysisKind kind, RetirementPlan plan, AnalysisFingerprintService.Inputs inputs) {
+        if (!kind.isMonteCarlo()) return false;
+        var failure = assertThrows(IllegalArgumentException.class, () -> service.fingerprint(kind, plan, inputs));
+        assertTrue(failure.getMessage().contains("Monte Carlo"));
+        assertFalse(service.assess(kind, plan, inputs, null).valid());
+        return true;
+    }
     @ParameterizedTest @EnumSource(AnalysisKind.class)
     void deterministicIndependentOfIdentityNamesAndObjectGraphs(AnalysisKind kind) {
         var p = plan(kind); var i = inputs("1.00", "0.0100", 10, false);
+        if (assertsMonteCarloDelegationGuard(kind, p, i)) return;
         var digest = service.fingerprint(kind, p, i);
         p.assignPlanId(UUID.randomUUID()); p.getHousehold().getPrimaryPerson().setFirstName("Renamed");
         assertEquals(digest, service.fingerprint(kind, p, i));
@@ -41,7 +49,9 @@ class AnalysisFingerprintTest {
     }
     @ParameterizedTest @EnumSource(AnalysisKind.class)
     void mortalityCandidateBaselineDependencySeparation(AnalysisKind kind) {
-        var p = plan(kind); var original = service.fingerprint(kind, p, inputs("1.00", "0.0100", 10, false));
+        var p = plan(kind);
+        if (assertsMonteCarloDelegationGuard(kind, p, inputs("1.00", "0.0100", 10, false))) return;
+        var original = service.fingerprint(kind, p, inputs("1.00", "0.0100", 10, false));
         var mortalityEdit = service.fingerprint(kind, p, inputs("0.90", "0.0200", 10, false));
         boolean mortalityMode = Set.of(AnalysisKind.COUPLE_SOCIAL_SECURITY, AnalysisKind.COUPLE_WEIGHTED,
                 AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY, AnalysisKind.INDIVIDUAL_WEIGHTED).contains(kind);
@@ -53,6 +63,7 @@ class AnalysisFingerprintTest {
     @ParameterizedTest @EnumSource(AnalysisKind.class)
     void accountBalancesMatterOnlyToIntegratedModesAndOrderIsPreserved(AnalysisKind kind) {
         var p = plan(kind); var i = inputs("1.00", "0.0100", 10, false);
+        if (assertsMonteCarloDelegationGuard(kind, p, i)) return;
         var a = AccountFactory.create(AccountType.BROKERAGE, "first", AccountOwnership.PRIMARY, new BigDecimal("123.4500"));
         var b = AccountFactory.create(AccountType.ROTH_IRA, "second", AccountOwnership.PRIMARY, new BigDecimal("456.7800"));
         p.getAccountPortfolio().addAccount(a); p.getAccountPortfolio().addAccount(b);
@@ -112,12 +123,17 @@ class AnalysisFingerprintTest {
                 .setNodeFactory(com.fasterxml.jackson.databind.node.JsonNodeFactory.withExactBigDecimals(true));
         for (AnalysisKind kind : AnalysisKind.values()) {
             var original = plan(kind); var next = inputs("1.00", "0.0100", 10, false);
-            var old = service.fingerprint(kind, original, next);
+            var old = kind.isMonteCarlo() ? null : service.fingerprint(kind, original, next);
             var root = mapper.readTree(mapper.writeValueAsBytes(original));
             var names = path.split("\\.");
             ((com.fasterxml.jackson.databind.node.ObjectNode) root.get("planningAssumptions").get(names[0]))
                     .put(names[1], new BigDecimal("0.07100"));
             var changed = mapper.treeToValue(root, RetirementPlan.class);
+            if (kind.isMonteCarlo()) {
+                assertTrue(assertsMonteCarloDelegationGuard(kind, original, next));
+                assertTrue(assertsMonteCarloDelegationGuard(kind, changed, next));
+                continue;
+            }
             boolean ssOnly = kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY;
             assertEquals(!ssOnly || path.endsWith("socialSecurityColaRate"), !old.equals(service.fingerprint(kind, changed, next)), kind + ":" + path);
             if (kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY && path.endsWith("generalInflationRate"))

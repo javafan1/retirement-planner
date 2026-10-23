@@ -96,17 +96,60 @@ class MonteCarloComparisonSessionTest {
     }
 
     @Test
-    void unexpectedErrorDiscardsPreviousResultAndRetainsOriginalDiagnostic() {
+    void unexpectedErrorPreservesPreviousResultAndRetainsOriginalDiagnostic() {
         var session = new MonteCarloStrategyComparisonSession(Runnable::run, Runnable::run);
         session.start((p, c) -> MonteCarloComparisonFixtures.run());
+        var previous = session.result();
         var original = new ArithmeticException("Unexpected failure");
         session.start((p, c) -> {
             throw original;
         });
         assertEquals(MonteCarloStrategyComparisonSession.State.FAILED, session.state());
         assertFalse(session.busy());
-        assertNull(session.result());
+        assertSame(previous, session.result());
         assertSame(original, session.failure());
+        assertSame(previous, session.result());
+    }
+
+    @Test
+    void replacementsRetainLastSuccessAndOnlyEligibleCompletionsAreAccepted() {
+        for (String action : java.util.List.of("cancel", "failure", "stale", "close", "success")) {
+            var worker = new Queue(); var ui = new Queue();
+            var session = new MonteCarloStrategyComparisonSession(worker, ui::execute);
+            var previous = MonteCarloComparisonFixtures.run();
+            var accepted = new java.util.concurrent.atomic.AtomicInteger();
+            session.start((p, c) -> previous, r -> accepted.incrementAndGet());
+            worker.drain(); ui.drain();
+            assertEquals(1, accepted.get());
+            session.start((p, c) -> {
+                if (action.equals("failure")) throw new ArithmeticException("injected");
+                return previous;
+            }, r -> accepted.incrementAndGet());
+            assertSame(previous, session.result(), "Starting a replacement preserves accepted evidence");
+            worker.drain();
+            switch (action) {
+                case "cancel" -> session.cancel();
+                case "stale" -> session.invalidate();
+                case "close" -> session.close();
+            }
+            ui.drain();
+            assertSame(previous, session.result());
+            assertEquals(action.equals("success") ? 2 : 1, accepted.get());
+        }
+    }
+
+    @Test
+    void lateHistoricalRestorePreservesFailedReplacementStatusAndDoesNotAcceptANewJob() {
+        var session = new MonteCarloStrategyComparisonSession(Runnable::run, Runnable::run);
+        var failure = new ArithmeticException("injected");
+        var accepted = new java.util.concurrent.atomic.AtomicInteger();
+        session.start((p, c) -> { throw failure; }, r -> accepted.incrementAndGet());
+        var historical = MonteCarloComparisonFixtures.run();
+        session.restore(historical, true);
+        assertEquals(MonteCarloStrategyComparisonSession.State.FAILED, session.state());
+        assertSame(failure, session.failure());
+        assertSame(historical, session.result());
+        assertEquals(0, accepted.get());
     }
 
     @Test

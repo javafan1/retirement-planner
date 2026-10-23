@@ -107,11 +107,8 @@ class MonteCarloMortalityViewTest {
                     var prior = view.session().result();
                     mode(view).setValue(selection);
                     assertTrue(queue.isEmpty(), "Selecting a mode must not run analysis");
-                    if (prior != null) {
-                        assertTrue(view.session().stale());
-                        assertSame(prior, view.session().result());
-                        assertEquals(prior.mode() == MonteCarloMode.FIXED_LIFESPAN
-                                ? "FUNDING PROBABILITY" : "LIFETIME FUNDING PROBABILITY", text(view, "#mc-funding-title"));
+                    if (prior != null && prior.mode() != selection) {
+                        assertNull(view.session().result(), "A different mode has an independent result slot; restoration is asynchronous");
                     }
                     button(view, "#mc-run").fire();
                     return null;
@@ -242,8 +239,12 @@ class MonteCarloMortalityViewTest {
                     default -> field(view, "#mc-" + change).setText("1.5");
                 }
                 assertTrue(view.session().stale());
-                assertSame(completed, view.session().result());
-                assertEquals("LIFETIME FUNDING PROBABILITY", text(view, "#mc-funding-title"));
+                if (change.equals("mode")) {
+                    assertNull(view.session().result(), "Do not present longevity results as fixed-mode results");
+                } else {
+                    assertSame(completed, view.session().result());
+                    assertEquals("LIFETIME FUNDING PROBABILITY", text(view, "#mc-funding-title"));
+                }
                 assertTrue(queue.isEmpty());
                 assertThrows(IllegalStateException.class, completed::result);
             } finally {

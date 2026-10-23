@@ -10,6 +10,11 @@ public final class AnalysisVersions {
         var versions = new TreeMap<String, String>();
         versions.put("monthly-social-security", "v1");
         versions.put("analysis-kind", kind.name() + "-v1");
+        if (kind.isMonteCarlo()) {
+            versions.put("monte-carlo", "v1");
+            versions.put("random-streams", "v1");
+            versions.put("statistics", "v1");
+        }
         if (kind != AnalysisKind.COUPLE_SOCIAL_SECURITY && kind != AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY)
             versions.put("projection", "v1");
         return Map.copyOf(versions);
@@ -17,7 +22,8 @@ public final class AnalysisVersions {
     /** Classpath reads belong on the I/O worker, not JavaFX. No remote reference data. */
     public static Map<String, String> references(AnalysisKind kind) {
         List<String> resources = new ArrayList<>();
-        if (kind != AnalysisKind.COUPLE_EXHAUSTIVE && kind != AnalysisKind.INDIVIDUAL_DETERMINISTIC)
+        if (kind.isMonteCarlo() ? kind.name().endsWith("LONGEVITY")
+                : kind != AnalysisKind.COUPLE_EXHAUSTIVE && kind != AnalysisKind.INDIVIDUAL_DETERMINISTIC)
             resources.add("mortality/ssa-period-life-table-2022.csv");
         if (kind != AnalysisKind.COUPLE_SOCIAL_SECURITY && kind != AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY) {
             resources.add("rules/government-rules-2026.json");

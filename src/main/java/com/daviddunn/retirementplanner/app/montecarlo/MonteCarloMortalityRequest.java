@@ -102,6 +102,18 @@ public final class MonteCarloMortalityRequest {
         return new MonteCarloMortalityRequest(plan, settings, primaryAdjustment, SocialSecurityMortalityTables.ssaPeriod2022());
     }
 
+    /** Codec-only reconstruction of the original independent individual inputs and table. */
+    static MonteCarloMortalityRequest individualFromSnapshot(RetirementPlan plan, MonteCarloSettings settings,
+            SocialSecurityMortalityAdjustment adjustment, SocialSecurityMortalityTable table) {
+        return new MonteCarloMortalityRequest(plan, settings, adjustment, table);
+    }
+
+    /** Preserve an explicitly absent shared election; paired candidates own their separate elections. */
+    static MonteCarloMortalityRequest coupleFromSnapshot(RetirementPlan plan, MonteCarloSettings settings,
+            LongevitySessionSettings session, SocialSecurityMortalityTable table, Optional<Integer> survivorAge) {
+        return new MonteCarloMortalityRequest(plan, settings, session, table, survivorAge);
+    }
+
     private MonteCarloMortalityRequest(RetirementPlan plan, MonteCarloSettings settings,
             SocialSecurityMortalityAdjustment primaryAdjustment, SocialSecurityMortalityTable table) {
         if (plan.getHousehold().hasSpouse()) throw new IllegalArgumentException("Individual request requires one person.");

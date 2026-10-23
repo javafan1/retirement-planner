@@ -42,6 +42,12 @@ public final class MonteCarloMortalityAnalysisResult {
             String returnModel,
             String mortalityModel,
             List<WorldOutcome> outcomes) {
+        this(request, returnModel, mortalityModel, outcomes, null);
+    }
+
+    /** Codec-only pure reconstruction; normal execution still uses the original reducer. */
+    MonteCarloMortalityAnalysisResult(MonteCarloMortalityRequest request, String returnModel,
+            String mortalityModel, List<WorldOutcome> outcomes, MonteCarloMortalityAccumulator.Aggregates frozen) {
         this.request = Objects.requireNonNull(request);
         this.returnModel = Objects.requireNonNull(returnModel);
         this.mortalityModel = Objects.requireNonNull(mortalityModel);
@@ -70,7 +76,7 @@ public final class MonteCarloMortalityAnalysisResult {
                 }
             }
         }
-        aggregates = MonteCarloMortalityAccumulator.reduce(first, outcomes);
+        aggregates = frozen == null ? MonteCarloMortalityAccumulator.reduce(first, outcomes) : frozen;
     }
 
     public MonteCarloMortalityRequest request() {

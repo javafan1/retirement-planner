@@ -12,7 +12,8 @@ public final class AnalysisCompatibilityPolicy {
             return unavailable("Unsupported snapshot format.");
         for (var version : saved.algorithms().entrySet()) {
             String readable = version.getKey().equals("analysis-kind") ? saved.kind().name() + "-v1" : "v1";
-            if (!Set.of("analysis-kind", "monthly-social-security", "projection", "weighted", "algorithm").contains(version.getKey())
+            if (!(Set.of("analysis-kind", "monthly-social-security", "projection", "weighted", "algorithm").contains(version.getKey())
+                    || saved.kind().isMonteCarlo() && Set.of("monte-carlo", "random-streams", "statistics").contains(version.getKey()))
                     || !version.getValue().equals(readable)) return unavailable("The saved financial algorithm semantics are not supported by this application.");
         }
         if (!inputs.valid() || inputs.contextFingerprint() == null)
@@ -27,6 +28,7 @@ public final class AnalysisCompatibilityPolicy {
     public Assessment unavailable(String reason) { return new Assessment(State.INCOMPATIBLE_OR_UNAVAILABLE, reason); }
     /** Copy assessment under the original frozen analysis settings; UI must reassess its next-run controls later. */
     public Assessment assessCopy(AnalysisSnapshot s, com.daviddunn.retirementplanner.domain.model.RetirementPlan plan) {
+        if (s.kind().isMonteCarlo()) return new Assessment(State.OUTDATED, "Historical Monte Carlo copy; current effective inputs have not been assessed.");
         try {
             if ((s.shape() == AnalysisKind.Shape.COUPLE) != plan.getHousehold().hasSpouse())
                 return new Assessment(State.OUTDATED, "Historical copy belongs to the previous household shape.");

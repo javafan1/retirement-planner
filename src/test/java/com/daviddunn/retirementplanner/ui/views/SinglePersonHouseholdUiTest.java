@@ -365,7 +365,12 @@ public class SinglePersonHouseholdUiTest {
             fx(() -> {
                 ((TextField) view.lookup("#mc-volatility")).setText("12");
                 assertTrue(view.session().stale());
-                assertFalse(view.canExportPdf());
+                assertTrue(view.canExportPdf());
+                var historical = view.preparePdfReport();
+                assertTrue(historical.context().getFirst().startsWith("Historical Analysis"));
+                var frozen = com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloPdfReportAdapter.from(view.session().result());
+                assertEquals(frozen.chart(), historical.chart());
+                assertEquals(frozen.sections(), historical.sections());
                 assertFalse(controller.getCurrentPlan().getHousehold().hasSpouse());
                 return null;
             });

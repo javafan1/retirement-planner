@@ -64,7 +64,9 @@ public final class MonteCarloSession implements AutoCloseable {
         return progress;
     }
 
-    public boolean start(Work work) {
+    public boolean start(Work work) { return start(work, ignored -> { }); }
+
+    public boolean start(Work work, Consumer<MonteCarloRun> accepted) {
         if (busy() || state == State.CLOSED) {
             return false;
         }
@@ -72,9 +74,7 @@ public final class MonteCarloSession implements AutoCloseable {
         long capturedRevision = revision;
         AtomicBoolean token = new AtomicBoolean();
         cancellation = token;
-        result = null;
         failure = null;
-        stale = false;
         progress = null;
         state = State.RUNNING;
         changed.run();
@@ -91,18 +91,18 @@ public final class MonteCarloSession implements AutoCloseable {
                         }
                     }), cancellationToken);
                     cancellationToken.throwIfCancellationRequested();
-                    dispatcher.accept(() -> finish(id, capturedRevision, completed, null, token));
+                    dispatcher.accept(() -> finish(id, capturedRevision, completed, null, token, accepted));
                 } catch (Throwable exception) {
-                    dispatcher.accept(() -> finish(id, capturedRevision, null, exception, token));
+                    dispatcher.accept(() -> finish(id, capturedRevision, null, exception, token, accepted));
                 }
             });
         } catch (RuntimeException exception) {
-            finish(id, capturedRevision, null, exception, token);
+            finish(id, capturedRevision, null, exception, token, accepted);
         }
         return true;
     }
 
-    private void finish(long id, long capturedRevision, MonteCarloRun completed, Throwable error, AtomicBoolean token) {
+    private void finish(long id, long capturedRevision, MonteCarloRun completed, Throwable error, AtomicBoolean token, Consumer<MonteCarloRun> accepted) {
         if (id != generation || state == State.CLOSED) {
             return;
         }
@@ -113,8 +113,26 @@ public final class MonteCarloSession implements AutoCloseable {
             state = State.FAILED;
         } else {
             result = Objects.requireNonNull(completed);
+            stale = false;
             state = State.COMPLETED;
+            accepted.accept(result);
         }
+        changed.run();
+    }
+
+    /** Passive publication is not an accepted financial completion. */
+    public void restore(MonteCarloRun restored, boolean outdated) {
+        if (busy() || state == State.CLOSED) return;
+        result = Objects.requireNonNull(restored);
+        stale = outdated;
+        if (state == State.IDLE) state = State.COMPLETED;
+        changed.run();
+    }
+
+    public void clearResult() {
+        invalidate();
+        result = null;
+        if (!busy() && state != State.CLOSED) state = State.IDLE;
         changed.run();
     }
 

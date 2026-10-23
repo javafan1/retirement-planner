@@ -43,6 +43,8 @@ public final class AnalysisSnapshotCodec {
         families.addDeserializer(AnalysisPayload.class, new JsonDeserializer<AnalysisPayload>() {
             @Override public AnalysisPayload deserialize(JsonParser parser, DeserializationContext context) throws IOException {
                 var kind = (AnalysisKind) context.getAttribute("snapshot-kind");
+                if (kind != null && kind.isMonteCarlo())
+                    return context.readValue(parser, com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot.class);
                 if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY)
                     return context.readValue(parser, CoupleSocialSecuritySnapshot.class);
                 if (kind == AnalysisKind.COUPLE_EXHAUSTIVE)
@@ -64,7 +66,8 @@ public final class AnalysisSnapshotCodec {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
             try (var output = new DigestOutputStream(OutputStream.nullOutputStream(), digest)) {
-                mapper.writeValue(output, new Content(payload, context));
+                mapper.writeValue(payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot ? limited(output) : output,
+                        new Content(payload, context));
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (IOException | NoSuchAlgorithmException e) { throw new IllegalArgumentException("Invalid snapshot content.", e); }
@@ -83,7 +86,8 @@ public final class AnalysisSnapshotCodec {
                 tree.set("payload", new ExhaustiveSnapshotInterning(exactTrees).encode(
                         (com.fasterxml.jackson.databind.node.ObjectNode) tree.get("payload")));
                 raw = exactTrees.writeValueAsBytes(tree);
-            } else raw = mapper.writeValueAsBytes(snapshot);
+            } else if (snapshot.kind().isMonteCarlo()) raw = boundedMonteCarloBytes(snapshot);
+            else raw = mapper.writeValueAsBytes(snapshot);
         }
         catch (Exception failure) { throw AnalysisSnapshotSaveException.at(AnalysisSnapshotSaveException.Stage.SERIALIZATION, -1, -1, failure); }
         if (snapshot.kind() == AnalysisKind.COUPLE_EXHAUSTIVE && (raw.length > MAX_RAW_BYTES
@@ -103,6 +107,31 @@ public final class AnalysisSnapshotCodec {
         return raw;
     }
     public record Encoded(byte[] bytes, int rawBytes) { }
+    /** MC encoding stops before allocating an oversized byte document; legacy encodings are untouched. */
+    private byte[] boundedMonteCarloBytes(AnalysisSnapshot snapshot) throws IOException {
+        var bytes = new ByteArrayOutputStream(8192);
+        try (var output = limited(bytes)) { mapper.writeValue(output, snapshot); }
+        catch (IOException failure) {
+            for (Throwable cause = failure; cause != null; cause = cause.getCause())
+                if (cause instanceof AnalysisSnapshotSaveException limit) throw limit;
+            throw failure;
+        }
+        return bytes.toByteArray();
+    }
+    private static OutputStream limited(OutputStream delegate) {
+        return new OutputStream() {
+            private long count;
+            private void reserve(int length) throws IOException {
+                if (length > MAX_RAW_BYTES - count) throw new AnalysisSnapshotSaveException(AnalysisSnapshotSaveException.Stage.SIZE_LIMIT,
+                        MAX_RAW_BYTES + 1L, -1, new IOException("Snapshot exceeds the uncompressed size limit."));
+                count += length;
+            }
+            @Override public void write(int value) throws IOException { reserve(1); delegate.write(value); }
+            @Override public void write(byte[] bytes, int offset, int length) throws IOException { reserve(length); delegate.write(bytes, offset, length); }
+            @Override public void flush() throws IOException { delegate.flush(); }
+            @Override public void close() throws IOException { delegate.close(); }
+        };
+    }
     public byte[] encode(AnalysisSnapshot snapshot) throws IOException {
         return encodeMeasured(snapshot).bytes();
     }
@@ -165,6 +194,9 @@ public final class AnalysisSnapshotCodec {
                 try (var parser = exact.traverse(exactTrees)) {
                     snapshot = mapper.readerFor(AnalysisSnapshot.class).withAttribute("snapshot-kind", kind).readValue(parser);
                 }
+            } else if (kind.isMonteCarlo()) {
+                snapshot = mapper.readerFor(AnalysisSnapshot.class).without(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
+                        .withAttribute("snapshot-kind", kind).readValue(raw);
             } else snapshot = mapper.readerFor(AnalysisSnapshot.class).withAttribute("snapshot-kind", kind).readValue(raw);
             validate(snapshot);
             return snapshot;
@@ -210,6 +242,8 @@ public final class AnalysisSnapshotCodec {
         var fields = new HashSet<String>();
         fields.addAll(Set.of("exhaustiveRepresentation", "tables", "document", "$ref"));
         var types = new ArrayList<Class<?>>();
+        types.add(com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot.class);
+        types.addAll(List.of(com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot.class.getDeclaredClasses()));
         types.addAll(List.of(WeightedSnapshots.class.getDeclaredClasses()));
         types.addAll(List.of(CoupleSocialSecuritySnapshot.class.getDeclaredClasses()));
         types.add(CoupleSocialSecuritySnapshot.class);
@@ -255,6 +289,9 @@ public final class AnalysisSnapshotCodec {
         s.payload().validate(s.kind());
         if (s.payload() instanceof ExhaustiveSnapshot exhaustive && !s.completedAt().equals(exhaustive.completedAt()))
             throw new IOException("Exhaustive completion timestamp does not match its envelope.");
+        if (s.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                && (!s.completedAt().equals(mc.completedAt()) || !s.context().startedAt().equals(mc.startedAt())))
+            throw new IOException("Monte Carlo timestamps do not match the envelope.");
         if (!digest(s.payload(), s.context()).equals(s.payloadDigest())) throw new IOException("Snapshot integrity check failed.");
     }
 }

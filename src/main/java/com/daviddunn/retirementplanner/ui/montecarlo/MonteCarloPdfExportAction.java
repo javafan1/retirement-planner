@@ -17,7 +17,7 @@ final class MonteCarloPdfExportAction {
     MonteCarloPdfExportAction(String id, BooleanSupplier ready, Supplier<MonteCarloPdfReport> capture) {
         this.ready = ready; this.capture = capture;
         button.setId(id); button.setAccessibleText("Export completed Monte Carlo analysis to PDF");
-        button.setTooltip(new Tooltip("Export the completed frozen result. Run again if the result is stale."));
+        button.setTooltip(new Tooltip("Export frozen completed results, including clearly labeled Outdated historical results."));
         button.setOnAction(event -> choose()); refresh();
     }
     Button button() { return button; }
