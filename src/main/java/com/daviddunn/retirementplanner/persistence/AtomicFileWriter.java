@@ -69,6 +69,11 @@ final class AtomicFileWriter {
 
     List<String> write(Path selected, byte[] bytes, Verification verify, boolean planBackup)
             throws IOException {
+        return write(selected, bytes, verify, planBackup, path -> { });
+    }
+
+    List<String> write(Path selected, byte[] bytes, Verification verify, boolean planBackup,
+            Verification commitGuard) throws IOException {
         synchronized (SAVE_LOCK) {
             Path target = selected.toAbsolutePath().normalize();
             regularOrMissing(target);
@@ -89,6 +94,7 @@ final class AtomicFileWriter {
                 Path prepared = prepare(target, bytes, temporary);
                 faults.before(Stage.VERIFY, prepared);
                 verify.verify(prepared);
+                commitGuard.verify(target);
                 if (planBackup && Files.exists(target)) {
                     // Verification of the old destination precedes ANY backup change.
                     verify.verify(target);
@@ -113,6 +119,7 @@ final class AtomicFileWriter {
                     backupChanged = true;
                 }
                 faults.before(Stage.REPLACE, target);
+                commitGuard.verify(target);
                 Files.move(prepared, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 committed = true;
                 return warnings;

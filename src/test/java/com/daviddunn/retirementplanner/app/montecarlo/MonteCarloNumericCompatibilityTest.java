@@ -11,6 +11,25 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class MonteCarloNumericCompatibilityTest {
+    @Test void configurationMetadataDoesNotChangeAnyExistingMonteCarloFingerprintContract() throws Exception {
+        var service = new MonteCarloFingerprintService();
+        for (var frozen : MonteCarloResultLifecycleTest.FIXTURES.values()) {
+            var original = new MonteCarloFingerprintService.Inputs(frozen.kind(), frozen.settings(), frozen.request());
+            var plan = MonteCarloPlanDocument.read(frozen.request().planA());
+            String financial = MonteCarloPlanDocument.capture(plan);
+            var configurations = com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations.empty()
+                    .with(com.daviddunn.retirementplanner.app.analysis.parameters.ParameterFixtures.configuration(frozen.kind()));
+            plan.setAnalyzerConfigurations(configurations);
+            assertEquals(financial, MonteCarloPlanDocument.capture(plan));
+            String with = new String(com.daviddunn.retirementplanner.persistence.PlanConfigurationTransaction.replace(
+                    frozen.request().planA().getBytes(java.nio.charset.StandardCharsets.UTF_8), "analyzerConfigurations",
+                    configurations.json().getBytes(java.nio.charset.StandardCharsets.UTF_8)), java.nio.charset.StandardCharsets.UTF_8);
+            var r = frozen.request();
+            var request = new MonteCarloSnapshot.Request(with, r.planB(), r.labelA(), r.labelB(), r.start(), r.endingYear(), r.fixedLife(), r.mortality());
+            var next = new MonteCarloFingerprintService.Inputs(frozen.kind(), frozen.settings(), request);
+            for (var contract : MonteCarloFingerprintService.Contract.values()) assertEquals(service.assess(original, contract), service.assess(next, contract));
+        }
+    }
     @org.junit.jupiter.api.io.TempDir Path directory;
     @BeforeAll static void fixtures() { MonteCarloResultLifecycleTest.calculateIndependentFixturesOnce(); }
 

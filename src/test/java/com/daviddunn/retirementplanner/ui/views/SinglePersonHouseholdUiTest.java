@@ -382,8 +382,8 @@ public class SinglePersonHouseholdUiTest {
             controller.getCurrentPlan().setBaseline(ProjectionBaselineFactory.create(controller.getCurrentPlan(), "Single baseline"));
             var v = new MonteCarloStrategyComparisonView(controller, comparisonQueue::add, new MonteCarloStrategyComparisonRunService()::run);
             new Scene(v, 1900, 1040);
-            field(v, "count", ComboBox.class).setValue(30);
             field(v, "mode", ComboBox.class).setValue(MonteCarloMode.LONGEVITY_ADJUSTED);
+            field(v, "count", ComboBox.class).setValue(30);
             field(v, "run", Button.class).fire();
             return v;
         });

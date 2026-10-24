@@ -24,8 +24,8 @@ final class IndividualCompletionPersistence {
                     return () -> view.restore(result, report);
                 }, view::refreshSavedState, view::clearSavedResult, view.persistenceNotice);
         view.getChildren().add(noticeIndex, view.persistence.controls);
-        view.conditioning.getEditor().textProperty().addListener((o, a, b) -> { WeightedResultPersistence.dateEdited(view.conditioning); view.persistence.reassess(); });
-        view.valuation.getEditor().textProperty().addListener((o, a, b) -> { WeightedResultPersistence.dateEdited(view.valuation); view.persistence.reassess(); });
+        view.conditioning.getEditor().textProperty().addListener((o, a, b) -> { if (view.parameters == null || !view.parameters.applying()) { WeightedResultPersistence.dateEdited(view.conditioning); view.persistence.reassess(); } });
+        view.valuation.getEditor().textProperty().addListener((o, a, b) -> { if (view.parameters == null || !view.parameters.applying()) { WeightedResultPersistence.dateEdited(view.valuation); view.persistence.reassess(); } });
         view.acceptedCompletion = input -> {
             UUID identity = input.plan().getPlanId() == null ? source.getAnalysisSessionId() : UUID.fromString(input.plan().getPlanId());
             var file = source.canPersistAnalysisResults() && Objects.equals(input.plan().getPlanId(), source.getCurrentPlan().getPlanId())

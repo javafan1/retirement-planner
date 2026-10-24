@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import com.daviddunn.retirementplanner.app.socialsecurity.results.*;
+import com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration;
 
 /** Resizable, read-only Social Security strategy analysis window. */
 public final class SocialSecurityStrategyAnalyzerDialog {
@@ -46,6 +47,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             request -> (progress, cancellation) -> new SocialSecuritySurvivorClaimingOptimizationCalculator().calculate(request, progress, cancellation);
     private WeightedResultPersistence socialSecurityPersistence;
     private WeightedResultPersistence exhaustivePersistence;
+    java.util.function.Function<SocialSecurityAnalyzerInputs.Quick, SocialSecurityAnalyzerJobController.Work<IntegratedSocialSecurityComparisonPresentation>> quickCalculation =
+            input -> (progress, cancellation) -> IntegratedSocialSecurityComparisonPresentation.from(
+                    new IntegratedSocialSecurityStrategyComparisonService().compareAnalyzerCandidates(input.plan(),
+                            input.selected().stream().map(SocialSecurityStrategyAnalyzerPresentation.RankedStrategy::cell).toList(), progress, cancellation), input.selected());
     private ExhaustiveSnapshot.CrossReference historicalExhaustiveReference;
     java.util.function.Function<IntegratedSocialSecurityCompleteStrategySearchRequest,
             SocialSecurityAnalyzerJobController.Work<com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityCompleteStrategySearchResult>> exhaustiveCalculation =
@@ -134,6 +139,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private ExhaustiveIntegratedSearchPresentation exhaustivePresentation;
     private boolean socialSecurityResultCurrent;
     private SinglePersonIntegratedView singlePersonView;
+    private final java.util.EnumMap<AnalysisKind, SocialSecurityParameterBinding> parameterBindings = new java.util.EnumMap<>(AnalysisKind.class);
+    private int acceptedSsTop = SocialSecuritySurvivorOptimizationSettings.DEFAULT_TOP_RETIREMENT_CANDIDATES;
+    private AnalysisParameterConfiguration.Search acceptedExhaustiveProfile;
+    private AnalysisParameterConfiguration.Mortality coupleParameterDefaults;
 
     public SocialSecurityStrategyAnalyzerDialog(Window owner, RetirementPlan plan) {
         this(owner, plan, new SocialSecurityAnalyzerJobController(
@@ -178,6 +187,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         this(owner, source.getCurrentPlan(), jobs);
         analysisSource = source;
         if (singlePersonView != null) {
+            singlePersonView.attachParameters(source);
             IndividualCompletionPersistence.attach(singlePersonView.weightedView, source);
             singlePersonView.navigation.onSelected(mode -> {
                 if (mode == SocialSecurityAnalyzerJobController.Mode.WEIGHTED) singlePersonView.weightedView.persistence.load();
@@ -190,6 +200,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 singlePersonView.ssView.persistenceNotice.setWrapText(true);
             }
             detachPlanListener = source.addSourcePlanRevisionListener(() -> singlePersonView.weightedView.persistence.sourceChanged(() -> {
+                if (source.getCurrentPlan().getHousehold().hasSpouse()) { close(); stage.close(); return; }
                 plan = source.getCurrentPlan();
                 singlePersonView.invalidate(plan);
             }));
@@ -214,6 +225,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         observe(primaryMortalityAdjustment.textProperty(), shareLongevity);
         observe(spouseMortalityAdjustment.textProperty(), shareLongevity);
         detachPlanListener = source.addSourcePlanRevisionListener(() -> exhaustivePersistence.sourceChanged(() -> socialSecurityPersistence.sourceChanged(() -> weightedPersistence.sourceChanged(() -> {
+            if (!source.getCurrentPlan().getHousehold().hasSpouse()) { close(); stage.close(); return; }
             boolean differentPlan = plan != source.getCurrentPlan();
             plan = source.getCurrentPlan();
             if (differentPlan) {
@@ -221,6 +233,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 mortalityDate.setValue(defaults.conditioningDate());
                 primaryMortalityAdjustment.setText(defaults.primaryAdjustment().factor().toPlainString());
                 spouseMortalityAdjustment.setText(defaults.spouseAdjustment().factor().toPlainString());
+                baselineInputs.load(plan);
+                if (plan.getHousehold().hasSpouse()) coupleParameterDefaults = defaultCoupleParameters(source);
+                parameterBindings.values().forEach(SocialSecurityParameterBinding::planChanged);
             }
             baselineInputs.load(plan);
             if (weightedPresentation == null) weightedView.initialCurrent(baselineInputs.snapshot());
@@ -352,7 +367,98 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         exhaustiveWorkspace.getChildren().add(5, exhaustivePersistence.controls);
         observe(mortalityDate.getEditor().textProperty(), () -> { WeightedResultPersistence.dateEdited(mortalityDate); weightedPersistence.reassess(); socialSecurityPersistence.reassess(); });
         observe(pvDate.getEditor().textProperty(), () -> { WeightedResultPersistence.dateEdited(pvDate); weightedPersistence.reassess(); socialSecurityPersistence.reassess(); });
+        attachCoupleParameters(source);
         socialSecurityPersistence.load();
+    }
+
+    private boolean applyingParameters() { return parameterBindings.values().stream().anyMatch(SocialSecurityParameterBinding::applying); }
+    private SocialSecurityParameterBinding.Run parameterRun(AnalysisKind kind, AnalysisParameterConfiguration.Parameters values) {
+        return parameterBindings.containsKey(kind) ? parameterBindings.get(kind).begin(values) : null;
+    }
+    private void acceptParameters(AnalysisKind kind, SocialSecurityParameterBinding.Run run) {
+        if (run != null) parameterBindings.get(kind).accept(run);
+    }
+    private void rollbackParameters(AnalysisKind kind, SocialSecurityParameterBinding.Run run) {
+        if (run != null) parameterBindings.get(kind).rollback(run);
+    }
+    private void refreshParameterInputs() {
+        if (analysisSource != null && plan.getHousehold().hasSpouse()) {
+            try { analysisSource.setLongevitySessionSettings(new LongevitySessionSettings(mortalityDate.getValue(),
+                    adjustment(primaryMortalityAdjustment.getText(), "Primary"), adjustment(spouseMortalityAdjustment.getText(), "Spouse"))); }
+            catch (IllegalArgumentException | NullPointerException incomplete) { /* Only valid values propagate. */ }
+        }
+        refreshInputSummary();
+        if (socialSecurityPersistence != null) socialSecurityPersistence.reassess();
+        if (weightedPersistence != null) weightedPersistence.reassess();
+        refreshQuickPrerequisite();
+    }
+    private void attachCoupleParameters(com.daviddunn.retirementplanner.ui.controller.ApplicationController source) {
+        coupleParameterDefaults = defaultCoupleParameters(source);
+        for (var kind : List.of(AnalysisKind.COUPLE_SOCIAL_SECURITY, AnalysisKind.COUPLE_QUICK,
+                AnalysisKind.COUPLE_EXHAUSTIVE, AnalysisKind.COUPLE_WEIGHTED)) {
+            var binding = new SocialSecurityParameterBinding(source, kind, values -> {
+                if (values instanceof AnalysisParameterConfiguration.Mortality m) {
+                    primaryMortalityAdjustment.setText(m.primaryFactor().toPlainString());
+                    spouseMortalityAdjustment.setText(m.spouseFactor().toPlainString());
+                    SocialSecurityParameterMapping.date(mortalityDate, m.conditioningDate()); SocialSecurityParameterMapping.date(pvDate, m.valuationDate());
+                    discountRate.setText(SocialSecurityParameterMapping.percent(m.realDiscountRate()));
+                    if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY) {
+                        if (!m.optimizerProfile().startsWith("couple-ss-v1:top=")) throw new IllegalArgumentException("Unsupported optimization profile");
+                        acceptedSsTop = new SocialSecuritySurvivorOptimizationSettings(Integer.parseInt(m.optimizerProfile().substring("couple-ss-v1:top=".length()))).topRetirementCandidates();
+                    } else {
+                        if (!SocialSecurityParameterMapping.WEIGHTED.equals(m.optimizerProfile())) throw new IllegalArgumentException("Unsupported optimization profile");
+                        baselineInputs.restoreParameters(m.baseline());
+                    }
+                    source.setLongevitySessionSettings(new LongevitySessionSettings(m.conditioningDate(),
+                            adjustment(primaryMortalityAdjustment.getText(), "Primary"), adjustment(spouseMortalityAdjustment.getText(), "Spouse")));
+                } else if (values instanceof AnalysisParameterConfiguration.Quick q) integratedCandidateCount.getValueFactory().setValue(q.candidateCount());
+                else {
+                    var s = (AnalysisParameterConfiguration.Search) values;
+                    if (!"couple-full-v1".equals(s.profile())) throw new IllegalArgumentException("Unsupported search profile");
+                    acceptedExhaustiveProfile = s;
+                }
+            }, () -> {
+                if (kind == AnalysisKind.COUPLE_QUICK) integratedCandidateCount.getValueFactory().setValue(10);
+                else if (kind == AnalysisKind.COUPLE_EXHAUSTIVE) acceptedExhaustiveProfile = null;
+                else {
+                    var settings = coupleParameterDefaults;
+                    primaryMortalityAdjustment.setText(settings.primaryFactor().toPlainString());
+                    spouseMortalityAdjustment.setText(settings.spouseFactor().toPlainString());
+                    SocialSecurityParameterMapping.date(mortalityDate, settings.conditioningDate()); SocialSecurityParameterMapping.date(pvDate, settings.valuationDate());
+                    discountRate.setText(SocialSecurityParameterMapping.percent(settings.realDiscountRate()));
+                    acceptedSsTop = SocialSecuritySurvivorOptimizationSettings.DEFAULT_TOP_RETIREMENT_CANDIDATES;
+                    if (kind == AnalysisKind.COUPLE_WEIGHTED) baselineInputs.restoreParameters(null);
+                }
+            }, this::refreshParameterInputs, () -> navigation.selected().mode() == switch (kind) {
+                case COUPLE_SOCIAL_SECURITY -> SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY;
+                case COUPLE_QUICK -> SocialSecurityAnalyzerJobController.Mode.QUICK;
+                case COUPLE_EXHAUSTIVE -> SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE;
+                default -> SocialSecurityAnalyzerJobController.Mode.WEIGHTED;
+            });
+            parameterBindings.put(kind, binding);
+            if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY) socialSecurityWorkspace.getChildren().add(5, binding.controls);
+            else if (kind == AnalysisKind.COUPLE_WEIGHTED) weightedView.getChildren().add(5, binding.controls);
+            else if (kind == AnalysisKind.COUPLE_EXHAUSTIVE) exhaustiveWorkspace.getChildren().add(5, binding.controls);
+        }
+        // Quick's workspace has its own notice; no new result persistence is introduced.
+        var quick = (VBox) navigation.choices().stream().filter(c -> c.mode() == SocialSecurityAnalyzerJobController.Mode.QUICK).findFirst().orElseThrow().workspace();
+        quick.getChildren().add(3, parameterBindings.get(AnalysisKind.COUPLE_QUICK).controls);
+        navigation.onSelected(mode -> {
+            refreshContextualInputs();
+            var kind = switch (mode) {
+                case SOCIAL_SECURITY -> AnalysisKind.COUPLE_SOCIAL_SECURITY;
+                case QUICK -> AnalysisKind.COUPLE_QUICK;
+                case EXHAUSTIVE -> AnalysisKind.COUPLE_EXHAUSTIVE;
+                case WEIGHTED -> AnalysisKind.COUPLE_WEIGHTED;
+            };
+            parameterBindings.get(kind).restore();
+        });
+    }
+    private AnalysisParameterConfiguration.Mortality defaultCoupleParameters(com.daviddunn.retirementplanner.ui.controller.ApplicationController source) {
+        var settings = source.getLongevitySessionSettings();
+        return new AnalysisParameterConfiguration.Mortality(settings.primaryAdjustment().factor(), settings.spouseAdjustment().factor(),
+                settings.conditioningDate(), plan.getPlanningAssumptions().getProjectionStartDate(), new BigDecimal("0.010"),
+                "couple-ss-v1:top=5", null);
     }
     private void refreshExhaustiveResultStatus() {
         if (exhaustivePresentation != null && exhaustivePersistence != null)
@@ -635,7 +741,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     primaryMortalityAdjustment.getText(), "Primary");
             SocialSecurityMortalityAdjustment spouseAdjustment = adjustment(
                     spouseMortalityAdjustment.getText(), "Spouse");
-            SocialSecurityStrategyAnalysisContext context =
+            SocialSecurityStrategyAnalysisContext preparedContext =
                     new SocialSecurityStrategyAnalysisRequestFactory().create(
                             plan,
                             primaryAdjustment,
@@ -643,6 +749,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                             rate,
                             mortalityDate.getValue(),
                             pvDate.getValue());
+            var originalRequest = preparedContext.request();
+            var context = acceptedSsTop == originalRequest.settings().topRetirementCandidates() ? preparedContext
+                    : withOptimizationSettings(preparedContext, acceptedSsTop);
+            var parameterRun = parameterRun(AnalysisKind.COUPLE_SOCIAL_SECURITY, SocialSecurityParameterMapping.socialSecurity(context));
             var completedPlanId = analysisSource == null ? null : analysisSource.getAnalysisSessionId();
             var completedFile = analysisSource != null && analysisSource.canPersistAnalysisResults() ? analysisSource.getCurrentFile() : null;
             var started = java.time.Instant.now();
@@ -664,6 +774,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 markIntegratedStale("Social Security analysis changed - run integrated analysis again.");
                 setAnalysisBusy(false);
                 status.setText("Analysis complete.");
+                if (AnalysisSuccessPolicy.accepted(run.result())) acceptParameters(AnalysisKind.COUPLE_SOCIAL_SECURITY, parameterRun);
                 if (socialSecurityPersistence != null && AnalysisSuccessPolicy.accepted(run.result())) {
                     var preferences = new java.util.HashMap<String, String>();
                     var selected = strategies.getSelectionModel().getSelectedItem();
@@ -679,13 +790,22 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                             inputFingerprint, contextFingerprint, AnalysisVersions.algorithms(AnalysisKind.COUPLE_SOCIAL_SECURITY), java.util.Map.of(),
                             CoupleSocialSecuritySnapshotMapper.capture(context, run.result()), frozen));
                 }
-            }, this::showError);
+            }, this::showError, () -> rollbackParameters(AnalysisKind.COUPLE_SOCIAL_SECURITY, parameterRun));
             if (!accepted) {
                 status.setText("Another Social Security analysis is running or cleaning up.");
             }
         } catch (RuntimeException exception) {
             showError(exception);
         }
+    }
+
+    private static SocialSecurityStrategyAnalysisContext withOptimizationSettings(SocialSecurityStrategyAnalysisContext c, int top) {
+        return new SocialSecurityStrategyAnalysisContext(new SocialSecuritySurvivorClaimingOptimizationRequest(
+                c.request().retirementGridRequest(), new SocialSecuritySurvivorOptimizationSettings(top)),
+                c.primaryName(), c.spouseName(), c.primaryFraMonthlyBenefit(), c.spouseFraMonthlyBenefit(),
+                c.primaryBenefitValuationYear(), c.spouseBenefitValuationYear(), c.primaryCurrentClaimDate(), c.spouseCurrentClaimDate(),
+                c.primaryMortalityCategory(), c.spouseMortalityCategory(), c.primaryMortalityAdjustment(), c.spouseMortalityAdjustment(),
+                c.mortalityMetadata(), c.longevityAssumptions());
     }
 
     private void render(
@@ -764,19 +884,24 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 throw new IllegalStateException(
                         "No complete Social Security strategies are available for integrated analysis.");
             }
-            List<SocialSecuritySurvivorClaimingOptimizationCell> cells = selected.stream()
-                    .map(SocialSecurityStrategyAnalyzerPresentation.RankedStrategy::cell)
-                    .toList();
             var input = SocialSecurityAnalyzerInputs.quick(plan, selected);
+            var prerequisite = new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_SOCIAL_SECURITY, plan, socialSecurityInputs());
+            var quickParameters = new AnalysisParameterConfiguration.Quick(integratedCandidateCount.getValue(), prerequisite);
+            var candidateInputs = new AnalysisFingerprintService.Inputs(null, null, null, null, null, quickParameters.candidateCount(), prerequisite,
+                    selected.stream().map(row -> new AnalysisFingerprintService.Candidate(WeightedSnapshots.Strategy.from(row.cell().strategy()),
+                            row.rank(), row.cell().expectedValue())).toList(), List.of(), null);
+            var parameterRun = parameterBindings.containsKey(AnalysisKind.COUPLE_QUICK)
+                    ? parameterBindings.get(AnalysisKind.COUPLE_QUICK).begin(quickParameters, java.util.Map.of("candidateBasisFingerprint",
+                            new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_QUICK, input.plan(), candidateInputs))) : null;
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.QUICK,
-                    (progress, cancellation) -> IntegratedSocialSecurityComparisonPresentation.from(
-                            new IntegratedSocialSecurityStrategyComparisonService()
-                                    .compareAnalyzerCandidates(input.plan(), cells, progress, cancellation), input.selected()), model -> {
+                    quickCalculation.apply(input), model -> {
                 integratedPresentation = model;
                 renderIntegrated(model);
                 integratedStale.setText("");
                 integratedStatus.setText(integratedCompletionText(model));
-            }, this::showError);
+                if (AnalysisSuccessPolicy.accepted(model.comparison())) acceptParameters(AnalysisKind.COUPLE_QUICK, parameterRun);
+                else rollbackParameters(AnalysisKind.COUPLE_QUICK, parameterRun);
+            }, this::showError, () -> rollbackParameters(AnalysisKind.COUPLE_QUICK, parameterRun));
             if (!accepted) {
                 integratedStatus.setText("Another Social Security analysis is running or cleaning up.");
             }
@@ -793,6 +918,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     adjustment(spouseMortalityAdjustment.getText(), "Spouse"), mortalityDate.getValue(), pvDate.getValue(),
                     new BigDecimal(discountRate.getText().trim()).movePointLeft(2), planRevision, assumptionsRevision,
                     baselineInputs.snapshot());
+            var parameterRun = parameterRun(AnalysisKind.COUPLE_WEIGHTED,
+                    SocialSecurityParameterMapping.weighted(snapshot, baselineInputs.parameters(snapshot.baseline)));
             var reportContext = captureReportContext(true);
             var completedPlanId = analysisSource == null ? null : analysisSource.getAnalysisSessionId();
             var completedFile = analysisSource != null && analysisSource.canPersistAnalysisResults() ? analysisSource.getCurrentFile() : null;
@@ -807,11 +934,13 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
                     (progress, cancellation) -> weightedCalculation.apply(factory.create(snapshot, progress, cancellation)), result -> {
                         if (!AnalysisSuccessPolicy.accepted(result)) {
+                            rollbackParameters(AnalysisKind.COUPLE_WEIGHTED, parameterRun);
                             weightedView.status.setText("No candidate completed successfully. Previous successful results were retained.");
                             return;
                         }
                         weightedPresentation = new LongevityWeightedIntegratedPresentation(result,
                                 snapshot.planRevision, snapshot.assumptionsRevision);
+                        acceptParameters(AnalysisKind.COUPLE_WEIGHTED, parameterRun);
                         weightedCurrent = true;
                         weightedReportContext = reportContext;
                         historicalWeightedComparison = null;
@@ -859,7 +988,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                             }
                         }
                         refreshExportActions();
-                    }, failure -> weightedView.status.setText(SocialSecurityAnalysisFailurePresentation.message(failure)));
+                    }, failure -> weightedView.status.setText(SocialSecurityAnalysisFailurePresentation.message(failure)),
+                    () -> rollbackParameters(AnalysisKind.COUPLE_WEIGHTED, parameterRun));
             if (!accepted) {
                 weightedView.status.setText("Another Social Security analysis is running or cleaning up.");
             } else if (weightedPresentation != null) {
@@ -887,7 +1017,12 @@ public final class SocialSecurityStrategyAnalyzerDialog {
 
     private void runExhaustiveSearch() {
         try {
-            var request = SocialSecurityAnalyzerInputs.exhaustive(plan);
+            var standard = SocialSecurityAnalyzerInputs.exhaustive(plan);
+            var request = acceptedExhaustiveProfile == null ? standard : new IntegratedSocialSecurityCompleteStrategySearchRequest(
+                    standard.plan(), standard.primaryRetirementAges(), standard.spouseRetirementAges(), standard.primarySurvivorCandidates(),
+                    standard.spouseSurvivorCandidates(), com.daviddunn.retirementplanner.app.socialsecurity.IntegratedStrategyRankingMeasure.valueOf(acceptedExhaustiveProfile.rankingMeasure()),
+                    acceptedExhaustiveProfile.retainedDetails());
+            var parameterRun = parameterRun(AnalysisKind.COUPLE_EXHAUSTIVE, SocialSecurityParameterMapping.search(request));
             long capturedRevision = planRevision;
             var reportContext = captureReportContext(false);
             var planId = analysisSource == null ? null : analysisSource.getAnalysisSessionId();
@@ -928,10 +1063,12 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 if (planId != null && !planId.equals(analysisSource.getAnalysisSessionId())) return;
                 var model = run.model();
                 if (!AnalysisSuccessPolicy.accepted(model.result())) {
+                    rollbackParameters(AnalysisKind.COUPLE_EXHAUSTIVE, parameterRun);
                     exhaustiveStatus.setText("No successful candidates. Previous results retained.");
                     return;
                 }
                 exhaustivePresentation = model;
+                acceptParameters(AnalysisKind.COUPLE_EXHAUSTIVE, parameterRun);
                 exhaustiveRevision = capturedRevision;
                 deterministicReportContext = reportContext;
                 historicalExhaustiveReference = run.payload() == null ? null : run.payload().socialSecurityReference();
@@ -942,7 +1079,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 exhaustiveStatus.setText("Exhaustive integrated search complete - "
                         + model.result().totalStrategyCount() + " strategies evaluated; " + model.result().failedStrategyCount() + " unavailable.");
                 refreshExportActions();
-            }, this::showError);
+            }, this::showError, () -> rollbackParameters(AnalysisKind.COUPLE_EXHAUSTIVE, parameterRun));
             if (accepted && exhaustivePersistence != null) exhaustivePersistence.beginReplacement();
             if (!accepted) {
                 exhaustiveStatus.setText("Another Social Security analysis is running or cleaning up.");
@@ -1412,6 +1549,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void baselineChanged() {
+        if (applyingParameters()) return;
+        parameterBindings.values().forEach(SocialSecurityParameterBinding::edited);
         jobs.invalidate(SocialSecurityAnalyzerJobController.Change.WEIGHTED_SETTINGS);
         refreshInputSummary();
         if (weightedPresentation != null) {
@@ -1425,6 +1564,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void markStale(SocialSecurityAnalyzerJobController.Change change) {
+        if (applyingParameters()) return;
         assumptionsRevision++;
         jobs.invalidate(change);
         refreshInputSummary();
@@ -1709,12 +1849,18 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private <T> void observe(javafx.beans.value.ObservableValue<T> value, Runnable action) {
-        javafx.beans.value.ChangeListener<T> listener = (observable, oldValue, newValue) -> action.run();
+        javafx.beans.value.ChangeListener<T> listener = (observable, oldValue, newValue) -> {
+            if (applyingParameters()) return;
+            parameterBindings.values().forEach(SocialSecurityParameterBinding::edited);
+            action.run();
+        };
         value.addListener(listener);
         detachInputListeners.add(() -> value.removeListener(listener));
     }
 
     private void close() {
+        parameterBindings.values().forEach(SocialSecurityParameterBinding::close);
+        if (singlePersonView != null) singlePersonView.closeParameters();
         if (exhaustivePersistence != null) exhaustivePersistence.close();
         if (weightedPersistence != null) weightedPersistence.close();
         if (socialSecurityPersistence != null) socialSecurityPersistence.close();

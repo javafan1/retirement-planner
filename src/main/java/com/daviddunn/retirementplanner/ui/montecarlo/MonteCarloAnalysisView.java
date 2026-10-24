@@ -48,6 +48,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     private final MonteCarloSession session;
     private final Runnable detach;
     private final MonteCarloResultLifecycle<MonteCarloRun> persistence;
+    private final MonteCarloParameterControls parameters;
     private final Label savedStatus = label("", "mc-muted");
     private final Button retrySave = new Button("Retry Save");
     private final ComboBox<Integer> simulations = new ComboBox<>();
@@ -134,7 +135,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         mode.setValue(MonteCarloMode.FIXED_LIFESPAN);
         mode.setId("mc-mode");
         InputHelp.install(mode, "Fixed Lifespan: stochastic investment returns with the configured plan lifetime and horizon. "
-                + "Longevity-Adjusted: stochastic investment returns with sampled household longevity. These settings are session-only.");
+                + "Longevity-Adjusted: stochastic investment returns with sampled household longevity. Last-successful settings are saved with this retirement plan.");
         mode.setAccessibleText("Analysis mode");
         mode.setPrefWidth(200);
         inflationMode.getItems().setAll("Deterministic", "Stochastic");
@@ -142,7 +143,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         inflationMode.setId("mc-inflation-mode");
         inflationMode.setPrefWidth(140);
         inflationMode.setAccessibleText("Inflation mode");
-        InputHelp.install(inflationMode, "Deterministic uses the plan's General Inflation; Stochastic samples annual general spending inflation using the inputs below. Healthcare Inflation, Social Security COLA and other specialized assumptions remain deterministic. Session-only; does not change the saved plan.");
+        InputHelp.install(inflationMode, "Deterministic uses the plan's General Inflation; Stochastic samples annual general spending inflation using the inputs below. Healthcare Inflation, Social Security COLA and other specialized assumptions remain deterministic. Accepted settings are saved as analyzer parameters; plan economic assumptions are unchanged.");
         inflationMean.setId("mc-inflation-mean");
         inflationVolatility.setId("mc-inflation-volatility");
         inflationFloor.setId("mc-inflation-floor");
@@ -237,7 +238,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                 "Annual returns use independent lognormal gross returns matched to the selected arithmetic expected return and volatility.\n"
                         + "Investment returns are randomized; general spending inflation uses the selected mode. Social Security COLA remains deterministic.\n"
                         + "Mortality/death assumptions, claiming elections, Roth strategy and all other plan settings remain those of the current plan.\n"
-                        + "Monte Carlo settings are session-only and are not saved into the retirement plan.\n"
+                        + "Last-successful Monte Carlo settings are saved as analyzer parameters in the retirement plan.\n"
                         + "Funding probability measures whether the modeled plan completed the planning horizon without an authoritative funding constraint.\n"
                         + "Funding-constraint shortfalls may involve allocation estimates or owner/account RMD restrictions; they are not necessarily unmet living expenses.\n"
                         + "After-Tax Estate excludes non-investable assets. Lifetime Taxes includes federal and selected-state income taxes.\n"
@@ -259,10 +260,14 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         getChildren().addAll(heading,
                 label("Tests the current retirement plan across simulated investment-return paths.", "mc-muted"),
                 planTitle, summary, transactions, inputs, mortalityContext, validation, progressRow, savedStatus, retrySave, results, details);
+        parameters = new MonteCarloParameterControls(controller, false, mode, simulations, inflationMode,
+                java.util.Arrays.asList(expected, volatility, seed, inflationMean, inflationVolatility, inflationFloor,
+                        primaryAdjustment, spouseAdjustment, survivorAge, null), this::shareLongevitySettings, this::inputsChanged);
+        getChildren().add(getChildren().indexOf(results), parameters.notice);
         run.setOnAction(event -> start());
         cancel.setOnAction(event -> session.cancel());
         simulations.valueProperty().addListener((observable, previous, value) -> inputsChanged());
-        mode.valueProperty().addListener((observable, previous, value) -> inputsChanged());
+        mode.valueProperty().addListener((observable, previous, value) -> { parameters.select(); inputsChanged(); });
         inflationMode.valueProperty().addListener((observable, previous, value) -> inputsChanged());
         survivorAge.textProperty().addListener((observable, previous, value) -> inputsChanged());
         for (var field : List.of(expected, volatility, seed, inflationMean, inflationVolatility, inflationFloor)) {
@@ -270,6 +275,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         }
         for (var field : List.of(primaryAdjustment, spouseAdjustment)) {
             field.textProperty().addListener((observable, previous, value) -> {
+                if (parameters.applying()) return;
                 shareLongevitySettings();
                 inputsChanged();
             });
@@ -283,7 +289,9 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                     || !persistence.binding().planId().equals(controller.getAnalysisSessionId())))
                 persistence.unbind();
             if (settingsOwner != controller.getCurrentPlan()) {
-                restoreLongevitySettings();
+                settingsOwner = controller.getCurrentPlan();
+                parameters.planChanged();
+                Platform.runLater(parameters.afterPlanChange());
             }
             session.invalidate();
             persistence.assess(this::currencyInputs);
@@ -297,6 +305,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     }
 
     private void inputsChanged() {
+        if (parameters.applying()) return;
+        parameters.edited();
         session.invalidate();
         validation.setText("");
         syncPersistence();
@@ -335,9 +345,12 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         return () -> com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService.standalone(plan, settings, frozen);
     }
 
-    private void startPersisted(RetirementPlan frozenPlan, MonteCarloSession.Work task) {
+    private void startPersisted(RetirementPlan frozenPlan,
+            com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.MonteCarlo inputs,
+            MonteCarloSession.Work task) {
         syncPersistence();
         var binding = persistence.binding();
+        var parameterRun = parameters.begin(inputs);
         var started = java.time.Instant.now();
         var completion = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion>();
         persistence.beginReplacement();
@@ -347,7 +360,10 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             var payload = MonteCarloSnapshotPresentationMapper.capture(result, frozenPlan, started, java.time.Instant.now());
             completion.set(MonteCarloResultLifecycle.completion(binding, payload));
             return result;
-        }, accepted -> persistence.accept(completion.get()));
+        }, accepted -> {
+            persistence.accept(completion.get());
+            parameters.accept(parameterRun, completion.get());
+        }, () -> parameters.rollback(parameterRun));
     }
 
     private void start() {
@@ -374,7 +390,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                             MonteCarloMortalityPresentation.adjustment(primaryAdjustment.getText(), "Primary"));
                 }
                 validation.setText("");
-                startPersisted(snapshot, (updates, cancellation) -> mortalityWork.run(snapshot, request, updates, cancellation));
+                startPersisted(snapshot, MonteCarloParameterMapping.capture(settings, request, null),
+                        (updates, cancellation) -> mortalityWork.run(snapshot, request, updates, cancellation));
                 return;
             }
             Projection cached = controller.peekCurrentProjection();
@@ -385,7 +402,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             }
             final Projection frozenReference = reference;
             validation.setText("");
-            startPersisted(snapshot, (updates, cancellation) -> work.run(snapshot, settings, frozenReference, updates, cancellation));
+            startPersisted(snapshot, MonteCarloParameterMapping.capture(settings, null, null),
+                    (updates, cancellation) -> work.run(snapshot, settings, frozenReference, updates, cancellation));
         } catch (RuntimeException exception) {
             validation.setText(exception.getMessage());
             validation.setManaged(true);
@@ -688,6 +706,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     @Override
     public void close() {
+        parameters.close();
         persistence.close();
         session.close();
         detach.run();

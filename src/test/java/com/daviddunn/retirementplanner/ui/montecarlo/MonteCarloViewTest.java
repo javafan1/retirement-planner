@@ -33,6 +33,9 @@ class MonteCarloViewTest {
         public RetirementPlan getCurrentPlan() {
             return plan;
         }
+        @Override public java.util.UUID getAnalysisSessionId() {
+            return plan == null ? super.getAnalysisSessionId() : java.util.UUID.fromString(plan.getPlanId());
+        }
 
         @Override
         public Projection peekCurrentProjection() {
@@ -70,6 +73,10 @@ class MonteCarloViewTest {
 
     static void waitForFx() throws Exception {
         fx(() -> null);
+    }
+    static String financialJson(ObjectMapper mapper, RetirementPlan plan) throws Exception {
+        return new String(com.daviddunn.retirementplanner.persistence.PlanConfigurationTransaction.replace(
+                mapper.writeValueAsBytes(plan), "analyzerConfigurations", null), java.nio.charset.StandardCharsets.UTF_8);
     }
 
     @Test

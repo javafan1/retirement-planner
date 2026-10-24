@@ -14,6 +14,26 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.ui.socialsecurity.SocialSecurityAnalyzerJobController.*;
 
 class SocialSecurityAnalyzerJobControllerTest {
+    @ParameterizedTest @EnumSource(Mode.class)
+    void terminalRollbackHookDistinguishesCancellationFailureObsoleteAndClosed(Mode mode) {
+        for (String outcome : List.of("cancel", "failure", "obsolete", "close")) {
+            try (var f = new Fixture()) {
+                var rollback = new AtomicInteger();
+                assertTrue(f.controller.start(mode, (p, c) -> {
+                    if (outcome.equals("failure")) throw new IllegalStateException("Injected");
+                    return "accepted";
+                }, f.results::add, f.failures::add, rollback::incrementAndGet));
+                switch (outcome) {
+                    case "cancel" -> f.controller.cancel();
+                    case "obsolete" -> f.controller.invalidate(Change.PLAN);
+                    case "close" -> f.controller.close();
+                }
+                f.executor.run(); f.drain();
+                assertEquals(outcome.equals("cancel") || outcome.equals("failure") ? 1 : 0, rollback.get());
+                assertEquals(List.of("previous"), f.results);
+            }
+        }
+    }
     @ParameterizedTest
     @EnumSource(Mode.class)
     void dateRevisionsAreIndependentAndDoNotInvalidateDeterministicFinancialResults(Mode mode) {

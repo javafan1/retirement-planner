@@ -77,6 +77,8 @@ class ExhaustiveHistoricalPdfFidelityTest {
                     ExhaustivePersistenceTest.invoke(live.dialog(), "runExhaustiveSearch"); return null;
                 });
                 await(live.persistence().notice, "Results saved.");
+                // Disk commit and the independent frozen-metadata task can finish in either order.
+                await(live.persistence().notice, "Current Results");
                 snapshot = repository.load(source.getAnalysisSessionId(), KIND).orElseThrow();
                 var model = fx(() -> field(live.dialog(), "exhaustivePresentation", ExhaustiveIntegratedSearchPresentation.class));
                 selected = model.groups().stream().map(ExhaustiveIntegratedSearchPresentation.Group::representative)

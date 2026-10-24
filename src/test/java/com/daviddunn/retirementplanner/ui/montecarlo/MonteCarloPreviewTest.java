@@ -163,7 +163,7 @@ class MonteCarloPreviewTest {
             var result = completed.mortalityResult();
             assertEquals(5000, result.requestedSimulationCount());
             MonteCarloMortalityUiFixtures.assertPreviewTail(completed, !persistedAge);
-            assertEquals(before, mapper.writeValueAsString(plan));
+            assertEquals(before, financialJson(mapper, plan));
             int late = result.annualResults().values().stream()
                     .filter(year -> year.year() > 2050 && year.livingHouseholdCount() < 4000
                             && year.primaryOnlyAliveCount() > 0 && year.spouseOnlyAliveCount() > 0
@@ -280,7 +280,7 @@ class MonteCarloPreviewTest {
             var result = finished.get(120, TimeUnit.SECONDS);
             assertEquals(5000, result.result().settings().simulationCount());
             assertTrue(updates.get() > 2);
-            assertEquals(before, mapper.writeValueAsString(plan));
+            assertEquals(before, financialJson(mapper, plan));
             awaitLayoutPulses(stage[0].getScene());
             var geometry = new StringBuilder();
             // Inspect boundaries as well as an unmistakable interior year; capture only the latter.

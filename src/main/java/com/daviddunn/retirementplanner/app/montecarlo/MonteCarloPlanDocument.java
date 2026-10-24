@@ -25,7 +25,11 @@ final class MonteCarloPlanDocument {
     }
     private MonteCarloPlanDocument() { }
     static String capture(RetirementPlan plan) {
-        try { var json = JSON.writeValueAsString(plan); read(json); return json; }
+        try {
+            byte[] bytes = JSON.writeValueAsBytes(plan);
+            if (plan.getAnalyzerConfigurations() != null) bytes = com.daviddunn.retirementplanner.persistence.PlanConfigurationTransaction.replace(bytes, "analyzerConfigurations", null);
+            var json = new String(bytes, java.nio.charset.StandardCharsets.UTF_8); read(json); return json;
+        }
         catch (Exception e) { throw new IllegalArgumentException("Cannot freeze Monte Carlo plan inputs.", e); }
     }
     static RetirementPlan read(String json) {

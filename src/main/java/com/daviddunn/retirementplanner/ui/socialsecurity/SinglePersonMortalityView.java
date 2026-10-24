@@ -25,10 +25,12 @@ final class SinglePersonMortalityView extends VBox {
     final Label summary = new Label();
     final Label persistenceNotice = new Label();
     WeightedResultPersistence persistence;
+    SocialSecurityParameterBinding parameters;
     record CompletionInput(RetirementPlan plan, IndividualReportContext context,
             IndividualLongevityScenarios mortality, java.time.LocalDate valuation, BigDecimal rate) { }
     java.util.function.Function<CompletionInput, java.util.function.Consumer<SinglePersonMortalityAnalysis.Result>>
             acceptedCompletion = input -> result -> { };
+    java.util.function.Function<CompletionInput, SocialSecurityAnalyzerJobController.Work<SinglePersonMortalityAnalysis.Result>> calculation;
     boolean displays(SinglePersonMortalityAnalysis.Result result) { return completed == result; }
     final TextArea details = new TextArea();
     final TableView<SinglePersonMortalityAnalysis.Entry> table = new TableView<>();
@@ -38,6 +40,7 @@ final class SinglePersonMortalityView extends VBox {
     private SinglePersonMortalityAnalysis.Result completed;
     private boolean current;
     private IndividualReportContext reportContext;
+    private String acceptedInputFingerprint;
     private final IndividualPdfExportAction pdf;
 
     boolean canExportPdf() { return (persistence == null ? current : persistence.exportable()) && completed != null && reportContext != null
@@ -59,6 +62,7 @@ final class SinglePersonMortalityView extends VBox {
         this.plan = plan;
         this.jobs = jobs;
         this.mode = mode;
+        calculation = input -> (p, c) -> new SinglePersonMortalityAnalysis().calculate(input.plan(), input.mortality(), input.valuation(), input.rate(), mode, p, c);
         pdf = new IndividualPdfExportAction("single-mortality-pdf", mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED
                 ? "social-security-longevity-weighted.pdf" : "social-security-only.pdf", this::canExportPdf, this::preparePdfReport);
         setPadding(new Insets(14));
@@ -74,13 +78,13 @@ final class SinglePersonMortalityView extends VBox {
         factor.setPrefColumnCount(8);
         discount.setPrefColumnCount(8);
         input(inputs, "Primary Longevity Factor", factor,
-                "Mortality multiplier: 1.00 uses the baseline table. Below 1 lowers mortality and increases later survival; above 1 increases mortality. Analysis only; the saved plan is unchanged.");
+                "Mortality multiplier: 1.00 uses the baseline table. Below 1 lowers mortality and increases later survival; above 1 increases mortality. Analyzer input; financial plan assumptions are unchanged.");
         input(inputs, "Mortality Conditioning Date", conditioning,
                 "Conditions on Primary being alive at this date. Uses the existing next complete birthday interval convention. Independent of the valuation date.");
         input(inputs, "PV Valuation Date", valuation,
                 "Date whose purchasing power is used for present values. Does not move the projection start or mortality conditioning date.");
         input(inputs, "Real Discount Rate (%)", discount,
-                "Annual real discount percentage, after inflation. Used only to value analysis outcomes; does not change investment returns or the saved plan.");
+                "Annual real discount percentage, after inflation. Used only to value analysis outcomes; does not change plan investment returns or financial assumptions.");
         table.setId(mode == SinglePersonMortalityAnalysis.Mode.SOCIAL_SECURITY_ONLY ? "single-ss-weighted" : "single-integrated-weighted");
         table.setAccessibleText("Nine primary claiming strategies ranked by mortality-weighted expected present value");
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
@@ -127,9 +131,51 @@ final class SinglePersonMortalityView extends VBox {
         refresh();
     }
 
-    void invalidate(RetirementPlan changed) { plan = changed; edited(); }
+    void attachParameters(com.daviddunn.retirementplanner.ui.controller.ApplicationController source) {
+        var kind = mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED
+                ? com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_WEIGHTED
+                : com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY;
+        parameters = new SocialSecurityParameterBinding(source, kind, values -> {
+            var m = (com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.Mortality) values;
+            String profile = mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED ? SocialSecurityParameterMapping.INDIVIDUAL_WEIGHTED : SocialSecurityParameterMapping.INDIVIDUAL_SS;
+            if (!profile.equals(m.optimizerProfile())) throw new IllegalArgumentException("Unsupported optimization profile");
+            factor.setText(m.primaryFactor().toString()); discount.setText(SocialSecurityParameterMapping.percent(m.realDiscountRate()));
+            SocialSecurityParameterMapping.date(conditioning, m.conditioningDate()); SocialSecurityParameterMapping.date(valuation, m.valuationDate());
+        }, () -> {
+            factor.setText("1.00"); discount.setText("1.0");
+            SocialSecurityParameterMapping.date(conditioning, plan.getPlanningAssumptions().getProjectionStartDate()); SocialSecurityParameterMapping.date(valuation, conditioning.getValue());
+        }, () -> { assessCompletedInputs(); refresh(); if (persistence != null) persistence.reassess(); }, () -> true);
+        getChildren().add(getChildren().indexOf(summary), parameters.controls);
+        parameters.restore();
+        conditioning.getEditor().textProperty().addListener((o, a, b) -> { if (!parameters.applying()) parameters.edited(); });
+        valuation.getEditor().textProperty().addListener((o, a, b) -> { if (!parameters.applying()) parameters.edited(); });
+    }
+    private void assessCompletedInputs() {
+        if (acceptedInputFingerprint == null) return;
+        try {
+            current = acceptedInputFingerprint.equals(inputFingerprint(plan, new BigDecimal(factor.getText().trim()),
+                    WeightedResultPersistence.date(conditioning), WeightedResultPersistence.date(valuation), new BigDecimal(discount.getText().trim()).movePointLeft(2)));
+        } catch (RuntimeException invalid) { current = false; }
+    }
+    private String inputFingerprint(RetirementPlan plan, BigDecimal factor, java.time.LocalDate conditioning, java.time.LocalDate valuation, BigDecimal rate) {
+        var kind = mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED
+                ? com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_WEIGHTED
+                : com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY;
+        return new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisFingerprintService().fingerprint(kind, plan,
+                new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisFingerprintService.Inputs(factor, null, conditioning, valuation, rate,
+                        null, null, java.util.List.of(), java.util.List.of(), null));
+    }
+    void invalidate(RetirementPlan changed) {
+        boolean different = plan != changed; plan = changed;
+        if (different) acceptedInputFingerprint = null;
+        if (different && parameters != null) parameters.planChanged();
+        edited();
+    }
     private void edited() {
+        if (parameters != null && parameters.applying()) return;
+        if (parameters != null) parameters.edited();
         current = false;
+        assessCompletedInputs();
         jobs.invalidate(SocialSecurityAnalyzerJobController.Change.ASSUMPTIONS);
         status.setText("Inputs changed - displayed results are stale. Run analysis again.");
         refresh();
@@ -166,16 +212,22 @@ final class SinglePersonMortalityView extends VBox {
             var date = valuation.getValue();
             var rate = new BigDecimal(discount.getText().trim()).movePointLeft(2);
             var accepted = acceptedCompletion.apply(new CompletionInput(frozen, captured, mortality, date, rate));
+            var parameterRun = parameters == null ? null : parameters.begin(SocialSecurityParameterMapping.individual(
+                    new CompletionInput(frozen, captured, mortality, date, rate), mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED));
+            String capturedFingerprint = parameters == null ? null : inputFingerprint(frozen,
+                    mortality.individual().request().mortalityAdjustment().factor(), mortality.individual().request().mortalityBaseDate(), date, rate);
             current = false;
             boolean admitted = jobs.start(mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED
                             ? SocialSecurityAnalyzerJobController.Mode.WEIGHTED : SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY,
-                    (p, c) -> new SinglePersonMortalityAnalysis().calculate(frozen, mortality, date, rate, mode, p, c),
+                    calculation.apply(new CompletionInput(frozen, captured, mortality, date, rate)),
                     result -> {
                         // This callback is reached only after the original generation/revision/cancellation gates.
                         try { accepted.accept(result); }
                         catch (RuntimeException persistenceFailure) { persistenceNotice.setText("Analysis completed, but result saving could not start. The previous saved result was retained."); }
-                        reportContext = captured; render(result);
-                    }, failure -> status.setText("Analysis failed: " + failure.getMessage()));
+                        reportContext = captured; acceptedInputFingerprint = capturedFingerprint; render(result);
+                        if (parameterRun != null && com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result)) parameters.accept(parameterRun);
+                    }, failure -> status.setText("Analysis failed: " + failure.getMessage()),
+                    () -> { if (parameterRun != null) parameters.rollback(parameterRun); });
             if (!admitted) status.setText("Another analysis is running.");
         } catch (RuntimeException invalid) { current = false; status.setText("Check inputs: " + invalid.getMessage()); }
         refresh();

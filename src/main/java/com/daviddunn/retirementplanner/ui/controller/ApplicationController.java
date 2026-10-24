@@ -39,6 +39,7 @@ public class ApplicationController {
         return () -> analysisBindingListeners.remove(listener);
     }
     private void analysisBindingChanged() {
+        analysisParameters.bind(currentPlan, currentFile);
         java.util.List.copyOf(analysisBindingListeners).forEach(Runnable::run);
     }
 
@@ -101,6 +102,12 @@ public class ApplicationController {
     private final ProjectionEngine projectionEngine;
     private final ProjectionSummaryService projectionSummaryService;
     private final RetirementPlanRepository repository;
+    private final com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterCoordinator analysisParameters;
+
+    public com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterCoordinator getAnalysisParameters() {
+        analysisParameters.bind(currentPlan, currentFile);
+        return analysisParameters;
+    }
     private final com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultStore analysisResults;
     private java.util.concurrent.CompletionStage<List<String>> snapshotCopy = java.util.concurrent.CompletableFuture.completedFuture(List.of());
 
@@ -168,6 +175,8 @@ public class ApplicationController {
                 new ProjectionComparisonService();
 
         this.repository = java.util.Objects.requireNonNull(repository);
+        analysisParameters = new com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterCoordinator(
+                repository instanceof JsonRetirementPlanRepository json ? json : null);
 
         applicationSettingsRepository = java.util.Objects.requireNonNull(settingsRepository);
 
@@ -467,6 +476,7 @@ public class ApplicationController {
         sourcePlanChanged();
 
         currentFile = null;
+        analysisParameters.bind(currentPlan, currentFile);
         recoveredOriginalPath = null;
         recoveredBackupPath = null;
 
@@ -507,6 +517,7 @@ public class ApplicationController {
 
         currentFile =
                 file;
+        analysisParameters.bind(currentPlan, currentFile);
         recoveredOriginalPath = null;
         recoveredBackupPath = null;
         failedOpenPath = null;
@@ -583,6 +594,7 @@ public class ApplicationController {
         repository.save(
                 currentPlan,
                 currentFile);
+        analysisParameters.saved(currentPlan, currentFile);
 
         modified = false;
 
@@ -619,6 +631,8 @@ public class ApplicationController {
 
         currentFile =
                 file;
+
+        analysisParameters.saved(currentPlan, currentFile);
 
         modified = false;
 

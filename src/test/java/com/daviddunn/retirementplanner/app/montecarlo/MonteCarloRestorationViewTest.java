@@ -69,11 +69,11 @@ class MonteCarloRestorationViewTest {
                     (p, m, progress, cancellation) -> { throw new AssertionError("No mortality calculation allowed"); });
             new Scene(v, 1180, 820);
             String prefix = paired ? "#mcc-" : "#mc-";
+            ((ComboBox<MonteCarloMode>) v.lookup(prefix + "mode")).setValue(payload.request().mortality() == null
+                    ? MonteCarloMode.FIXED_LIFESPAN : MonteCarloMode.LONGEVITY_ADJUSTED);
             ((ComboBox<Integer>) v.lookup(prefix + (paired ? "count" : "simulations"))).setValue(payload.settings().trials());
             ((TextField) v.lookup(prefix + "return")).setText(payload.settings().expectedReturn().movePointRight(2).toPlainString());
             ((TextField) v.lookup(prefix + "volatility")).setText(payload.settings().volatility().movePointRight(2).toPlainString());
-            ((ComboBox<MonteCarloMode>) v.lookup(prefix + "mode")).setValue(payload.request().mortality() == null
-                    ? MonteCarloMode.FIXED_LIFESPAN : MonteCarloMode.LONGEVITY_ADJUSTED);
             return v;
         });
         try {

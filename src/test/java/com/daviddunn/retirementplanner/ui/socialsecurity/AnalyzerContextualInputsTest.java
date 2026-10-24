@@ -133,7 +133,7 @@ class AnalyzerContextualInputsTest {
         });
     }
 
-    @Test void validSharedSessionPropagationAndPendingInvalidTextAreUnchanged() throws Exception {
+    @Test void validSharedSessionPropagationAndModeInitializationUseAcceptedOrDefaultValues() throws Exception {
         fx(f -> {
             var source = new ApplicationController();
             source.newPlan(LongevityWeightedAnalysisRequestFactoryTest.plan());
@@ -146,9 +146,10 @@ class AnalyzerContextualInputsTest {
                 assertEquals(0, new BigDecimal("0.80").compareTo(source.getLongevitySessionSettings().primaryAdjustment().factor()));
                 var valid = source.getLongevitySessionSettings();
                 factor.setText("unfinished");
-                for (var choice : navigation.choices()) navigation.select(choice.mode());
-                assertEquals("unfinished", factor.getText());
                 assertEquals(valid, source.getLongevitySessionSettings());
+                for (var choice : navigation.choices()) navigation.select(choice.mode());
+                assertEquals(0, BigDecimal.ONE.compareTo(new BigDecimal(factor.getText())));
+                assertEquals(0, BigDecimal.ONE.compareTo(source.getLongevitySessionSettings().primaryAdjustment().factor()));
                 assertEquals(revision, source.getSourcePlanRevision());
             } finally { invoke(dialog, "close"); field(dialog, "stage", Stage.class).close(); }
         });

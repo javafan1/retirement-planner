@@ -17,6 +17,16 @@ public class RetirementPlan {
     private static final java.util.regex.Pattern PLAN_ID_PATTERN = java.util.regex.Pattern.compile(
             "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
     private String planId;
+    private volatile com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations analyzerConfigurations;
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations getAnalyzerConfigurations() {
+        return analyzerConfigurations;
+    }
+
+    public void setAnalyzerConfigurations(com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations configurations) {
+        analyzerConfigurations = Objects.requireNonNull(configurations);
+    }
 
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     public String getPlanId() { return planId; }

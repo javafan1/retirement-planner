@@ -64,8 +64,8 @@ class MonteCarloInflationViewTest {
                     (p, s, r, progress, cancellation) -> { calls.incrementAndGet(); return service.run(p, s, r, progress, cancellation); },
                     (p, r, progress, cancellation) -> { calls.incrementAndGet(); return service.runMortality(p, r, progress, cancellation); });
             new Scene(created, 1900, 1040);
-            ((ComboBox<Integer>) created.lookup("#mc-simulations")).setValue(2);
             if (longevity) MonteCarloMortalityViewTest.mode(created).setValue(MonteCarloMode.LONGEVITY_ADJUSTED);
+            ((ComboBox<Integer>) created.lookup("#mc-simulations")).setValue(2);
             inflationMode(created).setValue("Stochastic");
             ((Label) created.lookup("#mc-status")).textProperty().addListener((o, a, b) -> {
                 if (created.session().state() == MonteCarloSession.State.COMPLETED) finished.complete(created.session().result());

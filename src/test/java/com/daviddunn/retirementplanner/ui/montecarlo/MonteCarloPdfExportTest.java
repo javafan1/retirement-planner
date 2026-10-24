@@ -41,8 +41,8 @@ class MonteCarloPdfExportTest {
                     (p, r, u, c) -> { calls.incrementAndGet(); return new MonteCarloRunService().runMortality(p, r, u, c); });
             assertFalse(v.canExportPdf()); assertTrue(v.lookup("#mc-export-pdf").isDisabled());
             assertThrows(IllegalStateException.class, v::preparePdfReport);
-            ((ComboBox<Integer>) v.lookup("#mc-simulations")).setValue(3);
             if (mortality) ((ComboBox<MonteCarloMode>) v.lookup("#mc-mode")).setValue(MonteCarloMode.LONGEVITY_ADJUSTED);
+            ((ComboBox<Integer>) v.lookup("#mc-simulations")).setValue(3);
             ((Button) v.lookup("#mc-run")).fire(); assertFalse(v.canExportPdf()); return v;
         });
         try {
@@ -88,8 +88,8 @@ class MonteCarloPdfExportTest {
                 calls.incrementAndGet(); return new MonteCarloStrategyComparisonRunService().run(p, u, c);
             });
             assertTrue(v.lookup("#mcc-export-pdf").isDisabled());
-            ((ComboBox<Integer>) v.lookup("#mcc-count")).setValue(3);
             if (mortality) ((ComboBox<MonteCarloMode>) v.lookup("#mcc-mode")).setValue(MonteCarloMode.LONGEVITY_ADJUSTED);
+            ((ComboBox<Integer>) v.lookup("#mcc-count")).setValue(3);
             ((Button) v.lookup("#mcc-run")).fire(); assertFalse(v.canExportPdf()); return v;
         });
         try {

@@ -67,6 +67,10 @@ public final class MonteCarloSession implements AutoCloseable {
     public boolean start(Work work) { return start(work, ignored -> { }); }
 
     public boolean start(Work work, Consumer<MonteCarloRun> accepted) {
+        return start(work, accepted, () -> { });
+    }
+
+    public boolean start(Work work, Consumer<MonteCarloRun> accepted, Runnable unsuccessful) {
         if (busy() || state == State.CLOSED) {
             return false;
         }
@@ -91,18 +95,18 @@ public final class MonteCarloSession implements AutoCloseable {
                         }
                     }), cancellationToken);
                     cancellationToken.throwIfCancellationRequested();
-                    dispatcher.accept(() -> finish(id, capturedRevision, completed, null, token, accepted));
+                    dispatcher.accept(() -> finish(id, capturedRevision, completed, null, token, accepted, unsuccessful));
                 } catch (Throwable exception) {
-                    dispatcher.accept(() -> finish(id, capturedRevision, null, exception, token, accepted));
+                    dispatcher.accept(() -> finish(id, capturedRevision, null, exception, token, accepted, unsuccessful));
                 }
             });
         } catch (RuntimeException exception) {
-            finish(id, capturedRevision, null, exception, token, accepted);
+            finish(id, capturedRevision, null, exception, token, accepted, unsuccessful);
         }
         return true;
     }
 
-    private void finish(long id, long capturedRevision, MonteCarloRun completed, Throwable error, AtomicBoolean token, Consumer<MonteCarloRun> accepted) {
+    private void finish(long id, long capturedRevision, MonteCarloRun completed, Throwable error, AtomicBoolean token, Consumer<MonteCarloRun> accepted, Runnable unsuccessful) {
         if (id != generation || state == State.CLOSED) {
             return;
         }
@@ -117,6 +121,7 @@ public final class MonteCarloSession implements AutoCloseable {
             state = State.COMPLETED;
             accepted.accept(result);
         }
+        if (state == State.CANCELLED || state == State.FAILED) unsuccessful.run();
         changed.run();
     }
 

@@ -21,6 +21,8 @@ final class SinglePersonIntegratedView extends VBox {
     final Button cancel = new Button("Cancel");
     final Button breakEven = new Button("Break-Even vs Current Plan");
     final TextField deathYear = new TextField();
+    SocialSecurityParameterBinding parameters;
+    private com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.Search acceptedProfile;
     final TableView<IntegratedSocialSecurityCompleteStrategySearchEntry> table = new TableView<>();
     final TextArea details = new TextArea();
     final Label status = new Label();
@@ -31,6 +33,9 @@ final class SinglePersonIntegratedView extends VBox {
     private RetirementPlan plan;
     private SinglePersonIntegratedAnalysis completed;
     private boolean current;
+    private String acceptedInputFingerprint;
+    java.util.function.Function<IntegratedSocialSecurityCompleteStrategySearchRequest,
+            SocialSecurityAnalyzerJobController.Work<SinglePersonIntegratedAnalysis>> calculation = request -> (p, c) -> SinglePersonIntegratedAnalysis.calculate(request, p, c);
     private IndividualReportContext reportContext;
     private final IndividualPdfExportAction pdf = new IndividualPdfExportAction("single-deterministic-pdf",
             "social-security-deterministic.pdf", this::canExportPdf, this::preparePdfReport);
@@ -63,14 +68,16 @@ final class SinglePersonIntegratedView extends VBox {
         deathYear.setMaxWidth(200);
         deathYear.setAccessibleText("Primary death year for this analysis");
         InputHelp.install(deathYear, "Optional primary death year for this deterministic analysis only. Death is modeled January 1, "
-                + "ending own Social Security with no survivor benefit. Blank uses survival through the configured horizon. The saved plan is unchanged.");
+                + "ending own Social Security with no survivor benefit. Blank uses survival through the configured horizon. Financial plan assumptions are unchanged.");
         Label deathLabel = new Label("Primary death year:");
         InputHelp.link(deathLabel, deathYear);
         InputHelp.install(run, "Evaluate all nine primary claiming ages through the existing deterministic retirement projection. No strategy is applied to the saved plan.");
         InputHelp.install(breakEven, "Compare the selected completed strategy with the frozen current-plan strategy. Uses existing annual results without rerunning projections.");
         cancel.setOnAction(e -> jobs.cancel());
         run.setOnAction(e -> start());
-        deathYear.textProperty().addListener((o, a, b) -> invalidate(plan));
+        deathYear.textProperty().addListener((o, a, b) -> { if (parameters == null || !parameters.applying()) {
+            if (parameters != null) parameters.edited(); invalidate(plan);
+        } });
         table.setId("single-claiming-strategies");
         table.setAccessibleText("Nine primary claiming strategies ranked by deterministic After-Tax Estate");
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
@@ -113,7 +120,7 @@ final class SinglePersonIntegratedView extends VBox {
         deterministic.getChildren().addAll(title, explanation,
                 AnalyzerConfigurationLayout.heading("From Retirement Plan"), inheritedPlan,
                 AnalyzerConfigurationLayout.heading("Inputs for Next Run"),
-                AnalyzerConfigurationLayout.note("Optional analysis-only death year; the saved plan is unchanged."),
+                AnalyzerConfigurationLayout.note("Optional analyzer death year; financial plan assumptions are unchanged."),
                 AnalyzerConfigurationLayout.field(deathLabel, deathYear),
                 AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"), AnalyzerConfigurationLayout.flow(run, cancel),
                 status, progress, AnalyzerConfigurationLayout.heading("Completed Results"), pdf.button(),
@@ -136,13 +143,44 @@ final class SinglePersonIntegratedView extends VBox {
     }
 
     void invalidate(RetirementPlan changed) {
+        boolean different = plan != changed;
+        if (different) acceptedInputFingerprint = null;
         plan = changed;
+        if (different && parameters != null) parameters.planChanged();
         ssView.invalidate(changed);
         weightedView.invalidate(changed);
         current = false;
         jobs.invalidate(SocialSecurityAnalyzerJobController.Change.PLAN);
+        assessCompletedInputs();
         status.setText("Inputs changed — run deterministic analysis again.");
         refreshControls();
+    }
+
+    void attachParameters(com.daviddunn.retirementplanner.ui.controller.ApplicationController source) {
+        parameters = new SocialSecurityParameterBinding(source,
+                com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_DETERMINISTIC, values -> {
+            var s = (com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.Search) values;
+            if (!"individual-nine-v1".equals(s.profile())) throw new IllegalArgumentException("Unsupported search profile");
+            acceptedProfile = s; deathYear.setText(s.primaryDeathYear() == null ? "" : s.primaryDeathYear().toString());
+        }, () -> { acceptedProfile = null; deathYear.clear(); }, () -> { assessCompletedInputs(); refreshControls(); }, () -> true);
+        ((VBox) navigation.choices().getFirst().workspace()).getChildren().add(9, parameters.controls);
+        parameters.restore(); ssView.attachParameters(source); weightedView.attachParameters(source);
+    }
+    void closeParameters() {
+        if (parameters != null) parameters.close();
+        if (ssView.parameters != null) ssView.parameters.close();
+        if (weightedView.parameters != null) weightedView.parameters.close();
+    }
+    private static String inputFingerprint(RetirementPlan plan, Integer year) {
+        return new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisFingerprintService().fingerprint(
+                com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_DETERMINISTIC, plan,
+                new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisFingerprintService.Inputs(null, null, null, null, null,
+                        null, null, List.of(), List.of(), year));
+    }
+    private void assessCompletedInputs() {
+        if (acceptedInputFingerprint == null) return;
+        try { current = acceptedInputFingerprint.equals(inputFingerprint(plan, deathYear.getText().isBlank() ? null : Integer.valueOf(deathYear.getText().trim()))); }
+        catch (RuntimeException invalid) { current = false; }
     }
 
     void start() {
@@ -154,11 +192,18 @@ final class SinglePersonIntegratedView extends VBox {
             Optional<Year> death = deathYear.getText().isBlank() ? Optional.empty()
                     : Optional.of(Year.of(Integer.parseInt(deathYear.getText().trim())));
             var request = new IntegratedSocialSecurityCompleteStrategySearchRequest(frozen, base.primaryRetirementAges(),
-                    List.of(), List.of(), List.of(), base.rankingMeasure(), 9, death);
+                    List.of(), List.of(), List.of(), acceptedProfile == null ? base.rankingMeasure()
+                            : IntegratedStrategyRankingMeasure.valueOf(acceptedProfile.rankingMeasure()),
+                    acceptedProfile == null ? 9 : acceptedProfile.retainedDetails(), death);
+            var parameterRun = parameters == null ? null : parameters.begin(SocialSecurityParameterMapping.search(request));
+            String capturedFingerprint = parameters == null ? null : inputFingerprint(frozen, request.primaryDeathYear().map(java.time.Year::getValue).orElse(null));
             current = false;
             boolean started = jobs.start(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
-                    (p, c) -> SinglePersonIntegratedAnalysis.calculate(request, p, c), result -> { reportContext = captured; render(result); },
-                    failure -> status.setText("Analysis failed: " + failure.getMessage()));
+                    calculation.apply(request), result -> {
+                        reportContext = captured; acceptedInputFingerprint = capturedFingerprint; render(result);
+                        if (parameterRun != null && com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result)) parameters.accept(parameterRun);
+                    }, failure -> status.setText("Analysis failed: " + failure.getMessage()),
+                    () -> { if (parameterRun != null) parameters.rollback(parameterRun); });
             if (!started) status.setText("Another analysis is running. Try again when it finishes.");
             refreshControls();
         } catch (RuntimeException invalid) {

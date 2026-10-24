@@ -6,7 +6,7 @@ import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
-/** Dialog-session inputs. Never writes to the plan. */
+/** Analyzer-only elections; financial plan elections are never edited here. */
 final class CurrentStrategyBaselineView extends VBox {
     final TextField primarySurvivor = new TextField();
     final TextField spouseSurvivor = new TextField();
@@ -19,6 +19,7 @@ final class CurrentStrategyBaselineView extends VBox {
     private boolean loading;
     private boolean primaryEdited;
     private boolean spouseEdited;
+    private com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.Baseline restoredParameters;
     private Runnable changed = () -> { };
 
     CurrentStrategyBaselineView(RetirementPlan plan) {
@@ -40,7 +41,7 @@ final class CurrentStrategyBaselineView extends VBox {
                 + "baseline for longevity-weighted analysis and does not change the deterministic plan's death scenario."));
         InputHelp.linkGridLabels(grid);
         var help = new Label("Comparison baseline only; candidate strategies are unchanged. Survivor ages are whole years "
-                + "60 or older, kept only while this analyzer is open. Benefits cannot begin before death. "
+                + "60 or older. Last-successful comparison settings are saved separately when plan persistence is available. Benefits cannot begin before death. "
                 + "This election is separate from retirement claiming; waiting past Survivor FRA adds no benefit increase.");
         help.setWrapText(true);
         help.setMinHeight(Region.USE_PREF_SIZE);
@@ -58,6 +59,7 @@ final class CurrentStrategyBaselineView extends VBox {
     void load(RetirementPlan next) {
         loading = true;
         if (plan != next) {
+            restoredParameters = null;
             primaryEdited = false;
             spouseEdited = false;
         }
@@ -70,6 +72,40 @@ final class CurrentStrategyBaselineView extends VBox {
 
     CurrentStrategyBaseline snapshot() {
         return CurrentStrategyBaseline.capture(plan, primarySurvivor.getText(), spouseSurvivor.getText());
+    }
+
+    com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.Baseline parameters(CurrentStrategyBaseline snapshot) {
+        return new com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.Baseline(
+                election(true, snapshot.elections().get(2)), election(false, snapshot.elections().get(3)));
+    }
+
+    private com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.OptionalElection election(boolean primary, CurrentStrategyBaseline.Election effective) {
+        String text = (primary ? primarySurvivor : spouseSurvivor).getText();
+        var saved = restoredParameters == null ? null : primary ? restoredParameters.primary() : restoredParameters.spouse();
+        if (saved != null && java.util.Objects.equals(text, SocialSecurityParameterMapping.text(saved))) return saved;
+        var captured = SocialSecurityParameterMapping.election(text, effective);
+        if (captured.state() == com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.OptionalElection.State.VALUE) {
+            try { (primary ? plan.getHousehold().getPrimaryPerson() : plan.getHousehold().getSpouse()).getBirthDate().plusYears(captured.age()); }
+            catch (RuntimeException unavailable) {
+                return new com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.OptionalElection(
+                        com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.OptionalElection.State.UNAVAILABLE,
+                        captured.originalText(), captured.source(), null);
+            }
+        }
+        return captured;
+    }
+
+    void restoreParameters(com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.Baseline saved) {
+        loading = true;
+        try {
+            restoredParameters = saved;
+            primaryEdited = saved != null; spouseEdited = saved != null;
+            primarySurvivor.setText(saved == null ? CurrentStrategyBaseline.text(CurrentStrategyBaseline.planSurvivorAge(plan, true))
+                    : SocialSecurityParameterMapping.text(saved.primary()));
+            spouseSurvivor.setText(saved == null ? CurrentStrategyBaseline.text(CurrentStrategyBaseline.planSurvivorAge(plan, false))
+                    : SocialSecurityParameterMapping.text(saved.spouse()));
+        } finally { loading = false; }
+        refresh();
     }
 
     private void edited(boolean primary) {

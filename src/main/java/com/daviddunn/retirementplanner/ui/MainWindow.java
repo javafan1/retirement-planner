@@ -714,30 +714,37 @@ public class MainWindow {
     private void finishExitAfterResultWrites(Runnable closeWindow) {
         if (drainingAnalysisResults) return;
         var store = controller.getAnalysisResults();
-        if (!store.needsDrain()) { closeWindow.run(); return; }
+        var parameters = controller.getAnalysisParameters();
+        if (!store.needsDrain() && !parameters.needsDrain()) { parameters.shutdown(); closeWindow.run(); return; }
         drainingAnalysisResults = true;
+        parameters.beginExit();
         var notice = new Alert(Alert.AlertType.INFORMATION, "Saving completed analysis results before exit…", ButtonType.CANCEL);
         notice.setHeaderText("Finishing result saves");
         if (stage != null) notice.initOwner(stage);
         notice.show();
         notice.setOnHidden(event -> {
-            if (notice.getResult() == ButtonType.CANCEL) store.resumeAfterCancelledExit();
+            if (notice.getResult() == ButtonType.CANCEL) { store.resumeAfterCancelledExit(); parameters.resumeAfterCancelledExit(); }
         });
         Thread.ofVirtual().name("analysis-result-exit-drain").start(() -> {
             var outcome = store.drain(java.time.Duration.ofSeconds(30));
+            com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterCoordinator.Drain parameterOutcome;
+            try { parameterOutcome = parameters.drain(java.time.Duration.ofSeconds(30)); }
+            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return; }
+            boolean parametersSaved = parameterOutcome.complete() && parameterOutcome.failed() == 0;
             javafx.application.Platform.runLater(() -> {
                 boolean cancelled = notice.getResult() == ButtonType.CANCEL;
                 notice.setOnHidden(null); notice.close(); drainingAnalysisResults = false;
-                if (outcome.safeToExit() && !cancelled) { closeWindow.run(); return; }
+                if (outcome.safeToExit() && parametersSaved && !cancelled) { parameters.shutdown(); closeWindow.run(); return; }
                 store.resumeAfterCancelledExit();
+                parameters.resumeAfterCancelledExit();
                 if (cancelled) return;
                 var retry = new ButtonType("Retry result saves");
                 var warning = new Alert(Alert.AlertType.WARNING,
-                        "The application remains open because completed results are not durably saved. Previous saved results were preserved.", retry, ButtonType.CANCEL);
+                        "The application remains open because completed results or accepted parameters are not durably saved. Previous saved data was preserved.", retry, ButtonType.CANCEL);
                 warning.setHeaderText("Analysis results could not be saved");
                 if (stage != null) warning.initOwner(stage);
                 if (warning.showAndWait().orElse(ButtonType.CANCEL) == retry) {
-                    store.retryFailed(); finishExitAfterResultWrites(closeWindow);
+                    store.retryFailed(); parameters.retryFailed(); finishExitAfterResultWrites(closeWindow);
                 }
             });
         });

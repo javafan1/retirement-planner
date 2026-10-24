@@ -70,9 +70,9 @@ public final class AnalysisFingerprintService {
         }
         if (kind != AnalysisKind.COUPLE_SOCIAL_SECURITY && kind != AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY) {
             var f = (ObjectNode) tree(plan);
-            var allowed = Set.of("planId", "household", "accountPortfolio", "planningAssumptions", "rothConversionRequest", "baseline", "nonInvestableAssets");
+            var allowed = Set.of("planId", "household", "accountPortfolio", "planningAssumptions", "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations");
             f.fieldNames().forEachRemaining(name -> { if (!allowed.contains(name)) throw new IllegalArgumentException("Unclassified plan field: " + name); });
-            f.remove(List.of("planId", "baseline"));
+            f.remove(List.of("planId", "baseline", "analyzerConfigurations"));
             removeDisplayNames(f);
             if (kind == AnalysisKind.COUPLE_WEIGHTED || kind == AnalysisKind.INDIVIDUAL_WEIGHTED) {
                 var assumptions = (ObjectNode) f.get("planningAssumptions");

@@ -62,6 +62,11 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
     public void onChanged(Runnable callback) { changed = Objects.requireNonNull(callback); }
 
     public <T> boolean start(Mode mode, Work<T> work, Consumer<T> success, Consumer<Throwable> failure) {
+        return start(mode, work, success, failure, () -> { });
+    }
+
+    /** Terminal rollback hook; never invoked for admission rejection, closed views or obsolete revisions. */
+    public <T> boolean start(Mode mode, Work<T> work, Consumer<T> success, Consumer<Throwable> failure, Runnable unsuccessful) {
         Objects.requireNonNull(mode);
         Objects.requireNonNull(work);
         Objects.requireNonNull(success);
@@ -73,7 +78,7 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
         if (lease == null) {
             return false;
         }
-        Job<T> job = new Job<>(++generation, mode, revisions.get(mode), lease, success, failure);
+        Job<T> job = new Job<>(++generation, mode, revisions.get(mode), lease, success, failure, unsuccessful);
         current = job;
         state = State.RUNNING;
         progress = new SocialSecurityAnalysisProgressModel();
@@ -189,6 +194,8 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
                 job.onFailure.accept(job.failure);
             }
         }
+        if (owns(job) && revisions.get(job.mode) == job.revision
+                && (job.lease.isCancelled() || job.failure != null)) job.unsuccessful.run();
     }
 
     @Override
@@ -211,19 +218,21 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
         final SocialSecurityAnalysisJobCoordinator.Lease lease;
         final Consumer<T> success;
         final Consumer<Throwable> onFailure;
+        final Runnable unsuccessful;
         T result;
         Throwable failure;
         AnalysisProgress pending;
         boolean progressQueued;
 
         Job(long generation, Mode mode, long revision, SocialSecurityAnalysisJobCoordinator.Lease lease,
-                Consumer<T> success, Consumer<Throwable> onFailure) {
+                Consumer<T> success, Consumer<Throwable> onFailure, Runnable unsuccessful) {
             this.generation = generation;
             this.mode = mode;
             this.revision = revision;
             this.lease = lease;
             this.success = success;
             this.onFailure = onFailure;
+            this.unsuccessful = Objects.requireNonNull(unsuccessful);
         }
     }
 }

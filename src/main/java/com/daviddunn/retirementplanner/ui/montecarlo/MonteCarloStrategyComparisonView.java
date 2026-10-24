@@ -15,7 +15,7 @@ import java.util.function.Function;
 
 import static com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyComparisonPresentation.*;
 
-/** Session-only controls and rendering; captures on FX and runs the existing analyzer on a worker. */
+/** Analyzer controls and rendering; captures on FX and runs the existing analyzer on a worker. */
 public final class MonteCarloStrategyComparisonView extends VBox implements AutoCloseable {
     private final MonteCarloPdfExportAction pdf = new MonteCarloPdfExportAction("mcc-export-pdf", this::canExportPdf, this::preparePdfReport);
     @FunctionalInterface
@@ -30,6 +30,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     private final MonteCarloStrategyComparisonSession session;
     private final Runnable detach;
     private final MonteCarloResultLifecycle<MonteCarloStrategyComparisonRun> persistence;
+    private final MonteCarloParameterControls parameters;
     private final Label savedStatus = label("", "mc-muted", "mcc-saved-status");
     private final Button retrySave = new Button("Retry Save");
     private final ComboBox<Integer> count = new ComboBox<>();
@@ -108,7 +109,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         survivorA.setText(age(p));
         survivorB.setText(plan.getBaseline() == null ? "" : age(plan.getBaseline().getSnapshot().getPlanningAssumptions()));
         controls.getChildren().addAll(input("Simulations", count, "count", "One paired world is one simulation. Maximum 10,000."),
-                input("Expected return (%)", expected, "return", "Arithmetic mean annual return, entered as a percentage and shared by both strategies. With volatility, median compounded outcomes generally differ from a deterministic projection using the same percentage. Session-only assumption."),
+                input("Expected return (%)", expected, "return", "Arithmetic mean annual return, entered as a percentage and shared by both strategies. With volatility, median compounded outcomes generally differ from a deterministic projection using the same percentage. Last-successful analyzer setting is saved with the plan."),
                 input("Return volatility (%)", volatility, "volatility", "Annual return standard deviation."),
                 input("Seed", seed, "seed", "Same seed and captured inputs reproduce the same worlds."),
                 input("Mode", mode, "mode", "Fixed uses the Current Plan horizon and shared configured deaths; longevity samples shared lifetimes."),
@@ -118,8 +119,8 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
                 input("Inflation floor (%)", inflationFloor, "inflation-floor", "Minimum annual general spending inflation percentage. Draws below this floor are raised to it, which can change the realized mean. Used only for Stochastic inflation; must exceed -100% and not exceed the mean."));
         longevityControls.getChildren().addAll(input("Primary mortality factor", primary, "primary", MonteCarloMortalityPresentation.ADJUSTMENT_HELP),
                 input("Spouse mortality factor", spouse, "spouse", MonteCarloMortalityPresentation.ADJUSTMENT_HELP),
-                input("Current survivor SS age", survivorA, "survivor-a", "Whole-year survivor-benefit claiming age, at least 60, for either surviving person in Current Plan longevity simulations. Separate from retirement claiming age; initialized from its saved election and kept only for this analysis."),
-                input("Baseline survivor SS age", survivorB, "survivor-b", "Whole-year survivor-benefit claiming age, at least 60, for either surviving person in Saved Baseline longevity simulations. Separate from retirement claiming age; initialized from its saved election and kept only for this analysis."));
+                input("Current survivor SS age", survivorA, "survivor-a", "Whole-year survivor-benefit claiming age, at least 60, for either surviving person in Current Plan longevity simulations. Separate from retirement claiming age; initialized from its plan election; the last-successful analyzer value is saved separately."),
+                input("Baseline survivor SS age", survivorB, "survivor-b", "Whole-year survivor-benefit claiming age, at least 60, for either surviving person in Saved Baseline longevity simulations. Separate from retirement claiming age; initialized from its plan election; the last-successful analyzer value is saved separately."));
         run.setId("mcc-run"); run.getStyleClass().add("mc-run");
         cancel.setId("mcc-cancel"); progress.setId("mcc-progress"); progress.setPrefWidth(160);
         var actions = new FlowPane(12, 4, run, cancel, pdf.button(), progress, status, context);
@@ -164,12 +165,16 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         getChildren().addAll(label("Monte Carlo Strategy Comparison", "mc-title", null),
                 label(PAIRED, "mc-muted", null), controls, optionalInputs,
                 validation, actions, savedStatus, retrySave, results, details);
+        parameters = new MonteCarloParameterControls(controller, true, mode, count, inflation,
+                List.of(expected, volatility, seed, inflationMean, inflationVolatility, inflationFloor,
+                        primary, spouse, survivorA, survivorB), () -> { }, this::edited);
+        getChildren().add(getChildren().indexOf(results), parameters.notice);
         run.setOnAction(event -> start()); cancel.setOnAction(event -> session.cancel());
         for (var field : List.of(expected, volatility, seed, inflationMean, inflationVolatility, inflationFloor, primary, spouse, survivorA, survivorB)) {
             field.textProperty().addListener((o, before, after) -> edited());
         }
         count.valueProperty().addListener((o, before, after) -> edited());
-        mode.valueProperty().addListener((o, before, after) -> edited());
+        mode.valueProperty().addListener((o, before, after) -> { parameters.select(); edited(); });
         inflation.valueProperty().addListener((o, before, after) -> edited());
         session.onChanged(() -> {
             if (!session.busy()) persistence.finishReplacement();
@@ -179,7 +184,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
             if (persistence.binding() != null && (sourceOwner != controller.getCurrentPlan()
                     || !persistence.binding().planId().equals(controller.getAnalysisSessionId())))
                 persistence.unbind();
-            sourceOwner = controller.getCurrentPlan();
+            if (sourceOwner != controller.getCurrentPlan()) { sourceOwner = controller.getCurrentPlan(); parameters.planChanged(); Platform.runLater(parameters.afterPlanChange()); }
             session.invalidate(); persistence.assess(this::currencyInputs);
             Platform.runLater(this::syncPersistence); refresh();
         });
@@ -193,7 +198,10 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         var age = p.getDeathScenarioAssumptions().getSurvivorClaimingAge(); return age == null ? "" : age.toString();
     }
 
-    private void edited() { validation.setText(""); session.invalidate(); syncPersistence(); refresh(); }
+    private void edited() {
+        if (parameters.applying()) return;
+        parameters.edited(); validation.setText(""); session.invalidate(); syncPersistence(); refresh();
+    }
 
     private void refreshPersistence() {
         savedStatus.setText(persistence.status());
@@ -226,6 +234,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     private void startPersisted(MonteCarloStrategyComparisonRunService.Prepared captured) {
         syncPersistence();
         var binding = persistence.binding();
+        var parameterRun = parameters.begin(MonteCarloParameterMapping.capture(captured));
         var started = java.time.Instant.now();
         var completion = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion>();
         persistence.beginReplacement();
@@ -235,7 +244,10 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
             var payload = MonteCarloSnapshotPresentationMapper.capture(result, started, java.time.Instant.now());
             completion.set(MonteCarloResultLifecycle.completion(binding, payload));
             return result;
-        }, accepted -> persistence.accept(completion.get()));
+        }, accepted -> {
+            persistence.accept(completion.get());
+            parameters.accept(parameterRun, completion.get());
+        }, () -> parameters.rollback(parameterRun));
     }
 
     private void start() {
@@ -348,6 +360,6 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         new com.daviddunn.retirementplanner.app.export.MonteCarloPdfExporter().export(preparePdfReport(), destination);
     }
     @Override public void close() {
-        persistence.close(); session.close(); detach.run(); if (worker instanceof ExecutorService service) service.shutdown();
+        parameters.close(); persistence.close(); session.close(); detach.run(); if (worker instanceof ExecutorService service) service.shutdown();
     }
 }

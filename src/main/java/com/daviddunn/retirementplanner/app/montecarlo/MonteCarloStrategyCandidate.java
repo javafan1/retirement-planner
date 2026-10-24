@@ -21,6 +21,10 @@ public final class MonteCarloStrategyCandidate {
     public String label() {
         return label;
     }
+    /** Immutable effective election provenance for accepted analyzer parameters. */
+    public Integer survivorClaimingAge() {
+        return frozenPlan.getPlanningAssumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge();
+    }
 
     /** One isolated working copy per run, never one per world. The frozen source is not exposed. */
     RetirementPlan copyForRun() {

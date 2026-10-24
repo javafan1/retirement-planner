@@ -185,8 +185,8 @@ class MonteCarloMortalityViewTest {
                         return new MonteCarloRunService().runMortality(snapshot, request, progress, cancellation);
                     });
             new Scene(created);
-            ((ComboBox<Integer>) created.lookup("#mc-simulations")).setValue(3);
             mode(created).setValue(MonteCarloMode.LONGEVITY_ADJUSTED);
+            ((ComboBox<Integer>) created.lookup("#mc-simulations")).setValue(3);
             assertEquals("", field(created, "#mc-survivor-age").getText());
             field(created, "#mc-survivor-age").setText("60");
             ((Label) created.lookup("#mc-status")).textProperty().addListener((o, a, b) -> {
@@ -208,7 +208,7 @@ class MonteCarloMortalityViewTest {
                 assertFalse(mode(view).isDisabled());
                 return null;
             });
-            assertEquals(before, json.writeValueAsString(plan));
+            assertEquals(before, financialJson(json, plan));
         } finally {
             fx(() -> { view.close(); return null; });
         }
@@ -439,15 +439,15 @@ class MonteCarloMortalityViewTest {
                 mode(view).setValue(MonteCarloMode.FIXED_LIFESPAN);
                 assertFalse(view.lookup("#mc-longevity-inputs").isManaged());
                 mode(view).setValue(MonteCarloMode.LONGEVITY_ADJUSTED);
-                assertEquals("65", field(view, "#mc-survivor-age").getText());
+                assertEquals("60", field(view, "#mc-survivor-age").getText(), "Mode selection restores accepted election, not the unaccepted draft");
                 assertTrue(queue.isEmpty());
-                assertEquals(before, json.valueToTree(plan));
+                assertEquals(before, ((com.fasterxml.jackson.databind.node.ObjectNode) json.valueToTree(plan)).without("analyzerConfigurations"));
             } finally {
                 view.close();
             }
             return null;
         });
-        assertEquals(before, json.valueToTree(plan));
+        assertEquals(before, ((com.fasterxml.jackson.databind.node.ObjectNode) json.valueToTree(plan)).without("analyzerConfigurations"));
     }
 
     @ParameterizedTest

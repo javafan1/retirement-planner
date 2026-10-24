@@ -14,6 +14,18 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AnalysisFingerprintTest {
+    @ParameterizedTest @EnumSource(AnalysisKind.class)
+    void acceptedConfigurationMetadataDoesNotChangeExistingFinancialDigest(AnalysisKind kind) {
+        if (kind.isMonteCarlo()) return;
+        var plan = plan(kind); var inputs = inputs("1.00", "0.0100", 10, false);
+        var original = service.fingerprint(kind, plan, inputs);
+        plan.setAnalyzerConfigurations(com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations.empty()
+                .with(com.daviddunn.retirementplanner.app.analysis.parameters.ParameterFixtures.configuration(kind)));
+        assertEquals(original, service.fingerprint(kind, plan, inputs));
+        var copied = new com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService().copy(plan);
+        assertNotNull(copied.getAnalyzerConfigurations());
+        assertEquals(original, service.fingerprint(kind, copied, inputs));
+    }
     final AnalysisFingerprintService service = new AnalysisFingerprintService();
     AnalysisFingerprintService.Inputs inputs(String factor, String rate, int count, boolean baseline) {
         var candidate = SnapshotFixtures.couple().couple().entries().getFirst().strategy();
