@@ -33,7 +33,7 @@ class BreakEvenControllerTest {
                 25, LocalDate.of(2027, 1, 1)));
         plan.getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.BrokerageAccount(
                 "Synthetic funding", AccountOwnership.PRIMARY, new BigDecimal("1000000")));
-        controller.saveCurrentAsBaseline("Synthetic 70/62");
+        controller.getCurrentProjection(); controller.saveCurrentAsBaseline("Synthetic 70/62");
         controller.compareProjections();
         spouse.setIncomeSources(List.of(new SocialSecurityIncome("Lisa SS", AccountOwnership.SPOUSE,
                 LocalDate.of(2035, 2, 28), null, new BigDecimal("2000"), 70, BigDecimal.ZERO, 2027)));
@@ -87,7 +87,7 @@ class BreakEvenControllerTest {
                 4, LocalDate.of(2027, 1, 1)));
         plan.getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.BrokerageAccount(
                 "Funding", AccountOwnership.PRIMARY, new BigDecimal("1000000")));
-        controller.saveCurrentAsBaseline("Lisa 62");
+        controller.getCurrentProjection(); controller.saveCurrentAsBaseline("Lisa 62");
         controller.compareProjections(); // Existing comparison prepares both projections and asset results.
         var baseline = controller.getBaselineProjection();
         plan.getHousehold().getSpouse().setIncomeSources(List.of(income(70)));

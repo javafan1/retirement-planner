@@ -21,6 +21,11 @@ public final class ProjectionChartView extends VBox {
     private final Label notice = new Label();
 
     public ProjectionChartView() {
+        this("Projection Chart", false);
+    }
+
+    /** Separate fixed-metric view over already prepared values; existing Results defaults are unchanged. */
+    public ProjectionChartView(String heading, boolean assetsOnly) {
         super(5);
         setId("projection-chart-panel");
         getStyleClass().add("chart-card");
@@ -28,7 +33,7 @@ public final class ProjectionChartView extends VBox {
         setPadding(new Insets(10));
         getStylesheets().add(getClass().getResource("/css/chart-timeline.css").toExternalForm());
         getStylesheets().add(getClass().getResource("/css/projection-chart.css").toExternalForm());
-        Label title = new Label("Projection Chart");
+        Label title = new Label(heading);
         title.getStyleClass().add("chart-title");
         InputHelp.install(selector, "Choose the metric shown from the completed projection. Switching the chart does not change planning assumptions or rerun the projection.");
         selector.setId("projection-chart-metric");
@@ -47,6 +52,7 @@ public final class ProjectionChartView extends VBox {
         legend.setMinWidth(0);
         getChildren().addAll(title, selector, legend, plot, notice, selectedYear);
         selector.setValue(ProjectionChartMetric.INVESTABLE_ASSETS);
+        if (assetsOnly) { selector.setVisible(false); selector.setManaged(false); }
     }
 
     public void load(ProjectionChartModel model) {

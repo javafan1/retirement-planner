@@ -172,6 +172,12 @@ class ExhaustivePersistenceTest {
         byte[] original = Files.readAllBytes(repo.path(old.planId(), KIND));
         try (var s = session(source)) {
             await(s.persistence.notice, "Current Results");
+            fx(() -> {
+                var tabs = field(s.dialog, "deterministicResultTabs", TabPane.class);
+                assertEquals(1, tabs.getSelectionModel().getSelectedIndex());
+                tabs.getSelectionModel().selectFirst();
+                return null;
+            });
             var model = fx(() -> field(s.dialog, "exhaustivePresentation", ExhaustiveIntegratedSearchPresentation.class));
             for (String outcome : List.of("cancel", "obsolete", "failure", "all-failed")) {
                 var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
@@ -212,7 +218,11 @@ class ExhaustivePersistenceTest {
                     String expected = switch (outcome) { case "cancel" -> "cancelled"; case "obsolete" -> "Inputs changed";
                         case "failure" -> "failed before completion"; default -> "No successful candidates"; };
                     await(field(s.dialog, "exhaustiveStatus", Label.class), expected);
-                    fx(() -> { assertSame(model, field(s.dialog, "exhaustivePresentation", ExhaustiveIntegratedSearchPresentation.class)); return null; });
+                    fx(() -> {
+                        assertSame(model, field(s.dialog, "exhaustivePresentation", ExhaustiveIntegratedSearchPresentation.class));
+                        assertEquals(0, field(s.dialog, "deterministicResultTabs", TabPane.class).getSelectionModel().getSelectedIndex());
+                        return null;
+                    });
                     assertArrayEquals(original, Files.readAllBytes(repo.path(old.planId(), KIND)));
                     assertEquals(old.runId(), store.inMemory(new AnalysisResultStore.Slot(old.planId(), KIND)).orElseThrow().runId());
                 } finally {

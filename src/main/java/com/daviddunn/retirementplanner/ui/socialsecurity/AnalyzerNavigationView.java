@@ -33,6 +33,7 @@ final class AnalyzerNavigationView extends BorderPane {
     private final EnumMap<SocialSecurityAnalyzerJobController.Mode, Double> positions =
             new EnumMap<>(SocialSecurityAnalyzerJobController.Mode.class);
     private Choice selected;
+    private Runnable navigationChanged = () -> { };
     private java.util.function.Consumer<SocialSecurityAnalyzerJobController.Mode> selectedAction = mode -> { };
 
     AnalyzerNavigationView(Node header, List<Choice> choices) {
@@ -114,6 +115,7 @@ final class AnalyzerNavigationView extends BorderPane {
         Choice choice = choices.stream().filter(item -> item.mode() == mode).findFirst().orElseThrow();
         boolean changed = selected != choice;
         if (changed) {
+            navigationChanged.run();
             if (selected != null) positions.put(selected.mode(), scroll.getVvalue());
             selected = choice;
             workspace.getChildren().setAll(choice.workspace());
@@ -130,6 +132,8 @@ final class AnalyzerNavigationView extends BorderPane {
         selectedAction = Objects.requireNonNull(action);
         selectedAction.accept(selected.mode());
     }
+
+    void onNavigation(Runnable action) { navigationChanged = Objects.requireNonNull(action); }
 
     void addExecutionStatus(Node status) {
         ((VBox) getTop()).getChildren().add(status);

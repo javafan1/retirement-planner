@@ -19,8 +19,10 @@ public final class RetirementPlanScenarioCopyService {
     public RetirementPlan copy(RetirementPlan source) {
         Objects.requireNonNull(source, "Source retirement plan is required.");
         try {
+            byte[] bytes = mapper.writeValueAsBytes(source);
+            if (source.getProjectionState() != null) bytes = com.daviddunn.retirementplanner.persistence.PlanConfigurationTransaction.replace(bytes, "projectionState", null);
             return mapper.readValue(
-                    mapper.writeValueAsBytes(source),
+                    bytes,
                     RetirementPlan.class);
         } catch (Exception exception) {
             throw new IllegalStateException(

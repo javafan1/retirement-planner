@@ -52,6 +52,7 @@ class StateTaxWizardIntegrationTest {
             Path file = directory.resolve(state.name() + ".json");
             controller.saveAs(file);
             controller.open(file);
+            controller.getProjectionRestoration().toCompletableFuture().get(20, java.util.concurrent.TimeUnit.SECONDS);
             assertEquals(couple, controller.getCurrentPlan().getHousehold().hasSpouse());
             for (var year : controller.getCurrentProjection().getYears()) {
                 assertEquals(state, year.getStateTaxJurisdiction());

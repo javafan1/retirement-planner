@@ -90,6 +90,9 @@ class ApplicationControllerTest {
         ApplicationController controller =
                 new ApplicationController();
 
+        controller.newPlan(com.daviddunn.retirementplanner.app.baseline.BaselineDetailsTest.plan(false));
+        controller.getCurrentProjection();
+
         controller.saveCurrentAsBaseline(
                 "Test Baseline");
 

@@ -17,6 +17,8 @@ import com.daviddunn.retirementplanner.ui.dialogs.*;
 
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
@@ -63,8 +65,15 @@ public class MainWindow {
     private final Label projectionFundingNotice = new Label();
 
     public MainWindow() {
+        this(new ApplicationController(), true);
+    }
 
-        controller = new ApplicationController();
+    public MainWindow(ApplicationController controller) {
+        this(controller, false);
+    }
+
+    private MainWindow(ApplicationController controller, boolean reopenLastPlan) {
+        this.controller = java.util.Objects.requireNonNull(controller);
 
         householdView = new HouseholdView();
         accountsView = new AccountsView();
@@ -93,9 +102,8 @@ public class MainWindow {
         root.setBottom(createStatusBar());
 
         //loadCurrentPlan();
-        controller.openLastPlan();
-
-        loadCurrentPlan();
+        if (reopenLastPlan) controller.openLastPlan();
+        loadCurrentPlan(reopenLastPlan);
     }
 
     private void wireEvents() {
@@ -138,6 +146,8 @@ public class MainWindow {
                 this::showProjectionYearSummary);
         resultsView.setOnBreakEvenAnalysis(this::showBreakEvenAnalysis);
         resultsSummaryView.setOnBreakEvenAnalysis(this::showBreakEvenAnalysis);
+        resultsSummaryView.setOnBaselineDetails(this::showBaselineDetails);
+        resultsSummaryView.setOnSwapProjections(this::swapCurrentAndBaseline);
 
         rothConversionView.setOnPlanChanged(() -> {
             if (collectingViewEdits) {
@@ -446,12 +456,25 @@ public class MainWindow {
 
         updateWindowTitle();
 
-        if (runProjection) {
+        if (controller.isRestoredProjectionMode()) {
+            refreshProjectionViews(false, true);
+            observeProjectionRestoration(plan);
+        }
+        else if (runProjection) {
             refreshAllViews();
         }
         else {
             refreshProjectionViews(false);
         }
+    }
+
+    private void observeProjectionRestoration(RetirementPlan plan) {
+        var restoring = controller.getProjectionRestoration();
+        restoring.whenComplete((ignored, failure) -> javafx.application.Platform.runLater(() -> {
+            if (controller.getCurrentPlan() != plan || !controller.isRestoredProjectionMode()) return;
+            if (controller.getProjectionRestoration() != restoring) observeProjectionRestoration(plan);
+            else refreshProjectionViews(false, true);
+        }));
     }
 
     private boolean saveCurrentPlan() {
@@ -770,39 +793,145 @@ public class MainWindow {
         if (stage != null) dialog.initOwner(stage);
         dialog.showAndWait();
     }
+
+    private void showBaselineDetails(com.daviddunn.retirementplanner.app.baseline.BaselineDetailsSession session) {
+        var owner = controller.getCurrentPlan();
+        var baseline = owner.getBaseline();
+        var dialog = new com.daviddunn.retirementplanner.ui.baseline.BaselineDetailsDialog(session, controller);
+        if (stage != null) dialog.initOwner(stage);
+        var remove = controller.addSourcePlanRevisionListener(() -> {
+            if (controller.getCurrentPlan() != owner || owner.getBaseline() != baseline) dialog.close();
+        });
+        try { dialog.showAndWait(); }
+        finally { remove.run(); }
+    }
+
+    private boolean swappingProjections;
+    private long swapUiEpoch;
+
+    private void swapCurrentAndBaseline() {
+        if (swappingProjections) return;
+        ++swapUiEpoch;
+        var owner = controller.getCurrentPlan();
+        String reason = controller.projectionSwapUnavailableReason();
+        // Saving drafts currently applies inputs and can project. Never invoke that route from swapping.
+        if (householdView.isDirty() || assumptionsView.isDirty() || rothConversionView.isDirty())
+            reason = "Apply or cancel pending input edits, then run and accept a matching projection before swapping. No calculation was started.";
+        if (!reason.isEmpty()) { showSwapNotice(reason); return; }
+        var roles = owner.getProjectionState();
+        if (roles.current().id().equals(roles.baseline().id())) {
+            showSwapNotice("Current and baseline already refer to the same original projection. Nothing was changed."); return;
+        }
+        if (controller.isModified()) {
+            if (!controller.hasCurrentFile()) { showSwapNotice("Save this plan explicitly before swapping. Save As is not performed by the swap command."); return; }
+            var save = new ButtonType("Save and Continue", ButtonBar.ButtonData.OK_DONE);
+            var confirmation = new Alert(Alert.AlertType.CONFIRMATION,
+                    "The former baseline becomes the editable current plan; the former current becomes the baseline. No calculation runs. Save the current plan before continuing?",
+                    save, ButtonType.CANCEL);
+            confirmation.setTitle("Save Before Swapping Projections?");
+            confirmation.setHeaderText("Save Before Swapping Projections?");
+            if (stage != null) confirmation.initOwner(stage);
+            if (confirmation.showAndWait().orElse(ButtonType.CANCEL) != save) return;
+            if (controller.getCurrentPlan() != owner || owner.getProjectionState() != roles
+                    || !controller.projectionSwapUnavailableReason().isEmpty()) {
+                showSwapNotice("The plan or projection changed while confirmation was open. Nothing was swapped."); return;
+            }
+            swappingProjections = true;
+            runSwapBackground(controller.saveBeforeProjectionSwap(), owner, saved -> {
+                controller.finishProjectionSwapSave(saved);
+                prepareProjectionSwap(owner);
+            });
+        } else {
+            swappingProjections = true;
+            prepareProjectionSwap(owner);
+        }
+    }
+
+    private void prepareProjectionSwap(RetirementPlan owner) {
+        runSwapBackground(controller.prepareProjectionSwap(), owner, prepared -> {
+            boolean changed = controller.commitProjectionSwap(prepared);
+            if (changed) loadCurrentPlan(false); // Accepted caches only; no invalidate/reproject path.
+            statusLabel.setText(changed ? controller.getProjectionSnapshotNotice() : "Both roles already identify the same projection. Nothing changed.");
+            updateWindowTitle();
+            swappingProjections = false;
+        });
+    }
+
+    private <T> void runSwapBackground(java.util.concurrent.CompletionStage<T> work, RetirementPlan owner,
+            java.util.function.Consumer<T> success) {
+        long operation = swapUiEpoch;
+        var progress = new Dialog<Void>();
+        progress.setTitle("Preparing Projection Swap");
+        progress.setHeaderText("Verifying original projection results. No financial calculation runs.");
+        progress.getDialogPane().setContent(new javafx.scene.control.ProgressIndicator());
+        progress.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+        if (stage != null) progress.initOwner(stage);
+        var finished = new java.util.concurrent.atomic.AtomicBoolean();
+        progress.setOnHidden(event -> {
+            if (!finished.get() && operation == swapUiEpoch) { ++swapUiEpoch; controller.cancelProjectionSwap(); swappingProjections = false; }
+        });
+        progress.show();
+        work.whenComplete((value, failure) -> javafx.application.Platform.runLater(() -> {
+            if (operation != swapUiEpoch) { finished.set(true); progress.close(); return; }
+            if (!progress.isShowing() || controller.getCurrentPlan() != owner || stage != null && !stage.isShowing()) {
+                finished.set(true); progress.close(); controller.cancelProjectionSwap(); swappingProjections = false; return;
+            }
+            finished.set(true); progress.close();
+            try {
+                if (failure != null) {
+                    controller.cancelProjectionSwap(); swappingProjections = false;
+                    showSwapNotice("Projection swap could not be completed. Original roles were retained. "
+                            + (failure.getCause() instanceof IllegalStateException cause ? cause.getMessage() : "Review persistence and projection readiness before retrying."));
+                } else success.accept(value);
+            } catch (IllegalStateException rejected) {
+                controller.cancelProjectionSwap(); swappingProjections = false; showSwapNotice(rejected.getMessage());
+            }
+        }));
+    }
+
+    private void showSwapNotice(String text) {
+        var notice = new Alert(Alert.AlertType.INFORMATION, text, ButtonType.OK);
+        notice.setTitle("Swap Current and Baseline"); notice.setHeaderText("Projection swap");
+        if (stage != null) notice.initOwner(stage);
+        notice.showAndWait();
+    }
     private void refreshProjectionViews() {
 
         refreshProjectionViews(true);
     }
 
     private void refreshProjectionViews(boolean runProjection) {
+        refreshProjectionViews(runProjection, false);
+    }
+
+    private void refreshProjectionViews(boolean runProjection, boolean restored) {
 
         resultsView.setBreakEvenAnalysis(null);
         resultsSummaryView.setBreakEvenAnalysis(null);
 
-        controller.invalidateProjection();
+        if (!restored) controller.invalidateProjection();
         projectionFundingNotice.setText("");
 
         try {
             Projection projection =
-                    runProjection ? controller.getCurrentProjection() : null;
+                    restored ? controller.peekCurrentProjection() : runProjection ? controller.getCurrentProjection() : null;
 
             ProjectionSummary summary =
-                    runProjection ? controller.getCurrentProjectionSummary() : null;
+                    (runProjection || restored && projection != null) ? controller.getCurrentProjectionSummary() : null;
 
             dashboardView.load(summary);
             portfolioChartView.load(projection);
             projectionYearView.load(projection);
             resultsView.load(
                     projection,
-                    runProjection ? controller.getCurrentNonInvestableAssetProjections() : List.of());
+                    (runProjection || restored && projection != null) ? controller.getCurrentNonInvestableAssetProjections() : List.of());
             assumptionsView.refresh(
                     controller.getCurrentPlan());
 
             resultsSummaryView.load(
                     controller.getCurrentPlan(),
                     projection,
-                    runProjection ? controller.getCurrentNonInvestableAssetProjections() : List.of());
+                    (runProjection || restored && projection != null) ? controller.getCurrentNonInvestableAssetProjections() : List.of());
 
             var breakEven = controller.getCachedBreakEvenAnalysis();
             resultsView.setBreakEvenAnalysis(breakEven);
@@ -815,6 +944,7 @@ public class MainWindow {
                     : projection == null
                             ? "Complete the required plan information to run a projection."
                             : "Projection updated.");
+            if (restored) statusLabel.setText(controller.getProjectionSnapshotNotice());
         }
         catch (Exception ex) {
 
@@ -995,6 +1125,12 @@ public class MainWindow {
     }
     private void onSaveCurrentAsBaseline() {
 
+        if (!controller.currentProjectionInputsMatch()) {
+            new Alert(Alert.AlertType.INFORMATION,
+                    "Run and accept a projection matching the current inputs before capturing a baseline. No calculation was started.").showAndWait();
+            return;
+        }
+
         RetirementPlan plan =
                 controller.getCurrentPlan();
 
@@ -1038,7 +1174,8 @@ public class MainWindow {
         controller.saveCurrentAsBaseline(
                 "Baseline");
 
-        refreshAllViews();
+        refreshProjectionViews(false, true);
+        statusLabel.setText("Original accepted projection captured as baseline. Save the plan to retain it across restarts.");
 
         updateWindowTitle();
 

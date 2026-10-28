@@ -25,13 +25,8 @@ final class ClaimingStrategyHeatMapView extends VBox {
     private final Label empty = label(EMPTY_TEXT);
     private final VBox results = new VBox(8);
     private final Label context = label("");
-    private final GridPane grid = new GridPane();
-    private final GridPane strategyLayout = new GridPane();
-    private final VBox gridArea = new VBox(4);
+    private final ClaimingAgeGridView grid = new ClaimingAgeGridView();
     private final VBox details = new VBox(6);
-    private boolean sideBySide;
-    private final Map<ClaimingStrategyHeatMapCell, ToggleButton> buttons = new LinkedHashMap<>();
-    private final ToggleGroup selection = new ToggleGroup();
     private final Label selectedTitle = label("Selected Strategy Details");
     private final Label selectedPercent = label("");
     private final Label selectedNote = label("");
@@ -72,23 +67,7 @@ final class ClaimingStrategyHeatMapView extends VBox {
         display.setLabelFor(metric);
         HBox selector = new HBox(8, display, metric, context);
         selector.setAlignment(Pos.CENTER_LEFT);
-        FlowPane legend = new FlowPane(8, 6);
-        for (var tier : ClaimingHeatMapPalette.values()) {
-            if (tier == ClaimingHeatMapPalette.UNAVAILABLE) continue;
-            Label swatch = label(tier.label);
-            swatch.getStyleClass().addAll("heat-map-legend-item", tier.css);
-            swatch.setTooltip(HelpIcon.createTooltip(tier.help));
-            legend.getChildren().add(swatch);
-        }
-        Label legendNote = label("★ Optimal");
-        legendNote.setTooltip(HelpIcon.createTooltip("Colors always show % of optimal using unrounded values. ★ marks an exact optimal result, including ties. "
-                + "Essentially optimal: at least 99.5%. Very close: 99.0% to below 99.5%. "
-                + "Moderate difference: 97.0% to below 99.0%. Meaningful difference: 95.0% to below 97.0%. "
-                + "Substantially worse: below 95.0%. These are display bands, not recommendations."));
-        legend.getChildren().add(legendNote);
-        grid.setHgap(4);
-        grid.setVgap(4);
-        grid.setMinWidth(0);
+        FlowPane legend = ClaimingAgeGridView.legend("★ Optimal");
         GridPane metrics = new GridPane();
         metrics.setHgap(12);
         metrics.setVgap(4);
@@ -117,19 +96,7 @@ final class ClaimingStrategyHeatMapView extends VBox {
         details.setId("heat-map-details");
         details.getStyleClass().add("heat-map-details");
         details.setMinHeight(Region.USE_PREF_SIZE);
-        Label primaryAxis = label("Primary Claiming Age");
-        primaryAxis.setAlignment(Pos.CENTER);
-        primaryAxis.getStyleClass().add("heat-map-axis");
-        gridArea.getChildren().addAll(primaryAxis, grid);
-        gridArea.setId("heat-map-grid-area");
-        gridArea.setMinWidth(0);
-        gridArea.setMinHeight(Region.USE_PREF_SIZE);
-        strategyLayout.setHgap(16);
-        strategyLayout.setVgap(12);
-        strategyLayout.setMinHeight(Region.USE_PREF_SIZE);
-        strategyLayout.getChildren().addAll(gridArea, details);
-        arrange(false);
-        widthProperty().addListener((observable, before, after) -> arrange(after.doubleValue() >= 1200));
+        var strategyLayout = grid.withDetails(details);
         results.getChildren().add(strategyLayout);
         results.setMinHeight(Region.USE_PREF_SIZE);
         resultNotice.managedProperty().bind(resultNotice.textProperty().isNotEmpty());
@@ -161,65 +128,12 @@ final class ClaimingStrategyHeatMapView extends VBox {
                 + (value.optimalValue().isEmpty() ? " — No successful strategies."
                 : value.optimalValue().orElseThrow().signum() <= 0
                         ? " — % unavailable: highest value is zero or negative." : ""));
-        grid.getChildren().clear();
-        grid.getColumnConstraints().clear();
-        buttons.clear();
-        selection.getToggles().clear();
-        for (int column = 0; column <= value.primaryAges().size(); column++) {
-            ColumnConstraints constraint = new ColumnConstraints();
-            constraint.setPercentWidth(100.0 / (value.primaryAges().size() + 1));
-            constraint.setMinWidth(0);
-            grid.getColumnConstraints().add(constraint);
-        }
-        Label spouseAxis = label("Spouse\nClaiming Age");
-        spouseAxis.getStyleClass().add("heat-map-axis");
-        grid.add(spouseAxis, 0, 0);
-        for (int column = 0; column < value.primaryAges().size(); column++) {
-            grid.add(label(Integer.toString(value.primaryAges().get(column))), column + 1, 0);
-        }
-        for (int row = 0; row < value.spouseAges().size(); row++) {
-            grid.add(label(Integer.toString(value.spouseAges().get(row))), 0, row + 1);
-            for (int column = 0; column < value.primaryAges().size(); column++) {
-                var cell = value.cell(value.primaryAges().get(column), value.spouseAges().get(row));
-                ToggleButton button = new ToggleButton();
-                button.setId("claiming-heat-map-" + cell.primaryClaimingAge() + "-" + cell.spouseClaimingAge());
-                button.setToggleGroup(selection);
-                button.setMinWidth(0);
-                button.setMinHeight(40);
-                button.setPrefHeight(40);
-                button.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-                button.setWrapText(true);
-                button.getStyleClass().addAll("heat-map-cell", tierClass(cell));
-                if (cell.optimal()) button.getStyleClass().add("heat-map-optimal");
-                button.setOnAction(event -> select(cell));
-                buttons.put(cell, button);
-                grid.add(button, column + 1, row + 1);
-            }
-        }
+        grid.render(value.primaryAges(), value.spouseAges(), value.cells().stream().map(this::displayCell).toList(),
+                "claiming-heat-map-", pair -> select(value.cell(pair.primary(), pair.spouse())));
         updateCellText();
         select(value.cells().stream().filter(ClaimingStrategyHeatMapCell::optimal).findFirst()
                 .orElse(value.cells().getFirst()));
         setAnalysisBusy(busy);
-    }
-
-    private void arrange(boolean horizontal) {
-        if (sideBySide == horizontal && !strategyLayout.getColumnConstraints().isEmpty()) return;
-        sideBySide = horizontal;
-        strategyLayout.getColumnConstraints().clear();
-        ColumnConstraints gridColumn = new ColumnConstraints();
-        gridColumn.setPercentWidth(horizontal ? 73 : 100);
-        gridColumn.setMinWidth(0);
-        strategyLayout.getColumnConstraints().add(gridColumn);
-        if (horizontal) {
-            ColumnConstraints detailColumn = new ColumnConstraints();
-            detailColumn.setPercentWidth(27);
-            detailColumn.setMinWidth(0);
-            strategyLayout.getColumnConstraints().add(detailColumn);
-        }
-        GridPane.setConstraints(gridArea, 0, 0);
-        GridPane.setConstraints(details, horizontal ? 1 : 0, horizontal ? 0 : 1);
-        GridPane.setValignment(gridArea, javafx.geometry.VPos.TOP);
-        GridPane.setValignment(details, javafx.geometry.VPos.TOP);
     }
 
     void setAnalysisBusy(boolean value) {
@@ -230,20 +144,22 @@ final class ClaimingStrategyHeatMapView extends VBox {
         if (model == null) empty.setText(value ? "Integrated analysis is running. Progress is shown above." : EMPTY_TEXT);
     }
 
-    private void updateCellText() {
-        buttons.forEach((cell, button) -> {
-            String value = format(metric.getValue(), cell.value(metric.getValue()));
-            button.setText((cell.optimal() ? "★ " : "") + value);
-            String description = "Primary " + cell.primaryClaimingAge() + " / Spouse " + cell.spouseClaimingAge()
-                    + (cell.optimal() ? " — Optimal" : "") + "\n" + metric.getValue() + ": " + value;
-            button.setAccessibleText(description);
-            button.setTooltip(HelpIcon.createTooltip(description + "\n" + note(cell)));
-        });
+    private ClaimingAgeGridView.Cell displayCell(ClaimingStrategyHeatMapCell cell) {
+        String value = format(metric.getValue(), cell.value(metric.getValue()));
+        String description = "Primary " + cell.primaryClaimingAge() + " / Spouse " + cell.spouseClaimingAge()
+                + (cell.optimal() ? " — Optimal" : "") + "\n" + metric.getValue() + ": " + value;
+        return new ClaimingAgeGridView.Cell(new ClaimingAgeGridView.Pair(cell.primaryClaimingAge(), cell.spouseClaimingAge()),
+                value, cell.value(ClaimingStrategyHeatMapMetric.PERCENT_OF_OPTIMAL), cell.optimal(), false,
+                description, description + "\n" + note(cell));
     }
 
+    private void updateCellText() {
+        if (model != null) model.cells().forEach(cell -> grid.update(displayCell(cell)));
+    }
     private void select(ClaimingStrategyHeatMapCell cell) {
         selected = cell;
-        buttons.get(cell).setSelected(true);
+        var pair = new ClaimingAgeGridView.Pair(cell.primaryClaimingAge(), cell.spouseClaimingAge());
+        if (!pair.equals(grid.selectedPair())) { grid.select(pair); return; }
         selectedTitle.setText("Primary " + cell.primaryClaimingAge() + " / Spouse " + cell.spouseClaimingAge());
         selectedPercent.setText(cell.value(ClaimingStrategyHeatMapMetric.PERCENT_OF_OPTIMAL)
                 .map(value -> format(ClaimingStrategyHeatMapMetric.PERCENT_OF_OPTIMAL, Optional.of(value)) + " of optimal")

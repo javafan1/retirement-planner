@@ -59,7 +59,9 @@ class MonteCarloPdfExportTest {
                 ((TextField) view.lookup("#mc-seed")).setText("999");
                 assertTrue(view.session().stale()); assertTrue(view.canExportPdf()); assertFalse(view.lookup("#mc-export-pdf").isDisabled());
                 var historical = view.preparePdfReport();
-                assertTrue(historical.context().getFirst().startsWith("Historical Analysis"));
+                assertEquals("Assessing completed result inputs…", historical.context().getFirst());
+                assertFalse(historical.context().getFirst().contains("Outdated"),
+                        "A changed seed is pending asynchronous assessment, not yet a proven mismatch.");
                 assertEquals(report.sections(), historical.sections()); assertEquals(report.chart(), historical.chart());
                 plan.getHousehold().getPrimaryPerson().setBirthDate(java.time.LocalDate.of(1961, 1, 1));
                 plan.setPlanningAssumptions(new com.daviddunn.retirementplanner.domain.model.PlanningAssumptions(
@@ -102,7 +104,9 @@ class MonteCarloPdfExportTest {
                 ((TextField) view.lookup("#mcc-seed")).setText("999");
                 assertFalse(view.lookup("#mcc-export-pdf").isDisabled());
                 var historical = view.preparePdfReport();
-                assertTrue(historical.context().getFirst().startsWith("Historical Analysis"));
+                assertEquals("Assessing completed result inputs…", historical.context().getFirst());
+                assertFalse(historical.context().getFirst().contains("Outdated"),
+                        "A changed seed is pending asynchronous assessment, not yet a proven mismatch.");
                 assertEquals(report.sections(), historical.sections()); assertEquals(report.chart(), historical.chart());
                 plan.setBaseline(null); controller.markModified();
                 var after = MonteCarloPdfReportAdapter.from(frozen);

@@ -27,6 +27,7 @@ final class MonteCarloPlanDocument {
     static String capture(RetirementPlan plan) {
         try {
             byte[] bytes = JSON.writeValueAsBytes(plan);
+            if (plan.getProjectionState() != null) bytes = com.daviddunn.retirementplanner.persistence.PlanConfigurationTransaction.replace(bytes, "projectionState", null);
             if (plan.getAnalyzerConfigurations() != null) bytes = com.daviddunn.retirementplanner.persistence.PlanConfigurationTransaction.replace(bytes, "analyzerConfigurations", null);
             var json = new String(bytes, java.nio.charset.StandardCharsets.UTF_8); read(json); return json;
         }

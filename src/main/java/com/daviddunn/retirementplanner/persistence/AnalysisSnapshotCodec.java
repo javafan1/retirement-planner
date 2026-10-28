@@ -49,6 +49,10 @@ public final class AnalysisSnapshotCodec {
                     return context.readValue(parser, CoupleSocialSecuritySnapshot.class);
                 if (kind == AnalysisKind.COUPLE_EXHAUSTIVE)
                     return context.readValue(parser, ExhaustiveSnapshot.class);
+                if (kind == AnalysisKind.COUPLE_QUICK)
+                    return context.readValue(parser, QuickComparisonSnapshot.class);
+                if (kind == AnalysisKind.INDIVIDUAL_DETERMINISTIC)
+                    return context.readValue(parser, IndividualDeterministicSnapshot.class);
                 if (kind != AnalysisKind.COUPLE_WEIGHTED && kind != AnalysisKind.INDIVIDUAL_WEIGHTED
                         && kind != AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY)
                     throw new IOException("Unsupported analysis payload family.");
@@ -66,7 +70,8 @@ public final class AnalysisSnapshotCodec {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
             try (var output = new DigestOutputStream(OutputStream.nullOutputStream(), digest)) {
-                mapper.writeValue(payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot ? limited(output) : output,
+                mapper.writeValue(payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot
+                        || payload instanceof QuickComparisonSnapshot || payload instanceof IndividualDeterministicSnapshot ? limited(output) : output,
                         new Content(payload, context));
             }
             return HexFormat.of().formatHex(digest.digest());
@@ -86,7 +91,8 @@ public final class AnalysisSnapshotCodec {
                 tree.set("payload", new ExhaustiveSnapshotInterning(exactTrees).encode(
                         (com.fasterxml.jackson.databind.node.ObjectNode) tree.get("payload")));
                 raw = exactTrees.writeValueAsBytes(tree);
-            } else if (snapshot.kind().isMonteCarlo()) raw = boundedMonteCarloBytes(snapshot);
+            } else if (snapshot.kind().isMonteCarlo() || snapshot.kind() == AnalysisKind.COUPLE_QUICK
+                    || snapshot.kind() == AnalysisKind.INDIVIDUAL_DETERMINISTIC) raw = boundedMonteCarloBytes(snapshot);
             else raw = mapper.writeValueAsBytes(snapshot);
         }
         catch (Exception failure) { throw AnalysisSnapshotSaveException.at(AnalysisSnapshotSaveException.Stage.SERIALIZATION, -1, -1, failure); }
@@ -139,6 +145,14 @@ public final class AnalysisSnapshotCodec {
         return compress(raw(snapshot));
     }
     /** Package-local document operations for explicit DTO codecs; no additional analysis kind is enabled. */
+    /** Bounded standard-projection output; existing analyzer/document encodings remain unchanged. */
+    Encoded encodeProjectionDocument(Object document) throws IOException {
+        var bytes = new ByteArrayOutputStream(8192);
+        try (var output = limited(bytes)) { mapper.writeValue(output, document); }
+        byte[] raw = bytes.toByteArray();
+        checkDocument(raw);
+        return compress(raw);
+    }
     Encoded encodeDocument(Object document) throws IOException {
         byte[] raw = mapper.writeValueAsBytes(document);
         if (raw.length > MAX_RAW_BYTES) throw new IOException("Uncompressed snapshot is too large.");

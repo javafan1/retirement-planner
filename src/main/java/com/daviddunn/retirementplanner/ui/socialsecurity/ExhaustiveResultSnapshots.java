@@ -19,6 +19,16 @@ final class ExhaustiveResultSnapshots {
     record Restored(ExhaustiveIntegratedSearchPresentation model, IntegratedReportContext report,
             ExhaustiveSnapshot.CrossReference reference, ExhaustiveSnapshot.Selection selection) { }
 
+    static String crossReferenceText(ExhaustiveSnapshot.CrossReference reference) {
+        if (reference.status() != ExhaustiveSnapshot.ReferenceStatus.AVAILABLE)
+            return "Original SS-only recommendation cross-reference: " + reference.explanation();
+        return "Original SS-only recommendation cross-reference: Expected PV " + com.daviddunn.retirementplanner.ui.util.UIFormatters.money(reference.expectedPresentValue())
+                + ", deterministic after-tax estate " + com.daviddunn.retirementplanner.ui.util.UIFormatters.money(reference.estate())
+                + ", estate rank " + reference.rank() + ", gap from highest tested "
+                + (reference.gapFromHighest().signum() > 0 ? "+" : "")
+                + com.daviddunn.retirementplanner.ui.util.UIFormatters.money(reference.gapFromHighest()) + ".";
+    }
+
     static ExhaustiveSnapshot capture(ExhaustiveIntegratedSearchPresentation model, IntegratedReportContext context,
             SocialSecurityBasis basis, Instant completed, String metric, String tab) {
         var reference = reference(model.result(), basis);

@@ -34,6 +34,7 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
     private String problem;
     private AcceptedAnalysisCompletion unqueued;
     private AcceptedAnalysisCompletion displayedCompletion;
+    private Function<AnalysisSnapshot, AnalysisResultFreshness.Association> association = saved -> AnalysisResultFreshness.Association.UNRECORDED;
 
     public MonteCarloResultLifecycle(AnalysisResultStore store, Consumer<Runnable> dispatch,
             Function<MonteCarloSnapshot, R> reconstruct, Consumer<R> attach, Runnable clear, Runnable changed) {
@@ -46,6 +47,13 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
         this.busy = busy;
     }
     public Binding binding() { return binding; }
+    public void associationResolver(Function<AnalysisSnapshot, AnalysisResultFreshness.Association> resolver) {
+        association = Objects.requireNonNull(resolver);
+    }
+    public AnalysisResultFreshness freshness() {
+        return new AnalysisResultFreshness(assessment, snapshot == null
+                ? AnalysisResultFreshness.Association.UNRECORDED : association.apply(snapshot));
+    }
     /** Invalidate publication immediately; the controller assigns the new file later in its open path. */
     public void unbind() {
         displayedCompletion = null;
@@ -192,7 +200,7 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
                 .orElse(snapshot == null ? "MEMORY ONLY" : "SAVED");
         if (unqueued != null) status = "SAVE FAILED";
         return MonteCarloHistoricalPdf.from(original, frozen, currency, status,
-                snapshot != null && snapshot.originPlanId() != null);
+                snapshot != null && snapshot.originPlanId() != null, freshness().status());
     }
     public boolean retryAvailable() { return unqueued != null || binding != null && store.status(slot())
             .map(s -> s.durability() == AnalysisResultStore.Durability.SAVE_FAILED).orElse(false); }
@@ -205,14 +213,9 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
     }
     public String status() {
         String text = loading ? "Loading previous results…" : problem != null ? problem : assessment == null
-                ? snapshot == null ? "No Saved Results" : "Assessing completed result inputs…"
-                : switch (assessment.state()) {
-                    case CURRENT -> "Current Results";
-                    case OUTDATED -> "Previous Results — Outdated\nThese results were generated using previous plan or analysis assumptions and may not reflect the current retirement plan.";
-                    case INPUTS_NEED_ATTENTION -> "Inputs Need Attention. " + assessment.explanation();
-                    case INCOMPATIBLE_OR_UNAVAILABLE -> "Incompatible or Unavailable. " + assessment.explanation();
-                    case NO_SAVED_RESULTS -> "No Saved Results";
-                };
+                ? snapshot == null && displayedCompletion == null ? "No Saved Results" : "Assessing completed result inputs…"
+                : freshness().status();
+        if (freshness().mismatch()) text = "Previous Results — Outdated\n" + text;
         if (snapshot != null) {
             text += "\nAnalysis completed: " + snapshot.completedAt();
             if (snapshot.originPlanId() != null) text += "\nHistorical copy from another plan; original assumptions retained.";

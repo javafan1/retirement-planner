@@ -17,6 +17,48 @@ public class RetirementPlan {
     private static final java.util.regex.Pattern PLAN_ID_PATTERN = java.util.regex.Pattern.compile(
             "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
     private String planId;
+    private volatile com.daviddunn.retirementplanner.app.projection.ProjectionRoleManifest projectionState;
+    private volatile java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot> associatedAnalyzerResults = java.util.Map.of();
+    private volatile java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion> pendingAnalyzerAssociations = java.util.Map.of();
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion> getPendingAnalyzerAssociations() { return pendingAnalyzerAssociations; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void installPendingAnalyzerAssociations(java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion> values) {
+        if (values.size() > 30) throw new IllegalArgumentException("Too many pending analyzer associations.");
+        pendingAnalyzerAssociations = java.util.Map.copyOf(values);
+    }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot> getAssociatedAnalyzerResults() { return associatedAnalyzerResults; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void installAssociatedAnalyzerResults(java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot> values) {
+        if (values.size() > 30) throw new IllegalArgumentException("Too many associated analyzer results.");
+        associatedAnalyzerResults = java.util.Map.copyOf(values);
+    }
+    private java.nio.file.Path projectionComponentSource;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.nio.file.Path getProjectionComponentSource() { return projectionComponentSource; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void setProjectionComponentSource(java.nio.file.Path source) { projectionComponentSource = source; }
+    private volatile java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> projectionComponents = java.util.Map.of();
+    private java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> pendingPinnedProjections = java.util.Map.of();
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> getPendingPinnedProjections() { return pendingPinnedProjections; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void installPendingPinnedProjections(java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> values) {
+        if (values.size() > 30) throw new IllegalArgumentException("Too many pending pinned projection contexts.");
+        pendingPinnedProjections = java.util.Map.copyOf(values);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public com.daviddunn.retirementplanner.app.projection.ProjectionRoleManifest getProjectionState() { return projectionState; }
+    public void setProjectionState(com.daviddunn.retirementplanner.app.projection.ProjectionRoleManifest state) { projectionState = state; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> getProjectionComponents() { return projectionComponents; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void installProjectionComponents(java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> components) {
+        if (components.size() > 2) throw new IllegalArgumentException("Only current and baseline projection components are supported.");
+        projectionComponents = java.util.Map.copyOf(components);
+    }
     private volatile com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations analyzerConfigurations;
 
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)

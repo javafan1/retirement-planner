@@ -13,7 +13,8 @@ import java.util.*;
 /** One set of existing controls, independent accepted mode settings, and guarded rollback. */
 final class MonteCarloParameterControls implements AutoCloseable {
     record Run(AnalysisParameterCoordinator.Binding binding, AnalysisKind kind, long sequence, long edit,
-            AnalysisParameterConfiguration.MonteCarlo parameters) { }
+            AnalysisParameterConfiguration.MonteCarlo parameters,
+            com.daviddunn.retirementplanner.app.projection.AnalyzerAdmission association) { }
     private record Values(int count, String inflation, List<String> fields) { }
     private final ApplicationController controller;
     private final AnalysisParameterCoordinator coordinator;
@@ -112,7 +113,11 @@ final class MonteCarloParameterControls implements AutoCloseable {
     }
     private static String percent(BigDecimal value) { return value.scaleByPowerOfTen(2).toString(); }
     Run begin(AnalysisParameterConfiguration.MonteCarlo parameters) {
-        return new Run(coordinator.bind(owner, controller.getCurrentFile()), kind(), coordinator.nextAcceptanceSequence(), edit, parameters);
+        return begin(parameters, null);
+    }
+    Run begin(AnalysisParameterConfiguration.MonteCarlo parameters, String fingerprint) {
+        return new Run(coordinator.bind(owner, controller.getCurrentFile()), kind(), coordinator.nextAcceptanceSequence(), edit, parameters,
+                controller.prepareAnalyzerAssociation(kind(), fingerprint));
     }
     void accept(Run run, AcceptedAnalysisCompletion completion) {
         if (closed || owner != controller.getCurrentPlan() || run.binding().plan() != owner || run.kind() != kind()
@@ -120,6 +125,7 @@ final class MonteCarloParameterControls implements AutoCloseable {
         var configuration = new AnalysisParameterConfiguration(1, run.kind(), run.kind().shape(), completion.runId(), completion.completedAt(),
                 run.parameters(), Map.of("parameterContract", "1"));
         coordinator.accept(new AcceptedAnalysisParameters(run.binding(), run.sequence(), configuration));
+        controller.associateAnalyzer(run.edit() == edit ? run.association() : null, completion);
         updateStatus();
     }
     void rollback(Run run) {
@@ -135,6 +141,8 @@ final class MonteCarloParameterControls implements AutoCloseable {
                     : "Parameters — MEMORY ONLY: Save this retirement plan to enable automatic parameter writes."
                 : "No accepted parameters saved for this analysis mode."
                 : "Parameters — " + state.status().name().replace('_', ' ') + ": " + state.message());
+        var association = controller.getAnalyzerAssociationNotice(kind());
+        if (!association.isEmpty()) status.setText(status.getText() + "\n" + association);
         boolean failed = state != null && state.status() == AnalysisParameterCoordinator.Status.SAVE_FAILED;
         retry.setVisible(failed); retry.setManaged(failed);
     }

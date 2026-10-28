@@ -15,6 +15,7 @@ final class WeightedResultPersistence implements AutoCloseable {
     final Label notice;
     final Button retry = new Button("Retry Save");
     final VBox controls;
+    final AssociatedAnalyzerAction associated;
     private final ApplicationController source;
     private final AnalysisKind kind;
     private final Supplier<AnalysisFingerprintService.Inputs> inputs;
@@ -33,6 +34,9 @@ final class WeightedResultPersistence implements AutoCloseable {
     private boolean metadataPending;
     private boolean changingSource;
     private boolean replacing;
+    private Runnable loadStarted = () -> { };
+
+    void onLoadStarted(Runnable action) { loadStarted = Objects.requireNonNull(action); }
 
     WeightedResultPersistence(ApplicationController source, AnalysisKind kind,
             Supplier<AnalysisFingerprintService.Inputs> inputs, Function<AnalysisSnapshot, Runnable> reconstruct,
@@ -46,7 +50,8 @@ final class WeightedResultPersistence implements AutoCloseable {
         notice.setWrapText(true);
         notice.setMinWidth(0);
         notice.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
-        controls = new VBox(5, notice, retry);
+        associated = new AssociatedAnalyzerAction(source, () -> kind);
+        controls = new VBox(5, notice, retry, associated);
         this.source = source;
         this.kind = kind;
         this.inputs = inputs;
@@ -95,9 +100,13 @@ final class WeightedResultPersistence implements AutoCloseable {
         var memory = store.inMemory(slot);
         if (!source.canPersistAnalysisResults() && memory.isEmpty()) { show(); return; }
         long expected = generation;
+        loadStarted.run();
         loading = true;
         notice.setText(kind == AnalysisKind.COUPLE_EXHAUSTIVE ? "Loading previous exhaustive results…"
-                : kind == AnalysisKind.COUPLE_SOCIAL_SECURITY ? "Loading previous Social Security results…" : "Loading previous longevity-weighted results…");
+                : kind == AnalysisKind.COUPLE_QUICK ? "Loading previous Quick Comparison results…"
+                : kind == AnalysisKind.INDIVIDUAL_DETERMINISTIC ? "Loading previous individual deterministic results…"
+                : kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
+                ? "Loading previous Social Security results…" : "Loading previous longevity-weighted results…");
         var file = source.getCurrentFile();
         var read = source.canPersistAnalysisResults() ? store.load(slot, file)
                 : store.background(() -> Optional.of(memory.orElseThrow().presentationSnapshot(new com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec())));
@@ -149,6 +158,7 @@ final class WeightedResultPersistence implements AutoCloseable {
         assessment = null;
         metadataPending = false;
         source.getAnalysisResults().accept(completion);
+        source.associateAnalyzer(completion.association(), completion);
         observeSave(generation);
         // Build integrity metadata off FX, including for a memory-only accepted result.
         metadata(completion, generation);
@@ -219,7 +229,50 @@ final class WeightedResultPersistence implements AutoCloseable {
     boolean exportable() { return sameBinding() && snapshot != null && assessment != null
             && assessment.state() != AnalysisCompatibilityPolicy.State.INCOMPATIBLE_OR_UNAVAILABLE; }
     boolean current() { return sameBinding() && assessment != null && assessment.state() == AnalysisCompatibilityPolicy.State.CURRENT; }
+    AnalysisResultFreshness freshness() {
+        return new AnalysisResultFreshness(reportAssessment(), source.analysisAssociation(resultMetadata()));
+    }
+    String warning() { return freshness().warning(); }
+    /** FX-thread capture of presentation only; compatibility remains the authoritative assessment. */
+    List<String> provenance() {
+        var saved = resultMetadata();
+        if (saved == null) return List.of();
+        var lines = new ArrayList<String>();
+        lines.add("Displayed completed result: last-success analysis (run " + saved.runId() + ").");
+        if (freshness().mismatch()) {
+            lines.add("This last-success analysis does not match Current's effective inputs or required analysis compatibility. Specific recorded input differences, when available, follow.");
+            if (saved.payload() instanceof CoupleSocialSecuritySnapshot ss && source.currentProjectionInputsMatch()) {
+                var household = source.getCurrentPlan().getHousehold();
+                claimingDifference(lines, "Primary", ss.request().base().primaryElection(), ss.frozen().primaryClaimDate(), household.getPrimaryPerson());
+                claimingDifference(lines, "Spouse", ss.request().base().spouseElection(), ss.frozen().spouseClaimDate(), household.getSpouse());
+            }
+        }
+        if (associated.available()) lines.add("Current has a separately recorded associated analysis. View Current Projection's Associated Result opens it read-only without recalculation; it does not replace this last-success analysis. Integrity is verified on opening.");
+        else lines.add("No recorded association for this analyzer is available for Current. Legacy associations are not inferred.");
+        return List.copyOf(lines);
+    }
+
+    private static void claimingDifference(List<String> lines, String owner,
+            com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityClaimingElection original,
+            java.time.LocalDate frozenDate, com.daviddunn.retirementplanner.domain.model.Person current) {
+        if (current == null || !original.retirementClaimDate().equals(frozenDate)) return;
+        var records = current.getIncomeSources().stream()
+                .filter(com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome.class::isInstance)
+                .map(com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome.class::cast).toList();
+        if (records.size() != 1) return;
+        var now = records.getFirst();
+        if (!original.birthDate().equals(current.getBirthDate()) || frozenDate.equals(now.getStartDate())) return;
+        for (int age = 62; age <= 70; age++) {
+            if (original.birthDate().plusYears(age).equals(frozenDate)
+                    && current.getBirthDate().plusYears(now.getClaimingAge()).equals(now.getStartDate())) {
+                lines.add(owner + " claiming age: last-success " + age + "; Current " + now.getClaimingAge() + ".");
+                return;
+            }
+        }
+        lines.add(owner + " claiming date: last-success " + frozenDate + "; Current " + now.getStartDate() + ".");
+    }
     AnalysisSnapshot resultMetadata() { return sameBinding() ? snapshot : null; }
+    AnalysisCompatibilityPolicy.Assessment reportAssessment() { return sameBinding() ? assessment : null; }
     static java.time.LocalDate date(DatePicker picker) {
         var value = Objects.requireNonNull(picker.getValue());
         var text = picker.getEditor().getText();
@@ -240,13 +293,10 @@ final class WeightedResultPersistence implements AutoCloseable {
     }
 
     private void show() {
-        String text = assessment == null ? "No Saved Results" : switch (assessment.state()) {
-            case CURRENT -> "Current Results";
-            case OUTDATED -> "Previous Results — Outdated\n" + OUTDATED;
-            case INPUTS_NEED_ATTENTION -> "Inputs Need Attention\n" + assessment.explanation();
-            case INCOMPATIBLE_OR_UNAVAILABLE -> "Incompatible or Unavailable\n" + assessment.explanation();
-            case NO_SAVED_RESULTS -> "No Saved Results";
-        };
+        String text = snapshot == null && !loading && !metadataPending && assessment == null
+                ? "No Saved Results" : freshness().status();
+        if (freshness().mismatch()) text = "Previous Results — Outdated\n" + text;
+        associated.refresh();
         if (snapshot != null) {
             text += "\nAnalysis completed: " + snapshot.completedAt();
             if (snapshot.originPlanId() != null) text += "\nHistorical copy from another plan; original completion and financial assumptions retained.";
@@ -256,6 +306,9 @@ final class WeightedResultPersistence implements AutoCloseable {
         if (status != null) text += "\n" + status.explanation();
         else if (snapshot != null) text += "\nResults saved.";
         if (!source.canPersistAnalysisResults()) text += "\nSave the retirement plan first to enable persistent results. No plan is autosaved.";
+        var association = source.getAnalyzerAssociationNotice(kind);
+        if (!association.isEmpty()) text += "\n" + association;
+        for (var line : provenance()) text += "\n" + line;
         retry.setManaged(status != null && status.durability() == AnalysisResultStore.Durability.SAVE_FAILED);
         notice.setText(text);
     }
@@ -264,10 +317,11 @@ final class WeightedResultPersistence implements AutoCloseable {
         reassess();
         if (!exportable()) throw new IllegalStateException("No safely restored result is available.");
         var context = new ArrayList<String>();
-        context.add(current() ? "Current Results" : "Historical Analysis — Outdated: " + OUTDATED);
+        context.add(freshness().status());
+        context.addAll(provenance());
         context.add("Original analysis completed: " + snapshot.completedAt());
         context.addAll(original.context());
-        return new IntegratedAnalyzerReport(current() ? original.analysisType() : "Historical Analysis — Outdated | " + original.analysisType(), original.household(), original.runStarted(),
+        return new IntegratedAnalyzerReport(freshness().mismatch() ? "Historical Analysis — Outdated | " + original.analysisType() : original.analysisType(), original.household(), original.runStarted(),
                 original.exportedAt(), context, original.selectedSummary(), original.visualization(), original.assumptions(),
                 original.rankedTables(), original.results());
     }

@@ -47,6 +47,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             request -> (progress, cancellation) -> new SocialSecuritySurvivorClaimingOptimizationCalculator().calculate(request, progress, cancellation);
     private WeightedResultPersistence socialSecurityPersistence;
     private WeightedResultPersistence exhaustivePersistence;
+    private WeightedResultPersistence quickPersistence;
+    private VBox quickWorkspace;
+    private boolean quickWasRestored;
     java.util.function.Function<SocialSecurityAnalyzerInputs.Quick, SocialSecurityAnalyzerJobController.Work<IntegratedSocialSecurityComparisonPresentation>> quickCalculation =
             input -> (progress, cancellation) -> IntegratedSocialSecurityComparisonPresentation.from(
                     new IntegratedSocialSecurityStrategyComparisonService().compareAnalyzerCandidates(input.plan(),
@@ -84,8 +87,25 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private final Label status = new Label("Mortality categories come from Person information.");
     private final Label stale = new Label();
     private final VBox recommendation = new VBox(8);
-    private final GridPane claimingGrid = new GridPane();
+    private final ClaimingAgeGridView claimingGrid = new ClaimingAgeGridView();
+    private Object claimingGridIdentity;
+    private TabPane socialSecurityTabs;
+    private Tab socialSecurityGridTab;
+    private final ResultNavigationGuard resultNavigation = new ResultNavigationGuard(() -> analysisSource == null
+            ? plan : java.util.List.of(plan, analysisSource.getAnalysisSessionId()));
+    private ResultNavigationGuard.Ticket weightedLoadNavigation;
+    private ResultNavigationGuard.Ticket exhaustiveLoadNavigation;
+    private ResultNavigationGuard.Ticket socialSecurityLoadNavigation;
     private final Label gridDetails = new Label("Select a retirement-grid cell.");
+    private final Button socialSecurityExportPdf = new Button("Export PDF");
+    private final Button quickExportPdf = new Button("Export PDF");
+    private final Label socialSecurityPdfNotice = AnalyzerConfigurationLayout.note("");
+    private final Label quickPdfNotice = AnalyzerConfigurationLayout.note("");
+    private SocialSecurityReportSession socialSecurityReport;
+    private QuickReportSession quickReport;
+    private Object socialSecurityReportBinding;
+    private Object quickReportBinding;
+    private boolean disposed;
     private final TableView<SocialSecurityStrategyAnalyzerPresentation.RankedStrategy> strategies =
             new TableView<>();
     private final Label strategyDetails = new Label("Select a complete strategy.");
@@ -189,21 +209,23 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         if (singlePersonView != null) {
             singlePersonView.attachParameters(source);
             IndividualCompletionPersistence.attach(singlePersonView.weightedView, source);
+            IndividualCompletionPersistence.attach(singlePersonView.ssView, source);
             singlePersonView.navigation.onSelected(mode -> {
                 if (mode == SocialSecurityAnalyzerJobController.Mode.WEIGHTED) singlePersonView.weightedView.persistence.load();
+                if (mode == SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY) singlePersonView.ssView.persistence.load();
+                if (mode == SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE) singlePersonView.persistence.load();
             });
             if (!source.canPersistAnalysisResults()) {
                 var notice = new Label("This plan is not saved. Analyses remain runnable in memory; save the plan before running a longevity-weighted analysis intended for persistence.");
                 notice.setWrapText(true);
                 singlePersonView.getChildren().addFirst(notice);
-                singlePersonView.ssView.persistenceNotice.setText("Social Security Only results remain in memory; persistent restoration is not enabled for this analysis.");
-                singlePersonView.ssView.persistenceNotice.setWrapText(true);
             }
-            detachPlanListener = source.addSourcePlanRevisionListener(() -> singlePersonView.weightedView.persistence.sourceChanged(() -> {
+            detachPlanListener = source.addSourcePlanRevisionListener(() -> singlePersonView.weightedView.persistence.sourceChanged(() -> singlePersonView.ssView.persistence.sourceChanged(() -> singlePersonView.persistence.sourceChanged(() -> {
                 if (source.getCurrentPlan().getHousehold().hasSpouse()) { close(); stage.close(); return; }
                 plan = source.getCurrentPlan();
                 singlePersonView.invalidate(plan);
-            }));
+            }))));
+            singlePersonView.persistence.load();
             return;
         }
         if (!source.canPersistAnalysisResults()) {
@@ -224,7 +246,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         observe(mortalityDate.valueProperty(), shareLongevity);
         observe(primaryMortalityAdjustment.textProperty(), shareLongevity);
         observe(spouseMortalityAdjustment.textProperty(), shareLongevity);
-        detachPlanListener = source.addSourcePlanRevisionListener(() -> exhaustivePersistence.sourceChanged(() -> socialSecurityPersistence.sourceChanged(() -> weightedPersistence.sourceChanged(() -> {
+        detachPlanListener = source.addSourcePlanRevisionListener(() -> quickPersistence.sourceChanged(() -> exhaustivePersistence.sourceChanged(() -> socialSecurityPersistence.sourceChanged(() -> weightedPersistence.sourceChanged(() -> {
             if (!source.getCurrentPlan().getHousehold().hasSpouse()) { close(); stage.close(); return; }
             boolean differentPlan = plan != source.getCurrentPlan();
             plan = source.getCurrentPlan();
@@ -245,7 +267,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             if (exhaustivePresentation != null) {
                 exhaustiveStale.setText("Plan changed - run exhaustive search again.");
             }
-        }))));
+        })))));
         weightedPersistence = new WeightedResultPersistence(source, AnalysisKind.COUPLE_WEIGHTED,
                 this::weightedInputs, saved -> {
                     var model = new LongevityWeightedIntegratedPresentation(saved.payload().couple().restore(), 0, 0);
@@ -287,7 +309,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                                         weightedView.heatMap.restoreStrategy(entry.strategy());
                                     });
                         }
-                        if ("heat-map".equals(preferences.get("tab"))) weightedView.resultTabs.getSelectionModel().select(weightedView.heatMapTab);
+                        displayResult(AnalysisKind.COUPLE_WEIGHTED, saved.runId(), weightedLoadNavigation);
                     };
                 }, this::refreshWeightedResultStatus, () -> {
                     weightedPresentation = null;
@@ -310,6 +332,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     return () -> {
                         presentation = model;
                         render(context, model);
+                        socialSecurityReport = SocialSecurityReportSession.restored(saved, context, model);
+                        socialSecurityReportBinding = reportBinding();
                         var occurrence = saved.context().preferences().get("occurrence");
                         if (occurrence != null) {
                             int index = Integer.parseInt(occurrence) - 1;
@@ -320,12 +344,14 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                             }
                         }
                         status.setText("Previous Social Security analysis restored without recalculation.");
+                        displayResult(AnalysisKind.COUPLE_SOCIAL_SECURITY, saved.runId(), socialSecurityLoadNavigation);
                     };
                 }, this::refreshSocialSecurityResultStatus, () -> {
                     presentation = null;
+                    socialSecurityReport = null; socialSecurityReportBinding = null;
                     socialSecurityResultCurrent = false;
                     recommendation.getChildren().setAll(new Label("Run analysis to identify the highest expected-PV tested strategy."));
-                    claimingGrid.getChildren().clear(); strategies.getItems().clear();
+                    claimingGrid.clear(); claimingGridIdentity = null; strategies.getItems().clear();
                     assumptions.clear(); gridDetails.setText("Select a retirement-grid cell.");
                     strategyDetails.setText("Select a complete strategy."); stale.setText("");
                 });
@@ -352,9 +378,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                                 deterministicSelectedEntry = entry;
                                 exhaustiveDetails.setText(exhaustiveDetail(entry, "\nOriginal strategy occurrence: " + entry.generationOrder()));
                             }
-                            if ("heat-map".equals(selection.tab())) deterministicResultTabs.getSelectionModel().select(deterministicHeatMapTab);
                         }
                         exhaustiveStatus.setText("Previous exhaustive analysis restored without recalculation.");
+                        displayResult(AnalysisKind.COUPLE_EXHAUSTIVE, saved.runId(), exhaustiveLoadNavigation);
                     };
                 }, this::refreshExhaustiveResultStatus, () -> {
                     exhaustivePresentation = null; deterministicReportContext = null;
@@ -365,10 +391,33 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     deterministicExportPdf.setDisable(true); exhaustiveDetails.clear(); exhaustiveStale.setText("");
                 });
         exhaustiveWorkspace.getChildren().add(5, exhaustivePersistence.controls);
+        quickPersistence = new WeightedResultPersistence(source, AnalysisKind.COUPLE_QUICK, this::quickInputs, saved -> {
+            var model = QuickSnapshotAdapter.presentation((QuickComparisonSnapshot) saved.payload());
+            var report = QuickSnapshotAdapter.report(saved);
+            return () -> {
+                integratedPresentation = model; quickReport = report; quickReportBinding = reportBinding(); quickWasRestored = true;
+                renderIntegrated(model); integratedStale.setText("Historical Quick result — original prerequisite and assumptions retained.");
+                integratedStatus.setText("Previous Quick comparison restored without recalculation. A new run still requires a current SS result.");
+            };
+        }, () -> {
+            if (quickReport != null) integratedStale.setText(quickPersistence.warning());
+            refreshExportActions();
+        }, () -> { quickReport = null; integratedPresentation = null; integratedTable.getItems().clear(); quickWasRestored = false; });
+        quickWorkspace.getChildren().add(5, quickPersistence.controls);
+        weightedPersistence.onLoadStarted(() -> weightedLoadNavigation = resultNavigation.capture());
+        exhaustivePersistence.onLoadStarted(() -> exhaustiveLoadNavigation = resultNavigation.capture());
+        socialSecurityPersistence.onLoadStarted(() -> socialSecurityLoadNavigation = resultNavigation.capture());
         observe(mortalityDate.getEditor().textProperty(), () -> { WeightedResultPersistence.dateEdited(mortalityDate); weightedPersistence.reassess(); socialSecurityPersistence.reassess(); });
         observe(pvDate.getEditor().textProperty(), () -> { WeightedResultPersistence.dateEdited(pvDate); weightedPersistence.reassess(); socialSecurityPersistence.reassess(); });
         attachCoupleParameters(source);
         socialSecurityPersistence.load();
+    }
+    private AnalysisFingerprintService.Inputs quickInputs() {
+        if (presentation == null || !socialSecurityResultCurrent) throw new IllegalArgumentException("A compatible SS prerequisite is required for a new Quick run.");
+        var selected = new IntegratedSocialSecurityCandidateSelector().select(presentation.rankedStrategies(), integratedCandidateCount.getValue());
+        String prerequisite = new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_SOCIAL_SECURITY, plan, socialSecurityInputs());
+        return new AnalysisFingerprintService.Inputs(null, null, null, null, null, integratedCandidateCount.getValue(), prerequisite,
+                selected.stream().map(row -> new AnalysisFingerprintService.Candidate(WeightedSnapshots.Strategy.from(row.cell().strategy()), row.rank(), row.cell().expectedValue())).toList(), List.of(), null);
     }
 
     private boolean applyingParameters() { return parameterBindings.values().stream().anyMatch(SocialSecurityParameterBinding::applying); }
@@ -377,6 +426,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
     private void acceptParameters(AnalysisKind kind, SocialSecurityParameterBinding.Run run) {
         if (run != null) parameterBindings.get(kind).accept(run);
+    }
+    private com.daviddunn.retirementplanner.app.projection.AnalyzerAdmission associationFor(AnalysisKind kind,
+            SocialSecurityParameterBinding.Run run, com.daviddunn.retirementplanner.app.projection.AnalyzerAdmission admission) {
+        return run != null && parameterBindings.get(kind).editEpoch() == run.edit() ? admission : null;
     }
     private void rollbackParameters(AnalysisKind kind, SocialSecurityParameterBinding.Run run) {
         if (run != null) parameterBindings.get(kind).rollback(run);
@@ -462,7 +515,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
     private void refreshExhaustiveResultStatus() {
         if (exhaustivePresentation != null && exhaustivePersistence != null)
-            exhaustiveStale.setText(exhaustivePersistence.current() ? "" : WeightedResultPersistence.OUTDATED);
+            exhaustiveStale.setText(exhaustivePersistence.warning());
         refreshExportActions();
     }
     private AnalysisFingerprintService.Inputs socialSecurityInputs() {
@@ -473,9 +526,12 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
     private void refreshSocialSecurityResultStatus() {
         socialSecurityResultCurrent = presentation != null && socialSecurityPersistence != null && socialSecurityPersistence.current();
-        if (presentation != null) stale.setText(socialSecurityResultCurrent ? "" : WeightedResultPersistence.OUTDATED);
+        if (presentation != null) stale.setText(socialSecurityPersistence == null
+                ? "Assessing completed result inputs…" : socialSecurityPersistence.warning());
         refreshQuickPrerequisite();
         integratedRunButton.setDisable(jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE || !socialSecurityResultCurrent);
+        if (quickPersistence != null) quickPersistence.reassess();
+        refreshExportActions();
     }
     private AnalysisFingerprintService.Inputs weightedInputs() {
         var baseline = baselineInputs.snapshot();
@@ -487,7 +543,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
     private void refreshWeightedResultStatus() {
         if (weightedPersistence != null && weightedPersistence.exportable()) {
-            weightedView.stale.setText(weightedPersistence.current() ? "" : WeightedResultPersistence.OUTDATED);
+            weightedView.stale.setText(weightedPersistence.warning());
         }
         refreshExportActions();
     }
@@ -504,6 +560,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         exhaustiveCancelButton.setManaged(false);
         runButton.setOnAction(event -> runAnalysis());
         integratedRunButton.setOnAction(event -> runIntegratedAnalysis());
+        socialSecurityExportPdf.setId("couple-ss-export-pdf");
+        quickExportPdf.setId("couple-quick-export-pdf");
+        socialSecurityExportPdf.setOnAction(event -> exportAdditionalPdf(true));
+        quickExportPdf.setOnAction(event -> exportAdditionalPdf(false));
         exhaustiveRunButton.setOnAction(event -> runExhaustiveSearch());
         weightedView.run.setOnAction(event -> runWeightedAnalysis());
         deterministicExportPdf.setDisable(true);
@@ -523,6 +583,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         observe(integratedCandidateCount.valueProperty(), () -> {
             jobs.invalidate(SocialSecurityAnalyzerJobController.Change.QUICK_CANDIDATES);
             markIntegratedStale("Candidate count changed - run integrated analysis again.");
+            if (quickPersistence != null) quickPersistence.reassess();
         });
 
         inputSection.setExpanded(false);
@@ -549,6 +610,14 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 new AnalyzerNavigationView.Choice(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
                         "Longevity-Weighted Search", "Rank expected PV after-tax investable estate across modeled lifetimes.", weightedView)));
         navigation.onSelected(mode -> refreshContextualInputs());
+        navigation.onNavigation(resultNavigation::navigated);
+        resultNavigation.watch(socialSecurityTabs);
+        resultNavigation.watch(deterministicResultTabs);
+        resultNavigation.watch(weightedView.resultTabs);
+        // Register after the epoch listeners; capture the epoch belonging to this selection.
+        ((IntegratedAnalysisResultTabs) socialSecurityTabs).onReveal(resultNavigation::revealGuard);
+        ((IntegratedAnalysisResultTabs) deterministicResultTabs).onReveal(resultNavigation::revealGuard);
+        ((IntegratedAnalysisResultTabs) weightedView.resultTabs).onReveal(resultNavigation::revealGuard);
         VBox activeExecution = new VBox(4, AnalyzerConfigurationLayout.flow(sharedCancel, sharedStatus), sharedProgress);
         activeExecution.managedProperty().bind(sharedCancel.managedProperty());
         activeExecution.visibleProperty().bind(activeExecution.managedProperty());
@@ -573,19 +642,29 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         assumptions.setEditable(false);
         assumptions.setWrapText(true);
 
-        ScrollPane gridScroll = new ScrollPane(new VBox(10, claimingGrid, gridDetails));
-        gridScroll.setFitToWidth(true);
+        gridDetails.setWrapText(true);
+        gridDetails.setId("ss-grid-details");
+        gridDetails.getStyleClass().add("heat-map-details");
+        var gridContent = new VBox(8, ClaimingAgeGridView.label("Stage 1 Expected Social Security Present Value"),
+                ClaimingAgeGridView.legend("★ Exact Stage 1 optimum   ▶ Retained for Stage 2"), claimingGrid.withDetails(gridDetails));
+        gridContent.getStyleClass().add("claiming-heat-map");
+        gridContent.setStyle(com.daviddunn.retirementplanner.util.ClaimingHeatMapPalette.cssVariables());
+        gridContent.getStylesheets().add(java.util.Objects.requireNonNull(getClass().getResource("/css/claiming-strategy-heat-map.css")).toExternalForm());
+        gridContent.setMinWidth(0);
+        gridContent.setMinHeight(Region.USE_PREF_SIZE);
         VBox strategyBox = new VBox(10, strategies, strategyDetails);
         VBox.setVgrow(strategies, Priority.ALWAYS);
-        TabPane socialSecurityTabs = new TabPane(
+        socialSecurityGridTab = tab("Claiming Grid", gridContent);
+        socialSecurityTabs = new IntegratedAnalysisResultTabs(
                 tab("Recommendation", new ScrollPane(recommendation)),
-                tab("Claiming Grid", gridScroll),
+                socialSecurityGridTab,
                 tab("Top Strategies", strategyBox),
                 tab("Assumptions", assumptions));
         VBox content = new VBox(8,
                 AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"),
                 AnalyzerConfigurationLayout.flow(runButton, socialSecurityCancelButton), status, socialSecurityProgress, stale,
                 AnalyzerConfigurationLayout.heading("Completed Results"),
+                AnalyzerConfigurationLayout.flow(socialSecurityExportPdf, socialSecurityPdfNotice),
                 wrappedLabel("Completed Result Assumptions are retained in the result-time Assumptions tab; next-run edits do not rewrite them."), socialSecurityTabs);
         status.setWrapText(true);
         content.setPadding(new Insets(12));
@@ -655,9 +734,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 candidates, AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"),
                 actions, integratedStatus, integratedProgress, integratedStale,
                 AnalyzerConfigurationLayout.heading("Completed Results"),
+                AnalyzerConfigurationLayout.flow(quickExportPdf, quickPdfNotice),
                 explanation, details, tableBox, heading("Methodology and Assumptions"), integratedMethodology);
         content.setPadding(new Insets(12));
         VBox.setVgrow(tableBox, Priority.ALWAYS);
+        quickWorkspace = content;
         return content;
     }
 
@@ -733,7 +814,21 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 AnalyzerConfigurationLayout.field(new Label("Real discount rate (%):"), discountRate)), help);
     }
 
+    private void displayResult(AnalysisKind kind, Object identity, ResultNavigationGuard.Ticket ticket) {
+        var mode = switch (kind) {
+            case COUPLE_SOCIAL_SECURITY -> SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY;
+            case COUPLE_EXHAUSTIVE -> SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE;
+            case COUPLE_WEIGHTED -> SocialSecurityAnalyzerJobController.Mode.WEIGHTED;
+            default -> throw new IllegalArgumentException("No automatic result navigation for this analysis.");
+        };
+        TabPane tabs = kind == AnalysisKind.COUPLE_SOCIAL_SECURITY ? socialSecurityTabs
+                : kind == AnalysisKind.COUPLE_EXHAUSTIVE ? deterministicResultTabs : weightedView.resultTabs;
+        Tab target = kind == AnalysisKind.COUPLE_SOCIAL_SECURITY ? socialSecurityGridTab
+                : kind == AnalysisKind.COUPLE_EXHAUSTIVE ? deterministicHeatMapTab : weightedView.heatMapTab;
+        resultNavigation.display(kind, identity, ticket, tabs, target, () -> navigation.selected().mode() == mode);
+    }
     private void runAnalysis() {
+        var navigationTicket = resultNavigation.capture();
         try {
             BigDecimal rate = new BigDecimal(discountRate.getText().trim())
                     .movePointLeft(2);
@@ -753,9 +848,13 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             var context = acceptedSsTop == originalRequest.settings().topRetirementCandidates() ? preparedContext
                     : withOptimizationSettings(preparedContext, acceptedSsTop);
             var parameterRun = parameterRun(AnalysisKind.COUPLE_SOCIAL_SECURITY, SocialSecurityParameterMapping.socialSecurity(context));
+            var association = analysisSource == null ? null : analysisSource.prepareAnalyzerAssociation(AnalysisKind.COUPLE_SOCIAL_SECURITY, new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_SOCIAL_SECURITY, plan, socialSecurityInputs()));
             var completedPlanId = analysisSource == null ? null : analysisSource.getAnalysisSessionId();
             var completedFile = analysisSource != null && analysisSource.canPersistAnalysisResults() ? analysisSource.getCurrentFile() : null;
             var started = java.time.Instant.now();
+            var reportHousehold = plan.getHousehold().getHouseholdName();
+            var reportOwner = reportBinding();
+            var reportRunId = association == null ? java.util.UUID.randomUUID() : association.ticket();
             var fingerprints = new AnalysisFingerprintService();
             var inputFingerprint = socialSecurityPersistence == null ? null : fingerprints.fingerprint(AnalysisKind.COUPLE_SOCIAL_SECURITY, plan, socialSecurityInputs());
             var contextFingerprint = socialSecurityPersistence == null ? null : fingerprints.effectiveContextFingerprint(AnalysisKind.COUPLE_SOCIAL_SECURITY, plan);
@@ -767,6 +866,14 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     }, run -> {
                 presentation = SocialSecurityStrategyAnalyzerPresentation.from(run.result());
                 render(run.context(), presentation);
+                var completed = java.time.Instant.now();
+                if (AnalysisSuccessPolicy.accepted(run.result())) {
+                    socialSecurityReport = new SocialSecurityReportSession(completedPlanId, reportRunId, reportHousehold, true,
+                            run.context(), presentation, started, completed);
+                    socialSecurityReportBinding = reportOwner;
+                }
+                if (AnalysisSuccessPolicy.accepted(run.result()))
+                    displayResult(AnalysisKind.COUPLE_SOCIAL_SECURITY, run.result(), navigationTicket);
                 socialSecurityResultCurrent = true;
                 jobs.invalidate(SocialSecurityAnalyzerJobController.Change.SOCIAL_SECURITY_RESULT);
                 refreshExhaustiveSocialSecurityReference();
@@ -782,14 +889,16 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         int occurrence = run.result().evaluatedStrategies().indexOf(selected.cell());
                         if (occurrence >= 0) preferences.put("occurrence", Integer.toString(occurrence + 1));
                     }
-                    var frozen = new SnapshotContext("Couple", context.primaryName(), context.spouseName(), started,
+                    var frozen = new SnapshotContext(reportHousehold, context.primaryName(), context.spouseName(), started,
                             List.of(new SnapshotContext.Section("Original analysis assumptions", List.of(assumptionText(context, run.result())))),
-                            List.of(), List.of(), preferences);
+                            List.of(new SnapshotContext.Section(SocialSecurityReportSession.HOUSEHOLD_SOURCE, List.of(reportHousehold))), List.of(), preferences);
                     socialSecurityPersistence.accept(new AcceptedAnalysisCompletion(completedPlanId, completedFile,
-                            AnalysisKind.COUPLE_SOCIAL_SECURITY, java.util.UUID.randomUUID(), java.time.Instant.now(),
+                            AnalysisKind.COUPLE_SOCIAL_SECURITY, reportRunId, completed,
                             inputFingerprint, contextFingerprint, AnalysisVersions.algorithms(AnalysisKind.COUPLE_SOCIAL_SECURITY), java.util.Map.of(),
-                            CoupleSocialSecuritySnapshotMapper.capture(context, run.result()), frozen));
+                            CoupleSocialSecuritySnapshotMapper.capture(context, run.result()), frozen)
+                            .associatedWith(associationFor(AnalysisKind.COUPLE_SOCIAL_SECURITY, parameterRun, association)));
                 }
+                refreshExportActions();
             }, this::showError, () -> rollbackParameters(AnalysisKind.COUPLE_SOCIAL_SECURITY, parameterRun));
             if (!accepted) {
                 status.setText("Another Social Security analysis is running or cleaning up.");
@@ -826,36 +935,23 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void renderGrid(SocialSecurityStrategyAnalyzerPresentation model) {
-        claimingGrid.getChildren().clear();
-        claimingGrid.setHgap(6);
-        claimingGrid.setVgap(6);
-        claimingGrid.add(new Label("Primary \\ Spouse"), 0, 0);
-        List<Integer> spouseAges = model.result().retirementGrid().spouseClaimAges();
-        for (int column = 0; column < spouseAges.size(); column++) {
-            claimingGrid.add(new Label("Age " + spouseAges.get(column)), column + 1, 0);
-        }
-        List<Integer> primaryAges = model.result().retirementGrid().primaryClaimAges();
-        for (int row = 0; row < primaryAges.size(); row++) {
-            int primaryAge = primaryAges.get(row);
-            claimingGrid.add(new Label("Age " + primaryAge), 0, row + 1);
-            for (int column = 0; column < spouseAges.size(); column++) {
-                int spouseAge = spouseAges.get(column);
-                SocialSecurityMortalityWeightedClaimingGridCell cell = model.result()
-                        .retirementGrid().cellFor(primaryAge, spouseAge).orElseThrow();
-                Button button = new Button(money(cell.expectedPresentValue()));
-                boolean retained = model.advancedToStageTwo(primaryAge, spouseAge);
-                boolean highest = model.result().retirementGrid()
-                        .highestExpectedPresentValue().highestCells().contains(cell);
-                button.setText((highest ? "★ " : retained ? "▶ " : "") + button.getText());
-                button.setTooltip(new Tooltip(
-                        "Expected PV; ★ highest Stage 1, ▶ advanced to Stage 2"));
-                button.setOnAction(event -> gridDetails.setText(
-                        gridDetail(model, cell, retained)));
-                claimingGrid.add(button, column + 1, row + 1);
-            }
-        }
+        var previous = claimingGridIdentity == model.result() ? claimingGrid.selectedPair() : null;
+        claimingGridIdentity = model.result();
+        var grid = SocialSecurityClaimingGridAdapter.from(model);
+        claimingGrid.render(grid.primaryAges(), grid.spouseAges(), grid.cells().stream()
+                .map(SocialSecurityClaimingGridAdapter.Cell::display).toList(), "ss-claiming-grid-", pair -> {
+            var cell = grid.cells().stream().filter(value -> value.pair().equals(pair)).findFirst().orElseThrow();
+            gridDetails.setText(cell.display().description() + "\n\nStage 1 retirement-age optimization\n"
+                    + gridDetail(model, cell.source(), cell.retained())
+                    + "\n\nStage 2 evaluates complete survivor-election strategies separately. The Stage 1 optimum is not necessarily the highest Stage 2 strategy.");
+        });
+        var initial = previous != null && claimingGrid.contains(previous) ? previous : model.result().retirementGrid()
+                .highestExpectedPresentValue().highestCells().stream()
+                .map(cell -> new ClaimingAgeGridView.Pair(cell.primaryClaimAge(), cell.spouseClaimAge()))
+                .filter(claimingGrid::contains).findFirst()
+                .or(() -> grid.cells().stream().map(SocialSecurityClaimingGridAdapter.Cell::pair).findFirst()).orElse(null);
+        if (initial != null) claimingGrid.select(initial);
     }
-
     private String gridDetail(
             SocialSecurityStrategyAnalyzerPresentation model,
             SocialSecurityMortalityWeightedClaimingGridCell cell,
@@ -885,6 +981,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         "No complete Social Security strategies are available for integrated analysis.");
             }
             var input = SocialSecurityAnalyzerInputs.quick(plan, selected);
+            var association = analysisSource == null ? null : analysisSource.prepareAnalyzerAssociation(AnalysisKind.COUPLE_QUICK, new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_QUICK, input.plan(), quickInputs()));
             var prerequisite = new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_SOCIAL_SECURITY, plan, socialSecurityInputs());
             var quickParameters = new AnalysisParameterConfiguration.Quick(integratedCandidateCount.getValue(), prerequisite);
             var candidateInputs = new AnalysisFingerprintService.Inputs(null, null, null, null, null, quickParameters.candidateCount(), prerequisite,
@@ -893,14 +990,51 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             var parameterRun = parameterBindings.containsKey(AnalysisKind.COUPLE_QUICK)
                     ? parameterBindings.get(AnalysisKind.COUPLE_QUICK).begin(quickParameters, java.util.Map.of("candidateBasisFingerprint",
                             new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_QUICK, input.plan(), candidateInputs))) : null;
+            var reportOwner = reportBinding();
+            var inputFingerprint = new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_QUICK, input.plan(), candidateInputs);
+            var contextFingerprint = new AnalysisFingerprintService().effectiveContextFingerprint(AnalysisKind.COUPLE_QUICK, input.plan());
+            var preparedReport = socialSecurityReport == null || socialSecurityReport.presentation().result() != presentation.result() ? null
+                    : new QuickReportSession.Prepared(analysisSource == null ? null : analysisSource.getAnalysisSessionId(), association == null ? java.util.UUID.randomUUID() : association.ticket(),
+                            captureReportContext(false), prerequisite, socialSecurityReport.runId(), integratedCandidateCount.getValue(),
+                            selected.stream().map(row -> new QuickReportSession.Candidate(row.rank(), row.cell().strategy(), row.cell().expectedValue())).toList(),
+                            List.of(new com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport.Section("Original SS Prerequisite Assumptions", List.of(
+                                    "Original SS participants: " + socialSecurityReport.context().primaryName() + " / " + socialSecurityReport.context().spouseName(),
+                                    assumptionText(socialSecurityReport.context(), socialSecurityReport.presentation().result())))));
+            var completedQuick = new java.util.concurrent.atomic.AtomicReference<AcceptedAnalysisCompletion>();
+            var capturedId = analysisSource == null ? null : analysisSource.getAnalysisSessionId();
+            var capturedFile = analysisSource != null && analysisSource.canPersistAnalysisResults() ? analysisSource.getCurrentFile() : null;
+            var calculation = quickCalculation.apply(input);
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.QUICK,
-                    quickCalculation.apply(input), model -> {
+                    (progress, cancellation) -> {
+                        var model = calculation.run(progress, cancellation); cancellation.throwIfCancellationRequested();
+                        if (preparedReport != null && capturedId != null && AnalysisSuccessPolicy.accepted(model.comparison())) {
+                            var report = QuickReportSession.accepted(preparedReport, model, java.time.Instant.now());
+                            completedQuick.set(new AcceptedAnalysisCompletion(capturedId, capturedFile, AnalysisKind.COUPLE_QUICK,
+                                    preparedReport.runId(), report.completed(), inputFingerprint, contextFingerprint,
+                                    AnalysisVersions.algorithms(AnalysisKind.COUPLE_QUICK), AnalysisVersions.references(AnalysisKind.COUPLE_QUICK),
+                                    QuickSnapshotAdapter.capture(model, report), QuickSnapshotAdapter.context(report)));
+                        }
+                        return model;
+                    }, model -> {
+                if (!AnalysisSuccessPolicy.accepted(model.comparison())) {
+                    rollbackParameters(AnalysisKind.COUPLE_QUICK, parameterRun);
+                    integratedStatus.setText("No successful candidates. Previous accepted comparison and report retained.");
+                    return;
+                }
                 integratedPresentation = model;
+                quickWasRestored = false;
+                quickReport = preparedReport == null ? null : QuickReportSession.accepted(preparedReport, model,
+                        completedQuick.get() == null ? java.time.Instant.now() : completedQuick.get().completedAt());
+                quickReportBinding = reportOwner;
+                if (quickPersistence != null && quickReport != null) {
+                    quickPersistence.accept(completedQuick.get().associatedWith(associationFor(AnalysisKind.COUPLE_QUICK, parameterRun, association)));
+                }
                 renderIntegrated(model);
                 integratedStale.setText("");
                 integratedStatus.setText(integratedCompletionText(model));
                 if (AnalysisSuccessPolicy.accepted(model.comparison())) acceptParameters(AnalysisKind.COUPLE_QUICK, parameterRun);
                 else rollbackParameters(AnalysisKind.COUPLE_QUICK, parameterRun);
+                refreshExportActions();
             }, this::showError, () -> rollbackParameters(AnalysisKind.COUPLE_QUICK, parameterRun));
             if (!accepted) {
                 integratedStatus.setText("Another Social Security analysis is running or cleaning up.");
@@ -911,6 +1045,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void runWeightedAnalysis() {
+        var navigationTicket = resultNavigation.capture();
         try {
             var factory = new LongevityWeightedAnalysisRequestFactory();
             var snapshot = factory.capture(plan,
@@ -931,6 +1066,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     .map(e -> new SnapshotContext.Section(e.name(), List.of(e.value(), e.source()))).toList(), null);
             var inputFingerprint = weightedPersistence == null ? null : fingerprints.fingerprint(AnalysisKind.COUPLE_WEIGHTED, plan, capturedInputs);
             var contextFingerprint = weightedPersistence == null ? null : fingerprints.effectiveContextFingerprint(AnalysisKind.COUPLE_WEIGHTED, plan);
+            var association = analysisSource == null ? null : analysisSource.prepareAnalyzerAssociation(AnalysisKind.COUPLE_WEIGHTED, inputFingerprint);
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
                     (progress, cancellation) -> weightedCalculation.apply(factory.create(snapshot, progress, cancellation)), result -> {
                         if (!AnalysisSuccessPolicy.accepted(result)) {
@@ -946,6 +1082,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         historicalWeightedComparison = null;
                         historicalWeightedRanks = null;
                         weightedView.render(weightedPresentation, snapshot.baseline);
+                        displayResult(AnalysisKind.COUPLE_WEIGHTED, result, navigationTicket);
                         weightedView.resultTabs.setVisible(true);
                         weightedView.resultTabs.setManaged(true);
                         refreshWeightedComparison();
@@ -980,9 +1117,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                             weightedView.historicalRanks(historicalWeightedRanks);
                             try {
                                 weightedPersistence.accept(new AcceptedAnalysisCompletion(completedPlanId, completedFile, AnalysisKind.COUPLE_WEIGHTED,
-                                        java.util.UUID.randomUUID(), java.time.Instant.now(), inputFingerprint, contextFingerprint,
+                                        association == null ? java.util.UUID.randomUUID() : association.ticket(), java.time.Instant.now(), inputFingerprint, contextFingerprint,
                                         AnalysisVersions.algorithms(AnalysisKind.COUPLE_WEIGHTED), java.util.Map.of(),
-                                        new WeightedSnapshots.Payload(WeightedSnapshots.Couple.from(result), null), context));
+                                        new WeightedSnapshots.Payload(WeightedSnapshots.Couple.from(result), null), context)
+                                        .associatedWith(associationFor(AnalysisKind.COUPLE_WEIGHTED, parameterRun, association)));
                             } catch (RuntimeException saving) {
                                 weightedView.status.setText("Analysis completed, but result saving could not start. Previous saved results were retained.");
                             }
@@ -1016,6 +1154,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void runExhaustiveSearch() {
+        var navigationTicket = resultNavigation.capture();
         try {
             var standard = SocialSecurityAnalyzerInputs.exhaustive(plan);
             var request = acceptedExhaustiveProfile == null ? standard : new IntegratedSocialSecurityCompleteStrategySearchRequest(
@@ -1023,6 +1162,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     standard.spouseSurvivorCandidates(), com.daviddunn.retirementplanner.app.socialsecurity.IntegratedStrategyRankingMeasure.valueOf(acceptedExhaustiveProfile.rankingMeasure()),
                     acceptedExhaustiveProfile.retainedDetails());
             var parameterRun = parameterRun(AnalysisKind.COUPLE_EXHAUSTIVE, SocialSecurityParameterMapping.search(request));
+            var association = analysisSource == null ? null : analysisSource.prepareAnalyzerAssociation(AnalysisKind.COUPLE_EXHAUSTIVE, new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan(), AnalysisFingerprintService.Inputs.none()));
             long capturedRevision = planRevision;
             var reportContext = captureReportContext(false);
             var planId = analysisSource == null ? null : analysisSource.getAnalysisSessionId();
@@ -1052,7 +1192,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                                             .map(s -> new SnapshotContext.Section(s.title(), s.lines())).toList(), List.of(), List.of(), java.util.Map.of());
                             var fingerprints = new AnalysisFingerprintService();
                             completion = new AcceptedAnalysisCompletion(planId, file, AnalysisKind.COUPLE_EXHAUSTIVE,
-                                    java.util.UUID.randomUUID(), completed,
+                                    association == null ? java.util.UUID.randomUUID() : association.ticket(), completed,
                                     fingerprints.fingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan(), AnalysisFingerprintService.Inputs.none()),
                                     fingerprints.effectiveContextFingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan()),
                                     AnalysisVersions.algorithms(AnalysisKind.COUPLE_EXHAUSTIVE), AnalysisVersions.references(AnalysisKind.COUPLE_EXHAUSTIVE),
@@ -1073,7 +1213,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 deterministicReportContext = reportContext;
                 historicalExhaustiveReference = run.payload() == null ? null : run.payload().socialSecurityReference();
                 renderExhaustive(model);
-                if (run.completion() != null) exhaustivePersistence.accept(run.completion());
+                displayResult(AnalysisKind.COUPLE_EXHAUSTIVE, model.result(), navigationTicket);
+                if (run.completion() != null) exhaustivePersistence.accept(run.completion()
+                        .associatedWith(associationFor(AnalysisKind.COUPLE_EXHAUSTIVE, parameterRun, association)));
                 refreshWeightedComparison();
                 exhaustiveStale.setText("");
                 exhaustiveStatus.setText("Exhaustive integrated search complete - "
@@ -1226,14 +1368,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private String socialSecurityCrossReference(ExhaustiveIntegratedSearchPresentation model) {
-        if (historicalExhaustiveReference != null) {
-            var reference = historicalExhaustiveReference;
-            if (reference.status() != ExhaustiveSnapshot.ReferenceStatus.AVAILABLE)
-                return "Original SS-only recommendation cross-reference: " + reference.explanation();
-            return "Original SS-only recommendation cross-reference: Expected PV " + money(reference.expectedPresentValue())
-                    + ", deterministic after-tax estate " + money(reference.estate()) + ", estate rank " + reference.rank()
-                    + ", gap from highest tested " + signedMoney(reference.gapFromHighest()) + ".";
-        }
+        if (historicalExhaustiveReference != null) return ExhaustiveResultSnapshots.crossReferenceText(historicalExhaustiveReference);
         if (presentation == null || !socialSecurityResultCurrent
                 || presentation.rankedStrategies().isEmpty()) {
             return "SS-only recommendation cross-reference: run current SS-only analysis first.";
@@ -1512,7 +1647,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         return text + ".";
     }
 
-    private String assumptionText(
+    static String assumptionText(
             SocialSecurityStrategyAnalysisContext context,
             SocialSecuritySurvivorClaimingOptimizationResult result) {
         SocialSecurityMortalityTableMetadata metadata = context.mortalityMetadata();
@@ -1591,6 +1726,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         if (integratedPresentation != null) {
             integratedStale.setText(message);
         }
+        refreshExportActions();
     }
 
     private void refreshExhaustiveSocialSecurityReference() {
@@ -1670,6 +1806,119 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private void refreshExportActions() {
         deterministicExportPdf.setDisable(!canExportPdf(false));
         weightedView.exportPdf.setDisable(!canExportPdf(true));
+        socialSecurityExportPdf.setDisable(!canExportAdditionalPdf(true));
+        quickExportPdf.setDisable(!canExportAdditionalPdf(false));
+        socialSecurityPdfNotice.setText(additionalPdfExplanation(true));
+        quickPdfNotice.setText(additionalPdfExplanation(false));
+    }
+
+    private Object reportBinding() {
+        return analysisSource == null ? plan : java.util.List.of(analysisSource.getCurrentPlan(), analysisSource.getAnalysisSessionId());
+    }
+
+    private boolean canExportAdditionalPdf(boolean socialSecurity) {
+        if (disposed || exportBusy || jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE) return false;
+        if (socialSecurity) {
+            if (socialSecurityReport == null || !java.util.Objects.equals(socialSecurityReportBinding, reportBinding())) return false;
+            var assessment = socialSecurityPersistence == null ? null : socialSecurityPersistence.reportAssessment();
+            return assessment == null || assessment.state() != AnalysisCompatibilityPolicy.State.INCOMPATIBLE_OR_UNAVAILABLE;
+        }
+        return quickReport != null && java.util.Objects.equals(quickReportBinding, reportBinding())
+                && (quickPersistence == null || quickPersistence.reportAssessment() == null
+                || quickPersistence.reportAssessment().state() != AnalysisCompatibilityPolicy.State.INCOMPATIBLE_OR_UNAVAILABLE);
+    }
+
+    private String resultDurability() {
+        if (socialSecurityReport == null) return "No safely captured completed report.";
+        if (analysisSource == null || !analysisSource.canPersistAnalysisResults()) return "Memory Only — completed results are not durably saved.";
+        var saved = analysisSource.getAnalysisResults().status(new AnalysisResultStore.Slot(socialSecurityReport.planId(), AnalysisKind.COUPLE_SOCIAL_SECURITY));
+        if (saved.isPresent()) return switch (saved.get().durability()) {
+            case PENDING -> "Pending — completed result storage has not committed yet.";
+            case SAVE_FAILED -> "Save Failed — the visible result remains in memory; previous durable results were retained.";
+            case MEMORY_ONLY -> "Memory Only — completed results are not durably saved.";
+            case SAVED -> "Saved — result storage committed successfully.";
+        };
+        return socialSecurityPersistence != null && socialSecurityPersistence.resultMetadata() != null
+                ? "Saved historical snapshot — original completion data retained." : "Memory Only — no durable commit is confirmed.";
+    }
+
+    private String additionalPdfExplanation(boolean socialSecurity) {
+        if (disposed) return "Report unavailable: this analyzer is closed.";
+        if (socialSecurity ? socialSecurityReport == null : quickReport == null)
+            return "PDF unavailable: no completed result with safe original report context is available.";
+        if (!java.util.Objects.equals(socialSecurity ? socialSecurityReportBinding : quickReportBinding, reportBinding()))
+            return "PDF unavailable: the completed result belongs to another plan/view binding.";
+        if (exportBusy || jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE) return "Export is unavailable while analysis or PDF export is active. Previous results are retained.";
+        if (!canExportAdditionalPdf(socialSecurity)) return "PDF unavailable: historical result is incompatible or unavailable.";
+        return socialSecurity ? "Export frozen completed results. " + resultDurability()
+                : "Export frozen comparison, including Outdated results. " + quickDurability();
+    }
+    private String quickDurability() {
+        if (analysisSource == null || quickReport == null) return "Memory Only — result storage is unavailable.";
+        return analysisSource.getAnalysisResults().status(new AnalysisResultStore.Slot(analysisSource.getAnalysisSessionId(), AnalysisKind.COUPLE_QUICK))
+                .map(s -> "Quick last-success storage: " + s.durability().name().replace('_', ' '))
+                .orElse(quickWasRestored ? "Saved historical Quick result." : "Memory Only — no durable commit confirmed.");
+    }
+
+    /** FX capture is small: immutable session, status strings and the selected age pair. Pure formatting runs on the export worker. */
+    private java.util.function.Supplier<com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport> prepareAdditionalPdf(boolean socialSecurity) {
+        if (!canExportAdditionalPdf(socialSecurity)) throw new IllegalStateException(additionalPdfExplanation(socialSecurity));
+        var exported = java.time.Instant.now();
+        if (!socialSecurity) {
+            var frozen = quickReport;
+            var freshness = quickPersistence == null
+                    ? new AnalysisResultFreshness(null, AnalysisResultFreshness.Association.UNRECORDED)
+                    : quickPersistence.freshness();
+            String durability = quickDurability();
+            return () -> QuickComparisonReportAdapter.capture(frozen, freshness, exported, durability);
+        }
+        var frozen = socialSecurityReport;
+        var selection = claimingGrid.selectedPair();
+        String currency = socialSecurityPersistence != null ? socialSecurityPersistence.freshness().status()
+                : socialSecurityResultCurrent ? "Current Results — financial compatibility only; association not assessed."
+                : AnalysisPdfData.OUTDATED;
+        var status = new java.util.ArrayList<String>(List.of(currency, resultDurability()));
+        if (socialSecurityPersistence != null) status.addAll(socialSecurityPersistence.provenance());
+        var capturedStatus = List.copyOf(status);
+        return () -> SocialSecurityOnlyReportAdapter.capture(frozen, selection, capturedStatus, exported);
+    }
+
+    private void exportAdditionalPdf(boolean socialSecurity) {
+        if (!canExportAdditionalPdf(socialSecurity)) return;
+        var chooser = new javafx.stage.FileChooser(); chooser.setTitle(socialSecurity ? "Export Social Security Only PDF" : "Export Quick Comparison PDF");
+        chooser.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
+        chooser.setInitialFileName(socialSecurity ? "Social-Security-Only-Analysis.pdf" : "Social-Security-Quick-Comparison.pdf");
+        var chosen = chooser.showSaveDialog(stage);
+        if (chosen == null || !canExportAdditionalPdf(socialSecurity)) return;
+        java.nio.file.Path destination = chosen.toPath();
+        if (!chosen.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) {
+            destination = java.nio.file.Path.of(destination + ".pdf");
+            if (java.nio.file.Files.exists(destination)) {
+                var confirm = new Alert(Alert.AlertType.CONFIRMATION, "Replace existing file " + destination.getFileName() + "?", ButtonType.YES, ButtonType.NO);
+                confirm.initOwner(stage);
+                if (confirm.showAndWait().orElse(ButtonType.NO) != ButtonType.YES) return;
+            }
+        }
+        if (!canExportAdditionalPdf(socialSecurity)) return;
+        try {
+            var capture = prepareAdditionalPdf(socialSecurity);
+            var binding = reportBinding(); var accepted = socialSecurity ? (Object) socialSecurityReport : quickReport;
+            var target = destination;
+            exportBusy = true; refreshExportActions();
+            var task = new javafx.concurrent.Task<Void>() {
+                @Override protected Void call() throws Exception {
+                    new com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerPdfExporter().export(capture.get(), target); return null;
+                }
+            };
+            java.util.function.BooleanSupplier stillOwned = () -> !disposed && stage.isShowing() && java.util.Objects.equals(binding, reportBinding())
+                    && accepted == (socialSecurity ? socialSecurityReport : quickReport);
+            task.setOnSucceeded(event -> {
+                exportBusy = false; refreshExportActions();
+                if (stillOwned.getAsBoolean()) { var alert = new Alert(Alert.AlertType.INFORMATION, "Analysis report saved to " + target); alert.initOwner(stage); alert.show(); }
+            });
+            task.setOnFailed(event -> { exportBusy = false; refreshExportActions(); if (stillOwned.getAsBoolean()) showPdfError(task.getException()); });
+            Thread.ofVirtual().name("completed-social-security-pdf").start(task);
+        } catch (RuntimeException failure) { exportBusy = false; refreshExportActions(); if (!disposed) showPdfError(failure); }
     }
 
     private com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport capturePdfReport(boolean weighted) {
@@ -1765,6 +2014,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         var mode = navigation.selected().mode();
         if (exhaustivePersistence != null && mode == SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE) exhaustivePersistence.load();
         if (weightedPersistence != null && mode == SocialSecurityAnalyzerJobController.Mode.WEIGHTED) weightedPersistence.load();
+        if (quickPersistence != null && mode == SocialSecurityAnalyzerJobController.Mode.QUICK) quickPersistence.load();
         if (socialSecurityPersistence != null && (mode == SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY
                 || mode == SocialSecurityAnalyzerJobController.Mode.QUICK)) socialSecurityPersistence.load();
         boolean longevity = mode == SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY
@@ -1811,6 +2061,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         if (exhaustivePersistence != null && jobs.mode() == SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE
                 && state == SocialSecurityAnalyzerJobController.State.IDLE)
             javafx.application.Platform.runLater(exhaustivePersistence::finishReplacement);
+        if (quickPersistence != null && jobs.mode() == SocialSecurityAnalyzerJobController.Mode.QUICK
+                && state == SocialSecurityAnalyzerJobController.State.IDLE)
+            javafx.application.Platform.runLater(quickPersistence::finishReplacement);
         boolean busy = state != SocialSecurityAnalyzerJobController.State.IDLE;
         navigation.showActivity(busy ? jobs.mode() : null, jobs.status());
         setAnalysisBusy(busy);
@@ -1859,11 +2112,14 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void close() {
+        disposed = true;
+        resultNavigation.close();
         parameterBindings.values().forEach(SocialSecurityParameterBinding::close);
         if (singlePersonView != null) singlePersonView.closeParameters();
         if (exhaustivePersistence != null) exhaustivePersistence.close();
         if (weightedPersistence != null) weightedPersistence.close();
         if (socialSecurityPersistence != null) socialSecurityPersistence.close();
+        if (quickPersistence != null) quickPersistence.close();
         if (singlePersonView != null && singlePersonView.weightedView.persistence != null) singlePersonView.weightedView.persistence.close();
         jobs.close();
         detachPlanListener.run();

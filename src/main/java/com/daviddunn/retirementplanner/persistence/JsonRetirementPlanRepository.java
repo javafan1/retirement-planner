@@ -60,7 +60,11 @@ public class JsonRetirementPlanRepository
                     throw new IOException("Application backups are recovery sources. Use Save As to a different filename.");
                 }
                 plan.validateHouseholdReferences();
+                var projectionObjects = new ProjectionSnapshotComponents().prepare(plan,
+                        plan.getProjectionComponentSource() == null ? file : plan.getProjectionComponentSource(), file, identity);
                 byte[] original = mapper.writeValueAsBytes(plan);
+                if (projectionObjects.manifest() != null) original = PlanConfigurationTransaction.replace(original,
+                        "projectionState", mapper.writeValueAsBytes(projectionObjects.manifest()));
                 byte[] captured = original;
                 if (!identity.toString().equals(plan.getPlanId())) {
                     // Preserve original numeric tokens; a tree round trip could change monetary scale.
@@ -97,6 +101,14 @@ public class JsonRetirementPlanRepository
                 var committedParameters = readBytes(captured).getAnalyzerConfigurations();
                 warnings = writer.write(file, captured, this::verify, true, path -> checkState(path, expectedState));
                 plan.assignPlanId(identity);
+                if (projectionObjects.manifest() != null) {
+                    plan.setProjectionState(projectionObjects.manifest());
+                    plan.installProjectionComponents(projectionObjects.components());
+                    plan.installPendingPinnedProjections(java.util.Map.of());
+                    plan.installAssociatedAnalyzerResults(projectionObjects.analyzers());
+                    plan.installPendingAnalyzerAssociations(java.util.Map.of());
+                    plan.setProjectionComponentSource(file);
+                }
                 durableStates.put(file, PlanConfigurationTransaction.digest(captured));
                 durableConfigurations.put(file, java.util.Optional.ofNullable(committedParameters));
             }
@@ -141,6 +153,7 @@ public class JsonRetirementPlanRepository
         synchronized (AtomicFileWriter.SAVE_LOCK) {
             byte[] original = java.nio.file.Files.readAllBytes(file);
             RetirementPlan plan = readBytes(original);
+            plan.setProjectionComponentSource(originalForBackup(file).orElse(file).toAbsolutePath().normalize());
             durableStates.put(file.toAbsolutePath().normalize(), PlanConfigurationTransaction.digest(original));
             durableConfigurations.put(file.toAbsolutePath().normalize(), java.util.Optional.ofNullable(plan.getAnalyzerConfigurations()));
             return plan;
@@ -158,11 +171,13 @@ public class JsonRetirementPlanRepository
             throw new IOException("Plan JSON is empty.");
         }
         // This tree is for financial validation only; future metadata may use unrelated field names.
-        if (json.isObject()) ((com.fasterxml.jackson.databind.node.ObjectNode) json).remove("analyzerConfigurations");
+        if (json.isObject()) ((com.fasterxml.jackson.databind.node.ObjectNode) json).remove(java.util.List.of("analyzerConfigurations", "projectionState"));
         validateExplicitStateConfiguration(json);
         // Deserialize original numeric tokens, preserving existing BigDecimal precision and scale.
         RetirementPlan plan = mapper.readValue(bytes, RetirementPlan.class);
         plan.validateHouseholdReferences();
+        if (plan.getProjectionState() != null && !plan.getProjectionState().owner().toString().equals(plan.getPlanId()))
+            throw new IOException("Projection role ownership does not match the plan.");
         return plan;
     }
 

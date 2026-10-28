@@ -35,6 +35,7 @@ final class SinglePersonMortalityView extends VBox {
     final TextArea details = new TextArea();
     final TableView<SinglePersonMortalityAnalysis.Entry> table = new TableView<>();
     private final SinglePersonMortalityAnalysis.Mode mode;
+    boolean integrated() { return mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED; }
     private final SocialSecurityAnalyzerJobController jobs;
     private RetirementPlan plan;
     private SinglePersonMortalityAnalysis.Result completed;
@@ -43,7 +44,7 @@ final class SinglePersonMortalityView extends VBox {
     private String acceptedInputFingerprint;
     private final IndividualPdfExportAction pdf;
 
-    boolean canExportPdf() { return (persistence == null ? current : persistence.exportable()) && completed != null && reportContext != null
+    boolean canExportPdf() { return (persistence == null || persistence.resultMetadata() == null ? current : persistence.exportable()) && completed != null && reportContext != null
             && jobs.state() == SocialSecurityAnalyzerJobController.State.IDLE; }
     com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport preparePdfReport() {
         if (!canExportPdf()) throw new IllegalStateException("A current completed analysis is required.");
@@ -217,6 +218,7 @@ final class SinglePersonMortalityView extends VBox {
             String capturedFingerprint = parameters == null ? null : inputFingerprint(frozen,
                     mortality.individual().request().mortalityAdjustment().factor(), mortality.individual().request().mortalityBaseDate(), date, rate);
             current = false;
+            if (persistence != null) persistence.beginReplacement();
             boolean admitted = jobs.start(mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED
                             ? SocialSecurityAnalyzerJobController.Mode.WEIGHTED : SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY,
                     calculation.apply(new CompletionInput(frozen, captured, mortality, date, rate)),
@@ -228,7 +230,7 @@ final class SinglePersonMortalityView extends VBox {
                         if (parameterRun != null && com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result)) parameters.accept(parameterRun);
                     }, failure -> status.setText("Analysis failed: " + failure.getMessage()),
                     () -> { if (parameterRun != null) parameters.rollback(parameterRun); });
-            if (!admitted) status.setText("Another analysis is running.");
+            if (!admitted) { if (persistence != null) persistence.finishReplacement(); status.setText("Another analysis is running."); }
         } catch (RuntimeException invalid) { current = false; status.setText("Check inputs: " + invalid.getMessage()); }
         refresh();
     }
@@ -246,6 +248,8 @@ final class SinglePersonMortalityView extends VBox {
         refresh();
     }
     void refresh() {
+        if (persistence != null && jobs.state() == SocialSecurityAnalyzerJobController.State.IDLE)
+            javafx.application.Platform.runLater(persistence::finishReplacement);
         boolean busy = jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE;
         if (busy) progress.show(jobs.progress()); else progress.hide();
         run.setDisable(busy);

@@ -9,7 +9,21 @@ import java.util.*;
 public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKind kind, UUID runId,
         Instant completedAt, String inputFingerprint, String contextFingerprint,
         Map<String, String> algorithms, Map<String, String> references,
-        AnalysisPayload payload, SnapshotContext context) {
+        AnalysisPayload payload, SnapshotContext context,
+        com.daviddunn.retirementplanner.app.projection.AnalyzerAdmission association) {
+    public AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKind kind, UUID runId,
+            Instant completedAt, String inputFingerprint, String contextFingerprint, Map<String, String> algorithms,
+            Map<String, String> references, AnalysisPayload payload, SnapshotContext context) {
+        this(planId, planFile, kind, runId, completedAt, inputFingerprint, contextFingerprint, algorithms, references, payload, context, null);
+    }
+    public AcceptedAnalysisCompletion associatedWith(com.daviddunn.retirementplanner.app.projection.AnalyzerAdmission admission) {
+        return new AcceptedAnalysisCompletion(planId, planFile, kind, runId, completedAt, inputFingerprint,
+                contextFingerprint, algorithms, references, payload, context, admission);
+    }
+    public AcceptedAnalysisCompletion forRun(UUID identity) {
+        return new AcceptedAnalysisCompletion(planId, planFile, kind, identity, completedAt, inputFingerprint,
+                contextFingerprint, algorithms, references, payload, context, association);
+    }
     public AcceptedAnalysisCompletion {
         Objects.requireNonNull(planId); Objects.requireNonNull(kind); Objects.requireNonNull(runId);
         if (planFile != null) planFile = planFile.toAbsolutePath().normalize();

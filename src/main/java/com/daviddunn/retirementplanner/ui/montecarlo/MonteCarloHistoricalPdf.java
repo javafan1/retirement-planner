@@ -11,9 +11,18 @@ public final class MonteCarloHistoricalPdf {
 
     public static MonteCarloPdfReport from(MonteCarloPdfReport original, MonteCarloSnapshot frozen,
             Currency currency, String durability, boolean historicalCopy) {
+        return from(original, frozen, currency, durability, historicalCopy, null);
+    }
+
+    public static MonteCarloPdfReport from(MonteCarloPdfReport original, MonteCarloSnapshot frozen,
+            Currency currency, String durability, boolean historicalCopy, String assessmentStatus) {
         var context = new ArrayList<String>();
-        context.add(currency == Currency.CURRENT ? "Current Results"
-                : "Historical Analysis — Outdated: These results were generated using previous retirement-plan or analysis assumptions.");
+        context.add(assessmentStatus != null ? assessmentStatus : switch (currency) {
+            case CURRENT -> "Current Results — financial/request compatibility; projection association not assessed.";
+            case OUTDATED -> "Historical Analysis — Outdated: These results were generated using previous retirement-plan or analysis assumptions.";
+            case INPUTS_NEED_ATTENTION -> "Inputs Need Attention — original completed results remain available.";
+            case UNASSESSED -> "Assessing completed result inputs — applicability has not been established.";
+        });
         if (currency == Currency.INPUTS_NEED_ATTENTION)
             context.add("Current inputs need attention. The original completed results and assumptions are exported unchanged.");
         if (currency == Currency.UNASSESSED)

@@ -116,8 +116,11 @@ public record ExhaustiveSnapshot(
                     e.failure().map(f -> new WeightedSnapshots.Failure(f.message(), f.category())).orElse(null));
         }
         IntegratedSocialSecurityCompleteStrategySearchEntry restore() {
+            return restore(true);
+        }
+        IntegratedSocialSecurityCompleteStrategySearchEntry restore(boolean couple) {
             var election = strategy.restore();
-            if (!election.hasSpouse() || (rank != null && rank < 1)) throw new IllegalArgumentException("Invalid couple entry.");
+            if (election.hasSpouse() != couple || (rank != null && rank < 1)) throw new IllegalArgumentException("Invalid entry household or rank.");
             var restoredDetail = detail == null ? null : detail.restoreStrategyResult();
             if (detail != null && (!strategy.equals(detail.strategy()) || !Objects.equals(metrics, detail.metrics())))
                 throw new IllegalArgumentException("Retained detail does not belong to its candidate.");

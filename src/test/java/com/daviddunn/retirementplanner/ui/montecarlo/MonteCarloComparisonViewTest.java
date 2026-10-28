@@ -37,7 +37,7 @@ class MonteCarloComparisonViewTest {
             var action = menu.getItems().stream().filter(i -> "monte-carlo-comparison-menu".equals(i.getId())).findFirst().orElseThrow();
             assertTrue(action.isDisable());
             assertTrue(menu.getItems().stream().anyMatch(i -> i.isVisible() && i.getText().equals(MonteCarloStrategyComparisonRunService.MISSING_BASELINE)));
-            controller.saveCurrentAsBaseline("Test"); menu.getOnShowing().handle(new javafx.event.Event(Menu.ON_SHOWING));
+            controller.getCurrentPlan().setBaseline(com.daviddunn.retirementplanner.domain.baseline.ProjectionBaselineFactory.create(controller.getCurrentPlan(), "Legacy inputs")); menu.getOnShowing().handle(new javafx.event.Event(Menu.ON_SHOWING));
             assertFalse(action.isDisable());
             assertTrue(menu.getItems().stream().anyMatch(i -> "monte-carlo-analysis-menu".equals(i.getId())));
             return null;
@@ -127,7 +127,9 @@ class MonteCarloComparisonViewTest {
                 plan.getHousehold().getPrimaryPerson().setBirthDate(java.time.LocalDate.of(1961, 1, 1)); controller.markModified();
                 assertTrue(view.session().stale()); assertSame(result, view.session().result());
                 ((TextField) view.lookup("#mcc-seed")).setText("999");
-                assertTrue(((Label) view.lookup("#mcc-status")).getText().contains("STALE"));
+                assertTrue(((Label) view.lookup("#mcc-status")).getText().contains("Assessing"));
+                assertFalse(((Label) view.lookup("#mcc-status")).getText().contains("Outdated"),
+                        "An edited request awaits fingerprint assessment; revision invalidation is not proof of mismatch.");
                 assertEquals(frozen, ((Label) ((TitledPane) view.lookup("#mcc-details")).getContent()).getText());
                 for (var node : view.lookupAll(".label")) {
                     String text = ((Label) node).getText().toLowerCase(Locale.ROOT);

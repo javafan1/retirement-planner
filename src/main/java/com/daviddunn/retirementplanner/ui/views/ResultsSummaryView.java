@@ -233,6 +233,14 @@ public class ResultsSummaryView extends BorderPane {
 
     private VBox baselineComparisonBox;
     private final Button breakEvenButton = new Button("Break-Even Analysis");
+    private final Button baselineDetailsButton = new Button("View Baseline Details");
+    private final Button swapProjectionsButton = new Button("Swap Current and Baseline");
+    private Runnable swapProjectionsHandler = () -> { };
+    public void setOnSwapProjections(Runnable handler) { swapProjectionsHandler = Objects.requireNonNull(handler); }
+    private Consumer<com.daviddunn.retirementplanner.app.baseline.BaselineDetailsSession> baselineDetailsHandler;
+    public void setOnBaselineDetails(Consumer<com.daviddunn.retirementplanner.app.baseline.BaselineDetailsSession> handler) {
+        baselineDetailsHandler = handler;
+    }
     private BreakEvenAnalysisResult breakEvenAnalysis;
     private Consumer<BreakEvenAnalysisResult> breakEvenHandler;
 
@@ -926,11 +934,23 @@ public class ResultsSummaryView extends BorderPane {
         exportButton.setOnAction(
                 event -> showExportDialog());
 
+        var history = new Button("Projection Analyzer History");
+        history.getStyleClass().add("results-action-button");
+        history.setAccessibleHelp("Inspect recorded original analyzer results without running an analysis.");
+        history.setOnAction(event -> {
+            if (currentPlan != controller.getCurrentPlan()) return;
+            var accepted = controller.getAcceptedProjectionSnapshot();
+            var dialog = new com.daviddunn.retirementplanner.ui.socialsecurity.ProjectionAnalyzerHistoryDialog(controller,
+                    accepted == null ? null : accepted.id());
+            if (getScene() != null) dialog.initOwner(getScene().getWindow());
+            dialog.showAndWait();
+        });
+
         HBox actions =
                 new HBox(
                         10,
                         recalculateButton,
-                        exportButton);
+                        exportButton, history);
 
         actions.setAlignment(
                 Pos.CENTER_RIGHT);
@@ -1061,12 +1081,33 @@ public class ResultsSummaryView extends BorderPane {
 
         section.getChildren().addAll(
                 baselineComparisonYear,
-                breakEvenButton,
+                new FlowPane(10, 6, breakEvenButton, baselineDetailsButton, swapProjectionsButton),
                 cards);
+
+        baselineDetailsButton.setId("baseline-details-action");
+        swapProjectionsButton.setId("swap-projections-action");
+        swapProjectionsButton.setAccessibleHelp("Exchange complete current and baseline projections without recalculation. Save is required for durability.");
+        swapProjectionsButton.setOnAction(event -> { if (currentPlan == controller.getCurrentPlan()) swapProjectionsHandler.run(); });
+        baselineDetailsButton.setDisable(true);
+        baselineDetailsButton.setAccessibleHelp("Inspect saved baseline and frozen current projection inputs without recalculation.");
+        baselineDetailsButton.setOnAction(event -> {
+            if (currentPlan != controller.getCurrentPlan()) { baselineDetailsButton.setDisable(true); return; }
+            var session = controller.prepareBaselineDetails(currentProjection);
+            if (session == null) { baselineDetailsButton.setDisable(true); return; }
+            if (baselineDetailsHandler != null) baselineDetailsHandler.accept(session);
+            else {
+                var dialog = new com.daviddunn.retirementplanner.ui.baseline.BaselineDetailsDialog(session, controller);
+                if (getScene() != null) dialog.initOwner(getScene().getWindow());
+                dialog.showAndWait();
+            }
+        });
 
         breakEvenButton.setId("break-even-action");
         breakEvenButton.setDisable(true);
         breakEvenButton.setOnAction(event -> {
+            if (currentPlan != controller.getCurrentPlan()) return;
+            // Explicit user request, including the first request after a calculation-free swap.
+            breakEvenAnalysis = controller.requestBreakEvenAnalysis();
             if (breakEvenAnalysis == null || breakEvenAnalysis.comparableYearCount() == 0) return;
             if (breakEvenHandler != null) {
                 breakEvenHandler.accept(breakEvenAnalysis);
@@ -2177,8 +2218,8 @@ public class ResultsSummaryView extends BorderPane {
 
         pdfBaselineComparison = comparison;
         baselineComparisonYear.setText(
-                "Baseline Comparison — "
-                        + comparison.getCalendarYear());
+                "Baseline Comparison — Baseline ending " + controller.getBaselineProjection().getEndYear()
+                        + " | Current ending " + currentProjection.getEndYear() + " (original full horizons)");
 
         updateMoneyComparison(
                 growthBaselineLabel, growthCurrentLabel, growthChangeLabel,
@@ -2420,6 +2461,7 @@ public class ResultsSummaryView extends BorderPane {
 
         pdfBaselineComparison = null;
         setBreakEvenAnalysis(null);
+        baselineDetailsButton.setDisable(true);
 
         currentPlan = plan;
         boolean couple = plan.getHousehold().hasSpouse();
@@ -2513,7 +2555,14 @@ public class ResultsSummaryView extends BorderPane {
 
     public void setBreakEvenAnalysis(BreakEvenAnalysisResult analysis) {
         breakEvenAnalysis = analysis;
-        breakEvenButton.setDisable(analysis == null || analysis.comparableYearCount() == 0);
+        breakEvenButton.setDisable((analysis == null || analysis.comparableYearCount() == 0) && !controller.canRequestBreakEven());
+        String swapReason = controller.projectionSwapUnavailableReason();
+        swapProjectionsButton.setDisable(currentPlan != controller.getCurrentPlan() || !swapReason.isEmpty());
+        swapProjectionsButton.setTooltip(new Tooltip(swapReason.isEmpty() ? "Exchange original saved projection roles; no calculation runs." : swapReason));
+        boolean ready = currentPlan == controller.getCurrentPlan() && controller.canViewBaselineDetails(currentProjection);
+        baselineDetailsButton.setDisable(!ready);
+        baselineDetailsButton.setTooltip(new Tooltip(ready ? "View saved baseline inputs and frozen completed projection inputs."
+                : "A baseline and an accepted current projection with a nonzero existing Baseline Comparison difference are required."));
     }
 
 
@@ -2709,7 +2758,8 @@ public class ResultsSummaryView extends BorderPane {
 
 
     private void updateCharts(List<ProjectionYear> years) {
-        pdfChartModel = com.daviddunn.retirementplanner.ui.charts.ProjectionChartModel.from(
+        var accepted = controller.getAcceptedProjectionChart(currentProjection);
+        pdfChartModel = accepted != null ? accepted : com.daviddunn.retirementplanner.ui.charts.ProjectionChartModel.from(
                 years, nonInvestableAssetProjections,
                 com.daviddunn.retirementplanner.domain.breakeven.BreakEvenPlanSummary.from(currentPlan.getHousehold()), currentPlan.getAccountPortfolio().getAccounts());
         projectionChart.load(pdfChartModel);
@@ -3659,6 +3709,16 @@ public class ResultsSummaryView extends BorderPane {
 
         if (claimingAge == null) {
             benefitLabel.setText("-");
+            return;
+        }
+
+        if (controller.isRestoredProjectionMode() && controller.currentProjectionInputsMatch()
+                && claimingAge == socialSecurity.getClaimingAge()) {
+            var income = controller.getCurrentProjectionSummary().getIncomeSummary();
+            var monthly = person == currentPlan.getHousehold().getPrimaryPerson()
+                    ? income.getPrimarySocialSecurityMonthly() : income.getSpouseSocialSecurityMonthly();
+            benefitLabel.setText(monthly == null ? "Not recorded" : UIFormatters.money(monthly));
+            benefitLabel.setTooltip(new Tooltip("Original accepted income summary; no benefit calculation was run during restoration."));
             return;
         }
 

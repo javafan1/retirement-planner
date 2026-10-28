@@ -13,6 +13,7 @@ public class ProjectionBaseline {
     private final LocalDateTime savedAt;
 
     private final String description;
+    private final java.util.UUID projectionSnapshotId;
 
     @JsonCreator
     public ProjectionBaseline(
@@ -23,7 +24,10 @@ public class ProjectionBaseline {
             LocalDateTime savedAt,
 
             @JsonProperty("description")
-            String description) {
+            String description,
+            @JsonProperty("projectionSnapshotId") java.util.UUID projectionSnapshotId) {
+
+        this.projectionSnapshotId = projectionSnapshotId;
 
         this.snapshot =
                 Objects.requireNonNull(
@@ -41,6 +45,13 @@ public class ProjectionBaseline {
     public RetirementPlanSnapshot getSnapshot() {
         return snapshot;
     }
+
+    public ProjectionBaseline(RetirementPlanSnapshot snapshot, LocalDateTime savedAt, String description) {
+        this(snapshot, savedAt, description, null);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public java.util.UUID getProjectionSnapshotId() { return projectionSnapshotId; }
 
     public LocalDateTime getSavedAt() {
         return savedAt;

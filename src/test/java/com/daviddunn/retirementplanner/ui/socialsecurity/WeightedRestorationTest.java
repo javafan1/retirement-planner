@@ -18,6 +18,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class WeightedRestorationTest {
     @TempDir Path dir;
+    private final List<ApplicationController> controllers = new ArrayList<>();
+    @AfterEach void drainParameterWritesBeforeTemporaryDirectoryRemoval() throws Exception {
+        for (var controller : controllers) {
+            var parameters = controller.getAnalysisParameters();
+            try { assertTrue(parameters.drain(Duration.ofSeconds(10)).complete()); }
+            finally { parameters.shutdown(); }
+        }
+    }
     static final Instant COMPLETED = Instant.parse("2026-01-02T03:04:05Z");
     @BeforeAll static void startFx() throws Exception { ClaimingStrategyHeatMapViewTest.startFx(); }
     static <T> T fx(Callable<T> action) throws Exception { return IndividualCompletionPersistenceTest.fx(action); }
@@ -35,7 +43,9 @@ class WeightedRestorationTest {
         catch (TimeoutException timeout) { fail("Expected " + text + "; visible: " + fx(label::getText), timeout); }
     }
     ApplicationController controller(AnalysisResultStore store, String name) throws Exception {
-        return new ApplicationController(new JsonRetirementPlanRepository(), new JsonApplicationSettingsRepository(dir.resolve(name + ".settings")), store);
+        var controller = new ApplicationController(new JsonRetirementPlanRepository(), new JsonApplicationSettingsRepository(dir.resolve(name + ".settings")), store);
+        controllers.add(controller);
+        return controller;
     }
     static AnalysisFingerprintService.Inputs coupleInputs(RetirementPlan plan) {
         var context = CurrentStrategyBaseline.fromPlan(plan);

@@ -32,7 +32,30 @@ public record IntegratedAnalyzerReport(
         results = List.copyOf(results);
     }
 
-    public sealed interface Visualization permits HeatMap, Individual { }
+    public sealed interface Visualization permits HeatMap, Individual, SocialSecurityGrid, TablesOnly { }
+
+    /** Stage 1 Social Security values, deliberately distinct from integrated estate heat maps. */
+    public record SocialSecurityGrid(List<Integer> primaryAges, List<Integer> spouseAges,
+                                     List<SocialSecurityCell> cells) implements Visualization {
+        public SocialSecurityGrid {
+            primaryAges = List.copyOf(primaryAges); spouseAges = List.copyOf(spouseAges); cells = List.copyOf(cells);
+            var primary = primaryAges; var spouse = spouseAges;
+            if (primaryAges.isEmpty() || spouseAges.isEmpty() || primaryAges.stream().distinct().count() != primaryAges.size()
+                    || spouseAges.stream().distinct().count() != spouseAges.size()
+                    || cells.size() != primaryAges.size() * spouseAges.size()
+                    || cells.stream().anyMatch(c -> !primary.contains(c.primaryAge()) || !spouse.contains(c.spouseAge()))
+                    || cells.stream().map(c -> List.of(c.primaryAge(), c.spouseAge())).distinct().count() != cells.size())
+                throw new IllegalArgumentException("Every original SS grid pair must be captured exactly once.");
+        }
+    }
+    public record SocialSecurityCell(int primaryAge, int spouseAge, java.math.BigDecimal presentValue,
+            String value, ClaimingHeatMapPalette tier, boolean optimal, boolean retained, boolean selected) {
+        public SocialSecurityCell { Objects.requireNonNull(value); Objects.requireNonNull(tier); }
+    }
+    /** Explicit table-only comparison. No heat map or synthetic strategy values. */
+    public record TablesOnly(String explanation) implements Visualization {
+        public TablesOnly { Objects.requireNonNull(explanation); }
+    }
 
     /** Compatibility accessor for genuine couple reports only. */
     public HeatMap heatMap() { return (HeatMap) visualization; }

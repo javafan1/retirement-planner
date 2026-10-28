@@ -54,6 +54,7 @@ class CompleteWizardEndToEndTest {
             }
             var mapper = new ObjectMapper().registerModule(new JavaTimeModule());
             var expected = mapper.valueToTree(plan);
+            ((com.fasterxml.jackson.databind.node.ObjectNode) expected).remove("projectionState");
             AccountsView accounts = field(window, "accountsView");
             assertEquals(couple ? 4 : 3, ((TableView<?>) field(accounts, "table")).getItems().size());
             IncomeSourcesView income = field(window, "incomeSourcesView");
@@ -76,17 +77,23 @@ class CompleteWizardEndToEndTest {
             controller.saveAs(file);
             assertEquals(Boolean.TRUE, invoke(window, "onSave"));
             controller.open(file);
+            controller.getProjectionRestoration().toCompletableFuture().get(20, java.util.concurrent.TimeUnit.SECONDS);
             invoke(window, "loadCurrentPlan");
-            assertEquals(expected, mapper.valueToTree(controller.getCurrentPlan()));
+            var restoredInputs = mapper.valueToTree(controller.getCurrentPlan());
+            ((com.fasterxml.jackson.databind.node.ObjectNode) restoredInputs).remove("projectionState");
+            assertEquals(expected, restoredInputs);
+            assertEquals(plan.getProjectionState().current().id(), controller.getCurrentPlan().getProjectionState().current().id());
+            assertNotEquals("0".repeat(64), controller.getCurrentPlan().getProjectionState().current().digest());
             assertEquals(30, results.getTable().getItems().size());
             assertEquals(couple, controller.getCurrentPlan().getHousehold().hasSpouse());
+            var beforeAnalyzers = mapper.valueToTree(controller.getCurrentPlan());
             var integrated = new IntegratedSocialSecurityStrategyEvaluator().evaluateCurrentStrategy(controller.getCurrentPlan());
             assertEquals(30, integrated.projection().getYears().size());
             assertTrue(integrated.metrics().lifetimeHouseholdSocialSecurity().signum() > 0);
             var settings = MonteCarloSettings.forPlan(controller.getCurrentPlan(), 3, 417, BigDecimal.ZERO);
             var mc = new MonteCarloAnalyzer().analyze(controller.getCurrentPlan(), settings);
             assertEquals(3, mc.outcomes().size());
-            assertEquals(expected, mapper.valueToTree(controller.getCurrentPlan()), "Projection/analyzers must preserve persisted plan values");
+            assertEquals(beforeAnalyzers, mapper.valueToTree(controller.getCurrentPlan()), "Projection/analyzers must preserve all persisted plan values and metadata");
         });
     }
 

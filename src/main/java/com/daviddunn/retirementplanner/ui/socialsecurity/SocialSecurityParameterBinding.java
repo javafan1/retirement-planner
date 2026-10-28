@@ -46,6 +46,7 @@ final class SocialSecurityParameterBinding implements AutoCloseable {
         update();
     }
     boolean applying() { return applying; }
+    long editEpoch() { return edit; }
     void edited() { if (!applying) edit++; }
     void restore() {
         edit++;

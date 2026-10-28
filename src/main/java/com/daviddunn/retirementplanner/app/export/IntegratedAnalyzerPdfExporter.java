@@ -36,6 +36,8 @@ public final class IntegratedAnalyzerPdfExporter {
     }
 
     private static String title(IntegratedAnalyzerReport report) {
+        if (report.visualization() instanceof TablesOnly) return "Deterministic Quick Comparison";
+        if (report.visualization() instanceof SocialSecurityGrid) return "Social Security Claiming Analysis";
         return report.analysisType().equals("Social Security Only") ? "Social Security Claiming Analysis" : IntegratedAnalyzerReport.TITLE;
     }
 
@@ -61,6 +63,12 @@ public final class IntegratedAnalyzerPdfExporter {
         }
 
         void render() throws IOException {
+            if (report.visualization() instanceof SocialSecurityGrid || report.visualization() instanceof TablesOnly) {
+                additionalReport();
+                close();
+                pageNumbers();
+                return;
+            }
             newPage(false);
             text(title(report), MARGIN, 570, 19, true, BLUE);
             text(report.analysisType(), MARGIN, 548, 15, true, INK);
@@ -88,6 +96,10 @@ public final class IntegratedAnalyzerPdfExporter {
             if (!(report.visualization() instanceof Individual)) newPage(true);
             for (var section : report.results()) section(section);
             close();
+            pageNumbers();
+        }
+
+        private void pageNumbers() throws IOException {
             for (int index = 0; index < document.getNumberOfPages(); index++) {
                 try (PDPageContentStream footer = new PDPageContentStream(document, document.getPage(index),
                         PDPageContentStream.AppendMode.APPEND, true, true)) {
@@ -103,6 +115,82 @@ public final class IntegratedAnalyzerPdfExporter {
                     footer.endText();
                 }
             }
+        }
+
+        /** New variants use the existing section/table pagination, leaving established report pages unchanged. */
+        private void additionalReport() throws IOException {
+            newPage(false);
+            section(new Section(title(report), List.of(report.analysisType(), report.household(),
+                    "Original run started: " + report.runStarted(), "PDF exported: " + report.exportedAt())));
+            section(new Section("Result status and provenance", report.context()));
+            section(new Section(report.visualization() instanceof SocialSecurityGrid
+                    ? "Recommendation and Export-Time Selection" : "Comparison Summary", report.selectedSummary()));
+            if (report.visualization() instanceof SocialSecurityGrid grid) {
+                newPage(true);
+                socialSecurityGrid(grid);
+            } else if (report.visualization() instanceof TablesOnly tables) {
+                section(new Section("Comparison Method", List.of(tables.explanation())));
+            }
+            for (var assumptions : report.assumptions()) section(assumptions);
+            for (var table : report.rankedTables()) { newPage(true); table(table); }
+            y -= 24;
+            for (var result : report.results()) section(result);
+        }
+
+        private void socialSecurityGrid(SocialSecurityGrid grid) throws IOException {
+            float cellWidth = (CONTENT_WIDTH - 36) / grid.primaryAges().size();
+            ssAxes(grid, cellWidth);
+            for (int spouse : grid.spouseAges()) {
+                var row = grid.primaryAges().stream().map(primary -> grid.cells().stream()
+                        .filter(c -> c.primaryAge() == primary && c.spouseAge() == spouse).findFirst().orElseThrow()).toList();
+                var lines = new ArrayList<List<String>>();
+                int maximumLines = 1;
+                for (var cell : row) {
+                    var wrapped = wrap(cell.value(), 8.5f, cellWidth - 12);
+                    lines.add(wrapped); maximumLines = Math.max(maximumLines, wrapped.size());
+                }
+                float height = Math.max(34, maximumLines * 10 + 19);
+                if (y - height < 100) { newPage(true); ssAxes(grid, cellWidth); }
+                text(Integer.toString(spouse), MARGIN + 6, y - 20, 9, true, INK);
+                for (int column = 0; column < row.size(); column++) {
+                    var cell = row.get(column);
+                    float x = MARGIN + 36 + column * cellWidth, bottom = y - height;
+                    rectangle(x, bottom + 2, cellWidth - 3, height - 3, Color.decode(cell.tier().color));
+                    if (cell.optimal() || cell.selected()) {
+                        content.setStrokingColor(Color.decode(cell.selected() ? ClaimingHeatMapPalette.SELECTED_BORDER : ClaimingHeatMapPalette.OPTIMAL_BORDER));
+                        content.setLineWidth(cell.selected() ? 2 : 1);
+                        content.addRect(x + 1, bottom + 3, cellWidth - 5, height - 5); content.stroke();
+                    }
+                    if (cell.optimal()) star(x + 8, y - 7, 3);
+                    if (cell.retained()) {
+                        content.setNonStrokingColor(INK);
+                        float tx = x + (cell.optimal() ? 17 : 7);
+                        content.moveTo(tx, y - 4); content.lineTo(tx, y - 10); content.lineTo(tx + 5, y - 7);
+                        content.closePath(); content.fill();
+                    }
+                    float baseline = y - 21;
+                    for (String line : lines.get(column)) { centered(line, x, baseline, cellWidth - 3, 8.5f, cell.optimal()); baseline -= 10; }
+                }
+                y -= height;
+            }
+            y -= 15;
+            for (var tier : ClaimingHeatMapPalette.values()) {
+                ensure(16);
+                rectangle(MARGIN, y - 2, 10, 10, Color.decode(tier.color));
+                text(tier.label + " — " + tier.help, MARGIN + 16, y, 8, false, INK); y -= 14;
+            }
+            section(new Section("Stage 1 Grid Explanation", List.of(
+                    "Cells show original Stage 1 expected Social Security present value in dollars. Colors use unrounded percentages of the highest positive Stage 1 PV.",
+                    "Star = exact Stage 1 optimum (including ties). Triangle = retained for Stage 2. Both markers may appear together. Blue outline = export-time selected pair.",
+                    "Stage 2 expands survivor elections and has its own complete-strategy ranking. A Stage 1 optimum is not necessarily the best Stage 2 strategy. No positive optimum means unavailable percentages.")));
+        }
+
+        private void ssAxes(SocialSecurityGrid grid, float cellWidth) throws IOException {
+            text("STAGE 1 CLAIMING-AGE GRID — Expected Social Security PV", MARGIN, y, 11, true, BLUE); y -= 20;
+            text("Primary Claiming Age (horizontal); Spouse Claiming Age (vertical)", MARGIN, y, 9, false, INK); y -= 20;
+            text("Spouse", MARGIN, y, 7, true, INK);
+            for (int i = 0; i < grid.primaryAges().size(); i++) centered(grid.primaryAges().get(i).toString(), MARGIN + 36 + i * cellWidth, y, cellWidth - 3, 9, true);
+            y -= 8;
         }
 
         private void newPage(boolean continuation) throws IOException {

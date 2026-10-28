@@ -112,6 +112,18 @@ class CoupleSocialSecurityPersistenceTest {
         try (var view = session(reopened)) {
             await(view.persistence.notice, "Current Results");
             fx(() -> {
+                var tabs = field(view.dialog, "socialSecurityTabs", TabPane.class);
+                assertEquals(1, tabs.getSelectionModel().getSelectedIndex(), "Historical SS initially selects Claiming Grid");
+                tabs.getSelectionModel().selectFirst();
+                view.persistence.load(); view.persistence.reassess();
+                var render = view.dialog.getClass().getDeclaredMethod("render", SocialSecurityStrategyAnalysisContext.class,
+                        SocialSecurityStrategyAnalyzerPresentation.class);
+                render.setAccessible(true);
+                render.invoke(view.dialog, context, field(view.dialog, "presentation", SocialSecurityStrategyAnalyzerPresentation.class));
+                assertEquals(0, tabs.getSelectionModel().getSelectedIndex(), "Refresh/re-render preserves manual Recommendation");
+                return null;
+            });
+            fx(() -> {
                 assertEquals(view.generation, view.jobs.generation()); assertEquals(SocialSecurityAnalyzerJobController.State.IDLE, view.jobs.state());
                 var actual = field(view.dialog, "presentation", SocialSecurityStrategyAnalyzerPresentation.class);
                 assertEquals(result.evaluatedStrategies(), actual.result().evaluatedStrategies());
@@ -123,10 +135,15 @@ class CoupleSocialSecurityPersistenceTest {
                 var navigation = field(view.dialog, "navigation", AnalyzerNavigationView.class);
                 navigation.select(SocialSecurityAnalyzerJobController.Mode.QUICK);
                 navigation.select(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY);
+                assertEquals(0, field(view.dialog, "socialSecurityTabs", TabPane.class).getSelectionModel().getSelectedIndex());
                 assertEquals(actual, field(view.dialog, "presentation", SocialSecurityStrategyAnalyzerPresentation.class));
                 return null;
             });
             assertArrayEquals(planBytes, Files.readAllBytes(source.getCurrentFile()));
+        }
+        try (var reopenedDialog = session(reopened)) {
+            await(reopenedDialog.persistence.notice, "Current Results");
+            fx(() -> { assertEquals(1, field(reopenedDialog.dialog, "socialSecurityTabs", TabPane.class).getSelectionModel().getSelectedIndex()); return null; });
         } finally { stop(restarted); }
     }
     @Test void fullAndTieHeavyCapacityRoundTrip() throws Exception {

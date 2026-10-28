@@ -33,6 +33,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     private final MonteCarloParameterControls parameters;
     private final Label savedStatus = label("", "mc-muted", "mcc-saved-status");
     private final Button retrySave = new Button("Retry Save");
+    private final com.daviddunn.retirementplanner.ui.socialsecurity.AssociatedAnalyzerAction associated;
     private final ComboBox<Integer> count = new ComboBox<>();
     private final ComboBox<MonteCarloMode> mode = new ComboBox<>();
     private final ComboBox<String> inflation = new ComboBox<>();
@@ -87,6 +88,9 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         persistence = new MonteCarloResultLifecycle<>(controller.getAnalysisResults(), Platform::runLater,
                 MonteCarloSnapshotPresentationMapper::restoreComparison, restored -> session.restore(restored, true),
                 session::clearResult, this::refreshPersistence, session::busy);
+        persistence.associationResolver(controller::analysisAssociation);
+        associated = new com.daviddunn.retirementplanner.ui.socialsecurity.AssociatedAnalyzerAction(controller,
+                () -> persistence.binding() == null ? null : persistence.binding().kind());
         savedStatus.accessibleTextProperty().bind(savedStatus.textProperty());
         retrySave.setId("mcc-retry-save");
         retrySave.setAccessibleText("Retry saving the accepted paired result without recalculation");
@@ -164,7 +168,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         optionalInputs.managedProperty().bind(optionalInputs.visibleProperty());
         getChildren().addAll(label("Monte Carlo Strategy Comparison", "mc-title", null),
                 label(PAIRED, "mc-muted", null), controls, optionalInputs,
-                validation, actions, savedStatus, retrySave, results, details);
+                validation, actions, savedStatus, retrySave, associated, results, details);
         parameters = new MonteCarloParameterControls(controller, true, mode, count, inflation,
                 List.of(expected, volatility, seed, inflationMean, inflationVolatility, inflationFloor,
                         primary, spouse, survivorA, survivorB), () -> { }, this::edited);
@@ -205,6 +209,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
 
     private void refreshPersistence() {
         savedStatus.setText(persistence.status());
+        if (associated != null) associated.refresh();
         show(retrySave, persistence.retryAvailable());
         refresh();
     }
@@ -234,7 +239,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     private void startPersisted(MonteCarloStrategyComparisonRunService.Prepared captured) {
         syncPersistence();
         var binding = persistence.binding();
-        var parameterRun = parameters.begin(MonteCarloParameterMapping.capture(captured));
+        var parameterRun = parameters.begin(MonteCarloParameterMapping.capture(captured), new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().assess(com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService.comparison(captured.request()), com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService.Contract.EXACT_V1).fingerprint());
         var started = java.time.Instant.now();
         var completion = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion>();
         persistence.beginReplacement();
@@ -242,7 +247,8 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
             var result = work.run(captured, updates, token);
             token.throwIfCancellationRequested();
             var payload = MonteCarloSnapshotPresentationMapper.capture(result, started, java.time.Instant.now());
-            completion.set(MonteCarloResultLifecycle.completion(binding, payload));
+            var completed = MonteCarloResultLifecycle.completion(binding, payload);
+            completion.set(parameterRun.association() == null ? completed : completed.forRun(parameterRun.association().ticket()));
             return result;
         }, accepted -> {
             persistence.accept(completion.get());
@@ -293,7 +299,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
             case COMPLETED -> "Comparison complete.";
             case CLOSED -> "";
         };
-        status.setText((session.stale() && !persistence.current() ? "STALE — inputs, Current Plan or Saved Baseline changed. Run again. " : "") + message);
+        status.setText((session.stale() && !persistence.current() ? persistence.freshness().warning() + " " : "") + message);
         show(results, session.result() != null);
         if (session.result() != null && session.result() != displayed) {
             displayed = session.result(); render(displayed);

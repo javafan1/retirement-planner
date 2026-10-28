@@ -103,7 +103,8 @@ class MonteCarloRestorationViewTest {
             });
             if (Boolean.getBoolean("mc.lifecycle.preview")) fx(() -> { preview(view, kind, "current", 1180); return null; });
             var originalReport = fx(() -> paired ? ((MonteCarloStrategyComparisonView) view).preparePdfReport() : ((MonteCarloAnalysisView) view).preparePdfReport());
-            assertEquals("Current Results", originalReport.context().getFirst());
+            assertEquals("Current Results — compatible but unassociated; financial/request compatibility only, not verified projection-associated Current.",
+                    originalReport.context().getFirst());
             var outdated = new CompletableFuture<Void>();
             fx(() -> {
                 var label = (Label) view.lookup(paired ? "#mcc-saved-status" : "#mc-saved-status");

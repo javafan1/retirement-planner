@@ -29,6 +29,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class SinglePersonHouseholdUiTest {
     @TempDir Path temporary;
+    private final java.util.List<ApplicationController> analysisControllers = new java.util.ArrayList<>();
+    @AfterEach void drainAcceptedWritesBeforeTemporaryDirectoryRemoval() throws Exception {
+        for (var controller : analysisControllers) {
+            var parameters = controller.getAnalysisParameters();
+            try { assertTrue(parameters.drain(java.time.Duration.ofSeconds(10)).complete()); }
+            finally { parameters.shutdown(); }
+            // This fixture uses the shared application result store, not an owned store.
+            // Await its queued writes without changing global admission/shutdown state.
+            var results = controller.getAnalysisResults();
+            results.background(() -> null).toCompletableFuture().get(10, TimeUnit.SECONDS);
+        }
+    }
 
     @BeforeAll static void startup() throws Exception {
         var task = new FutureTask<Void>(() -> { Platform.setImplicitExit(false); return null; });
@@ -168,13 +180,13 @@ public class SinglePersonHouseholdUiTest {
             assertFalse(text(details).contains("Spouse"));
             var ending = projection.getYears().getLast().getEndingInvestableAssets();
             var file = temporary.resolve("single-ui.json");
-            controller.saveAs(file); controller.newPlan(); controller.open(file);
+            controller.saveAs(file); controller.newPlan(); controller.open(file); controller.getProjectionRestoration().toCompletableFuture().get(20, TimeUnit.SECONDS);
             assertFalse(controller.getCurrentPlan().getHousehold().hasSpouse());
             assertEquals(3, controller.getCurrentPlan().getAccountPortfolio().getAccounts().size());
             var view = new HouseholdView(); view.load(controller.getCurrentPlan());
             field(card(view, 0), "lastNameField", TextField.class).setText("Edited");
             assertTrue(view.applyChanges()); controller.markModified(); controller.saveAs(file);
-            controller.newPlan(); controller.open(file);
+            controller.newPlan(); controller.open(file); controller.getProjectionRestoration().toCompletableFuture().get(20, TimeUnit.SECONDS);
             assertFalse(controller.getCurrentPlan().getHousehold().hasSpouse());
             assertEquals("Edited", controller.getCurrentPlan().getHousehold().getPrimaryPerson().getLastName());
             assertEquals(ending, controller.getCurrentProjection().getYears().getLast().getEndingInvestableAssets());
@@ -240,10 +252,10 @@ public class SinglePersonHouseholdUiTest {
     @Test void normalWindowLoadsSingleResultsAndEnablesMonteCarlo() throws Exception {
         fx(() -> {
             var controller = uiPlan();
-            var file = temporary.resolve("window-single.json"); controller.saveAs(file);
+            var file = temporary.resolve("window-single.json"); controller.getCurrentProjection(); controller.saveAs(file);
             var window = new MainWindow();
             var active = field(window, "controller", ApplicationController.class);
-            active.open(file); invoke(window, "loadCurrentPlan");
+            active.open(file); active.getProjectionRestoration().toCompletableFuture().get(20, TimeUnit.SECONDS); invoke(window, "loadCurrentPlan");
             assertNotNull(active.getCurrentProjectionSummary());
             var root = field(window, "root", BorderPane.class);
             var menu = ((MenuBar) root.getTop()).getMenus().stream().filter(m -> m.getText().equals("Analysis")).findFirst().orElseThrow();
@@ -298,13 +310,14 @@ public class SinglePersonHouseholdUiTest {
         var controller = fx(() -> {
             var c = uiPlan();
             var file = temporary.resolve("monte-carlo-single.json");
-            c.saveAs(file);
+            c.getCurrentProjection(); c.saveAs(file);
             c.newPlan();
-            c.open(file);
+            c.open(file); c.getProjectionRestoration().toCompletableFuture().get(20, TimeUnit.SECONDS);
             assertFalse(c.getCurrentPlan().getHousehold().hasSpouse());
             assertNotNull(c.getCurrentProjection());
             return c;
         });
+        analysisControllers.add(controller);
         var queue = new java.util.ArrayDeque<Runnable>();
         var calls = new java.util.concurrent.atomic.AtomicInteger();
         var service = new MonteCarloRunService();
@@ -367,7 +380,9 @@ public class SinglePersonHouseholdUiTest {
                 assertTrue(view.session().stale());
                 assertTrue(view.canExportPdf());
                 var historical = view.preparePdfReport();
-                assertTrue(historical.context().getFirst().startsWith("Historical Analysis"));
+                assertEquals("Assessing completed result inputs…", historical.context().getFirst());
+                assertFalse(historical.context().getFirst().contains("Outdated"),
+                        "The changed individual request must be assessed before it is labeled a mismatch.");
                 var frozen = com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloPdfReportAdapter.from(view.session().result());
                 assertEquals(frozen.chart(), historical.chart());
                 assertEquals(frozen.sections(), historical.sections());

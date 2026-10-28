@@ -37,17 +37,20 @@ final class SinglePersonIntegratedView extends VBox {
     java.util.function.Function<IntegratedSocialSecurityCompleteStrategySearchRequest,
             SocialSecurityAnalyzerJobController.Work<SinglePersonIntegratedAnalysis>> calculation = request -> (p, c) -> SinglePersonIntegratedAnalysis.calculate(request, p, c);
     private IndividualReportContext reportContext;
+    private com.daviddunn.retirementplanner.ui.controller.ApplicationController source;
+    WeightedResultPersistence persistence;
     private final IndividualPdfExportAction pdf = new IndividualPdfExportAction("single-deterministic-pdf",
             "social-security-deterministic.pdf", this::canExportPdf, this::preparePdfReport);
 
-    boolean canExportPdf() { return current && completed != null && reportContext != null
+    boolean canExportPdf() { return (persistence == null || persistence.resultMetadata() == null ? current : persistence.exportable()) && completed != null && reportContext != null
             && jobs.state() == SocialSecurityAnalyzerJobController.State.IDLE; }
     com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport preparePdfReport() {
         if (!canExportPdf()) throw new IllegalStateException("A current completed analysis is required.");
         var selected = table.getSelectionModel().getSelectedItem();
-        return IndividualAnalyzerReportAdapter.deterministic(reportContext, completed,
+        var report = IndividualAnalyzerReportAdapter.deterministic(reportContext, completed,
                 selected == null ? completed.result().currentPlanBaseline().evaluatedStrategy().primaryRetirementAge()
                         : selected.strategy().primaryRetirementAge());
+        return persistence != null && persistence.exportable() ? persistence.report(report) : report;
     }
     final SinglePersonMortalityView ssView;
     final SinglePersonMortalityView weightedView;
@@ -157,16 +160,30 @@ final class SinglePersonIntegratedView extends VBox {
     }
 
     void attachParameters(com.daviddunn.retirementplanner.ui.controller.ApplicationController source) {
+        this.source = source;
         parameters = new SocialSecurityParameterBinding(source,
                 com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_DETERMINISTIC, values -> {
             var s = (com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.Search) values;
             if (!"individual-nine-v1".equals(s.profile())) throw new IllegalArgumentException("Unsupported search profile");
             acceptedProfile = s; deathYear.setText(s.primaryDeathYear() == null ? "" : s.primaryDeathYear().toString());
-        }, () -> { acceptedProfile = null; deathYear.clear(); }, () -> { assessCompletedInputs(); refreshControls(); }, () -> true);
+        }, () -> { acceptedProfile = null; deathYear.clear(); }, () -> { assessCompletedInputs(); refreshControls(); if (persistence != null) persistence.reassess(); }, () -> true);
         ((VBox) navigation.choices().getFirst().workspace()).getChildren().add(9, parameters.controls);
         parameters.restore(); ssView.attachParameters(source); weightedView.attachParameters(source);
+        persistence = new WeightedResultPersistence(source, com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_DETERMINISTIC,
+                () -> new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisFingerprintService.Inputs(null, null, null, null, null,
+                        null, null, List.of(), List.of(), deathYear.getText().isBlank() ? null : Integer.valueOf(deathYear.getText().trim())), saved -> {
+            var restored = ((com.daviddunn.retirementplanner.app.socialsecurity.results.IndividualDeterministicSnapshot) saved.payload()).restore();
+            var c = saved.context();
+            var report = new IndividualReportContext(c.household(), c.primary(), c.startedAt(), c.assumptions().stream()
+                    .map(s -> new com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport.Section(s.title(), s.lines())).toList());
+            return () -> { reportContext = report; acceptedInputFingerprint = saved.inputFingerprint(); render(restored); };
+        }, () -> { if (persistence != null) current = persistence.current(); refreshControls(); },
+                () -> { completed = null; reportContext = null; table.getItems().clear(); details.clear(); });
+        ((VBox) navigation.choices().getFirst().workspace()).getChildren().add(9, persistence.controls);
     }
     void closeParameters() {
+        if (persistence != null) persistence.close();
+        if (ssView.persistence != null) ssView.persistence.close();
         if (parameters != null) parameters.close();
         if (ssView.parameters != null) ssView.parameters.close();
         if (weightedView.parameters != null) weightedView.parameters.close();
@@ -197,14 +214,39 @@ final class SinglePersonIntegratedView extends VBox {
                     acceptedProfile == null ? 9 : acceptedProfile.retainedDetails(), death);
             var parameterRun = parameters == null ? null : parameters.begin(SocialSecurityParameterMapping.search(request));
             String capturedFingerprint = parameters == null ? null : inputFingerprint(frozen, request.primaryDeathYear().map(java.time.Year::getValue).orElse(null));
+            var admission = source == null ? null : source.prepareAnalyzerAssociation(com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_DETERMINISTIC, capturedFingerprint);
+            var capturedPayload = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.IndividualDeterministicSnapshot>();
+            var calculationWork = calculation.apply(request);
             current = false;
+            if (persistence != null) persistence.beginReplacement();
             boolean started = jobs.start(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
-                    calculation.apply(request), result -> {
+                    (progress, cancellation) -> {
+                        var result = calculationWork.run(progress, cancellation); cancellation.throwIfCancellationRequested();
+                        if (com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result.result()))
+                            capturedPayload.set(com.daviddunn.retirementplanner.app.socialsecurity.results.IndividualDeterministicSnapshot.capture(result));
+                        return result;
+                    }, result -> {
+                        if (!com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result.result())) {
+                            if (parameterRun != null) parameters.rollback(parameterRun);
+                            status.setText("No successful candidates. Previous accepted result and parameters retained.");
+                            return;
+                        }
                         reportContext = captured; acceptedInputFingerprint = capturedFingerprint; render(result);
+                        if (persistence != null) {
+                            var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_DETERMINISTIC;
+                            var context = new com.daviddunn.retirementplanner.app.socialsecurity.results.SnapshotContext(captured.household(), captured.primary(), null, captured.started(),
+                                    captured.assumptions().stream().map(s -> new com.daviddunn.retirementplanner.app.socialsecurity.results.SnapshotContext.Section(s.title(), s.lines())).toList(), List.of(), List.of(), Map.of());
+                            var completion = new com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion(source.getAnalysisSessionId(),
+                                    source.canPersistAnalysisResults() ? source.getCurrentFile() : null, kind, admission == null ? UUID.randomUUID() : admission.ticket(), java.time.Instant.now(), capturedFingerprint,
+                                    new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisFingerprintService().effectiveContextFingerprint(kind, frozen),
+                                    com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisVersions.algorithms(kind), Map.of(),
+                                    capturedPayload.get(), context);
+                            persistence.accept(completion.associatedWith(parameterRun != null && parameterRun.edit() == parameters.editEpoch() ? admission : null));
+                        }
                         if (parameterRun != null && com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result)) parameters.accept(parameterRun);
                     }, failure -> status.setText("Analysis failed: " + failure.getMessage()),
                     () -> { if (parameterRun != null) parameters.rollback(parameterRun); });
-            if (!started) status.setText("Another analysis is running. Try again when it finishes.");
+            if (!started) { if (persistence != null) persistence.finishReplacement(); status.setText("Another analysis is running. Try again when it finishes."); }
             refreshControls();
         } catch (RuntimeException invalid) {
             current = false;
@@ -264,6 +306,7 @@ final class SinglePersonIntegratedView extends VBox {
     private void refreshControls() {
         inheritedPlan.setText(AnalyzerConfigurationLayout.individualPlan(plan));
         boolean busy = jobs.state() != SocialSecurityAnalyzerJobController.State.IDLE;
+        if (!busy && persistence != null) javafx.application.Platform.runLater(persistence::finishReplacement);
         run.setDisable(busy || plan.getHousehold().hasSpouse());
         cancel.setDisable(!busy);
         pdf.refresh();

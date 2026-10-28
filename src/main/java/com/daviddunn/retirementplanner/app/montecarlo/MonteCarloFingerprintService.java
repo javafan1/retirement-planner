@@ -124,9 +124,9 @@ public final class MonteCarloFingerprintService {
     private JsonNode plan(String document, boolean sampled, boolean alternative, boolean paired, ObjectNode context) throws java.io.IOException {
         var node = (ObjectNode) json.readTree(document);
         var allowed = Set.of("planId", "household", "accountPortfolio", "planningAssumptions",
-                "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations");
+                "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations", "projectionState");
         node.fieldNames().forEachRemaining(k -> { if (!allowed.contains(k)) throw new IllegalArgumentException("Unclassified plan field."); });
-        node.remove(List.of("planId", "baseline", "analyzerConfigurations"));
+        node.remove(List.of("planId", "baseline", "analyzerConfigurations", "projectionState"));
         removeNames(node);
         var assumptions = (ObjectNode) node.get("planningAssumptions");
         if (sampled || alternative) move(assumptions, "projectionLengthYears", context);

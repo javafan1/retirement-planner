@@ -132,6 +132,7 @@ final class LongevityWeightedIntegratedView extends VBox {
     }
 
     private void render(LongevityWeightedIntegratedPresentation value, String knownElections, String baselineProblem) {
+        boolean sameResult = model != null && model.result() == value.result();
         model = value;
         stale.setText("");
         var result = value.result();
@@ -156,10 +157,12 @@ final class LongevityWeightedIntegratedView extends VBox {
                                 + value.provenEquivalentCount(entry.inputOrder())).orElse(""))
                         .orElseGet(() -> "\nBaseline evaluation unavailable: " + base.failure().orElseThrow().message()))
                 .orElse(knownElections + "\n" + baselineProblem));
-        table.getItems().setAll(result.orderedEntries());
-        table.sort();
-        table.getSelectionModel().selectFirst();
-        heatMap.render(LongevityWeightedHeatMapAdapter.from(value));
+        if (!sameResult) {
+            table.getItems().setAll(result.orderedEntries());
+            table.sort();
+            table.getSelectionModel().selectFirst();
+            heatMap.render(LongevityWeightedHeatMapAdapter.from(value));
+        }
         status.setText("Complete: " + result.completedStrategyCount() + " successful; " + result.failedStrategyCount()
                 + " failed candidates. " + (result.baseline().filter(base -> !base.successful()).isPresent() ? "Baseline failed separately." : ""));
         methodology.setText(METHODOLOGY + "\n\nJanuary 1 modeled deaths use the preceding December 31 ending estate or matching opening snapshot. "

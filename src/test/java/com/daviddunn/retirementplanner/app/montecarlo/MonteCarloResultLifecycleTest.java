@@ -142,6 +142,38 @@ class MonteCarloResultLifecycleTest {
         }
     }
 
+    @ParameterizedTest @EnumSource(value = AnalysisKind.class, names = ".*MONTE_CARLO.*", mode = EnumSource.Mode.MATCH_ALL)
+    void pendingReassessmentIsNotPresentedAsProvenMismatch(AnalysisKind kind) throws Exception {
+        var payload = FIXTURES.get(kind); var repo = new Memory(); var store = new AnalysisResultStore(repo);
+        var binding = new MonteCarloResultLifecycle.Binding(UUID.randomUUID(), dir.resolve("pending.json"), kind);
+        repo.save(MonteCarloResultLifecycle.completion(binding, payload).presentationSnapshot(new AnalysisSnapshotCodec()));
+        var ui = new Ui(); var attached = new AtomicReference<Object>();
+        var lifecycle = new MonteCarloResultLifecycle<Object>(store, ui, MonteCarloResultLifecycleTest::restore,
+                attached::set, () -> attached.set(null), () -> { });
+        lifecycle.bind(binding); lifecycle.assess(() -> () -> inputs(payload));
+        ui.until(() -> attached.get() != null && lifecycle.current());
+        var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
+        try {
+            lifecycle.assess(() -> () -> {
+                entered.countDown();
+                try { assertTrue(release.await(10, TimeUnit.SECONDS)); }
+                catch (InterruptedException e) { throw new AssertionError(e); }
+                return inputs(payload);
+            });
+            assertTrue(entered.await(10, TimeUnit.SECONDS));
+            assertTrue(lifecycle.freshness().pending()); assertFalse(lifecycle.freshness().mismatch());
+            assertTrue(lifecycle.status().contains("Assessing")); assertFalse(lifecycle.status().contains("Outdated"));
+            var report = payload.paired() == null
+                    ? MonteCarloPdfReportAdapter.from(MonteCarloSnapshotPresentationMapper.restoreRun(payload))
+                    : MonteCarloPdfReportAdapter.from(MonteCarloSnapshotPresentationMapper.restoreComparison(payload));
+            var pending = lifecycle.report(report);
+            assertTrue(pending.context().getFirst().contains("Assessing"));
+            assertFalse(pending.context().getFirst().contains("Outdated"));
+            release.countDown(); ui.until(lifecycle::current);
+            assertTrue(lifecycle.report(report).context().getFirst().contains("compatible but unassociated"));
+        } finally { release.countDown(); lifecycle.close(); close(store); }
+    }
+
     @Test void allEightSlotsCoexistAndFingerprintsExcludeIdentityAndDisplayNames() throws Exception {
         var repo = new Memory(); var store = new AnalysisResultStore(repo); var id = UUID.randomUUID();
         for (var payload : FIXTURES.values()) {

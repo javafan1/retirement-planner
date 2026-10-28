@@ -8,9 +8,17 @@ import javafx.scene.layout.Region;
 
 /** Shared result navigation and natural-height sizing inside the analyzer's outer scroller. */
 final class IntegratedAnalysisResultTabs extends TabPane {
-    IntegratedAnalysisResultTabs(Tab ranked, Tab heatMap) {
-        super(ranked, heatMap);
+    private long selectionEpoch;
+    private boolean initialSelection;
+    private java.util.function.Supplier<java.util.function.BooleanSupplier> revealGuard = () -> () -> true;
+    private Runnable navigationChanged = () -> { };
+    void onNavigation(Runnable action) { navigationChanged = action; }
+    void onReveal(java.util.function.Supplier<java.util.function.BooleanSupplier> guard) { revealGuard = guard; }
+    IntegratedAnalysisResultTabs(Tab... tabs) {
+        super(tabs);
+        Tab heatMap = tabs[1];
         setTabClosingPolicy(TabClosingPolicy.UNAVAILABLE);
+        setMinWidth(0);
         setMinHeight(Region.USE_PREF_SIZE);
         for (Tab tab : getTabs()) {
             if (tab.getContent() instanceof Region content) {
@@ -21,9 +29,23 @@ final class IntegratedAnalysisResultTabs extends TabPane {
             }
         }
         getSelectionModel().selectedItemProperty().addListener((observable, before, after) -> {
+            navigationChanged.run();
+            long expected = ++selectionEpoch;
             requestLayout();
-            if (after == heatMap) Platform.runLater(() -> reveal(this));
+            // A delayed scroll must not undo a later selection or scroll a detached workspace.
+            var scene = getScene();
+            var allowed = revealGuard.get();
+            if (after == heatMap && !initialSelection) Platform.runLater(() -> {
+                if (selectionEpoch == expected && getSelectionModel().getSelectedItem() == heatMap
+                        && getScene() == scene && scene != null && isVisible() && allowed.getAsBoolean()) reveal(this);
+            });
         });
+    }
+
+    void selectInitial(Tab tab) {
+        initialSelection = true;
+        try { getSelectionModel().select(tab); }
+        finally { initialSelection = false; }
     }
 
     @Override protected double computePrefHeight(double width) {

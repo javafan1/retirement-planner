@@ -1,0 +1,16 @@
+.baseline-details {
+    -fx-padding: 12;
+    -fx-background-color: -fx-control-inner-background;
+}
+.baseline-details .baseline-changed {
+    -fx-background-color: -fx-control-inner-background, rgba(239, 174, 35, 0.22);
+}
+.baseline-details .baseline-unknown {
+    -fx-background-color: derive(-fx-control-inner-background, -5%);
+}
+.baseline-details .baseline-difference {
+    -fx-font-weight: bold;
+}
+.baseline-details .table-cell .label {
+    -fx-text-fill: -fx-text-inner-color;
+}
