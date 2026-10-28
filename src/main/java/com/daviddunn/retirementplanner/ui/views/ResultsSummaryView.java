@@ -3670,7 +3670,10 @@ public class ResultsSummaryView extends BorderPane {
                 0);
 
         Label benefitLabelTitle =
-                new Label("Monthly Benefit");
+                new Label("Monthly Benefit\n("
+                        + socialSecurity.getBenefitValuationYear()
+                        + " dollars)");
+        benefitLabelTitle.setWrapText(true);
 
         benefitLabelTitle.getStyleClass().add(
                 "assumption-label");
@@ -3707,53 +3710,44 @@ public class ResultsSummaryView extends BorderPane {
         Integer claimingAge =
                 ageCombo.getValue();
 
-        if (claimingAge == null) {
+        String explanation =
+                "Monthly own-retirement benefit in "
+                        + socialSecurity.getBenefitValuationYear()
+                        + " dollars. The claiming-age adjustment is included. "
+                        + "COLA after that valuation year is not applied to this preview. "
+                        + "This is not the household payment including spousal or survivor benefits, "
+                        + "or the deposit after deductions.";
+        Tooltip tooltip = new Tooltip(explanation);
+        tooltip.setWrapText(true);
+        tooltip.setMaxWidth(360);
+        benefitLabel.setTooltip(tooltip);
+        benefitLabel.setAccessibleHelp(explanation);
+
+        if (claimingAge == null || person.getBirthDate() == null) {
             benefitLabel.setText("-");
+            benefitLabel.setAccessibleText("Monthly own-retirement benefit unavailable.");
             return;
         }
 
-        if (controller.isRestoredProjectionMode() && controller.currentProjectionInputsMatch()
-                && claimingAge == socialSecurity.getClaimingAge()) {
-            var income = controller.getCurrentProjectionSummary().getIncomeSummary();
-            var monthly = person == currentPlan.getHousehold().getPrimaryPerson()
-                    ? income.getPrimarySocialSecurityMonthly() : income.getSpouseSocialSecurityMonthly();
-            benefitLabel.setText(monthly == null ? "Not recorded" : UIFormatters.money(monthly));
-            benefitLabel.setTooltip(new Tooltip("Original accepted income summary; no benefit calculation was run during restoration."));
-            return;
-        }
-
-        LocalDate claimDate =
-                SocialSecurityBenefitStartDateCalculator
-                        .calculate(person, claimingAge)
-                        .orElse(null);
-
-        if (claimDate == null) {
-            benefitLabel.setText("-");
-            return;
-        }
-
-        SocialSecurityIncome preview =
-                new SocialSecurityIncome(
-                        socialSecurity.getName(),
-                        socialSecurity.getOwnership(),
-                        claimDate,
-                        socialSecurity.getEndDate(),
-                        socialSecurity
-                                .getFullRetirementMonthlyBenefit(),
-                        claimingAge,
-                        socialSecurity.getAnnualColaRate(),
-                        socialSecurity.getBenefitValuationYear());
-
+        // One valuation-year path for initial, restored and edited elections.
+        // Annual projections and analyzers apply their own authoritative payment-year COLA.
         BigDecimal monthlyBenefit =
-                preview.getProjectedMonthlyBenefit(
-                        person,
-                        claimDate,
-                        currentPlan
-                                .getPlanningAssumptions()
-                                .getSocialSecurityColaRate());
+                SocialSecurityBenefitCalculator.calculateMonthlyBenefit(
+                        socialSecurity.getFullRetirementMonthlyBenefit(),
+                        person.getBirthDate(),
+                        claimingAge)
+                        .setScale(2, RoundingMode.HALF_UP);
 
         benefitLabel.setText(
                 UIFormatters.money(monthlyBenefit));
+        benefitLabel.setAccessibleText(
+                "Monthly own-retirement benefit at age "
+                        + claimingAge
+                        + ": "
+                        + benefitLabel.getText()
+                        + " in "
+                        + socialSecurity.getBenefitValuationYear()
+                        + " dollars.");
     }
 
     private void applySocialSecurity() {
