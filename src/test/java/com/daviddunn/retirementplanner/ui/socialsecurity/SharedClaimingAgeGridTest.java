@@ -17,6 +17,31 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.ui.socialsecurity.WeightedRestorationTest.*;
 
 class SharedClaimingAgeGridTest {
+    @ParameterizedTest @CsvSource({"1180,820,LIGHT", "900,650,LIGHT", "1180,820,DARK", "900,650,DARK"})
+    void applicationThemesKeepExactGridPaletteAndReadableLayout(int width, int height,
+            com.daviddunn.retirementplanner.application.settings.ApplicationTheme theme) throws Exception {
+        fx(() -> {
+            var themes = com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(theme);
+            var view = new ClaimingStrategyHeatMapView(ClaimingStrategyHeatMapProfile.deterministic(), order -> { });
+            view.render(DeterministicHeatMapAdapter.from(DeterministicHeatMapAdapterTest.fixture()));
+            var scroll = new ScrollPane(view); scroll.setFitToWidth(true);
+            var stage = new Stage(); stage.setScene(new Scene(new StackPane(scroll), width, height)); stage.show();
+            try {
+                view.applyCss(); view.layout();
+                assertEquals(81, view.lookupAll(".heat-map-cell").size());
+                for (var node : view.lookupAll(".heat-map-cell")) {
+                    var button = (ToggleButton) node;
+                    assertEquals(javafx.scene.paint.Color.web("#142536"), button.getTextFill());
+                    assertTrue(button.getBackground().getFills().stream().anyMatch(fill ->
+                            java.util.Arrays.stream(ClaimingHeatMapPalette.values()).anyMatch(t -> fill.getFill().equals(javafx.scene.paint.Color.web(t.color)))));
+                }
+                Files.createDirectories(Path.of("target/phase13b-previews"));
+                javax.imageio.ImageIO.write(toBuffered(stage.getScene().snapshot(null)), "png",
+                        Path.of("target/phase13b-previews/grid-" + width + "-" + theme + ".png").toFile());
+            } finally { stage.close(); themes.close(); }
+            return null;
+        });
+    }
     static SocialSecurityStrategyAnalyzerPresentation presentation;
     @BeforeAll static void prepare() throws Exception {
         startFx();

@@ -60,6 +60,10 @@ public class MainWindow {
     private final NonInvestableAssetsView nonInvestableAssetsView;
 
     private Stage stage;
+    private com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager themes;
+    private final com.daviddunn.retirementplanner.application.branding.ApplicationBranding branding;
+    private final boolean applicationOwnedPreferences;
+    private Exception startupProjectionFailure;
     private boolean collectingViewEdits;
     private final Label statusLabel;
     private final Label projectionFundingNotice = new Label();
@@ -73,7 +77,26 @@ public class MainWindow {
     }
 
     private MainWindow(ApplicationController controller, boolean reopenLastPlan) {
+        this(controller, reopenLastPlan,
+                com.daviddunn.retirementplanner.application.branding.ApplicationBranding.defaults(), null, false, null);
+    }
+
+    /** Prepared startup consumes existing caches; does not reopen/invalidate/recalculate them. */
+    public MainWindow(ApplicationController controller,
+            com.daviddunn.retirementplanner.application.branding.ApplicationBranding branding,
+            com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager themes,
+            Exception startupProjectionFailure) {
+        this(controller, false, branding, themes, true, startupProjectionFailure);
+    }
+
+    private MainWindow(ApplicationController controller, boolean reopenLastPlan,
+            com.daviddunn.retirementplanner.application.branding.ApplicationBranding branding,
+            com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager sharedThemes,
+            boolean preparedStartup, Exception startupProjectionFailure) {
         this.controller = java.util.Objects.requireNonNull(controller);
+        this.branding = java.util.Objects.requireNonNull(branding);
+        this.themes = sharedThemes;
+        this.applicationOwnedPreferences = preparedStartup;
 
         householdView = new HouseholdView();
         accountsView = new AccountsView();
@@ -103,7 +126,8 @@ public class MainWindow {
 
         //loadCurrentPlan();
         if (reopenLastPlan) controller.openLastPlan();
-        loadCurrentPlan(reopenLastPlan);
+        loadCurrentPlan(reopenLastPlan, preparedStartup);
+        this.startupProjectionFailure = startupProjectionFailure;
     }
 
     private void wireEvents() {
@@ -258,7 +282,16 @@ public class MainWindow {
     }
 
     public Scene createScene() {
-        return new Scene(root, 1200, 800);
+        var scene = new Scene(root, 1200, 800);
+        if (themes == null) themes = com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(controller.getSettingsService().snapshot().getTheme());
+        com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.prepare(scene);
+        return scene;
+    }
+
+    public void closeApplicationPreferences() {
+        if (applicationOwnedPreferences) return;
+        controller.getSettingsService().close();
+        if (themes != null) themes.close();
     }
 
     private MenuBar createMenuBar() {
@@ -272,6 +305,11 @@ public class MainWindow {
         MenuItem saveBaselineItem =
                 new MenuItem("Save Current as Baseline");
         MenuItem exitItem = new MenuItem("Exit");
+        MenuItem settingsItem = new MenuItem("Application Settings…");
+        settingsItem.setOnAction(e -> {
+            if (themes == null) themes = com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(controller.getSettingsService().snapshot().getTheme());
+            new com.daviddunn.retirementplanner.ui.settings.ApplicationSettingsDialog(root.getScene().getWindow(), controller.getSettingsService(), themes).showAndWait();
+        });
 
         saveItem.setOnAction(e -> onSave());
         saveAsItem.setOnAction(e -> onSaveAs());
@@ -289,6 +327,8 @@ public class MainWindow {
                 saveAsItem,
                 new SeparatorMenuItem(),
                 saveBaselineItem,
+                new SeparatorMenuItem(),
+                settingsItem,
                 new SeparatorMenuItem(),
                 exitItem);
 
@@ -428,7 +468,7 @@ public class MainWindow {
         projectionFundingNotice.accessibleTextProperty().bind(projectionFundingNotice.textProperty());
         projectionFundingNotice.visibleProperty().bind(projectionFundingNotice.textProperty().isNotEmpty());
         projectionFundingNotice.managedProperty().bind(projectionFundingNotice.visibleProperty());
-        projectionFundingNotice.setStyle("-fx-background-color: #fff6dc; -fx-text-fill: #493000; -fx-padding: 8;");
+        projectionFundingNotice.setStyle("-fx-background-color: -fx-control-inner-background; -fx-text-fill: -fx-text-base-color; -fx-border-color: #c49532; -fx-padding: 8;");
         var statusBar = new javafx.scene.layout.VBox(5, projectionFundingNotice, statusLabel);
         statusBar.setPadding(new Insets(5));
 
@@ -442,6 +482,10 @@ public class MainWindow {
     }
 
     private void loadCurrentPlan(boolean runProjection) {
+        loadCurrentPlan(runProjection, false);
+    }
+
+    private void loadCurrentPlan(boolean runProjection, boolean preparedStartup) {
 
         RetirementPlan plan = controller.getCurrentPlan();
 
@@ -459,6 +503,9 @@ public class MainWindow {
         if (controller.isRestoredProjectionMode()) {
             refreshProjectionViews(false, true);
             observeProjectionRestoration(plan);
+        }
+        else if (preparedStartup) {
+            refreshProjectionViews(false, false, true);
         }
         else if (runProjection) {
             refreshAllViews();
@@ -524,6 +571,8 @@ public class MainWindow {
 
     private boolean onSave() {
 
+        if (planOperationActive || swappingProjections) return false;
+
         if (!controller.hasCurrentFile()) {
             return onSaveAs();
         }
@@ -532,14 +581,16 @@ public class MainWindow {
             return false;
         }
 
+        boolean durable = false;
         try {
-
-            controller.save();
+            var receipt = awaitPlanFile(controller.preparePlanSave(controller.getCurrentFile(), false), "Saving retirement plan…");
+            durable = true;
+            controller.finishPlanSave(receipt);
+            awaitPlanFile(controller.getPlanPreferenceWrite(), "Updating application preferences…");
 
             updateWindowTitle();
 
-            statusLabel.setText(
-                    "Plan saved.");
+            statusLabel.setText(controller.isModified() ? "Captured plan saved; newer changes remain unsaved." : "Plan saved.");
             showPersistenceWarnings();
 
         } catch (Exception ex) {
@@ -547,13 +598,15 @@ public class MainWindow {
             statusLabel.setText(
                     "Save failed.");
 
-            showSaveFailure();
+            if (durable) showSavedEarlierSnapshotNotice(); else showSaveFailure();
             return false;
         }
-        return true;
+        return !controller.isModified();
     }
 
     private boolean onSaveAs() {
+
+        if (planOperationActive || swappingProjections) return false;
 
         // Invalid drafts must also block Save before an untitled plan opens the file chooser.
         if (!assumptionsView.validateChanges()) {
@@ -576,15 +629,19 @@ public class MainWindow {
             return false;
         }
 
+        boolean durable = false;
         try {
-            controller.saveAs(file.toPath());
+            var receipt = awaitPlanFile(controller.preparePlanSave(file.toPath(), true), "Saving retirement plan as…");
+            durable = true;
+            controller.finishPlanSave(receipt);
+            awaitPlanFile(controller.getPlanPreferenceWrite(), "Updating application preferences…");
             controller.getSnapshotCopyCompletion().thenAccept(warnings -> {
                 if (!warnings.isEmpty()) javafx.application.Platform.runLater(() -> {
                     if (stage != null && stage.isShowing()) showPersistenceWarnings();
                 });
             });
 
-            statusLabel.setText("Plan saved.");
+            statusLabel.setText(controller.isModified() ? "Captured plan saved; newer changes remain unsaved." : "Plan saved.");
 
             updateWindowTitle();
             showPersistenceWarnings();
@@ -593,13 +650,15 @@ public class MainWindow {
 
             statusLabel.setText("Save failed.");
 
-            showSaveFailure();
+            if (durable) showSavedEarlierSnapshotNotice(); else showSaveFailure();
             return false;
         }
-        return true;
+        return !controller.isModified();
     }
 
     private void onOpen() {
+
+        if (planOperationActive || swappingProjections) return;
 
         if (!confirmPlanDeparture()) {
             return;
@@ -614,15 +673,25 @@ public class MainWindow {
                         "JSON Files",
                         "*.json"));
 
-        File file = fileChooser.showOpenDialog(root.getScene().getWindow());
+        if (!preparePlanChooser(fileChooser)) return;
+        File file;
+        try { file = fileChooser.showOpenDialog(root.getScene().getWindow()); }
+        catch (IllegalArgumentException unavailable) {
+            fileChooser.setInitialDirectory(null);
+            statusLabel.setText("Preferred folder unavailable; using the system file chooser location.");
+            file = fileChooser.showOpenDialog(root.getScene().getWindow());
+        }
 
         if (file == null) {
             return;
         }
 
+        boolean prepared = false;
         try {
-
-            controller.open(file.toPath());
+            var loaded = awaitPlanFile(controller.preparePlanOpen(file.toPath()), "Loading retirement plan…");
+            prepared = true;
+            controller.finishPlanOpen(loaded);
+            awaitPlanFile(controller.getPlanPreferenceWrite(), "Updating application preferences…");
 
             loadCurrentPlan();
 
@@ -635,7 +704,11 @@ public class MainWindow {
 
             statusLabel.setText("Open failed.");
 
-            offerPlanRecovery(file.toPath());
+            if (prepared) {
+                var notice = new Alert(Alert.AlertType.WARNING,
+                        "The active plan or accepted analysis changed while loading. The loaded plan was not applied. Review current changes before opening another plan.", ButtonType.OK);
+                notice.setTitle("Plan changed while loading"); if (stage != null) notice.initOwner(stage); notice.showAndWait();
+            } else offerPlanRecovery(file.toPath());
         }
     }
 
@@ -645,7 +718,44 @@ public class MainWindow {
         chooser.setTitle("Save Retirement Plan");
         chooser.setInitialFileName("RetirementPlan.json");
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files", "*.json"));
-        return chooser.showSaveDialog(root.getScene().getWindow());
+        if (!preparePlanChooser(chooser)) return null;
+        try { return chooser.showSaveDialog(root.getScene().getWindow()); }
+        catch (IllegalArgumentException unavailable) {
+            chooser.setInitialDirectory(null);
+            statusLabel.setText("Preferred folder unavailable; using the system file chooser location.");
+            return chooser.showSaveDialog(root.getScene().getWindow());
+        }
+    }
+
+    /** Modal nested event loop keeps FX responsive while potentially slow directory probes run off FX. */
+    private boolean preparePlanChooser(FileChooser chooser) {
+        var plan = controller.getCurrentPlan();
+        var path = controller.getCurrentFile();
+        var service = controller.getSettingsService();
+        var settings = service.snapshot();
+        var progress = new Dialog<ButtonType>(); progress.setTitle("Choose Retirement Plan Location");
+        progress.initOwner(root.getScene().getWindow()); progress.setContentText("Checking available plan folders…");
+        progress.getDialogPane().getButtonTypes().setAll(ButtonType.CANCEL);
+        var resolved = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.application.settings.PlanDirectoryResolver.Resolution>();
+        var probeFailed = new java.util.concurrent.atomic.AtomicBoolean();
+        var request = service.background(() -> com.daviddunn.retirementplanner.application.settings.PlanDirectoryResolver.resolve(settings, path, System.getProperty("user.home")));
+        request.whenComplete((value, failure) -> javafx.application.Platform.runLater(() -> {
+            if (!progress.isShowing()) return;
+            if (failure == null) resolved.set(value);
+            else {
+                probeFailed.set(true);
+                resolved.set(new com.daviddunn.retirementplanner.application.settings.PlanDirectoryResolver.Resolution(null, false));
+            }
+            progress.close();
+        }));
+        progress.showAndWait();
+        if (controller.getCurrentPlan() != plan || !java.util.Objects.equals(controller.getCurrentFile(), path)) return false;
+        var value = resolved.get();
+        if (value == null) { statusLabel.setText("Folder selection canceled or unavailable. No plan was changed."); return false; }
+        if (value.preferredUnavailable()) statusLabel.setText("Default plan directory unavailable; using an available fallback folder.");
+        if (probeFailed.get()) statusLabel.setText("Folder validation unavailable; using the native file chooser location.");
+        if (value.directory() != null) chooser.setInitialDirectory(value.directory().toFile());
+        return true;
     }
 
     private void showSaveFailure() {
@@ -654,6 +764,15 @@ public class MainWindow {
         alert.setHeaderText("The plan was not saved.");
         alert.setContentText("Existing plan data was preserved. Check folder permissions, read-only or locked files, available space and adjacent backup ownership. The location must support atomic replacement. If the existing file is damaged, use Open to review its backup, or Save As to a different filename.");
         alert.showAndWait();
+    }
+
+    private void showSavedEarlierSnapshotNotice() {
+        statusLabel.setText("The captured plan was saved; newer active changes were retained. Review and save again.");
+        var notice = new Alert(Alert.AlertType.WARNING,
+                "The captured plan was durably saved, but the active plan changed before completion. Newer edits and plan ownership were not replaced. Review the active plan and save again.", ButtonType.OK);
+        notice.setTitle("Saved earlier plan state");
+        if (stage != null) notice.initOwner(stage);
+        notice.showAndWait();
     }
 
     public void showPersistenceWarnings() {
@@ -669,6 +788,11 @@ public class MainWindow {
 
     /** Called once after the stage is visible; no automatic backup activation. */
     public void showStartupPersistenceNotices() {
+        if (startupProjectionFailure != null) {
+            var failure = startupProjectionFailure;
+            startupProjectionFailure = null;
+            handleProjectionFailure(failure);
+        }
         showPersistenceWarnings();
         if (controller.getFailedOpenPath() != null) {
             offerPlanRecovery(controller.getFailedOpenPath());
@@ -676,7 +800,9 @@ public class MainWindow {
     }
 
     private void offerPlanRecovery(java.nio.file.Path original) {
-        boolean available = controller.hasValidBackup(original);
+        boolean available;
+        try { available = awaitPlanFile(controller.prepareBackupAvailability(original), "Checking recovery backup…"); }
+        catch (RuntimeException unavailable) { available = false; }
         Alert alert = new Alert(available ? Alert.AlertType.CONFIRMATION : Alert.AlertType.WARNING);
         alert.setTitle("Unable to open plan");
         alert.setHeaderText("The original file was preserved.");
@@ -687,7 +813,7 @@ public class MainWindow {
         if (available) alert.getButtonTypes().setAll(recover, ButtonType.CANCEL);
         if (alert.showAndWait().orElse(ButtonType.CANCEL) == recover) {
             try {
-                controller.openRecoveredPlan(original);
+                controller.finishPlanOpen(awaitPlanFile(controller.preparePlanRecovery(original), "Loading recovery backup…"));
                 loadCurrentPlan();
                 updateWindowTitle();
                 statusLabel.setText("Recovered backup — unsaved. Review, then Save As to a different filename.");
@@ -723,6 +849,7 @@ public class MainWindow {
         return false;
     }
     private void onExit() {
+        if (planOperationActive || swappingProjections) return;
 
         if (!confirmPlanDeparture()) {
             return;
@@ -808,9 +935,40 @@ public class MainWindow {
 
     private boolean swappingProjections;
     private long swapUiEpoch;
+    private boolean planOperationActive;
+    private Runnable releaseSwapFeedback;
+    private PlanOperationFeedback swapFeedback;
+
+    /** Preserve synchronous departure decisions while the nested FX event loop keeps repainting.
+     * Only the detached worker runs expensive file work. No blocking Future.get on FX. */
+    private <T> T awaitPlanFile(java.util.concurrent.CompletionStage<T> work, String message) {
+        if (!javafx.application.Platform.isFxApplicationThread()) throw new IllegalStateException("FX owner required.");
+        if (planOperationActive) throw new IllegalStateException("Another plan operation is in progress.");
+        planOperationActive = true;
+        var feedback = new PlanOperationFeedback(stage, message);
+
+        var top = root.getTop(); var center = root.getCenter();
+        boolean topDisabled = top.isDisable(), centerDisabled = center.isDisable();
+        top.setDisable(true); center.setDisable(true);
+        Object loop = new Object();
+        var completed = new java.util.concurrent.atomic.AtomicReference<T>();
+        var failed = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        try {
+            work.whenComplete((value, failure) -> javafx.application.Platform.runLater(() -> {
+                completed.set(value); failed.set(failure);
+                javafx.application.Platform.exitNestedEventLoop(loop, null);
+            }));
+            javafx.application.Platform.enterNestedEventLoop(loop);
+            if (failed.get() != null) throw new java.util.concurrent.CompletionException(failed.get());
+            return completed.get();
+        } finally {
+            feedback.close();
+            top.setDisable(topDisabled); center.setDisable(centerDisabled); planOperationActive = false;
+        }
+    }
 
     private void swapCurrentAndBaseline() {
-        if (swappingProjections) return;
+        if (swappingProjections || planOperationActive) return;
         ++swapUiEpoch;
         var owner = controller.getCurrentPlan();
         String reason = controller.projectionSwapUnavailableReason();
@@ -837,7 +995,7 @@ public class MainWindow {
                 showSwapNotice("The plan or projection changed while confirmation was open. Nothing was swapped."); return;
             }
             swappingProjections = true;
-            runSwapBackground(controller.saveBeforeProjectionSwap(), owner, saved -> {
+            runSwapBackground(controller.saveBeforeProjectionSwap(), owner, false, saved -> {
                 controller.finishProjectionSwapSave(saved);
                 prepareProjectionSwap(owner);
             });
@@ -848,7 +1006,7 @@ public class MainWindow {
     }
 
     private void prepareProjectionSwap(RetirementPlan owner) {
-        runSwapBackground(controller.prepareProjectionSwap(), owner, prepared -> {
+        runSwapBackground(controller.prepareProjectionSwap(), owner, true, prepared -> {
             boolean changed = controller.commitProjectionSwap(prepared);
             if (changed) loadCurrentPlan(false); // Accepted caches only; no invalidate/reproject path.
             statusLabel.setText(changed ? controller.getProjectionSnapshotNotice() : "Both roles already identify the same projection. Nothing changed.");
@@ -858,35 +1016,46 @@ public class MainWindow {
     }
 
     private <T> void runSwapBackground(java.util.concurrent.CompletionStage<T> work, RetirementPlan owner,
-            java.util.function.Consumer<T> success) {
+            boolean canCancelPreparation, java.util.function.Consumer<T> success) {
         long operation = swapUiEpoch;
-        var progress = new Dialog<Void>();
-        progress.setTitle("Preparing Projection Swap");
-        progress.setHeaderText("Verifying original projection results. No financial calculation runs.");
-        progress.getDialogPane().setContent(new javafx.scene.control.ProgressIndicator());
-        progress.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
-        if (stage != null) progress.initOwner(stage);
-        var finished = new java.util.concurrent.atomic.AtomicBoolean();
-        progress.setOnHidden(event -> {
-            if (!finished.get() && operation == swapUiEpoch) { ++swapUiEpoch; controller.cancelProjectionSwap(); swappingProjections = false; }
-        });
-        progress.show();
+        if (releaseSwapFeedback == null) {
+            planOperationActive = true;
+            var feedback = new PlanOperationFeedback(stage, "Preparing projection swap…");
+            swapFeedback = feedback;
+
+            var top = root.getTop(); var center = root.getCenter();
+            boolean topDisabled = top.isDisable(), centerDisabled = center.isDisable();
+            top.setDisable(true); center.setDisable(true);
+            releaseSwapFeedback = () -> {
+                feedback.close();
+                top.setDisable(topDisabled); center.setDisable(centerDisabled); planOperationActive = false;
+            };
+        }
+        swapFeedback.phase(canCancelPreparation ? "Preparing projection swap…" : "Saving retirement plan before swap…",
+                canCancelPreparation ? () -> {
+                    ++swapUiEpoch; controller.cancelProjectionSwap(); swappingProjections = false; finishSwapFeedback();
+                    statusLabel.setText("Projection swap canceled. Original roles were retained.");
+                } : null);
         work.whenComplete((value, failure) -> javafx.application.Platform.runLater(() -> {
-            if (operation != swapUiEpoch) { finished.set(true); progress.close(); return; }
-            if (!progress.isShowing() || controller.getCurrentPlan() != owner || stage != null && !stage.isShowing()) {
-                finished.set(true); progress.close(); controller.cancelProjectionSwap(); swappingProjections = false; return;
+            if (operation != swapUiEpoch) return; // Never release or cancel a newer request's feedback/generation.
+            if (controller.getCurrentPlan() != owner || stage != null && !stage.isShowing()) {
+                controller.cancelProjectionSwap(); swappingProjections = false; finishSwapFeedback(); return;
             }
-            finished.set(true); progress.close();
             try {
-                if (failure != null) {
-                    controller.cancelProjectionSwap(); swappingProjections = false;
-                    showSwapNotice("Projection swap could not be completed. Original roles were retained. "
-                            + (failure.getCause() instanceof IllegalStateException cause ? cause.getMessage() : "Review persistence and projection readiness before retrying."));
-                } else success.accept(value);
-            } catch (IllegalStateException rejected) {
-                controller.cancelProjectionSwap(); swappingProjections = false; showSwapNotice(rejected.getMessage());
+                if (failure != null) throw new java.util.concurrent.CompletionException(failure);
+                success.accept(value);
+            } catch (RuntimeException rejected) {
+                controller.cancelProjectionSwap(); swappingProjections = false;
+                finishSwapFeedback();
+                showSwapNotice("Projection swap could not be completed. Original roles were retained. Review persistence and projection readiness before retrying.");
+            } finally {
+                if (!swappingProjections) finishSwapFeedback();
             }
         }));
+    }
+
+    private void finishSwapFeedback() {
+        if (releaseSwapFeedback != null) { var release = releaseSwapFeedback; releaseSwapFeedback = null; swapFeedback = null; release.run(); }
     }
 
     private void showSwapNotice(String text) {
@@ -905,33 +1074,37 @@ public class MainWindow {
     }
 
     private void refreshProjectionViews(boolean runProjection, boolean restored) {
+        refreshProjectionViews(runProjection, restored, false);
+    }
+
+    private void refreshProjectionViews(boolean runProjection, boolean restored, boolean preparedStartup) {
 
         resultsView.setBreakEvenAnalysis(null);
         resultsSummaryView.setBreakEvenAnalysis(null);
 
-        if (!restored) controller.invalidateProjection();
+        if (!restored && !preparedStartup) controller.invalidateProjection();
         projectionFundingNotice.setText("");
 
         try {
             Projection projection =
-                    restored ? controller.peekCurrentProjection() : runProjection ? controller.getCurrentProjection() : null;
+                    restored || preparedStartup ? controller.peekCurrentProjection() : runProjection ? controller.getCurrentProjection() : null;
 
             ProjectionSummary summary =
-                    (runProjection || restored && projection != null) ? controller.getCurrentProjectionSummary() : null;
+                    (runProjection || (restored || preparedStartup) && projection != null) ? controller.getCurrentProjectionSummary() : null;
 
             dashboardView.load(summary);
             portfolioChartView.load(projection);
             projectionYearView.load(projection);
             resultsView.load(
                     projection,
-                    (runProjection || restored && projection != null) ? controller.getCurrentNonInvestableAssetProjections() : List.of());
+                    (runProjection || (restored || preparedStartup) && projection != null) ? controller.getCurrentNonInvestableAssetProjections() : List.of());
             assumptionsView.refresh(
                     controller.getCurrentPlan());
 
             resultsSummaryView.load(
                     controller.getCurrentPlan(),
                     projection,
-                    (runProjection || restored && projection != null) ? controller.getCurrentNonInvestableAssetProjections() : List.of());
+                    (runProjection || (restored || preparedStartup) && projection != null) ? controller.getCurrentNonInvestableAssetProjections() : List.of());
 
             var breakEven = controller.getCachedBreakEvenAnalysis();
             resultsView.setBreakEvenAnalysis(breakEven);
@@ -956,7 +1129,9 @@ public class MainWindow {
 
         this.stage = stage;
         stage.setOnCloseRequest(event -> {
-            if (!confirmPlanDeparture()) {
+            if (planOperationActive || swappingProjections) {
+                event.consume();
+            } else if (!confirmPlanDeparture()) {
                 event.consume();
             } else if (controller.getAnalysisResults().needsDrain()) {
                 event.consume();
@@ -975,7 +1150,7 @@ public class MainWindow {
         }
 
         StringBuilder title =
-                new StringBuilder("Retirement Planner");
+                new StringBuilder(branding.applicationTitle());
 
         title.append(" - ");
 
@@ -1000,6 +1175,7 @@ public class MainWindow {
     }
 
     private void onNew() {
+        if (planOperationActive || swappingProjections) return;
 
         new com.daviddunn.retirementplanner.ui.wizard.NewRetirementPlanWizard(stage)
                 .showAndWait().ifPresent(plan -> {
@@ -1124,6 +1300,7 @@ public class MainWindow {
         statusLabel.setText("Projection could not be completed.");
     }
     private void onSaveCurrentAsBaseline() {
+        if (planOperationActive || swappingProjections) return;
 
         if (!controller.currentProjectionInputsMatch()) {
             new Alert(Alert.AlertType.INFORMATION,

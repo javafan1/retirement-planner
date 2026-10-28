@@ -223,6 +223,7 @@ public class ApplicationController {
 
     /** No engine work, no writes, and no publication on this worker. */
     public synchronized java.util.concurrent.CompletionStage<PreparedProjectionSwap> prepareProjectionSwap() {
+        if (planFileBusy) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("A plan file operation is in progress."));
         String reason = projectionSwapUnavailableReason();
         if (!reason.isEmpty()) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException(reason));
         if (modified) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Save the plan before swapping projections."));
@@ -256,8 +257,9 @@ public class ApplicationController {
                         || (association.kind().shape() == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.Shape.COUPLE)
                             != original.restoreInputs().getHousehold().hasSpouse())
                     throw new IllegalStateException("Historical analyzer projection binding is inconsistent.");
-                store.resolveAnalyzer(association, owner.getPendingAnalyzerAssociations().get(association.runId()),
-                        owner.getAssociatedAnalyzerResults().get(association.runId()), owner.getProjectionComponentSource());
+                store.verifyAnalyzer(owner.getProjectionComponentSource(), association,
+                        owner.getPendingAnalyzerAssociations().get(association.runId()),
+                        owner.getAssociatedAnalyzerResults().get(association.runId()));
             }
             var inputs = originalBaseline.restoreInputs();
             var target = new RetirementPlan(inputs.getHousehold(), inputs.getAccountPortfolio(), inputs.getPlanningAssumptions(),
@@ -280,6 +282,213 @@ public class ApplicationController {
 
     public synchronized void cancelProjectionSwap() { ++swapSequence; swapPreparing = false; }
 
+    // Dedicated bounded file work, independent of analyzer/result queues. Idle threads expire.
+    private final java.util.concurrent.ThreadPoolExecutor planFiles = new java.util.concurrent.ThreadPoolExecutor(
+            1, 1, 10, java.util.concurrent.TimeUnit.SECONDS, new java.util.concurrent.ArrayBlockingQueue<>(1), task -> {
+                var thread = new Thread(task, "retirement-plan-file"); thread.setDaemon(true); return thread;
+            }, new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+    private boolean planFileBusy;
+    private long planFileSequence;
+    public synchronized boolean isPlanFileBusy() { return planFileBusy; }
+    private synchronized void beginPlanFile() {
+        if (planFileBusy || swapPreparing) throw new IllegalStateException("Another plan operation is in progress.");
+        planFileBusy = true;
+        ++planFileSequence;
+        planFiles.allowCoreThreadTimeOut(true);
+    }
+    private synchronized void endPlanFile() { planFileBusy = false; }
+
+    public static final class PlanSave {
+        private final ProjectionSwapSave capture;
+        private final Path destination;
+        private final boolean fork;
+        private final List<String> warnings;
+        private final long sequence;
+        private PlanSave(ProjectionSwapSave capture, Path destination, boolean fork, List<String> warnings, long sequence) {
+            this.capture = capture; this.destination = destination; this.fork = fork; this.warnings = warnings;
+            this.sequence = sequence;
+        }
+    }
+
+    /** Capture only immutable documents/maps on the owner thread; no live graph reaches the writer. */
+    public synchronized java.util.concurrent.CompletionStage<PlanSave> preparePlanSave(Path destination, boolean saveAs) {
+        beginPlanFile();
+        long sequence = planFileSequence;
+        try {
+            if (destination == null) throw new IllegalStateException("No file selected.");
+            if (recoveredBackupPath != null && recoveredBackupPath.equals(destination.toAbsolutePath().normalize()))
+                throw new IllegalStateException("Choose a different filename; preserve the recovery backup.");
+            var owner = currentPlan; var file = currentFile; var revision = sourcePlanRevision; var epoch = projectionEpoch.get();
+            var inputs = CompleteProjectionSnapshot.freeze(owner); var baseline = owner.getBaseline();
+            var baselineInputs = baseline == null ? null : CompleteProjectionSnapshot.freeze(baseline.getSnapshot());
+            var manifest = owner.getProjectionState(); var configurations = owner.getAnalyzerConfigurations();
+            var components = owner.getProjectionComponents(); var pending = owner.getPendingAnalyzerAssociations();
+            var pinned = owner.getPendingPinnedProjections(); var analyzers = owner.getAssociatedAnalyzerResults();
+            var source = owner.getProjectionComponentSource(); var identity = owner.getPlanId();
+            Path identitySource = file != null ? file : recoveredOriginalPath;
+            boolean fork = saveAs && identitySource != null && !identitySource.toAbsolutePath().normalize().equals(destination.toAbsolutePath().normalize());
+            var proposed = fork || identity == null ? java.util.UUID.randomUUID() : RetirementPlan.validatedPlanId(identity);
+            boolean sameActiveFile = !fork && file != null && file.toAbsolutePath().normalize().equals(destination.toAbsolutePath().normalize());
+            Runnable parameterFence = repository instanceof JsonRetirementPlanRepository json
+                    ? json.parameterWriteFence(destination, configurations, sameActiveFile) : () -> { };
+            return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                try {
+                    var roots = CompleteProjectionSnapshot.restoreInputs(inputs);
+                    var copy = new RetirementPlan(roots.getHousehold(), roots.getAccountPortfolio(), roots.getPlanningAssumptions(),
+                            roots.getRothConversionRequest(), roots.getNonInvestableAssets(), identity);
+                    if (baseline != null) copy.setBaseline(new ProjectionBaseline(CompleteProjectionSnapshot.restoreInputs(baselineInputs),
+                            baseline.getSavedAt(), baseline.getDescription(), baseline.getProjectionSnapshotId()));
+                    if (configurations != null) copy.setAnalyzerConfigurations(configurations);
+                    copy.setProjectionState(manifest); copy.installProjectionComponents(components); copy.installPendingAnalyzerAssociations(pending);
+                    copy.installPendingPinnedProjections(pinned); copy.installAssociatedAnalyzerResults(analyzers); copy.setProjectionComponentSource(source);
+                    if (repository instanceof JsonRetirementPlanRepository json) json.saveWithIdentity(copy, destination, proposed, parameterFence);
+                    else { copy.assignPlanId(proposed); repository.save(copy, destination); }
+                    var warnings = new java.util.ArrayList<String>();
+                    if (repository instanceof JsonRetirementPlanRepository json) warnings.addAll(json.takeWarnings());
+                    return new PlanSave(new ProjectionSwapSave(owner, copy, file, revision, epoch, inputs, identity,
+                            manifest, baseline, configurations), destination, fork, List.copyOf(warnings), sequence);
+                } catch (IOException failure) { throw new java.util.concurrent.CompletionException(failure); }
+            }, planFiles).whenComplete((saved, failure) -> { if (failure != null) endPlanFile(); });
+        } catch (RuntimeException failure) { endPlanFile(); throw failure; }
+    }
+
+    /** A durable receipt does not authorize clearing later edits or publishing into a different plan. */
+    public synchronized void finishPlanSave(PlanSave receipt) {
+        if (!planFileBusy || receipt.sequence != planFileSequence) throw new IllegalStateException("This Save receipt is obsolete.");
+        try {
+            var saved = receipt.capture;
+            persistenceWarnings.addAll(receipt.warnings);
+            if (currentPlan != saved.owner || !java.util.Objects.equals(currentFile, saved.file)
+                    || !java.util.Objects.equals(currentPlan.getPlanId(), saved.planId))
+                throw new IllegalStateException("The captured plan was saved, but the active plan changed; its state was not replaced.");
+            boolean metadataMatches = currentPlan.getProjectionState() == saved.manifest
+                    && currentPlan.getBaseline() == saved.baseline && currentPlan.getAnalyzerConfigurations() == saved.configurations;
+            boolean inputsMatch = sourcePlanRevision == saved.revision && projectionEpoch.get() == saved.epoch
+                    && saved.inputs.equals(CompleteProjectionSnapshot.freeze(currentPlan));
+            boolean identityChanges = !java.util.Objects.equals(saved.planId, saved.committed.getPlanId());
+            if (identityChanges && (!metadataMatches || !inputsMatch)) {
+                modified = true;
+                throw new IllegalStateException("The captured copy was saved, but newer active changes prevented activating Save As. Retry Save As.");
+            }
+            var committed = saved.committed;
+            currentPlan.assignPlanId(RetirementPlan.validatedPlanId(committed.getPlanId()));
+            currentFile = receipt.destination;
+            if (metadataMatches) {
+                currentPlan.setProjectionState(committed.getProjectionState()); currentPlan.installProjectionComponents(committed.getProjectionComponents());
+                currentPlan.installPendingAnalyzerAssociations(committed.getPendingAnalyzerAssociations());
+                currentPlan.installPendingPinnedProjections(committed.getPendingPinnedProjections());
+                currentPlan.installAssociatedAnalyzerResults(committed.getAssociatedAnalyzerResults());
+                currentPlan.setProjectionComponentSource(committed.getProjectionComponentSource());
+            }
+            analysisParameters.saved(currentPlan, currentFile);
+            modified = !inputsMatch || !metadataMatches;
+            if (metadataMatches) projectionRolesSaved();
+            recoveredOriginalPath = null; recoveredBackupPath = null;
+            applicationSettings.setLastOpenedPlan(currentFile.toString());
+            recordLastPlanLater(currentFile);
+            if (receipt.fork && saved.planId != null) {
+                try {
+                    var isolated = new com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService().copy(currentPlan);
+                    snapshotCopy = analysisResults.cloneSnapshots(RetirementPlan.validatedPlanId(saved.planId),
+                            RetirementPlan.validatedPlanId(currentPlan.getPlanId()), currentFile, isolated);
+                } catch (RuntimeException unavailable) {
+                    var warning = "The new plan was saved, but historical analysis copying could not start.";
+                    persistenceWarnings.add(warning);
+                    snapshotCopy = java.util.concurrent.CompletableFuture.completedFuture(List.of(warning));
+                }
+            }
+            analysisBindingChanged();
+            if (restoredProjectionMode && currentProjection == null) restoreProjectionSnapshots();
+        } finally { endPlanFile(); }
+    }
+
+    public static final class PlanOpen {
+        private final RetirementPlan previous, loaded;
+        private final Path previousFile, file, recovery;
+        private final long revision, epoch;
+        private final String inputs;
+        private final JsonRetirementPlanRepository.PreparedLoad repositoryLoad;
+        private final long sequence;
+        private final ProjectionRoleManifest manifest;
+        private final ProjectionBaseline baseline;
+        private final com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations configurations;
+        private PlanOpen(RetirementPlan previous, RetirementPlan loaded, Path previousFile, Path file, Path recovery,
+                long revision, long epoch, String inputs, JsonRetirementPlanRepository.PreparedLoad repositoryLoad, long sequence,
+                ProjectionRoleManifest manifest, ProjectionBaseline baseline,
+                com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations configurations) {
+            this.previous = previous; this.loaded = loaded; this.previousFile = previousFile; this.file = file;
+            this.recovery = recovery; this.revision = revision; this.epoch = epoch; this.inputs = inputs;
+            this.repositoryLoad = repositoryLoad;
+            this.sequence = sequence;
+            this.manifest = manifest; this.baseline = baseline; this.configurations = configurations;
+        }
+    }
+
+    public synchronized java.util.concurrent.CompletionStage<PlanOpen> preparePlanOpen(Path file) {
+        beginPlanFile();
+        long sequence = planFileSequence;
+        try {
+            var previous = currentPlan; var previousFile = currentFile;
+            long revision = sourcePlanRevision, epoch = projectionEpoch.get();
+            String inputs = CompleteProjectionSnapshot.freeze(previous);
+            var manifest = previous.getProjectionState(); var baseline = previous.getBaseline(); var configurations = previous.getAnalyzerConfigurations();
+            return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                try {
+                    Path recovery = repository instanceof JsonRetirementPlanRepository json ? json.originalForBackup(file).orElse(null) : null;
+                    var prepared = repository instanceof JsonRetirementPlanRepository json ? json.prepareLoad(file) : null;
+                    var loaded = prepared == null ? repository.load(file) : prepared.plan();
+                    return new PlanOpen(previous, loaded, previousFile, file, recovery, revision, epoch, inputs, prepared, sequence,
+                            manifest, baseline, configurations);
+                } catch (IOException failure) { throw new java.util.concurrent.CompletionException(failure); }
+            }, planFiles).whenComplete((opened, failure) -> { if (failure != null) endPlanFile(); });
+        } catch (RuntimeException failure) { endPlanFile(); throw failure; }
+    }
+
+    public java.util.concurrent.CompletionStage<Boolean> prepareBackupAvailability(Path file) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> hasValidBackup(file), planFiles);
+    }
+    public java.util.concurrent.CompletionStage<PlanOpen> preparePlanRecovery(Path original) {
+        if (!(repository instanceof JsonRetirementPlanRepository json))
+            return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Backup recovery is unavailable."));
+        return preparePlanOpen(json.backupPath(original));
+    }
+
+    public synchronized void finishPlanOpen(PlanOpen prepared) {
+        if (!planFileBusy || prepared.sequence != planFileSequence) throw new IllegalStateException("This Open receipt is obsolete.");
+        try {
+            if (currentPlan != prepared.previous || !java.util.Objects.equals(currentFile, prepared.previousFile)
+                    || sourcePlanRevision != prepared.revision || projectionEpoch.get() != prepared.epoch
+                    || currentPlan.getProjectionState() != prepared.manifest || currentPlan.getBaseline() != prepared.baseline
+                    || currentPlan.getAnalyzerConfigurations() != prepared.configurations
+                    || !prepared.inputs.equals(CompleteProjectionSnapshot.freeze(currentPlan)))
+                throw new IllegalStateException("The active plan changed during loading. The loaded plan was not applied.");
+            if (prepared.repositoryLoad != null && repository instanceof JsonRetirementPlanRepository json) json.adoptLoad(prepared.repositoryLoad);
+            currentPlan = prepared.loaded; currentFile = prepared.recovery == null ? prepared.file : null;
+            recoveredOriginalPath = prepared.recovery;
+            recoveredBackupPath = prepared.recovery == null ? null : prepared.file.toAbsolutePath().normalize();
+            failedOpenPath = null; modified = prepared.recovery != null;
+            projectionChanged(); analysisParameters.bind(currentPlan, currentFile); sourcePlanChanged(); restoreProjectionSnapshots();
+            if (prepared.recovery == null) {
+                applicationSettings.setLastOpenedPlan(prepared.file.toString());
+                recordLastPlanLater(prepared.file);
+            }
+        } finally { endPlanFile(); }
+    }
+
+    private java.util.concurrent.CompletionStage<Void> planPreferenceWrite = java.util.concurrent.CompletableFuture.completedFuture(null);
+    public java.util.concurrent.CompletionStage<Void> getPlanPreferenceWrite() { return planPreferenceWrite; }
+    private void recordLastPlanLater(Path file) {
+        planPreferenceWrite = settingsService.recordLastPlanAsync(file.toString()).thenRun(() -> {
+            var notices = applicationSettingsRepository.takeWarnings();
+            synchronized (ApplicationController.this) { persistenceWarnings.addAll(notices); }
+        }).exceptionally(failure -> {
+            synchronized (ApplicationController.this) {
+                persistenceWarnings.add("The plan operation succeeded, but application settings could not be saved.");
+            }
+            return null;
+        });
+    }
+
     public static final class ProjectionSwapSave {
         private final RetirementPlan owner, committed;
         private final Path file;
@@ -299,6 +508,7 @@ public class ApplicationController {
 
     /** Same ordinary repository Save transaction, with captured binding and owner-thread finalization. */
     public synchronized java.util.concurrent.CompletionStage<ProjectionSwapSave> saveBeforeProjectionSwap() {
+        if (planFileBusy) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("A plan file operation is in progress."));
         if (currentFile == null) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Save the plan explicitly first."));
         var owner = currentPlan; var file = currentFile; var revision = sourcePlanRevision; var epoch = projectionEpoch.get();
         var inputs = CompleteProjectionSnapshot.freeze(owner); var baseline = owner.getBaseline();
@@ -307,6 +517,8 @@ public class ApplicationController {
         var components = owner.getProjectionComponents(); var pending = owner.getPendingAnalyzerAssociations();
         var pinned = owner.getPendingPinnedProjections(); var analyzers = owner.getAssociatedAnalyzerResults();
         var source = owner.getProjectionComponentSource(); var identity = owner.getPlanId();
+        Runnable parameterFence = repository instanceof JsonRetirementPlanRepository json
+                ? json.parameterWriteFence(file, configurations, true) : () -> { };
         return analysisResults.background(() -> {
             var roots = CompleteProjectionSnapshot.restoreInputs(inputs);
             var copy = new RetirementPlan(roots.getHousehold(), roots.getAccountPortfolio(), roots.getPlanningAssumptions(),
@@ -318,7 +530,13 @@ public class ApplicationController {
             copy.installPendingPinnedProjections(pinned); copy.installAssociatedAnalyzerResults(analyzers); copy.setProjectionComponentSource(source);
             // The ordinary atomic transaction may materialize/clear its argument's transient maps.
             // Never pass the live object: a later accepted analysis must not be cleared by this Save.
-            repository.save(copy, file);
+            if (repository instanceof JsonRetirementPlanRepository json)
+                json.saveWithIdentity(copy, file, RetirementPlan.validatedPlanId(identity), parameterFence);
+            else repository.save(copy, file);
+            if (repository instanceof JsonRetirementPlanRepository json) {
+                var notices = json.takeWarnings();
+                synchronized (ApplicationController.this) { persistenceWarnings.addAll(notices); }
+            }
             return new ProjectionSwapSave(owner, copy, file, revision, epoch, inputs, identity, manifest, baseline, configurations);
         });
     }
@@ -340,7 +558,7 @@ public class ApplicationController {
         currentPlan.setProjectionComponentSource(committed.getProjectionComponentSource());
         analysisParameters.saved(currentPlan, currentFile); modified = false;
         projectionRolesSaved();
-        applicationSettings.setLastOpenedPlan(currentFile.toString()); saveSettingsQuietly(); collectSaveWarnings(); analysisBindingChanged();
+        applicationSettings.setLastOpenedPlan(currentFile.toString()); recordLastPlanLater(currentFile); analysisBindingChanged();
     }
 
     /** Called by the application/FX owner. All throwing reconstruction occurred before this boundary. */
@@ -585,6 +803,15 @@ public class ApplicationController {
     public ApplicationController(RetirementPlanRepository repository,
             JsonApplicationSettingsRepository settingsRepository,
             com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultStore analysisResults) {
+        this(repository, settingsRepository, analysisResults,
+                new com.daviddunn.retirementplanner.application.settings.ApplicationSettingsService(settingsRepository));
+    }
+
+    /** Application startup supplies the single existing preference authority. */
+    public ApplicationController(RetirementPlanRepository repository,
+            JsonApplicationSettingsRepository settingsRepository,
+            com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultStore analysisResults,
+            com.daviddunn.retirementplanner.application.settings.ApplicationSettingsService sharedSettings) {
 
         this.analysisResults = java.util.Objects.requireNonNull(analysisResults);
 
@@ -612,11 +839,39 @@ public class ApplicationController {
 
         applicationSettingsRepository = java.util.Objects.requireNonNull(settingsRepository);
 
-        applicationSettings =
-                applicationSettingsRepository.load();
+        settingsService = java.util.Objects.requireNonNull(sharedSettings);
+        applicationSettings = settingsService.snapshot();
         persistenceWarnings.addAll(applicationSettingsRepository.takeWarnings());
 
         newPlan();
+    }
+
+    private boolean startupPrepared;
+
+    /**
+     * Exclusive pre-view startup only: no controls/listeners exist yet. Uses the ordinary
+     * acceptance/restoration methods, then transfers ownership through the startup future.
+     * Never use this as a general asynchronous projection or plan-open API.
+     */
+    public Exception prepareStartup() {
+        synchronized (this) {
+            if (startupPrepared || !sourcePlanListeners.isEmpty() || !analysisBindingListeners.isEmpty()
+                    || currentFile != null || modified || sourcePlanRevision != 1) {
+                throw new IllegalStateException("Startup preparation requires a fresh, unsubscribed controller.");
+            }
+            startupPrepared = true;
+        }
+        openLastPlan();
+        if (!restoredProjectionMode) {
+            try {
+                getCurrentProjection();
+                getCurrentProjectionSummary();
+                getCurrentNonInvestableAssetProjections();
+            } catch (Exception failure) {
+                return failure; // Same recoverable projection-error presentation as normal refresh.
+            }
+        }
+        return null;
     }
 
     public List<NonInvestableAssetProjection>
@@ -1042,6 +1297,8 @@ public class ApplicationController {
             Path file)
             throws IOException {
 
+        if (isPlanFileBusy()) throw new IllegalStateException("A plan file operation is in progress.");
+
         if (repository instanceof JsonRetirementPlanRepository json) {
             var original = json.originalForBackup(file);
             if (original.isPresent()) {
@@ -1137,6 +1394,8 @@ public class ApplicationController {
     public void save()
             throws IOException {
 
+        if (isPlanFileBusy()) throw new IllegalStateException("A plan file operation is in progress.");
+
         if (currentFile == null) {
 
             throw new IllegalStateException(
@@ -1163,6 +1422,8 @@ public class ApplicationController {
     public void saveAs(
             Path file)
             throws IOException {
+
+        if (isPlanFileBusy()) throw new IllegalStateException("A plan file operation is in progress.");
 
         if (recoveredBackupPath != null
                 && recoveredBackupPath.equals(file.toAbsolutePath().normalize())) {
@@ -1212,9 +1473,15 @@ public class ApplicationController {
         if (restoredProjectionMode && currentProjection == null) restoreProjectionSnapshots();
     }
 
+    private final com.daviddunn.retirementplanner.application.settings.ApplicationSettingsService settingsService;
+
+    public com.daviddunn.retirementplanner.application.settings.ApplicationSettingsService getSettingsService() {
+        return settingsService;
+    }
+
     private void saveSettingsQuietly() {
         try {
-            applicationSettingsRepository.save(applicationSettings);
+            settingsService.recordLastPlan(applicationSettings.getLastOpenedPlan());
             persistenceWarnings.addAll(applicationSettingsRepository.takeWarnings());
         } catch (RuntimeException failure) {
             persistenceWarnings.add("The plan operation succeeded, but application settings could not be saved. The application remains usable.");
@@ -1227,7 +1494,7 @@ public class ApplicationController {
         }
     }
 
-    public List<String> takePersistenceWarnings() {
+    public synchronized List<String> takePersistenceWarnings() {
         persistenceWarnings.addAll(analysisResults.takeOperationWarnings());
         var result = List.copyOf(persistenceWarnings);
         persistenceWarnings.clear();

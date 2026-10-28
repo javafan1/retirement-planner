@@ -8,6 +8,14 @@ import java.util.*;
 
 /** Immutable bounded objects, published before the ordinary plan's atomic role-manifest commit. */
 public final class ProjectionSnapshotComponents {
+    // Receipts contain identities only, never retained simulation graphs. A receipt is useful only
+    // after rereading and hashing the entire bounded artifact; timestamps are not trusted.
+    private static final Map<AnalyzerAssociation, Boolean> verifiedAnalyzers =
+            Collections.synchronizedMap(new LinkedHashMap<>(64, 0.75f, true) {
+                @Override protected boolean removeEldestEntry(Map.Entry<AnalyzerAssociation, Boolean> entry) {
+                    return size() > 64;
+                }
+            });
     private final AnalysisSnapshotCodec documents = new AnalysisSnapshotCodec();
     private final AtomicFileWriter writer = new AtomicFileWriter();
     /** Pure bounded encoding validation for an accepted component not yet written by ordinary Save. */
@@ -114,6 +122,14 @@ public final class ProjectionSnapshotComponents {
             if (!reference.projectionInputDigest().equals(inputs.get(reference.projectionId()))) throw new IOException("Analyzer projection association mismatch.");
             if ((reference.kind().shape() == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.Shape.COUPLE)
                     != shapes.get(reference.projectionId())) throw new IOException("Analyzer projection household mismatch.");
+            if (identity.equals(reference.owner())
+                    && plan.getPendingAnalyzerAssociations().get(reference.runId()) == null
+                    && plan.getAssociatedAnalyzerResults().get(reference.runId()) == null
+                    && sourceFile != null && sourceFile.toAbsolutePath().normalize().equals(targetFile.toAbsolutePath().normalize())) {
+                verifyUnchangedAnalyzer(targetFile, reference);
+                associations.add(reference);
+                continue;
+            }
             var original = resolveAnalyzer(reference, plan.getPendingAnalyzerAssociations().get(reference.runId()),
                     plan.getAssociatedAnalyzerResults().get(reference.runId()), sourceFile);
             var snapshot = identity.equals(original.planId()) ? original : original.clonedTo(identity);
@@ -130,6 +146,7 @@ public final class ProjectionSnapshotComponents {
                     if (!decoded.payloadDigest().equals(snapshot.payloadDigest())) throw new IOException("Analyzer verification failed.");
                 }, false);
             }
+            verifiedAnalyzers.put(rebound, Boolean.TRUE);
             // Do not retain every decoded analyzer graph: stage and release one artifact at a time.
             associations.add(rebound);
         }
@@ -152,13 +169,33 @@ public final class ProjectionSnapshotComponents {
         }
     }
     public com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot readAnalyzer(Path file, AnalyzerAssociation reference) throws IOException {
+        byte[] bytes = analyzerBytes(file, reference);
+        var snapshot = documents.decode(bytes); reference.validate(snapshot);
+        verifiedAnalyzers.put(reference, Boolean.TRUE);
+        return snapshot;
+    }
+    private void verifyUnchangedAnalyzer(Path file, AnalyzerAssociation reference) throws IOException {
+        byte[] bytes = analyzerBytes(file, reference);
+        if (!verifiedAnalyzers.containsKey(reference)) {
+            reference.validate(documents.decode(bytes));
+            verifiedAnalyzers.put(reference, Boolean.TRUE);
+        }
+    }
+    /** Validation-only callers need no decoded result graph. Byte/digest verification is never skipped. */
+    public void verifyAnalyzer(Path file, AnalyzerAssociation reference,
+            com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion pending,
+            com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot memory) throws IOException {
+        if (pending == null && memory == null) verifyUnchangedAnalyzer(file, reference);
+        else resolveAnalyzer(reference, pending, memory, file);
+    }
+    private byte[] analyzerBytes(Path file, AnalyzerAssociation reference) throws IOException {
         Path source = analyzerPath(file, reference.owner(), reference.runId());
         verifyBinding(file, source.getParent()); AtomicFileWriter.regularOrMissing(source);
         byte[] bytes;
         try (var input = Files.newInputStream(source)) { bytes = input.readNBytes(AnalysisSnapshotCodec.MAX_COMPRESSED_BYTES+1); }
         if (bytes.length > AnalysisSnapshotCodec.MAX_COMPRESSED_BYTES || !AnalysisSnapshotCodec.sha256(bytes).equals(reference.componentDigest()))
             throw new IOException("Analyzer component checksum or size mismatch.");
-        var snapshot = documents.decode(bytes); reference.validate(snapshot); return snapshot;
+        return bytes;
     }
     public com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot resolveAnalyzer(AnalyzerAssociation reference,
             com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion pending,

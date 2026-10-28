@@ -17,6 +17,32 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.ui.charts.ProjectionChartFixtures.*;
 
 class ProjectionChartViewTest {
+    @Test void realChartPreviewsPreserveValuesAcrossBothThemesAndSizes() throws Exception {
+        var task = new FutureTask<Void>(() -> {
+            var model = ProjectionChartFixtures.model(List.of(year(2027, 75, 0), year(2029, 75, 30), year(2033, 0, 30)), List.of(), people());
+            var view = new ProjectionChartView(); view.load(model);
+            var stage = new Stage();
+            var themes = com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(com.daviddunn.retirementplanner.application.settings.ApplicationTheme.LIGHT);
+            try {
+                for (var theme : com.daviddunn.retirementplanner.application.settings.ApplicationTheme.values()) for (int width : new int[] {1180, 900}) {
+                    themes.apply(theme);
+                    if (stage.getScene() != null) stage.getScene().setRoot(new Pane());
+                    stage.setScene(new Scene(view, width, width == 900 ? 650 : 820)); stage.show();
+                    view.applyCss(); view.layout();
+                    assertEquals(2, view.lookupAll(".timeline-claim-label").size());
+                    var chart = (XYChart<Number, Number>) view.lookup("#projection-chart");
+                    assertEquals(3, chart.getData().getFirst().getData().size());
+                    java.nio.file.Files.createDirectories(java.nio.file.Path.of("target/phase13b-previews"));
+                    var image = view.snapshot(null, null);
+                    var bitmap = new java.awt.image.BufferedImage((int) image.getWidth(), (int) image.getHeight(), java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                    for (int y = 0; y < bitmap.getHeight(); y++) for (int x = 0; x < bitmap.getWidth(); x++) bitmap.setRGB(x, y, image.getPixelReader().getArgb(x, y));
+                    javax.imageio.ImageIO.write(bitmap, "png", java.nio.file.Path.of("target/phase13b-previews/chart-" + width + "-" + theme + ".png").toFile());
+                }
+            } finally { stage.close(); themes.close(); }
+            return null;
+        });
+        Platform.runLater(task); task.get(30, TimeUnit.SECONDS);
+    }
     @BeforeAll static void startFx() throws Exception {
         FutureTask<Void> task = new FutureTask<>(() -> { Platform.setImplicitExit(false); return null; });
         try { Platform.startup(task); } catch (IllegalStateException started) { Platform.runLater(task); }

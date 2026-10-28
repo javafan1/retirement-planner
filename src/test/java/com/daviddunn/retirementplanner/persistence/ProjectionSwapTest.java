@@ -51,6 +51,7 @@ class ProjectionSwapTest {
     }
     @AfterEach void close() throws Exception {
         for (var c : controllers) {
+            c.getPlanPreferenceWrite().toCompletableFuture().get(15, TimeUnit.SECONDS);
             c.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
             c.getSnapshotCopyCompletion().toCompletableFuture().get(15, TimeUnit.SECONDS);
             assertTrue(c.getAnalysisParameters().drain(Duration.ofSeconds(10)).complete()); c.getAnalysisParameters().shutdown();

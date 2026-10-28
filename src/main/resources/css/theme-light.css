@@ -1,0 +1,25 @@
+.app-theme {
+    -app-surface: #ffffff;
+    -app-background: #f7f9fc;
+    -app-text: #17213d;
+    -app-muted: #526079;
+    -app-border: #ccd6e4;
+    -app-accent: #235dc4;
+    -app-warning: #855400;
+    -app-error: #a12622;
+    -fx-base: #ececec;
+    -fx-background: -app-background;
+    -fx-control-inner-background: -app-surface;
+    -fx-text-base-color: -app-text;
+    -fx-text-background-color: -app-text;
+    -fx-text-inner-color: -app-text;
+    -fx-accent: -app-accent;
+    -fx-focus-color: -app-accent;
+    -fx-faint-focus-color: rgba(35,93,196,0.20);
+    -fx-selection-bar: #235dc4;
+    -fx-selection-bar-non-focused: #d4e2f7;
+    -fx-box-border: -app-border;
+}
+.app-theme .settings-notice { -fx-text-fill: -app-error; }
+.app-theme.tooltip, .app-theme .tooltip { -fx-background-color: #313a49; -fx-text-fill: white; }
+.app-theme .button:default { -fx-background-color: #235dc4; -fx-text-fill: white; }

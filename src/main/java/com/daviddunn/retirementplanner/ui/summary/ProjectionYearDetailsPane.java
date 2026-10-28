@@ -1264,7 +1264,7 @@ public class ProjectionYearDetailsPane
         if (difference == null) {
 
             label.setStyle(
-                    "-fx-text-fill: #64748b;");
+                    "-fx-text-fill: -fx-text-base-color;");
 
             return label;
         }
@@ -1276,21 +1276,18 @@ public class ProjectionYearDetailsPane
 
 
         if (comparison > 0) {
-
-            label.setStyle(
-                    "-fx-text-fill: #16a34a; " +
-                            "-fx-font-weight: bold;");
+            label.getStyleClass().add("comparison-positive");
+            label.setStyle("-fx-font-weight: bold;");
 
         } else if (comparison < 0) {
 
-            label.setStyle(
-                    "-fx-text-fill: #dc2626; " +
-                            "-fx-font-weight: bold;");
+            label.getStyleClass().add("comparison-negative");
+            label.setStyle("-fx-font-weight: bold;");
 
         } else {
 
             label.setStyle(
-                    "-fx-text-fill: #64748b; " +
+                    "-fx-text-fill: -fx-text-base-color; " +
                             "-fx-font-weight: bold;");
         }
 
@@ -1334,7 +1331,7 @@ public class ProjectionYearDetailsPane
                 new Label(title);
 
         label.setStyle(
-                "-fx-text-fill: #334155; " +
+                "-fx-text-fill: -fx-text-base-color; " +
                         "-fx-font-size: 12px; " +
                         "-fx-font-weight: bold;");
 

@@ -21,6 +21,59 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BreakEvenAnalysisViewTest {
+    @Test void annotationContrastFollowsLiveThemeAndReopeningAtSupportedSizes() throws Exception {
+        fx(() -> {
+            var output = java.nio.file.Path.of("target/phase13e/previews");
+            try { java.nio.file.Files.createDirectories(output); } catch (Exception failure) { throw new RuntimeException(failure); }
+            var themes = com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(
+                    com.daviddunn.retirementplanner.application.settings.ApplicationTheme.LIGHT);
+            try {
+                for (int width : new int[]{1180, 900}) {
+                    var view = new BreakEvenAnalysisView(result(-100, 10, -20, 30));
+                    var scroll = new ScrollPane(view); scroll.setFitToWidth(true); scroll.getStylesheets().add(getClass().getResource("/css/break-even.css").toExternalForm());
+                    var stage = new Stage(); stage.setScene(new Scene(scroll, width, width == 900 ? 650 : 820)); stage.show();
+                    try {
+                        ComboBox<BreakEvenMetric> selector = lookup(view, "#break-even-metric");
+                        selector.setValue(BreakEvenMetric.INVESTABLE_ASSETS);
+                        for (var theme : com.daviddunn.retirementplanner.application.settings.ApplicationTheme.values()) {
+                            themes.apply(theme); scroll.applyCss(); scroll.layout(); view.layout();
+                            Label annotation = lookup(view, "#break-even-annotation");
+                            assertEquals("Break-even 2030\nDavid 67 · Lisa 65", annotation.getText());
+                            assertTrue(annotation.isVisible());
+                            var chart = (LineChart<?, ?>) view.lookup("#break-even-chart"); chart.layout();
+                            assertTrue(annotation.getHeight() + 1 >= annotation.prefHeight(annotation.getWidth()), "Callout text must fit");
+                            var image = scroll.snapshot(null, null);
+                            var pixels = new java.awt.image.BufferedImage((int)image.getWidth(), (int)image.getHeight(), java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                            for (int y=0;y<pixels.getHeight();y++) for(int x=0;x<pixels.getWidth();x++) pixels.setRGB(x,y,image.getPixelReader().getArgb(x,y));
+                            try { javax.imageio.ImageIO.write(pixels, "png", output.resolve(System.getProperty("phase13e.capture", "after") + "-break-even-" + theme + "-" + width + ".png").toFile()); }
+                            catch(Exception failure) { throw new RuntimeException(failure); }
+                            var foreground = (javafx.scene.paint.Color) annotation.getTextFill();
+                            var background = (javafx.scene.paint.Color) annotation.getBackground().getFills().getFirst().getFill();
+                            double a = luminance(foreground), b = luminance(background);
+                            assertTrue((Math.max(a,b)+0.05)/(Math.min(a,b)+0.05) >= 4.5,
+                                    () -> "Annotation contrast: foreground="+foreground+", background="+background);
+                        }
+                    } finally { stage.hide(); }
+                }
+                var reopened = new BreakEvenAnalysisView(result(-100, -50, 10, 40)); reopened.getStylesheets().add(getClass().getResource("/css/break-even.css").toExternalForm());
+                var stage = new Stage(); stage.setScene(new Scene(reopened, 900, 650)); stage.show();
+                try {
+                    ComboBox<BreakEvenMetric> selector = lookup(reopened, "#break-even-metric"); selector.setValue(BreakEvenMetric.INVESTABLE_ASSETS);
+                    reopened.applyCss(); reopened.layout();
+                    assertTrue(((Label)reopened.lookup("#break-even-annotation")).getText().contains("2029"));
+                    assertEquals(javafx.scene.paint.Color.web("#edf1f7"), ((Label)reopened.lookup("#break-even-annotation")).getTextFill());
+                    var absent = new BreakEvenAnalysisView(result(-100, -50, -10));
+                    ComboBox<BreakEvenMetric> absentSelector = lookup(absent,"#break-even-metric"); absentSelector.setValue(BreakEvenMetric.INVESTABLE_ASSETS);
+                    assertFalse(absent.lookup("#break-even-annotation").isVisible());
+                } finally { stage.hide(); }
+            } finally { themes.close(); }
+        });
+    }
+    private static double luminance(javafx.scene.paint.Color color) {
+        double[] channels = {color.getRed(), color.getGreen(), color.getBlue()};
+        for (int i=0;i<channels.length;i++) channels[i] = channels[i] <= 0.04045 ? channels[i]/12.92 : Math.pow((channels[i]+0.055)/1.055,2.4);
+        return channels[0]*0.2126 + channels[1]*0.7152 + channels[2]*0.0722;
+    }
     @BeforeAll static void startFx() throws Exception {
         FutureTask<Void> task = new FutureTask<>(() -> { Platform.setImplicitExit(false); return null; });
         try { Platform.startup(task); } catch (IllegalStateException started) { Platform.runLater(task); }

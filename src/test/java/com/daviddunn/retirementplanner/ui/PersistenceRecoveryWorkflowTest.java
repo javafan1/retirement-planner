@@ -48,23 +48,29 @@ class PersistenceRecoveryWorkflowTest {
             controller.save();
             Files.writeString(file, "broken");
             AtomicReference<Throwable> failure = new AtomicReference<>();
-            Platform.runLater(() -> {
+            var reviewWhenReady = new javafx.animation.AnimationTimer() {
+                @Override public void handle(long now) {
                 try {
                     DialogPane pane = List.copyOf(Window.getWindows()).stream()
                             .filter(Window::isShowing).map(w -> w.getScene().getRoot())
                             .filter(DialogPane.class::isInstance).map(DialogPane.class::cast)
                             .filter(p -> p.getButtonTypes().stream().anyMatch(b -> b.getText().equals("Review backup")))
-                            .findFirst().orElseThrow();
+                            .findFirst().orElse(null);
+                    if (pane == null) return; // Backup validation now runs on the file worker.
+                    stop();
                     var review = pane.getButtonTypes().stream().filter(b -> b.getText().equals("Review backup")).findFirst().orElseThrow();
                     ((Button) pane.lookupButton(review)).fire();
                 } catch (Throwable exception) {
+                    stop();
                     failure.set(exception);
                     Window.getWindows().stream().filter(Window::isShowing).toList().forEach(Window::hide);
                 }
-            });
+                }
+            };
+            reviewWhenReady.start();
             var method = MainWindow.class.getDeclaredMethod("offerPlanRecovery", Path.class);
             method.setAccessible(true);
-            method.invoke(window, file);
+            try { method.invoke(window, file); } finally { reviewWhenReady.stop(); }
             if (failure.get() != null) throw new AssertionError(failure.get());
             assertTrue(controller.isModified());
             assertFalse(controller.hasCurrentFile());

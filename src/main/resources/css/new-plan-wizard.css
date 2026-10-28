@@ -1,15 +1,15 @@
 .new-plan-wizard {
-    -fx-background-color: #f7f9fc;
+    -fx-background-color: -fx-background;
 }
 
 .new-plan-wizard .wizard-title {
     -fx-font-size: 21px;
     -fx-font-weight: bold;
-    -fx-text-fill: #20344d;
+    -fx-text-fill: -fx-text-base-color;
 }
 
 .new-plan-wizard .wizard-description {
-    -fx-text-fill: #46566a;
+    -fx-text-fill: -fx-text-base-color;
 }
 
 .new-plan-wizard .wizard-step-heading {
@@ -33,8 +33,8 @@
 
 .new-plan-wizard .wizard-review-section {
     -fx-padding: 10px;
-    -fx-background-color: white;
-    -fx-border-color: #dce3ec;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -fx-box-border;
     -fx-border-radius: 4px;
     -fx-background-radius: 4px;
 }
@@ -55,13 +55,13 @@
 
 .new-plan-wizard .wizard-sidebar {
     -fx-padding: 4px 8px 4px 0;
-    -fx-border-color: transparent #dce3ec transparent transparent;
+    -fx-border-color: transparent -fx-box-border transparent transparent;
 }
 .new-plan-wizard .wizard-navigation-step {
     -fx-alignment: center-left;
     -fx-padding: 10px;
-    -fx-background-color: #edf1f6;
-    -fx-text-fill: #20344d;
+    -fx-background-color: -fx-background;
+    -fx-text-fill: -fx-text-base-color;
 }
 .new-plan-wizard .wizard-navigation-step:current {
     -fx-background-color: #dbe9f8;
@@ -70,30 +70,30 @@
 }
 .new-plan-wizard .wizard-navigation-step:disabled {
     -fx-opacity: 1;
-    -fx-text-fill: #617082;
-    -fx-background-color: #f2f4f7;
+    -fx-text-fill: -fx-text-base-color;
+    -fx-background-color: -fx-background;
 }
 .new-plan-wizard .wizard-navigation-step:focused,
 .new-plan-wizard .wizard-help-button:focused {
-    -fx-border-color: #20344d;
+    -fx-border-color: -fx-text-base-color;
     -fx-border-width: 2px;
 }
 .new-plan-wizard .wizard-field-row { -fx-padding: 4px 0 8px 0; }
 .new-plan-wizard #wizard-advanced-summary {
-    -fx-text-fill: #46566a;
+    -fx-text-fill: -fx-text-base-color;
     -fx-padding: 6px 0;
 }
 .new-plan-wizard #wizard-advanced-assumptions > .title {
-    -fx-background-color: #edf1f6;
+    -fx-background-color: -fx-background;
     -fx-padding: 8px;
 }
 .new-plan-wizard #wizard-advanced-assumptions:focused > .title {
-    -fx-border-color: #20344d;
+    -fx-border-color: -fx-text-base-color;
 }
-.new-plan-wizard .wizard-field-units { -fx-text-fill: #46566a; }
+.new-plan-wizard .wizard-field-units { -fx-text-fill: -fx-text-base-color; }
 .new-plan-wizard .wizard-help-button { -fx-font-size: 11px; }
 .new-plan-wizard .wizard-footer {
     -fx-padding: 10px 18px;
-    -fx-background-color: #edf1f6;
-    -fx-border-color: #dce3ec transparent transparent transparent;
+    -fx-background-color: -fx-background;
+    -fx-border-color: -fx-box-border transparent transparent transparent;
 }

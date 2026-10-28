@@ -3,7 +3,7 @@
    ========================================================= */
 
 .results-summary {
-    -fx-background-color: #F7F9FC;
+    -fx-background-color: -fx-background;
     -fx-font-family: "Segoe UI";
 }
 
@@ -11,13 +11,13 @@
 /* ---------- Main title ---------- */
 
 .results-title {
-    -fx-text-fill: #111B3A;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 28px;
     -fx-font-weight: 700;
 }
 
 .results-subtitle {
-    -fx-text-fill: #526079;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 14px;
 }
 
@@ -25,11 +25,11 @@
 /* ---------- Top action buttons ---------- */
 
 .results-action-button {
-    -fx-background-color: white;
-    -fx-border-color: #D7DFEB;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -fx-box-border;
     -fx-border-radius: 7px;
     -fx-background-radius: 7px;
-    -fx-text-fill: #17213D;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 13px;
     -fx-font-weight: 600;
     -fx-padding: 9px 16px;
@@ -44,15 +44,15 @@
 /* ---------- Metric cards ---------- */
 
 .metric-card {
-    -fx-background-color: white;
-    -fx-border-color: #DCE3ED;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -fx-box-border;
     -fx-border-radius: 9px;
     -fx-background-radius: 9px;
     -fx-padding: 15px;
 }
 
 .metric-title {
-    -fx-text-fill: #17213D;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 13px;
     -fx-font-weight: 600;
 }
@@ -63,7 +63,7 @@
 }
 
 .metric-detail {
-    -fx-text-fill: #536079;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 13px;
 }
 
@@ -120,20 +120,20 @@
 /* ---------- Section cards ---------- */
 
 .summary-section {
-    -fx-background-color: white;
-    -fx-border-color: #DCE3ED;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -fx-box-border;
     -fx-border-radius: 9px;
     -fx-background-radius: 9px;
 }
 
 .section-title {
-    -fx-text-fill: #111B3A;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 17px;
     -fx-font-weight: 700;
 }
 
 .section-subtitle {
-    -fx-text-fill: #59657B;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 12px;
 }
 
@@ -141,29 +141,29 @@
 /* ---------- Projection table ---------- */
 
 .projection-table {
-    -fx-background-color: white;
-    -fx-border-color: #DCE3ED;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -fx-box-border;
     -fx-border-radius: 6px;
     -fx-background-radius: 6px;
 }
 
 .projection-table .column-header-background {
-    -fx-background-color: #F3F6FA;
+    -fx-background-color: -fx-background;
 }
 
 .projection-table .column-header {
-    -fx-background-color: #F3F6FA;
-    -fx-border-color: #DCE3ED;
+    -fx-background-color: -fx-background;
+    -fx-border-color: -fx-box-border;
 }
 
 .projection-table .column-header .label {
-    -fx-text-fill: #17213D;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 12px;
     -fx-font-weight: 600;
 }
 
 .projection-table .table-row-cell {
-    -fx-background-color: white;
+    -fx-background-color: -fx-control-inner-background;
     -fx-border-color: transparent transparent #EDF1F6 transparent;
 }
 
@@ -176,7 +176,7 @@
 }
 
 .projection-table .table-cell {
-    -fx-text-fill: #17213D;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 12px;
     -fx-padding: 7px 8px;
 }
@@ -185,14 +185,14 @@
 /* ---------- Assumption sidebar ---------- */
 
 .assumptions-title {
-    -fx-text-fill: #111B3A;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 17px;
     -fx-font-weight: 700;
 }
 
 .assumption-card {
-    -fx-background-color: white;
-    -fx-border-color: #DCE3ED;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -fx-box-border;
     -fx-border-radius: 9px;
     -fx-background-radius: 9px;
     -fx-padding: 15px;
@@ -219,13 +219,13 @@
 /* ---------- Assumption controls ---------- */
 
 .assumption-label {
-    -fx-text-fill: #17213D;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 13px;
 }
 
 .assumption-field {
-    -fx-background-color: white;
-    -fx-border-color: #CCD6E4;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -fx-box-border;
     -fx-border-radius: 6px;
     -fx-background-radius: 6px;
     -fx-padding: 7px 9px;
@@ -277,33 +277,33 @@
 /* ---------- Charts ---------- */
 
 .chart-card {
-    -fx-background-color: white;
-    -fx-border-color: #DCE3ED;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -fx-box-border;
     -fx-border-radius: 9px;
     -fx-background-radius: 9px;
     -fx-padding: 10px;
 }
 
 .chart-title {
-    -fx-text-fill: #111B3A;
+    -fx-text-fill: -fx-text-base-color;
     -fx-font-size: 16px;
     -fx-font-weight: 700;
 }
 
 .chart {
-    -fx-background-color: white;
+    -fx-background-color: -fx-control-inner-background;
 }
 
 .chart-plot-background {
-    -fx-background-color: white;
+    -fx-background-color: -fx-control-inner-background;
 }
 
 .axis {
-    -fx-tick-label-fill: #526079;
+    -fx-tick-label-fill: -fx-text-base-color;
 }
 
 .axis-label {
-    -fx-text-fill: #526079;
+    -fx-text-fill: -fx-text-base-color;
 }
 
 .metric-icon {
@@ -354,9 +354,9 @@
 }
 
 .baseline-comparison {
-    -fx-background-color: #f8fafc;
+    -fx-background-color: -fx-background;
     -fx-background-radius: 10;
-    -fx-border-color: #e2e8f0;
+    -fx-border-color: -fx-box-border;
     -fx-border-radius: 10;
     -fx-border-width: 1;
     -fx-padding: 12;
@@ -371,9 +371,9 @@
 }
 
 .comparison-metric-card {
-    -fx-background-color: white;
+    -fx-background-color: -fx-control-inner-background;
     -fx-background-radius: 10;
-    -fx-border-color: #e2e8f0;
+    -fx-border-color: -fx-box-border;
     -fx-border-radius: 10;
     -fx-border-width: 1;
     -fx-padding: 12;
@@ -383,23 +383,23 @@
 .comparison-card-title {
     -fx-font-size: 13px;
     -fx-font-weight: bold;
-    -fx-text-fill: #475569;
+    -fx-text-fill: -fx-text-base-color;
 }
 
 .comparison-value-label {
     -fx-font-size: 11px;
-    -fx-text-fill: #64748b;
+    -fx-text-fill: -fx-text-base-color;
 }
 
 .comparison-card-value {
     -fx-font-size: 12px;
     -fx-font-weight: bold;
-    -fx-text-fill: #334155;
+    -fx-text-fill: -fx-text-base-color;
 }
 
 .comparison-change-title {
     -fx-font-size: 10px;
-    -fx-text-fill: #64748b;
+    -fx-text-fill: -fx-text-base-color;
     -fx-padding: 5 0 0 0;
 }
 
@@ -417,5 +417,5 @@
 }
 
 .comparison-neutral {
-    -fx-text-fill: #64748b;
+    -fx-text-fill: -fx-text-base-color;
 }

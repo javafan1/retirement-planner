@@ -47,7 +47,7 @@ final class LongevityWeightedIntegratedView extends VBox {
     LongevityWeightedIntegratedView() {
         super(6);
         Label limitation = label(LIMITATION);
-        limitation.setStyle("-fx-border-color: #9a6700; -fx-padding: 6;");
+        limitation.setStyle("-fx-border-color: -fx-text-base-color; -fx-padding: 6;");
         getChildren().addAll(label("Rank complete claiming strategies by Expected PV After-Tax Estate across modeled household lifespans."),
                 AnalyzerConfigurationLayout.heading("Run / Cancel / Progress"),
                 AnalyzerConfigurationLayout.flow(run), status, stale,

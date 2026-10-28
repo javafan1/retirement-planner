@@ -101,6 +101,21 @@ class Phase12EAssociationTest {
         set(source, "projectionEngine", throwing()); source.save();
         assertTrue(source.getAnalyzerAssociationNotice(kind).contains("saved"));
         var ref = source.getAnalyzerAssociations(projection.id()).getFirst(); assertNotEquals("0".repeat(64), ref.componentDigest());
+        var artifact = file.getParent().resolve(".retirement-planner-projections").resolve(ref.owner().toString())
+                .resolve("analysis-" + ref.runId() + ".json.gz");
+        var originalArtifact = Files.readAllBytes(artifact);
+        source.save(); // Warm receipt reuse must preserve the exact compressed wire representation.
+        assertArrayEquals(originalArtifact, Files.readAllBytes(artifact));
+        assertEquals(ref, source.getAnalyzerAssociations(projection.id()).getFirst());
+        if (kind == AnalysisKind.COUPLE_QUICK) {
+            var durablePlan = Files.readAllBytes(file);
+            var corrupt = originalArtifact.clone(); corrupt[corrupt.length / 2] ^= 1;
+            Files.write(artifact, corrupt);
+            assertThrows(java.io.IOException.class, source::save, "Warm receipts must still detect changed artifact bytes");
+            assertArrayEquals(durablePlan, Files.readAllBytes(file));
+            Files.write(artifact, originalArtifact);
+            source.save();
+        }
         assertEquals(source.getCurrentPlan().getProjectionState().current().id(), source.getCurrentPlan().getProjectionState().baseline().id());
         var reloaded = controller(kind.shape() == AnalysisKind.Shape.COUPLE); set(reloaded, "projectionEngine", throwing()); reloaded.open(file);
         reloaded.getProjectionRestoration().toCompletableFuture().get(20, TimeUnit.SECONDS);

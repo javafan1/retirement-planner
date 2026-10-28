@@ -36,6 +36,8 @@ public final class MonteCarloFanChart extends LineChart<Number, Number> {
 
     public MonteCarloFanChart() {
         super(new NumberAxis(), new NumberAxis());
+        singleMedian.getStyleClass().add("mc-median-point");
+        singleReference.getStyleClass().add("mc-reference-point");
         setId("monte-carlo-fan");
         setFocusTraversable(true);
         setAccessibleRole(AccessibleRole.NODE);

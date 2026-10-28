@@ -50,6 +50,7 @@ class ProjectionSwapViewTest {
     }
     @AfterEach void finish() throws Exception {
         for(var c:sources) {
+            c.getPlanPreferenceWrite().toCompletableFuture().get(15, TimeUnit.SECONDS);
             assertTrue(c.getAnalysisParameters().drain(Duration.ofSeconds(10)).complete()); c.getAnalysisParameters().shutdown();
             assertTrue(c.getAnalysisResults().drain(Duration.ofSeconds(10)).safeToExit()); c.getAnalysisResults().shutdownAfterSuccessfulDrain();
         }
@@ -155,5 +156,39 @@ class ProjectionSwapViewTest {
             assertTrue(kinds.getItems().stream().allMatch(k->((AnalysisKind)k).shape()==AnalysisKind.Shape.SINGLE));
             history.close();return null;
         });
+    }
+    @Test void canceledPreparationCannotReleaseOrCancelNewerSwap() throws Exception {
+        var c = source(true); var owner = c.getCurrentPlan(); var roles = owner.getProjectionState();
+        var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
+        var blocker = c.getAnalysisResults().background(() -> {
+            entered.countDown();
+            if (!release.await(15, TimeUnit.SECONDS)) throw new IllegalStateException("Test worker timed out");
+            return null;
+        });
+        assertTrue(entered.await(10, TimeUnit.SECONDS)); var stage = new Stage[1];
+        try {
+            fx(() -> {
+                var window = new MainWindow(c); stage[0] = new Stage(); window.setStage(stage[0]);
+                var scene = window.createScene(); stage[0].setScene(scene); stage[0].show();
+                var action = MainWindow.class.getDeclaredMethod("swapCurrentAndBaseline"); action.setAccessible(true);
+                action.invoke(window);
+                var feedbackField = MainWindow.class.getDeclaredField("swapFeedback"); feedbackField.setAccessible(true);
+                var feedback = feedbackField.get(window); var show = feedback.getClass().getDeclaredMethod("showSubtle"); show.setAccessible(true); show.invoke(feedback);
+                var dialog = javafx.stage.Window.getWindows().stream().filter(w -> w instanceof Stage s && s.getOwner() == stage[0]).findFirst().orElseThrow();
+                var cancel = (Button) dialog.getScene().lookup("#plan-operation-cancel"); assertNotNull(cancel); assertTrue(cancel.isVisible());
+                cancel.fire();
+                assertSame(owner, c.getCurrentPlan()); assertEquals(roles, owner.getProjectionState());
+                assertFalse(scene.getRoot().lookup(".menu-bar").isDisabled());
+                action.invoke(window); // Old work is still queued; its callback must not cancel this request.
+                assertTrue(scene.getRoot().lookup(".menu-bar").isDisabled()); return null;
+            });
+            release.countDown(); blocker.toCompletableFuture().get(15, TimeUnit.SECONDS);
+            long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+            while (c.getCurrentPlan() == owner && System.nanoTime() < deadline) Thread.sleep(10);
+            fx(() -> {
+                assertNotSame(owner, c.getCurrentPlan()); assertEquals(roles.baseline().id(), c.getAcceptedProjectionSnapshot().id());
+                assertFalse(stage[0].getScene().lookup(".menu-bar").isDisabled()); return null;
+            });
+        } finally { release.countDown(); fx(() -> { if (stage[0] != null) stage[0].hide(); return null; }); }
     }
 }

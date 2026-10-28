@@ -25,6 +25,27 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.ui.socialsecurity.WeightedRestorationTest.*;
 
 class SocialSecurityAndQuickPdfTest {
+    @Test void applicationThemeCannotChangePrintedSourceTextOrPagePixels() throws Exception {
+        var session = new SocialSecurityReportSession(UUID.randomUUID(), UUID.randomUUID(), "Theme-independent household", true,
+                CoupleSocialSecurityPersistenceTest.fixture(true, false), SharedClaimingAgeGridTest.presentation, COMPLETED.minusSeconds(2), COMPLETED);
+        var report = SocialSecurityOnlyReportAdapter.capture(session, null, List.of("Current Results"), COMPLETED.plusSeconds(5));
+        String light;
+        fx(() -> { com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(com.daviddunn.retirementplanner.application.settings.ApplicationTheme.LIGHT); return null; });
+        try {
+            light = pdf(report, "phase13b-light");
+            fx(() -> { com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(com.daviddunn.retirementplanner.application.settings.ApplicationTheme.DARK); return null; });
+            assertEquals(light, pdf(report, "phase13b-dark"));
+            try (var a = Loader.loadPDF(EVIDENCE.resolve("phase13b-light.pdf").toFile()); var b = Loader.loadPDF(EVIDENCE.resolve("phase13b-dark.pdf").toFile())) {
+                assertEquals(a.getNumberOfPages(), b.getNumberOfPages());
+                for (int page : new int[] {0, 1}) {
+                    var first = new PDFRenderer(a).renderImageWithDPI(page, 72);
+                    var second = new PDFRenderer(b).renderImageWithDPI(page, 72);
+                    assertArrayEquals(first.getRGB(0, 0, first.getWidth(), first.getHeight(), null, 0, first.getWidth()),
+                            second.getRGB(0, 0, second.getWidth(), second.getHeight(), null, 0, second.getWidth()));
+                }
+            }
+        } finally { fx(() -> { com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(com.daviddunn.retirementplanner.application.settings.ApplicationTheme.LIGHT).close(); return null; }); }
+    }
     @TempDir Path dir;
     static final Path EVIDENCE = Path.of("target/phase11c-pdf");
     @BeforeAll static void prepare() throws Exception { CoupleSocialSecurityPersistenceTest.prepare(); SharedClaimingAgeGridTest.prepare(); }

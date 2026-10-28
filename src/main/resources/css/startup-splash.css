@@ -1,0 +1,22 @@
+.startup-splash {
+    -fx-background-color: -app-background;
+    -fx-border-color: -app-border;
+    -fx-border-width: 1;
+}
+.startup-splash .splash-product {
+    -fx-text-fill: -app-text;
+    -fx-font-size: 25px;
+    -fx-font-weight: bold;
+}
+.startup-splash .splash-tagline {
+    -fx-text-fill: -app-muted;
+    -fx-font-size: 16px;
+    -fx-font-style: italic;
+}
+.startup-splash .splash-activity {
+    -fx-text-fill: -app-muted;
+    -fx-font-size: 12px;
+    -fx-padding: 10 0 0 0;
+    -fx-border-color: #b8995e transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+}

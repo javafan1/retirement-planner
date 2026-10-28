@@ -16,8 +16,8 @@
 .projection-rmd-stripe { -fx-fill: #168B50; }
 .projection-period-label {
     -fx-font-size: 10px;
-    -fx-text-fill: #59657B;
-    -fx-background-color: rgba(255,255,255,0.80);
+    -fx-text-fill: -fx-text-base-color;
+    -fx-background-color: -fx-control-inner-background;
     -fx-background-radius: 3px;
     -fx-padding: 3px;
     -fx-alignment: center;

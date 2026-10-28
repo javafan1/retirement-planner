@@ -4,6 +4,25 @@ package com.daviddunn.retirementplanner.application.settings;
 
 
 public class ApplicationSettings {
+    private ApplicationTheme theme = ApplicationTheme.LIGHT;
+    private String defaultPlanDirectory;
+
+    public ApplicationTheme getTheme() { return theme; }
+    public void setTheme(ApplicationTheme theme) { this.theme = java.util.Objects.requireNonNull(theme); }
+    public String getDefaultPlanDirectory() { return defaultPlanDirectory; }
+    public void setDefaultPlanDirectory(String directory) {
+        if (directory != null && directory.length() > 4096) throw new IllegalArgumentException("Directory preference is too long.");
+        defaultPlanDirectory = directory == null || directory.isBlank() ? null : directory;
+    }
+
+    public ApplicationSettings copy() {
+        var result = new ApplicationSettings();
+        result.theme = theme;
+        result.defaultPlanDirectory = defaultPlanDirectory;
+        result.automaticallyOpenLastPlan = automaticallyOpenLastPlan;
+        result.lastOpenedPlan = lastOpenedPlan;
+        return result;
+    }
 
     /**
      * Automatically open the last retirement plan when

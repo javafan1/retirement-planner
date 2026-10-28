@@ -552,9 +552,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private BorderPane content() {
-        stale.setStyle("-fx-text-fill: #9a6700; -fx-font-weight: bold;");
-        integratedStale.setStyle("-fx-text-fill: #9a6700; -fx-font-weight: bold;");
-        exhaustiveStale.setStyle("-fx-text-fill: #9a6700; -fx-font-weight: bold;");
+        for (var label : List.of(stale, integratedStale, exhaustiveStale)) {
+            label.getStyleClass().add("analysis-stale");
+            label.setStyle("-fx-font-weight: bold;");
+        }
         integratedRunButton.setDisable(true);
         exhaustiveCancelButton.setVisible(false);
         exhaustiveCancelButton.setManaged(false);

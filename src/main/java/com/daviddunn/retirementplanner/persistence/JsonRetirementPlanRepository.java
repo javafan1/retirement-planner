@@ -44,6 +44,30 @@ public class JsonRetirementPlanRepository
 
     /** Identity is published to memory only after the verified file has committed. */
     public void saveWithIdentity(RetirementPlan plan, Path file, java.util.UUID identity) throws IOException {
+        saveWithIdentity(plan, file, identity, () -> { });
+    }
+
+    /** A new accepted parameter event must not be overwritten by an earlier detached Save. */
+    public Runnable parameterWriteFence(Path file,
+            com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations configurations,
+            boolean sameActiveFile) {
+        String prefix = file.toAbsolutePath().normalize() + ":";
+        var captured = new java.util.HashMap<String, java.util.UUID>();
+        latestParameters.forEach((key, value) -> { if (key.startsWith(prefix)) captured.put(key, value); });
+        return () -> {
+            if (sameActiveFile) for (var entry : captured.entrySet()) {
+                var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.valueOf(entry.getKey().substring(prefix.length()));
+                var configuration = configurations == null ? java.util.Optional.<com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration>empty() : configurations.get(kind);
+                if (configuration.isEmpty() || !configuration.orElseThrow().acceptedRunId().equals(entry.getValue()))
+                    throw new IllegalStateException("Captured analyzer parameters were superseded. Retry Save; newer settings were retained.");
+            }
+            var current = new java.util.HashMap<String, java.util.UUID>();
+            latestParameters.forEach((key, value) -> { if (key.startsWith(prefix)) current.put(key, value); });
+            if (!current.equals(captured)) throw new IllegalStateException("New analyzer parameters were accepted during Save. Retry Save; newer settings were retained.");
+        };
+    }
+
+    public void saveWithIdentity(RetirementPlan plan, Path file, java.util.UUID identity, Runnable acceptanceFence) throws IOException {
 
         synchronized (AtomicFileWriter.SAVE_LOCK) {
             file = file.toAbsolutePath().normalize();
@@ -56,6 +80,7 @@ public class JsonRetirementPlanRepository
                 if (expected == null && java.nio.file.Files.exists(file)) expected = state(file);
                 final String expectedState = expected;
                 checkState(file, expectedState);
+                acceptanceFence.run();
                 if (originalForBackup(file).isPresent()) {
                     throw new IOException("Application backups are recovery sources. Use Save As to a different filename.");
                 }
@@ -99,7 +124,9 @@ public class JsonRetirementPlanRepository
                     captured = output.toByteArray();
                 }
                 var committedParameters = readBytes(captured).getAnalyzerConfigurations();
-                warnings = writer.write(file, captured, this::verify, true, path -> checkState(path, expectedState));
+                warnings = writer.write(file, captured, this::verify, true, path -> {
+                    checkState(path, expectedState); acceptanceFence.run();
+                });
                 plan.assignPlanId(identity);
                 if (projectionObjects.manifest() != null) {
                     plan.setProjectionState(projectionObjects.manifest());
@@ -151,13 +178,36 @@ public class JsonRetirementPlanRepository
             throws IOException {
 
         synchronized (AtomicFileWriter.SAVE_LOCK) {
+            var prepared = prepareLoad(file);
+            adoptLoad(prepared);
+            return prepared.plan();
+        }
+    }
+
+    public static final class PreparedLoad {
+        private final Path file;
+        private final RetirementPlan plan;
+        private final String durableDigest;
+        private PreparedLoad(Path file, RetirementPlan plan, String durableDigest) {
+            this.file = file; this.plan = plan; this.durableDigest = durableDigest;
+        }
+        public RetirementPlan plan() { return plan; }
+    }
+
+    /** No active repository binding changes until the application accepts this loaded document. */
+    public PreparedLoad prepareLoad(Path file) throws IOException {
+        synchronized (AtomicFileWriter.SAVE_LOCK) {
             byte[] original = java.nio.file.Files.readAllBytes(file);
             RetirementPlan plan = readBytes(original);
             plan.setProjectionComponentSource(originalForBackup(file).orElse(file).toAbsolutePath().normalize());
-            durableStates.put(file.toAbsolutePath().normalize(), PlanConfigurationTransaction.digest(original));
-            durableConfigurations.put(file.toAbsolutePath().normalize(), java.util.Optional.ofNullable(plan.getAnalyzerConfigurations()));
-            return plan;
+            return new PreparedLoad(file.toAbsolutePath().normalize(), plan, PlanConfigurationTransaction.digest(original));
         }
+    }
+
+    /** Owner-thread receipt adoption. No disk access or long-held global lock on FX. */
+    public void adoptLoad(PreparedLoad prepared) {
+        durableStates.put(prepared.file, prepared.durableDigest);
+        durableConfigurations.put(prepared.file, java.util.Optional.ofNullable(prepared.plan().getAnalyzerConfigurations()));
     }
 
     private RetirementPlan read(Path file) throws IOException {
