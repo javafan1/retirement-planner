@@ -34,6 +34,10 @@ public final class MonteCarloRandomStreams {
     public static final int GENERAL_INFLATION_V1 = 1;
     public static final int HEALTHCARE_INFLATION = 5;
 
+    // Keyed expense/year protocol; does not consume this class's sequential streams.
+    public static final int RECURRING_EXPENSE = 6;
+    public static final int RECURRING_EXPENSE_V1 = 1;
+
     private MonteCarloRandomStreams() {
     }
 
