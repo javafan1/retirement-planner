@@ -7,11 +7,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import com.daviddunn.retirementplanner.domain.financial.Expense;
+import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
+import com.daviddunn.retirementplanner.domain.financial.GrowthCategory;
+import java.time.LocalDate;
 
 /**
  * Immutable scenario-local expense multipliers, with no generator or engine dependency.
  * Contains enabled occurrences only. Missing occurrence/year lookups fail, never default to one.
- * This is not yet consumed by ProjectionEngine or ProjectionEvaluationContext.
+ * Financial execution requires an explicit frozen-list binding; an unbound sampler
+ * path cannot be silently applied to a plan.
  */
 public final class ProjectionExpensePath {
 
@@ -32,6 +38,18 @@ public final class ProjectionExpensePath {
     private final int firstYear;
     private final int lastYear;
     private final Map<Occurrence, List<BigDecimal>> multipliers;
+    private final List<FinancialDefinition> definitions;
+    private final List<Optional<Occurrence>> bindings;
+
+    /** Exact binding values, not a new fingerprint or sampling identity. */
+    public record FinancialDefinition(ExpenseType type, BigDecimal amount, LocalDate start,
+            LocalDate end, GrowthCategory escalation) {
+        public static FinancialDefinition capture(Expense expense) {
+            Objects.requireNonNull(expense);
+            return new FinancialDefinition(expense.getExpenseType(), expense.getAnnualAmount(),
+                    expense.getStartDate(), expense.getEndDate(), expense.getGrowthCategory());
+        }
+    }
 
     public ProjectionExpensePath(int firstYear, int lastYear,
             Map<Occurrence, List<BigDecimal>> multipliers) {
@@ -56,6 +74,53 @@ public final class ProjectionExpensePath {
             copy.put(occurrence, values);
         }
         this.multipliers = Collections.unmodifiableMap(copy);
+        definitions = List.of();
+        bindings = List.of();
+    }
+
+    private ProjectionExpensePath(ProjectionExpensePath source, List<FinancialDefinition> definitions,
+            List<Optional<Occurrence>> bindings) {
+        firstYear = source.firstYear;
+        lastYear = source.lastYear;
+        multipliers = source.multipliers;
+        this.definitions = List.copyOf(definitions);
+        this.bindings = List.copyOf(bindings);
+    }
+
+    public ProjectionExpensePath bind(List<Expense> expenses, List<Optional<Occurrence>> bindings) {
+        Objects.requireNonNull(expenses);
+        Objects.requireNonNull(bindings);
+        if (expenses.size() != bindings.size() || expenses.size() > MAX_OCCURRENCES) {
+            throw new IllegalArgumentException("Expense binding must cover the exact frozen input list.");
+        }
+        var definitions = expenses.stream().map(FinancialDefinition::capture).toList();
+        var required = new java.util.HashSet<Occurrence>();
+        for (int index = 0; index < bindings.size(); index++) {
+            var binding = Objects.requireNonNull(bindings.get(index));
+            if (binding.isPresent()) {
+                var definition = definitions.get(index);
+                if (definition.type() != ExpenseType.RECURRING || definition.amount().signum() < 0
+                        || !required.add(binding.orElseThrow())) {
+                    throw new IllegalArgumentException("Enabled bindings require distinct nonnegative recurring occurrences.");
+                }
+            }
+        }
+        if (!required.equals(multipliers.keySet())) {
+            throw new IllegalArgumentException("Expense path and enabled bindings differ.");
+        }
+        return new ProjectionExpensePath(this, definitions, bindings);
+    }
+
+    public void validateBinding(List<Expense> expenses, int first, int last) {
+        if (definitions.isEmpty() || !definitions.equals(expenses.stream().map(FinancialDefinition::capture).toList())) {
+            throw new IllegalArgumentException("Expense path is unbound or differs from the frozen financial expense list.");
+        }
+        for (var occurrence : multipliers.keySet()) requireCoverage(occurrence, first, last);
+    }
+
+    public Optional<Occurrence> bindingForExpense(int index) {
+        if (bindings.isEmpty()) throw new IllegalArgumentException("Expense path requires a financial binding.");
+        return bindings.get(index);
     }
 
     public BigDecimal multiplier(Occurrence occurrence, int year) {

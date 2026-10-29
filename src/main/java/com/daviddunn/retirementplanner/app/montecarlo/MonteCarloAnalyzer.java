@@ -50,6 +50,27 @@ public final class MonteCarloAnalyzer {
         this.engine = Objects.requireNonNull(engine);
     }
 
+    /** Internal-only generated runs; results cannot enter supported snapshot/PDF APIs. */
+    InternalExpenseResults.Fixed analyzeInternalExpenses(RetirementPlan source, MonteCarloSettings settings,
+            InternalExpenseRun expenses, AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
+        Objects.requireNonNull(expenses);
+        int first = source.getPlanningAssumptions().getProjectionStartDate().getYear();
+        int last = first + source.getPlanningAssumptions().getProjectionLengthYears() - 1;
+        var generator = new MonteCarloScenarioGenerator();
+        return new InternalExpenseResults.Fixed(analyze(source, settings, null,
+                index -> generator.generate(first, last, settings, index),
+                MonteCarloScenarioGenerator.MODEL_VERSION, progress, cancellation, expenses));
+    }
+
+    InternalExpenseResults.Longevity analyzeMortalityInternalExpenses(RetirementPlan source,
+            MonteCarloMortalityRequest request, InternalExpenseRun expenses,
+            AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
+        return new InternalExpenseResults.Longevity(analyzeMortality(source, request, null,
+                MonteCarloScenarioGenerator.MODEL_VERSION,
+                request.hasSpouse() ? "HOUSEHOLD_MORTALITY_V1" : "PRIMARY_MORTALITY_V1",
+                progress, cancellation, Objects.requireNonNull(expenses)));
+    }
+
     public MonteCarloMortalityAnalysisResult analyzeMortality(
             RetirementPlan source,
             MonteCarloMortalityRequest request) {
@@ -85,12 +106,23 @@ public final class MonteCarloAnalyzer {
             String mortalityModel,
             AnalysisProgressListener progress,
             AnalysisCancellationToken cancellation) {
+        return analyzeMortality(source, request, suppliedWorlds, returnModel, mortalityModel, progress, cancellation, null);
+    }
+
+    private MonteCarloMortalityAnalysisResult analyzeMortality(RetirementPlan source,
+            MonteCarloMortalityRequest request, IntFunction<MonteCarloWorld> suppliedWorlds,
+            String returnModel, String mortalityModel, AnalysisProgressListener progress,
+            AnalysisCancellationToken cancellation, InternalExpenseRun expenses) {
         Objects.requireNonNull(request);
         Objects.requireNonNull(progress);
         Objects.requireNonNull(cancellation);
         cancellation.throwIfCancellationRequested();
         Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
+        if (expenses != null) {
+            expenses.validate(plan);
+            if (expenses.enabled()) InternalExpenseRun.requireGeneratedWorlds(suppliedWorlds);
+        }
         validateMortalityPreparation(plan, request);
         IntFunction<MonteCarloWorld> worlds = suppliedWorlds != null
                 ? suppliedWorlds : new MonteCarloWorldGenerator(request)::generate;
@@ -130,6 +162,7 @@ public final class MonteCarloAnalyzer {
                     if (world.inflationPath().isPresent()) {
                         context = context.withInflationPath(world.inflationPath().orElseThrow());
                     }
+                    if (expenses != null) context = expenses.apply(plan, context, settings.seed(), index, start.getYear(), last);
                     var execution = engine.projectWithOutcome(plan, context, world.economicPath());
                     if (execution instanceof ProjectionExecutionResult.InsufficientFunds failed) {
                         outcomes.add(new MonteCarloMortalityAnalysisResult.WorldOutcome(index, lifetime,
@@ -265,6 +298,12 @@ public final class MonteCarloAnalyzer {
             String returnModel,
             AnalysisProgressListener progress,
             AnalysisCancellationToken cancellation) {
+        return analyze(source, settings, reference, paths, returnModel, progress, cancellation, null);
+    }
+
+    private MonteCarloAnalysisResult analyze(RetirementPlan source, MonteCarloSettings settings,
+            ProjectionExecutionResult reference, IntFunction<ProjectionEconomicPath> paths, String returnModel,
+            AnalysisProgressListener progress, AnalysisCancellationToken cancellation, InternalExpenseRun expenses) {
         Objects.requireNonNull(settings);
         Objects.requireNonNull(paths);
         Objects.requireNonNull(progress);
@@ -272,6 +311,12 @@ public final class MonteCarloAnalyzer {
         cancellation.throwIfCancellationRequested();
         Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
+        if (expenses != null) {
+            expenses.validate(plan);
+            if (expenses.enabled() && !returnModel.equals(MonteCarloScenarioGenerator.MODEL_VERSION)) {
+                InternalExpenseRun.requireGeneratedWorlds(paths);
+            }
+        }
         int first = plan.getPlanningAssumptions().getProjectionStartDate().getYear();
         int last = Math.addExact(first, plan.getPlanningAssumptions().getProjectionLengthYears() - 1);
         if (reference instanceof ProjectionExecutionResult.Completed completed) {
@@ -298,6 +343,7 @@ public final class MonteCarloAnalyzer {
                 var inflationPath = inflationGenerator.generate(first, last, settings, index);
                 var context = inflationPath.map(path -> ProjectionEvaluationContext.empty().withInflationPath(path))
                         .orElseGet(ProjectionEvaluationContext::empty);
+                if (expenses != null) context = expenses.apply(plan, context, settings.seed(), index, first, last);
                 var execution = engine.projectWithOutcome(
                         plan, context, economicPath);
                 if (execution instanceof ProjectionExecutionResult.InsufficientFunds failed) {

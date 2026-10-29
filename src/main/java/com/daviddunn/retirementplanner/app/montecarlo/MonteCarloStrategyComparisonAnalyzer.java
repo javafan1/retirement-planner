@@ -27,6 +27,14 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         this.engine = Objects.requireNonNull(engine);
     }
 
+    /** No supported historical/export representation until Phase 14B3. */
+    InternalExpenseResults.Comparison analyzeInternalExpenses(MonteCarloStrategyComparisonRequest request,
+            InternalExpenseRun expensesA, InternalExpenseRun expensesB,
+            AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
+        return new InternalExpenseResults.Comparison(run(request, null, progress, cancellation,
+                Objects.requireNonNull(expensesA), Objects.requireNonNull(expensesB)));
+    }
+
     public MonteCarloStrategyComparisonResult analyzeComparison(MonteCarloStrategyComparisonRequest request) {
         return analyzeComparison(request, AnalysisProgressListener.none(), AnalysisCancellationToken.none());
     }
@@ -46,11 +54,23 @@ public final class MonteCarloStrategyComparisonAnalyzer {
     private MonteCarloStrategyComparisonResult run(MonteCarloStrategyComparisonRequest request,
             IntFunction<MonteCarloComparisonWorld> supplied,
             AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
+        return run(request, supplied, progress, cancellation, null, null);
+    }
+
+    private MonteCarloStrategyComparisonResult run(MonteCarloStrategyComparisonRequest request,
+            IntFunction<MonteCarloComparisonWorld> supplied,
+            AnalysisProgressListener progress, AnalysisCancellationToken cancellation,
+            InternalExpenseRun expensesA, InternalExpenseRun expensesB) {
         Objects.requireNonNull(request);
         Objects.requireNonNull(progress);
         Objects.requireNonNull(cancellation).throwIfCancellationRequested();
         var a = request.strategyA().copyForRun();
         var b = request.strategyB().copyForRun();
+        if (expensesA != null) expensesA.validate(a);
+        if (expensesB != null) expensesB.validate(b);
+        if ((expensesA != null && expensesA.enabled()) || (expensesB != null && expensesB.enabled())) {
+            InternalExpenseRun.requireGeneratedWorlds(supplied);
+        }
 
         validate(a, request.assumptions());
         validate(b, request.assumptions());
@@ -72,9 +92,9 @@ public final class MonteCarloStrategyComparisonAnalyzer {
                 throw new ExecutionException(index, Stage.WORLD, request, exception);
             }
             cancellation.throwIfCancellationRequested();
-            var outcomeA = evaluateSide(a, world, request, Stage.STRATEGY_A);
+            var outcomeA = evaluateSide(a, world, request, Stage.STRATEGY_A, expensesA);
             cancellation.throwIfCancellationRequested();
-            var outcomeB = evaluateSide(b, world, request, Stage.STRATEGY_B);
+            var outcomeB = evaluateSide(b, world, request, Stage.STRATEGY_B, expensesB);
             cancellation.throwIfCancellationRequested();
             pairs.add(new MonteCarloPairedOutcome(index, world.lifetime(), outcomeA, outcomeB));
             if ((index + 1) % interval == 0 || index + 1 == count) {
@@ -88,9 +108,9 @@ public final class MonteCarloStrategyComparisonAnalyzer {
     }
 
     private MonteCarloStrategyOutcome evaluateSide(RetirementPlan plan, MonteCarloComparisonWorld world,
-            MonteCarloStrategyComparisonRequest request, Stage stage) {
+            MonteCarloStrategyComparisonRequest request, Stage stage, InternalExpenseRun expenses) {
         try {
-            return evaluate(plan, world, request.assumptions());
+            return evaluate(plan, world, request.assumptions(), expenses);
         } catch (AnalysisCancelledException exception) {
             throw exception;
         } catch (RuntimeException exception) {
@@ -100,7 +120,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
 
     /** Reduces engine output immediately. Neither the source plan nor world is changed. */
     private MonteCarloStrategyOutcome evaluate(RetirementPlan plan, MonteCarloComparisonWorld world,
-            MonteCarloStrategyComparisonRequest.Assumptions assumptions) {
+            MonteCarloStrategyComparisonRequest.Assumptions assumptions, InternalExpenseRun expenses) {
         int last = endingYear(world, assumptions);
         var context = ProjectionEvaluationContext.empty().withExactEndingYear(last);
         if (assumptions instanceof MonteCarloStrategyComparisonRequest.Longevity) {
@@ -123,6 +143,8 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         if (world.inflationPath().isPresent()) {
             context = context.withInflationPath(world.inflationPath().orElseThrow());
         }
+        if (expenses != null) context = expenses.apply(plan, context, assumptions.settings().seed(),
+                world.scenarioIndex(), assumptions.start().getYear(), last);
         var execution = engine.projectWithOutcome(plan, context, world.economicPath());
         var annual = new TreeMap<Integer, BigDecimal>();
         int expected = assumptions.start().getYear();

@@ -271,6 +271,8 @@ public class ProjectionEngine {
         int projectionLength = Math.addExact(Math.subtractExact(endingYear, startYear), 1);
         economicPath.requireCoverage(startYear, endingYear);
         evaluationContext.inflationPath().ifPresent(path -> path.requireCoverage(startYear, endingYear));
+        evaluationContext.expensePath().ifPresent(path -> path.validateBinding(
+                plan.getHousehold().getExpenses(), startYear, endingYear));
 
         EffectiveHouseholdDeathView deathView = EffectiveHouseholdDeathView.resolve(
                 plan.getHousehold(), assumptions.getDeathScenarioAssumptions(), evaluationContext.householdLifetimeScenario());
@@ -325,7 +327,8 @@ public class ProjectionEngine {
                             lifetimeRun,
                             householdRmdHasOccurred,
                             economicPath.investmentReturnForYear(calendarYear),
-                            evaluationContext.inflationPath().isPresent() ? generalExpenseMultiplier : null);
+                            evaluationContext.inflationPath().isPresent() ? generalExpenseMultiplier : null,
+                            evaluationContext.expensePath().orElse(null));
             } catch (RuntimeException exception) {
                 if (!structured || !(exception.getCause() instanceof FundingConstraint constraint)) {
                     throw exception;
@@ -394,7 +397,8 @@ public class ProjectionEngine {
             boolean lifetimeRun,
             boolean householdRmdHasOccurred,
             BigDecimal annualInvestmentReturn,
-            BigDecimal generalExpenseMultiplier) {
+            BigDecimal generalExpenseMultiplier,
+            ProjectionExpensePath expensePath) {
 
         return calculateProjectionYear(
                 plan,
@@ -409,6 +413,7 @@ public class ProjectionEngine {
                 householdRmdHasOccurred,
                 annualInvestmentReturn,
                 generalExpenseMultiplier,
+                expensePath,
                 null);
     }
 
@@ -425,6 +430,7 @@ public class ProjectionEngine {
             boolean householdRmdHasOccurred,
             BigDecimal annualInvestmentReturn,
             BigDecimal generalExpenseMultiplier,
+            ProjectionExpensePath expensePath,
             MedicarePremiumCalculation authoritativeMedicarePremium) {
 
         BigDecimal beginningAssets =
@@ -498,7 +504,8 @@ public class ProjectionEngine {
                         yearOffset,
                         projectionDate,
                         deathView,
-                        generalExpenseMultiplier);
+                        generalExpenseMultiplier,
+                        expensePath);
 
         BigDecimal cashFlowExpenses =
                 annualExpenses.add(
@@ -827,6 +834,7 @@ public class ProjectionEngine {
                     householdRmdHasOccurred,
                     annualInvestmentReturn,
                     generalExpenseMultiplier,
+                    expensePath,
                     medicarePremiumCalculation);
         }
 
@@ -1128,13 +1136,15 @@ public class ProjectionEngine {
             int yearOffset,
             LocalDate projectionDate,
             EffectiveHouseholdDeathView deathView,
-            BigDecimal generalExpenseMultiplier) {
+            BigDecimal generalExpenseMultiplier,
+            ProjectionExpensePath expensePath) {
 
         BigDecimal totalExpenses =
                 BigDecimal.ZERO;
 
-        for (Expense expense :
-                household.getExpenses()) {
+        var expenses = household.getExpenses();
+        for (int expenseIndex = 0; expenseIndex < expenses.size(); expenseIndex++) {
+            Expense expense = expenses.get(expenseIndex);
 
             if (!expense.isActiveDuringYear(
                     projectionDate.getYear(),
@@ -1154,6 +1164,16 @@ public class ProjectionEngine {
                             assumptions,
                             yearOffset,
                             generalExpenseMultiplier);
+
+            if (expensePath != null) {
+                var occurrence = expensePath.bindingForExpense(expenseIndex);
+                if (occurrence.isPresent()) {
+                    BigDecimal multiplier = expensePath.multiplier(occurrence.orElseThrow(), projectionDate.getYear());
+                    if (projectedExpense.signum() != 0) {
+                        projectedExpense = projectedExpense.multiply(multiplier);
+                    }
+                }
+            }
 
             /*
              * Only the first projection year may
