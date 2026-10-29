@@ -10,14 +10,14 @@ public final class ExpensesWizardStep extends WizardListStep<Expense> {
     public ExpensesWizardStep(NewPlanDraft draft) {
         super(draft, "Spending funds the retirement cash-flow projection and is optional. Recurring amounts are dollars/year; "
                         + "one-time amounts are a single purchase, not monthly spending. Enter amounts in the projection's opening-year spending base, "
-                        + "even for a later start. Future amounts grow from that base using the configured inflation category. "
+                        + "even for a later start. General Inflation or Healthcare Inflation uses the corresponding plan assumption; No Inflation keeps the recurring amount fixed in nominal dollars. "
                         + "The one-time editor uses a purchase date and General inflation. Medicare premiums are modeled separately; review healthcare entries to avoid double counting.",
                 "No expenses yet. Review will remind you to check your spending plan.");
         table.setId("wizard-expenses");
         column("Description", Expense::getDescription);
         column("Type", expense -> expense.isOneTimeExpense() ? "One-time" : "Recurring");
         column("Entered dollars", expense -> CurrencyFormatter.format(expense.getAnnualAmount()));
-        column("Inflation", expense -> expense.isHealthcareExpense() ? "Healthcare" : "General");
+        column("Escalation", expense -> expense.getGrowthCategory().displayName());
         column("Starts", expense -> expense.getStartDate() == null ? "Unrestricted" : expense.getStartDate().toString());
         details("wizard-spending-details", ExpensesWizardStep::describe);
         Button add = action("Add Expense", "wizard-add-expense", () -> edit(null));
@@ -45,12 +45,12 @@ public final class ExpensesWizardStep extends WizardListStep<Expense> {
     static String describe(Expense expense) {
         return expense.getDescription() + ": $" + expense.getAnnualAmount().toPlainString()
                 + (expense.isOneTimeExpense() ? " one-time purchase" : "/year, recurring")
-                + "\nProjection opening-year spending base; future amounts grow from that base."
+                + "\nProjection opening-year spending base; escalation follows the selected policy."
                 + (expense.isOneTimeExpense() ? "\nPurchase date: " + expense.getStartDate()
                 : "\nFirst active date: " + (expense.getStartDate() == null ? "Unrestricted" : expense.getStartDate())
                 + "; Last active date: " + (expense.getEndDate() == null ? "No scheduled end" : expense.getEndDate())
                 + ". Active calendar-year overlap applies; the opening year may be prorated.")
-                + "\nInflation category: " + (expense.isHealthcareExpense() ? "Healthcare" : "General");
+                + "\nEscalation: " + expense.getGrowthCategory().displayName();
     }
 
     private void edit(Expense original) {

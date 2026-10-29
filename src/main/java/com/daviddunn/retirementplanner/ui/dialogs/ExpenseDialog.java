@@ -73,6 +73,17 @@ public class ExpenseDialog extends Dialog<Expense> {
                 GrowthCategory.values());
         growthCategoryComboBox.setValue(
                 GrowthCategory.GENERAL);
+        growthCategoryComboBox.setAccessibleText("Recurring expense escalation");
+        growthCategoryComboBox.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(GrowthCategory value) {
+                return value == null ? "" : value.displayName();
+            }
+            @Override public GrowthCategory fromString(String value) {
+                return java.util.Arrays.stream(GrowthCategory.values())
+                        .filter(category -> category.displayName().equals(value)).findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("Select an expense escalation policy."));
+            }
+        });
 
         effectiveDatePicker = new DatePicker();
         endDatePicker = new DatePicker();
@@ -88,7 +99,7 @@ public class ExpenseDialog extends Dialog<Expense> {
                 });
 
         growthCategoryLabel =
-                new Label("Growth Category:");
+                new Label("Escalation:");
 
         amountLabel =
                 new Label("Annual Amount:");
@@ -195,8 +206,8 @@ public class ExpenseDialog extends Dialog<Expense> {
                 row++);
 
         InputHelp.install(expenseTypeComboBox, "Recurring expenses repeat in active calendar years. One Time records a purchase in its purchase year, uses General Inflation, and is not reduced by the post-death expense factor.");
-        InputHelp.install(annualAmountField, "Dollars in the projection's opening-year spending base: annual spending for Recurring, or the single purchase amount for One Time. Future amounts grow from that base using the applicable inflation assumption.");
-        InputHelp.install(growthCategoryComboBox, "Select General or Healthcare Inflation for a recurring expense. One-time purchases always use General Inflation, so this choice is hidden for them.");
+        InputHelp.install(annualAmountField, "Dollars in the projection's opening-year spending base: annual spending for Recurring, or the single purchase amount for One Time. Later-starting expenses use that same base. Inflation applies only under the selected escalation policy.");
+        InputHelp.install(growthCategoryComboBox, "General Inflation and Healthcare Inflation each use the corresponding existing plan assumption once. No Inflation keeps the entered recurring amount fixed in nominal dollars; existing active-year, opening-year proration and survivor adjustments still apply. One-time purchases retain General Inflation and hide this selector.");
         InputHelp.install(effectiveDatePicker, "First active date for recurring spending; blank means no start restriction. For a one-time expense, a purchase date is required. Recurring expenses are included by calendar-year overlap, with opening-year proration from the projection start.");
         InputHelp.install(endDatePicker, "Optional last active date for a recurring expense; blank means no scheduled end. A calendar year is included when the expense overlaps it. One-time expenses instead use their purchase date.");
         InputHelp.linkGridLabels(grid);
@@ -238,7 +249,7 @@ public class ExpenseDialog extends Dialog<Expense> {
                     new Field("Description", descriptionField, Kind.TEXT, true),
                     new Field("Expense Type", expenseTypeComboBox, Kind.CHOICE, true),
                     new Field("Amount", annualAmountField, Kind.NUMBER, true),
-                    new Field("Growth Category", growthCategoryComboBox, Kind.CHOICE, true),
+                    new Field("Escalation", growthCategoryComboBox, Kind.CHOICE, true),
                     new Field("Effective Date", effectiveDatePicker, Kind.DATE, false),
                     new Field("End Date", endDatePicker, Kind.DATE, false)), () -> {
                         if (!validateAndBuildExpense()) throw new IllegalArgumentException("Please complete the expense.");

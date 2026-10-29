@@ -188,7 +188,7 @@ class WizardFinancialEquivalenceTest {
             ((TextField) dialog.lookup("#wizard-input-description")).setText(name);
             ((ComboBox<ExpenseType>) dialog.lookup("#wizard-input-expense-type")).setValue(type);
             ((TextField) dialog.lookup("#wizard-input-amount")).setText(amount);
-            ((ComboBox<GrowthCategory>) dialog.lookup("#wizard-input-growth-category")).setValue(growth);
+            ((ComboBox<GrowthCategory>) dialog.lookup("#wizard-input-escalation")).setValue(growth);
             ((DatePicker) dialog.lookup("#wizard-input-effective-date")).setValue(start);
             if (type == ExpenseType.RECURRING) ((DatePicker) dialog.lookup("#wizard-input-end-date")).setValue(end);
         });

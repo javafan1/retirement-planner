@@ -1228,6 +1228,9 @@ public class ProjectionEngine {
             int yearOffset,
             BigDecimal generalExpenseMultiplier) {
 
+        if (expense.getGrowthCategory() == com.daviddunn.retirementplanner.domain.financial.GrowthCategory.NONE) {
+            return expense.getAnnualAmount();
+        }
         if (generalExpenseMultiplier != null && !expense.isHealthcareExpense()) {
             return expense.getAnnualAmount().multiply(generalExpenseMultiplier);
         }

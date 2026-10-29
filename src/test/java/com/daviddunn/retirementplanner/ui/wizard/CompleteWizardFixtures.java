@@ -99,7 +99,7 @@ final class CompleteWizardFixtures {
         edit(wizard, "wizard-add-expense", "wizard-input-description", pane -> {
             ((TextField) pane.lookup("#wizard-input-description")).setText(description);
             ((TextField) pane.lookup("#wizard-input-amount")).setText(amount);
-            ((ComboBox<GrowthCategory>) pane.lookup("#wizard-input-growth-category")).setValue(growth);
+            ((ComboBox<GrowthCategory>) pane.lookup("#wizard-input-escalation")).setValue(growth);
         });
     }
 

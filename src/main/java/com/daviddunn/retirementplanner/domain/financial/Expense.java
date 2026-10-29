@@ -96,6 +96,11 @@ public class Expense {
                         ? ExpenseType.RECURRING
                         : expenseType;
 
+        if (this.growthCategory == GrowthCategory.NONE
+                && this.expenseType != ExpenseType.RECURRING) {
+            throw new IllegalArgumentException("No Inflation is supported only for recurring expenses.");
+        }
+
         if (startDate != null
                 && endDate != null
                 && endDate.isBefore(startDate)) {

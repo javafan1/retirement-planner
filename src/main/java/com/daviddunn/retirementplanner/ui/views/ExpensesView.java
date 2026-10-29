@@ -127,7 +127,7 @@ public class ExpensesView extends BorderPane {
         amountColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
 
         TableColumn<Expense, String> growthColumn =
-                new TableColumn<>("Growth");
+                new TableColumn<>("Escalation");
 
         growthColumn.setCellValueFactory(cellData -> {
 
@@ -186,12 +186,7 @@ public class ExpensesView extends BorderPane {
     private String formatGrowthCategory(
             GrowthCategory category) {
 
-        return switch (category) {
-
-            case GENERAL -> "General";
-
-            case HEALTHCARE -> "Healthcare";
-        };
+        return category.displayName();
     }
 
     private String formatDate(

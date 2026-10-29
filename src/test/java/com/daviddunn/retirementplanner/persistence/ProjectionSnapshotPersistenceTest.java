@@ -50,6 +50,36 @@ class ProjectionSnapshotPersistenceTest {
             @Override public ProjectionExecutionResult projectWithOutcome(RetirementPlan p) { throw new AssertionError("Restoration must not project"); }
         };
     }
+
+    @Test void noInflationCurrentAndBaselineRestoreExactlyWithoutEngineExecution() throws Exception {
+        var c = controller();
+        var household = c.getCurrentPlan().getHousehold();
+        for (var expense : List.copyOf(household.getExpenses())) household.removeExpense(expense);
+        household.addExpense(new com.daviddunn.retirementplanner.domain.financial.Expense("Fixed nominal spending", new BigDecimal("1234.5600"),
+                com.daviddunn.retirementplanner.domain.financial.GrowthCategory.NONE));
+        c.invalidateProjection();
+        var original = c.getCurrentProjection();
+        c.saveCurrentAsBaseline("No Inflation baseline");
+        var accepted = c.getAcceptedProjectionSnapshot();
+        set(c, "projectionEngine", throwing());
+        var file = directory.resolve("no-inflation.json"); c.saveAs(file);
+        var copy = controller(); set(copy, "projectionEngine", throwing()); copy.open(file);
+        copy.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertNotNull(copy.peekCurrentProjection(), copy.getProjectionSnapshotNotice());
+        assertEquals(accepted.id(), copy.getAcceptedProjectionSnapshot().id());
+        assertEquals(accepted.inputsDocument(), copy.getAcceptedProjectionSnapshot().inputsDocument());
+        assertEquals(accepted.inputDigest(), copy.getAcceptedProjectionSnapshot().inputDigest());
+        assertEquals(accepted.chart(), copy.getAcceptedProjectionSnapshot().chart());
+        compareFinancialGetters(original, copy.peekCurrentProjection());
+        assertEquals(com.daviddunn.retirementplanner.domain.financial.GrowthCategory.NONE,
+                copy.getCurrentPlan().getHousehold().getExpenses().getFirst().getGrowthCategory());
+        assertEquals(accepted.id(), copy.getCurrentPlan().getBaseline().getProjectionSnapshotId());
+        var previousOwner = copy.getCurrentPlan().getPlanId();
+        copy.saveAs(directory.resolve("independent.json"));
+        assertNotEquals(previousOwner, copy.getCurrentPlan().getPlanId());
+        assertEquals(accepted.id(), copy.getAcceptedProjectionSnapshot().id());
+        assertEquals(accepted.inputDigest(), copy.getAcceptedProjectionSnapshot().inputDigest());
+    }
     static void compareFinancialGetters(Projection original, Projection restored) throws Exception {
         assertEquals(original.size(), restored.size());
         for (int i = 0; i < original.size(); i++) {
