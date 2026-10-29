@@ -1,0 +1,19 @@
+.application-about .about-product {
+    -fx-text-fill: -app-text;
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+}
+.application-about .about-tagline {
+    -fx-text-fill: -app-muted;
+    -fx-font-size: 15px;
+    -fx-font-style: italic;
+}
+.application-about .about-version,
+.application-about .about-detail,
+.application-about .about-attribution {
+    -fx-text-fill: -app-muted;
+    -fx-font-size: 12px;
+}
+.application-about .about-attribution {
+    -fx-padding: 8 0 0 0;
+}

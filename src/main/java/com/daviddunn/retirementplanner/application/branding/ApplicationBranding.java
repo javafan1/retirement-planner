@@ -4,6 +4,7 @@ import java.util.Objects;
 
 /** Restart-scoped presentation metadata, deliberately independent of plan inputs/preferences. */
 public record ApplicationBranding(String applicationTitle, String productName, String tagline, String logoResource) {
+    public static final String COMPANY_ATTRIBUTION = "A product of ZaZoot LLC, USA";
     public ApplicationBranding {
         applicationTitle = text(applicationTitle, 160);
         productName = text(productName, 160);

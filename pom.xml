@@ -6,12 +6,17 @@
 
     <groupId>com.daviddunn.retirementplanner</groupId>
     <artifactId>retirement-planner</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>0.91.0</version>
 
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
         <javafx.version>25</javafx.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
+        <aledrix.build.designation>development</aledrix.build.designation>
+        <!-- Safe defaults when building a source archive without Git. -->
+        <git.commit.id>unknown</git.commit.id>
+        <git.commit.id.abbrev>unknown</git.commit.id.abbrev>
     </properties>
 
     <dependencies>
@@ -62,7 +67,18 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+            </resource>
+            <resource>
+                <directory>src/main/version</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -89,4 +105,37 @@
 
 
     </build>
+    <profiles>
+        <!-- Never borrow an enclosing repository's identity when building a source archive. -->
+        <profile>
+            <id>git-build-identity</id>
+            <activation><file><exists>.git</exists></file></activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>io.github.git-commit-id</groupId>
+                        <artifactId>git-commit-id-maven-plugin</artifactId>
+                        <version>9.0.2</version>
+                        <executions>
+                            <execution>
+                                <id>application-build-identity</id>
+                                <phase>initialize</phase>
+                                <goals><goal>revision</goal></goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <generateGitPropertiesFile>false</generateGitPropertiesFile>
+                            <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                            <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
+                            <abbrevLength>12</abbrevLength>
+                            <includeOnlyProperties>
+                                <includeOnlyProperty>^git.commit.id$</includeOnlyProperty>
+                                <includeOnlyProperty>^git.commit.id.abbrev$</includeOnlyProperty>
+                            </includeOnlyProperties>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

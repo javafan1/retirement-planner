@@ -20,3 +20,11 @@
     -fx-border-color: #b8995e transparent transparent transparent;
     -fx-border-width: 1 0 0 0;
 }
+.startup-splash .splash-metadata,
+.startup-splash .splash-attribution {
+    -fx-text-fill: -app-muted;
+    -fx-font-size: 12px;
+}
+.startup-splash .splash-attribution {
+    -fx-padding: 6 0 0 0;
+}

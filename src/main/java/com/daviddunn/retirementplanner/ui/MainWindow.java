@@ -384,7 +384,10 @@ public class MainWindow {
 
         Menu helpMenu = new Menu("Help");
 
-        MenuItem aboutItem = new MenuItem("About");
+        MenuItem aboutItem = new MenuItem("About " + branding.productName());
+        aboutItem.setId("about-application-menu");
+        aboutItem.setOnAction(event ->
+                new com.daviddunn.retirementplanner.ui.startup.AboutApplicationDialog(stage, branding).show());
 
         helpMenu.getItems().add(aboutItem);
 

@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.startup;
 
 import com.daviddunn.retirementplanner.application.branding.ApplicationBranding;
+import com.daviddunn.retirementplanner.application.branding.ApplicationVersion;
 import javafx.geometry.*;
 import javafx.scene.control.Label;
 import javafx.scene.image.*;
@@ -10,6 +11,10 @@ import java.util.Optional;
 /** Presentation only. Branding text remains independent of the approved symbol. */
 public final class StartupSplashView extends VBox {
     public StartupSplashView(ApplicationBranding branding, Optional<Image> logo) {
+        this(branding, logo, ApplicationVersion.current());
+    }
+
+    public StartupSplashView(ApplicationBranding branding, Optional<Image> logo, ApplicationVersion version) {
         getStyleClass().add("startup-splash");
         getStylesheets().add(StartupSplashView.class.getResource("/css/startup-splash.css").toExternalForm());
         setAlignment(Pos.CENTER);
@@ -29,7 +34,9 @@ public final class StartupSplashView extends VBox {
         var product = label(branding.productName(), "splash-product", "branding-product");
         var tagline = label(branding.tagline(), "splash-tagline", "branding-tagline");
         var activity = label("Initializing…", "splash-activity", "startup-activity");
-        getChildren().addAll(product, tagline, activity);
+        var metadata = label(version.displaySummary(), "splash-metadata", "branding-version");
+        var company = label(ApplicationBranding.COMPANY_ATTRIBUTION, "splash-attribution", "branding-attribution");
+        getChildren().addAll(product, tagline, metadata, activity, company);
     }
 
     private Label label(String text, String style, String id) {
