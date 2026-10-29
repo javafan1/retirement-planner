@@ -482,12 +482,12 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     acceptedSsTop = SocialSecuritySurvivorOptimizationSettings.DEFAULT_TOP_RETIREMENT_CANDIDATES;
                     if (kind == AnalysisKind.COUPLE_WEIGHTED) baselineInputs.restoreParameters(null);
                 }
-            }, this::refreshParameterInputs, () -> navigation.selected().mode() == switch (kind) {
+            }, this::refreshParameterInputs, () -> navigation.isSelected(switch (kind) {
                 case COUPLE_SOCIAL_SECURITY -> SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY;
                 case COUPLE_QUICK -> SocialSecurityAnalyzerJobController.Mode.QUICK;
                 case COUPLE_EXHAUSTIVE -> SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE;
                 default -> SocialSecurityAnalyzerJobController.Mode.WEIGHTED;
-            });
+            }));
             parameterBindings.put(kind, binding);
             if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY) socialSecurityWorkspace.getChildren().add(5, binding.controls);
             else if (kind == AnalysisKind.COUPLE_WEIGHTED) weightedView.getChildren().add(5, binding.controls);
@@ -506,6 +506,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             };
             parameterBindings.get(kind).restore();
         });
+        // Restore the existing SS prerequisite context without selecting or revealing its workspace.
+        parameterBindings.get(AnalysisKind.COUPLE_SOCIAL_SECURITY).restore();
     }
     private AnalysisParameterConfiguration.Mortality defaultCoupleParameters(com.daviddunn.retirementplanner.ui.controller.ApplicationController source) {
         var settings = source.getLongevitySessionSettings();
@@ -845,7 +847,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 : kind == AnalysisKind.COUPLE_EXHAUSTIVE ? deterministicResultTabs : weightedView.resultTabs;
         Tab target = kind == AnalysisKind.COUPLE_SOCIAL_SECURITY ? socialSecurityGridTab
                 : kind == AnalysisKind.COUPLE_EXHAUSTIVE ? deterministicHeatMapTab : weightedView.heatMapTab;
-        resultNavigation.display(kind, identity, ticket, tabs, target, () -> navigation.selected().mode() == mode);
+        resultNavigation.display(kind, identity, ticket, tabs, target, () -> navigation.isSelected(mode));
     }
     private void runAnalysis() {
         var navigationTicket = resultNavigation.capture();
@@ -2031,6 +2033,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     }
 
     private void refreshContextualInputs() {
+        if (navigation.selected() == null) return;
         var mode = navigation.selected().mode();
         if (exhaustivePersistence != null && mode == SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE) exhaustivePersistence.load();
         if (weightedPersistence != null && mode == SocialSecurityAnalyzerJobController.Mode.WEIGHTED) weightedPersistence.load();

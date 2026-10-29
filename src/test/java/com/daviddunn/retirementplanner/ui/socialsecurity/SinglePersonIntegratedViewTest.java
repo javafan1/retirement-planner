@@ -85,10 +85,12 @@ class SinglePersonIntegratedViewTest {
                 var stage = (Stage) field.get(dialog);
                 try {
                     stage.show(); stage.getScene().getRoot().applyCss(); stage.getScene().getRoot().layout();
+                    var navigation = ((SinglePersonIntegratedView) stage.getScene().getRoot()).navigation;
+                    assertNull(navigation.selected());
+                    navigation.select(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE);
                     assertNotNull(stage.getScene().lookup("#single-claiming-strategies"));
                     assertTrue(stage.getScene().getRoot().lookupAll(".heat-map-cell").isEmpty());
                     assertEquals(0, jobs.generation());
-                    var navigation = ((SinglePersonIntegratedView) stage.getScene().getRoot()).navigation;
                     assertEquals(java.util.List.of("Deterministic Integrated", "Social Security Only", "Longevity-Weighted Integrated"),
                             navigation.choices().stream().map(AnalyzerNavigationView.Choice::title).toList());
                     assertInstanceOf(SinglePersonMortalityView.class, navigation.choices().get(1).workspace());
@@ -151,6 +153,7 @@ class SinglePersonIntegratedViewTest {
             try (var coordinator = new SocialSecurityAnalysisJobCoordinator();
                  var jobs = new SocialSecurityAnalyzerJobController(coordinator)) {
                 var view = new SinglePersonIntegratedView(SinglePersonDeterministicStrategyTest.plan(), jobs);
+                view.navigation.select(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE);
                 view.render(completed);
                 var stage = new Stage();
                 stage.setScene(new Scene(view, 1180, 820));

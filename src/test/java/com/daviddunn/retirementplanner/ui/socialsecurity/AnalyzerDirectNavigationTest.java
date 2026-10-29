@@ -34,7 +34,7 @@ class AnalyzerDirectNavigationTest {
             layout(f.stage);
             assertEquals(List.of(SOCIAL_SECURITY, QUICK, EXHAUSTIVE, WEIGHTED),
                     f.navigation.choices().stream().map(AnalyzerNavigationView.Choice::mode).toList());
-            assertEquals(SOCIAL_SECURITY, f.navigation.selected().mode());
+            assertNull(f.navigation.selected());
             var pending = field(f.dialog, "discountRate", TextField.class);
             pending.setText("pending invalid text");
             var count = field(f.dialog, "integratedCandidateCount", Spinner.class);
@@ -158,7 +158,7 @@ class AnalyzerDirectNavigationTest {
             var view = new SinglePersonIntegratedView(SinglePersonDeterministicStrategyTest.plan(), f.jobs);
             assertEquals(List.of(EXHAUSTIVE, SOCIAL_SECURITY, WEIGHTED),
                     view.navigation.choices().stream().map(AnalyzerNavigationView.Choice::mode).toList());
-            assertEquals(EXHAUSTIVE, view.navigation.selected().mode());
+            assertNull(view.navigation.selected());
             view.ssView.discount.setText("bad pending value");
             view.weightedView.discount.setText("2.75");
             for (var choice : view.navigation.choices()) view.navigation.select(choice.mode());

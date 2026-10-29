@@ -26,6 +26,7 @@ final class AnalyzerNavigationView extends BorderPane {
     private final VBox sidebar = new VBox(8);
     private final VBox workspace = new VBox();
     private final ScrollPane scroll;
+    private final Node header;
     private final Label description = new Label();
     private final Label activity = new Label();
     private final EnumMap<SocialSecurityAnalyzerJobController.Mode, ToggleButton> buttons =
@@ -38,6 +39,7 @@ final class AnalyzerNavigationView extends BorderPane {
     private java.util.function.Consumer<SocialSecurityAnalyzerJobController.Mode> selectedAction = mode -> { };
 
     AnalyzerNavigationView(Node header, List<Choice> choices) {
+        this.header = header;
         this.choices = List.copyOf(choices);
         if (this.choices.isEmpty() || this.choices.stream().map(Choice::mode).distinct().count() != this.choices.size()) {
             throw new IllegalArgumentException("Analysis choices must be nonempty and unique.");
@@ -53,6 +55,7 @@ final class AnalyzerNavigationView extends BorderPane {
 
         compact.getItems().setAll(this.choices);
         compact.setMaxWidth(Double.MAX_VALUE);
+        compact.setPromptText("Select an analysis method");
         compact.setAccessibleText("Analysis type");
         compact.setAccessibleHelp("Choose an analysis. Selection does not run or cancel analysis.");
         com.daviddunn.retirementplanner.ui.controls.InputHelp.install(compact,
@@ -86,7 +89,7 @@ final class AnalyzerNavigationView extends BorderPane {
             button.selectedProperty().addListener((o, before, after) -> button.setStyle(after
                     ? "-fx-border-color: #2466af; -fx-border-width: 2; -fx-font-weight: bold;" : ""));
             button.setOnKeyPressed(event -> {
-                int index = this.choices.indexOf(selected);
+                int index = this.choices.indexOf(selected == null ? choice : selected);
                 int target = switch (event.getCode()) {
                     case UP -> Math.max(0, index - 1);
                     case DOWN -> Math.min(this.choices.size() - 1, index + 1);
@@ -103,12 +106,24 @@ final class AnalyzerNavigationView extends BorderPane {
             sidebar.getChildren().add(button);
         }
         widthProperty().addListener((o, before, after) -> updateLayout());
-        select(this.choices.getFirst().mode());
+        if (header != null) { header.setVisible(false); header.setManaged(false); }
+        var instruction = new Label("Select an analysis method to explore your Social Security claiming strategies.");
+        instruction.setId("analyzer-selection-instruction");
+        instruction.setWrapText(true);
+        instruction.setMinHeight(Region.USE_PREF_SIZE);
+        var explanation = new Label("Choose a method from the analysis choices. Opening a workspace does not start a calculation.");
+        explanation.setWrapText(true);
+        explanation.setMinHeight(Region.USE_PREF_SIZE);
+        var neutral = new VBox(14, instruction, explanation);
+        neutral.setPadding(new Insets(32));
+        workspace.getChildren().setAll(neutral);
+        description.setText("No analysis selected");
         updateLayout();
     }
 
     List<Choice> choices() { return choices; }
     Choice selected() { return selected; }
+    boolean isSelected(SocialSecurityAnalyzerJobController.Mode mode) { return selected != null && selected.mode() == mode; }
     boolean isCompact() { return compact.isManaged(); }
 
     void onSelectionRequest(java.util.function.BiConsumer<SocialSecurityAnalyzerJobController.Mode, Runnable> request) {
@@ -120,9 +135,11 @@ final class AnalyzerNavigationView extends BorderPane {
     }
 
     void requestSelect(SocialSecurityAnalyzerJobController.Mode mode, Runnable afterSelection) {
+        if (choices.stream().noneMatch(choice -> choice.mode() == mode)) throw new IllegalArgumentException("Unavailable analysis choice.");
+        // Revert speculative ComboBox/ToggleGroup changes before an asynchronous introduction.
+        compact.setValue(selected);
+        buttons.forEach((key, button) -> button.setSelected(isSelected(key)));
         if (selected != null) {
-            compact.setValue(selected);
-            buttons.get(selected.mode()).setSelected(true);
             if (selected.mode() == mode) {
                 afterSelection.run();
                 return;
@@ -137,6 +154,7 @@ final class AnalyzerNavigationView extends BorderPane {
             navigationChanged.run();
             if (selected != null) positions.put(selected.mode(), scroll.getVvalue());
             selected = choice;
+            if (header != null) { header.setVisible(true); header.setManaged(true); }
             workspace.getChildren().setAll(choice.workspace());
             scroll.setVvalue(positions.getOrDefault(mode, 0.0));
         }
@@ -149,7 +167,7 @@ final class AnalyzerNavigationView extends BorderPane {
 
     void onSelected(java.util.function.Consumer<SocialSecurityAnalyzerJobController.Mode> action) {
         selectedAction = Objects.requireNonNull(action);
-        selectedAction.accept(selected.mode());
+        if (selected != null) selectedAction.accept(selected.mode());
     }
 
     void onNavigation(Runnable action) { navigationChanged = Objects.requireNonNull(action); }
@@ -159,7 +177,7 @@ final class AnalyzerNavigationView extends BorderPane {
     }
 
     void focusSelector() {
-        if (isCompact()) compact.requestFocus(); else buttons.get(selected.mode()).requestFocus();
+        if (isCompact()) compact.requestFocus(); else buttons.get(selected == null ? choices.getFirst().mode() : selected.mode()).requestFocus();
     }
 
     void showActivity(SocialSecurityAnalyzerJobController.Mode mode, String status) {

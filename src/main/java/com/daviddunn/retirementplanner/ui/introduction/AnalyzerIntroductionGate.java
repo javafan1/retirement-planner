@@ -28,6 +28,16 @@ public final class AnalyzerIntroductionGate {
     public void request(Window owner, AnalyzerIntroduction entry, boolean single,
             BooleanSupplier valid, Consumer<Runnable> open) {
         Objects.requireNonNull(entry);
+        requestLaunch(owner, entry, single, valid, open);
+    }
+
+    /** Opens the neutral analyzer window, retaining the same owner/token duplicate-launch guard. */
+    public void openWithoutIntroduction(Window owner, BooleanSupplier valid, Consumer<Runnable> open) {
+        requestLaunch(owner, null, false, valid, open);
+    }
+
+    private void requestLaunch(Window owner, AnalyzerIntroduction entry, boolean single,
+            BooleanSupplier valid, Consumer<Runnable> open) {
         Objects.requireNonNull(valid);
         Objects.requireNonNull(open);
         if (!Platform.isFxApplicationThread()) throw new IllegalStateException("FX owner required.");
@@ -59,7 +69,7 @@ public final class AnalyzerIntroductionGate {
                 throw failure;
             }
         };
-        if (!settings.snapshot().showsIntroduction(entry)) {
+        if (entry == null || !settings.snapshot().showsIntroduction(entry)) {
             launch.run();
             return;
         }

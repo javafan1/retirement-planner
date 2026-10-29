@@ -150,6 +150,7 @@ class SharedClaimingAgeGridTest {
     void ssLogicalLayoutsAreReadableAndProduceInspectedPreviews(int width, int height) throws Exception {
         fx(() -> {
             var dialog = new SocialSecurityStrategyAnalyzerDialog(null, LongevityWeightedAnalysisRequestFactoryTest.plan());
+            field(dialog, "navigation", AnalyzerNavigationView.class).select(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY);
             var context = CoupleSocialSecurityPersistenceTest.fixture(true, false);
             var render = dialog.getClass().getDeclaredMethod("render", SocialSecurityStrategyAnalysisContext.class, SocialSecurityStrategyAnalyzerPresentation.class);
             render.setAccessible(true); render.invoke(dialog, context, presentation);

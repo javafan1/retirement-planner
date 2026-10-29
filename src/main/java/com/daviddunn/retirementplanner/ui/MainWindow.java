@@ -337,17 +337,22 @@ public class MainWindow {
         Menu analysisMenu = new Menu("Analysis");
         MenuItem socialSecurityAnalyzerItem =
                 new MenuItem("Social Security Strategy Analyzer...");
-        socialSecurityAnalyzerItem.setOnAction(event -> requestIntroduction(
-                controller.getCurrentPlan().getHousehold().hasSpouse()
-                        ? com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.SOCIAL_SECURITY_ONLY
-                        : com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.SOCIAL_SECURITY_EXHAUSTIVE,
-                finished -> {
-                    try {
-                        var dialog = new SocialSecurityStrategyAnalyzerDialog(stage, controller);
-                        dialog.configureIntroductions();
-                        dialog.show();
-                    } finally { finished.run(); }
-                }));
+        socialSecurityAnalyzerItem.setOnAction(event -> {
+            var owner = controller.getCurrentPlan();
+            if (owner == null || planOperationActive || swappingProjections) return;
+            var identity = owner.getPlanId();
+            long revision = controller.getSourcePlanRevision();
+            introductionGate.openWithoutIntroduction(stage,
+                    () -> !planOperationActive && !swappingProjections && controller.getCurrentPlan() == owner
+                            && java.util.Objects.equals(identity, owner.getPlanId()) && controller.getSourcePlanRevision() == revision,
+                    finished -> {
+                        try {
+                            var dialog = new SocialSecurityStrategyAnalyzerDialog(stage, controller);
+                            dialog.configureIntroductions();
+                            dialog.show();
+                        } finally { finished.run(); }
+                    });
+        });
         analysisMenu.getItems().add(socialSecurityAnalyzerItem);
         MenuItem monteCarloItem = new MenuItem("Monte Carlo Retirement Analysis...");
         monteCarloItem.setId("monte-carlo-analysis-menu");

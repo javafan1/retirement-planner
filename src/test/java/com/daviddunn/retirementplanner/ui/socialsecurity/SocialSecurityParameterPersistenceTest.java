@@ -132,6 +132,32 @@ class SocialSecurityParameterPersistenceTest {
         rig.execute(); await(rig.binding(AnalysisKind.COUPLE_SOCIAL_SECURITY).status, "SAVED");
     }
 
+    @Test void neutralOpeningStillRestoresHiddenAcceptedSsParametersForQuickCompatibility() throws Exception {
+        var kind = AnalysisKind.COUPLE_SOCIAL_SECURITY;
+        var source = source(kind, new JsonRetirementPlanRepository());
+        try {
+            try (var rig = fx(() -> new Rig(source))) {
+                fx(() -> { rig.configure(kind); rig.run(kind); return null; });
+                rig.execute(); await(rig.binding(kind).status, "SAVED");
+            }
+            var restarted = new ApplicationController(new JsonRetirementPlanRepository(), new JsonApplicationSettingsRepository(dir.resolve("restart.json")),
+                    new AnalysisResultStore(new JsonAnalysisSnapshotRepository(dir.resolve("restart-results"))));
+            fx(() -> { restarted.open(dir.resolve("plan.json")); return null; });
+            long revision = restarted.getSourcePlanRevision(); boolean dirty = restarted.isModified();
+            try (var reopened = fx(() -> new Rig(restarted))) {
+                fx(() -> {
+                    var navigation = field(reopened.dialog, "navigation", AnalyzerNavigationView.class);
+                    assertNull(navigation.selected());
+                    assertEquals("1.1500", reopened.editedField(kind).getText());
+                    assertEquals(0, reopened.calculations.get());
+                    assertEquals(0, reopened.jobs.generation());
+                    assertEquals(revision, restarted.getSourcePlanRevision()); assertEquals(dirty, restarted.isModified());
+                    return null;
+                });
+            } finally { stop(restarted); }
+        } finally { stop(source); }
+    }
+
     @ParameterizedTest @EnumSource(value = AnalysisKind.class, names = ".*MONTE_CARLO.*", mode = EnumSource.Mode.MATCH_NONE)
     void acceptedSettingsSaveAndRestoreFromNewControllerWithoutFinancialWork(AnalysisKind kind) throws Exception {
         var source = source(kind, new JsonRetirementPlanRepository());

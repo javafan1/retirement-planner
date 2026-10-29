@@ -24,6 +24,24 @@ class AnalyzerIntroductionMenuTest {
     @TempDir Path directory;
     @BeforeAll static void start()throws Exception{AnalyzerIntroductionUiTest.start();}
     static MenuItem item(Stage owner,String name){return ((MenuBar)owner.getScene().lookup(".menu-bar")).getMenus().stream().flatMap(m->m.getItems().stream()).filter(i->name.equals(i.getText())).findFirst().orElseThrow();}
+    static void openAndCloseNeutralAnalyzer(Stage owner) {
+        var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        Platform.runLater(() -> {
+            Stage analyzer = null;
+            try {
+                analyzer = (Stage) Window.getWindows().stream().filter(w -> w instanceof Stage s && s.getOwner() == owner
+                        && s.getTitle().equals("Social Security Strategy Analyzer")).findFirst().orElseThrow();
+                assertNotNull(analyzer.getScene().lookup("#analyzer-selection-instruction"));
+                assertNull(analyzer.getScene().lookup("#suppress-analyzer-introduction"));
+                assertEquals(1, Window.getWindows().stream().filter(w -> w instanceof Stage s && s.getOwner() == owner).count());
+                item(owner,"Social Security Strategy Analyzer...").fire();
+                assertEquals(1, Window.getWindows().stream().filter(w -> w instanceof Stage s && s.getOwner() == owner).count());
+            } catch (Throwable problem) { failure.set(problem); }
+            finally { if (analyzer != null) analyzer.close(); }
+        });
+        item(owner,"Social Security Strategy Analyzer...").fire();
+        if (failure.get() != null) throw new AssertionError(failure.get());
+    }
     static void forbidProjection(ApplicationController c)throws Exception{
         var field=c.getClass().getDeclaredField("projectionEngine");field.setAccessible(true);field.set(c,new ProjectionEngine(){
             @Override public Projection project(RetirementPlan p){throw new AssertionError("Introductions cannot project");}
@@ -53,8 +71,8 @@ class AnalyzerIntroductionMenuTest {
         try{
             AnalyzerIntroductionUiTest.fx(()->{
                 var window=new MainWindow(c);stage[0]=new Stage();window.setStage(stage[0]);stage[0].setScene(window.createScene());stage[0].show();
-                item(stage[0],"Social Security Strategy Analyzer...").fire();var intro=AnalyzerIntroductionUiTest.pane(stage[0]);
-                assertEquals(couple?"Social Security Only":"Deterministic Integrated",((Stage)intro.getScene().getWindow()).getTitle());AnalyzerIntroductionUiTest.canceled(intro);
+                openAndCloseNeutralAnalyzer(stage[0]);
+                DialogPane intro;
                 for(var name:List.of("Monte Carlo Retirement Analysis...","Monte Carlo Strategy Comparison...")){
                     var menu=item(stage[0],name);menu.fire();intro=AnalyzerIntroductionUiTest.pane(stage[0]);
                     assertTrue(intro.lookup("#suppress-analyzer-introduction")!=null);menu.fire();
@@ -65,12 +83,7 @@ class AnalyzerIntroductionMenuTest {
                     menu.fire();assertEquals(1,Window.getWindows().stream().filter(w->w instanceof Stage s&&s.getOwner()==stage[0]).count());
                     ((Button)result.lookupButton(ButtonType.CLOSE)).fire();
                 }
-                item(stage[0],"Social Security Strategy Analyzer...").fire();var pending=AnalyzerIntroductionUiTest.pane(stage[0]);
-                Platform.runLater(()->AnalyzerIntroductionUiTest.continued(pending));return null;
-            });
-            AnalyzerIntroductionUiTest.fx(()->{
-                var analyzer=Window.getWindows().stream().filter(w->w instanceof Stage s&&s.getOwner()==stage[0]&&s.getTitle().equals("Social Security Strategy Analyzer")).findFirst().orElseThrow();
-                assertNull(analyzer.getScene().lookup("#suppress-analyzer-introduction"));((Stage)analyzer).close();return null;
+                openAndCloseNeutralAnalyzer(stage[0]);return null;
             });
             assertEquals(before,CompleteProjectionSnapshot.freeze(c.getCurrentPlan()));assertSame(snapshot,c.getAcceptedProjectionSnapshot());assertEquals(dirty,c.isModified());assertEquals(revision,c.getSourcePlanRevision());
         }finally{
