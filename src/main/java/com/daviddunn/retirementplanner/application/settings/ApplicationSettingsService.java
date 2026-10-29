@@ -44,6 +44,22 @@ public final class ApplicationSettingsService implements AutoCloseable {
     }
 
     public CompletionStage<Void> savePreferences(ApplicationTheme theme, String directory) {
+        return savePreferences(theme, directory, false);
+    }
+
+    public CompletionStage<Void> suppressIntroduction(AnalyzerIntroduction kind) {
+        Objects.requireNonNull(kind);
+        return submit(worker, () -> {
+            update(next -> {
+                var values = new java.util.HashSet<>(next.getSuppressedAnalyzerIntroductions());
+                values.add(kind);
+                next.setSuppressedAnalyzerIntroductions(values);
+            });
+            return null;
+        });
+    }
+
+    public CompletionStage<Void> savePreferences(ApplicationTheme theme, String directory, boolean resetIntroductions) {
         Objects.requireNonNull(theme);
         return background(() -> {
             if (directory != null && directory.length() > 4096) throw new IllegalArgumentException("Directory preference is too long.");
@@ -52,7 +68,11 @@ public final class ApplicationSettingsService implements AutoCloseable {
                 throw new IllegalArgumentException("Choose an existing readable and writable directory.");
             return normalized;
         }).thenCompose(normalized -> submit(worker, () -> {
-            update(next -> { next.setTheme(theme); next.setDefaultPlanDirectory(normalized); });
+            update(next -> {
+                next.setTheme(theme);
+                next.setDefaultPlanDirectory(normalized);
+                if (resetIntroductions) next.setSuppressedAnalyzerIntroductions(java.util.Set.of());
+            });
             return null;
         }));
     }

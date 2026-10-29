@@ -14,6 +14,7 @@ public final class ApplicationSettingsDialog extends Dialog<Void> {
     private final Label notice = new Label();
     private boolean saving;
     private boolean committed;
+    private boolean resetIntroductions;
 
     public ApplicationSettingsDialog(Window owner, ApplicationSettingsService service, ApplicationThemeManager themes) {
         initOwner(owner); initModality(Modality.WINDOW_MODAL);
@@ -49,17 +50,28 @@ public final class ApplicationSettingsDialog extends Dialog<Void> {
         var folderLabel = new Label("Default retirement-plan directory"); folderLabel.setLabelFor(directory);
         var help = new Label("Used for plan Open and Save As. Existing plan Save and PDF/CSV exports keep their locations."); help.setWrapText(true);
         notice.setWrapText(true); notice.getStyleClass().add("settings-notice");
-        var body = new VBox(10, themeLabel, theme, folderLabel, directory, new HBox(8, browse, clear), help, notice);
+        var introductions = new Label("Analyzer Introductions");
+        var introductionHelp = new Label("Restore the introductory explanations shown before opening Social Security and Monte Carlo analyzers.");
+        introductionHelp.setWrapText(true);
+        var reset = new Button("Show All Analyzer Introductions Again");
+        reset.setId("reset-analyzer-introductions");
+        reset.setAccessibleHelp("Reset all six introductions when these application settings are saved. Cancel discards this reset.");
+        reset.setOnAction(event -> {
+            resetIntroductions = true;
+            notice.setText("Introductions will be shown again after Save.");
+        });
+        var body = new VBox(10, themeLabel, theme, folderLabel, directory, new HBox(8, browse, clear), help,
+                new Separator(), introductions, introductionHelp, reset, notice);
         body.setPadding(new javafx.geometry.Insets(14)); body.setMinWidth(0);
         var scroll = new ScrollPane(body); scroll.setFitToWidth(true);
-        getDialogPane().setContent(scroll); getDialogPane().setPrefSize(600, 390);
+        getDialogPane().setContent(scroll); getDialogPane().setPrefSize(600, 520);
         var save = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
         getDialogPane().getButtonTypes().setAll(save, ButtonType.CANCEL);
         getDialogPane().lookupButton(save).addEventFilter(ActionEvent.ACTION, e -> {
             e.consume(); if (saving) return;
             saving = true; body.setDisable(true); getDialogPane().lookupButton(save).setDisable(true);
             getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(true); notice.setText("Saving application preferences…");
-            service.savePreferences(theme.getValue(), directory.getText().trim()).whenComplete((ignored, failure) -> Platform.runLater(() -> {
+            service.savePreferences(theme.getValue(), directory.getText().trim(), resetIntroductions).whenComplete((ignored, failure) -> Platform.runLater(() -> {
                 saving = false; body.setDisable(false); getDialogPane().lookupButton(save).setDisable(false);
                 getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(false);
                 if (failure != null) { notice.setText("Preferences were not saved. Check the directory, permissions or settings recovery notice, then retry or Cancel."); return; }

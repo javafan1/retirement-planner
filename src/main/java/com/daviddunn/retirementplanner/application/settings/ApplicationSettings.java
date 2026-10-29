@@ -4,6 +4,16 @@ package com.daviddunn.retirementplanner.application.settings;
 
 
 public class ApplicationSettings {
+    private java.util.Set<AnalyzerIntroduction> suppressedAnalyzerIntroductions = java.util.Set.of();
+
+    public java.util.Set<AnalyzerIntroduction> getSuppressedAnalyzerIntroductions() { return suppressedAnalyzerIntroductions; }
+    public void setSuppressedAnalyzerIntroductions(java.util.Set<AnalyzerIntroduction> values) {
+        suppressedAnalyzerIntroductions = values == null ? java.util.Set.of() : java.util.Set.copyOf(values);
+    }
+    public boolean showsIntroduction(AnalyzerIntroduction kind) {
+        return !suppressedAnalyzerIntroductions.contains(java.util.Objects.requireNonNull(kind));
+    }
+
     private ApplicationTheme theme = ApplicationTheme.LIGHT;
     private String defaultPlanDirectory;
 
@@ -17,6 +27,7 @@ public class ApplicationSettings {
 
     public ApplicationSettings copy() {
         var result = new ApplicationSettings();
+        result.suppressedAnalyzerIntroductions = suppressedAnalyzerIntroductions;
         result.theme = theme;
         result.defaultPlanDirectory = defaultPlanDirectory;
         result.automaticallyOpenLastPlan = automaticallyOpenLastPlan;

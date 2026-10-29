@@ -547,6 +547,26 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         }
         refreshExportActions();
     }
+    /** Installed by the application launch path; passive history navigation remains calculation-free. */
+    public void configureIntroductions() {
+        var gate = new com.daviddunn.retirementplanner.ui.introduction.AnalyzerIntroductionGate(analysisSource.getSettingsService());
+        var choices = singlePersonView == null ? navigation : singlePersonView.navigation;
+        choices.onSelectionRequest((mode, accepted) -> {
+            var owner = analysisSource.getCurrentPlan();
+            var identity = owner.getPlanId();
+            long revision = analysisSource.getSourcePlanRevision();
+            var entry = switch (mode) {
+                case SOCIAL_SECURITY -> com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.SOCIAL_SECURITY_ONLY;
+                case QUICK -> com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.SOCIAL_SECURITY_QUICK;
+                case EXHAUSTIVE -> com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.SOCIAL_SECURITY_EXHAUSTIVE;
+                case WEIGHTED -> com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.SOCIAL_SECURITY_WEIGHTED;
+            };
+            gate.request(stage, entry, !owner.getHousehold().hasSpouse(),
+                    () -> analysisSource.getCurrentPlan() == owner && java.util.Objects.equals(identity, owner.getPlanId())
+                            && analysisSource.getSourcePlanRevision() == revision,
+                    finished -> { try { accepted.run(); } finally { finished.run(); } });
+        });
+    }
     public void show() {
         stage.showAndWait();
     }
@@ -690,8 +710,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         goToSocialSecurity.setAccessibleText("Go to Social Security Only");
         goToSocialSecurity.setAccessibleHelp("Navigate to Social Security Only without running an analysis.");
         goToSocialSecurity.setOnAction(event -> {
-            navigation.select(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY);
-            navigation.focusSelector();
+            navigation.requestSelect(SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY, navigation::focusSelector);
         });
         configureIntegratedTable();
         integratedDetails.setEditable(false);

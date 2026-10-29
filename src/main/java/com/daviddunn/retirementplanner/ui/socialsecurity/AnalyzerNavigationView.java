@@ -32,6 +32,7 @@ final class AnalyzerNavigationView extends BorderPane {
             new EnumMap<>(SocialSecurityAnalyzerJobController.Mode.class);
     private final EnumMap<SocialSecurityAnalyzerJobController.Mode, Double> positions =
             new EnumMap<>(SocialSecurityAnalyzerJobController.Mode.class);
+    private java.util.function.BiConsumer<SocialSecurityAnalyzerJobController.Mode, Runnable> selectionRequest = (mode, accepted) -> accepted.run();
     private Choice selected;
     private Runnable navigationChanged = () -> { };
     private java.util.function.Consumer<SocialSecurityAnalyzerJobController.Mode> selectedAction = mode -> { };
@@ -56,7 +57,7 @@ final class AnalyzerNavigationView extends BorderPane {
         compact.setAccessibleHelp("Choose an analysis. Selection does not run or cancel analysis.");
         com.daviddunn.retirementplanner.ui.controls.InputHelp.install(compact,
                 "Choose an analysis workspace. Selecting does not run or cancel an analysis; pending inputs and completed results are retained.");
-        compact.valueProperty().addListener((o, before, after) -> { if (after != null) select(after.mode()); });
+        compact.valueProperty().addListener((o, before, after) -> { if (after != null && (selected == null || after.mode() != selected.mode())) requestSelect(after.mode()); });
         description.setWrapText(true);
         description.setMinHeight(Region.USE_PREF_SIZE);
         activity.setWrapText(true);
@@ -81,7 +82,7 @@ final class AnalyzerNavigationView extends BorderPane {
             button.setToggleGroup(group);
             button.setAccessibleText(choice.title());
             button.setAccessibleHelp(choice.description() + " Selecting does not run analysis.");
-            button.setOnAction(event -> select(choice.mode()));
+            button.setOnAction(event -> requestSelect(choice.mode()));
             button.selectedProperty().addListener((o, before, after) -> button.setStyle(after
                     ? "-fx-border-color: #2466af; -fx-border-width: 2; -fx-font-weight: bold;" : ""));
             button.setOnKeyPressed(event -> {
@@ -94,8 +95,7 @@ final class AnalyzerNavigationView extends BorderPane {
                     default -> -1;
                 };
                 if (target >= 0) {
-                    select(this.choices.get(target).mode());
-                    buttons.get(selected.mode()).requestFocus();
+                    requestSelect(this.choices.get(target).mode(), () -> buttons.get(this.choices.get(target).mode()).requestFocus());
                     event.consume();
                 }
             });
@@ -111,6 +111,25 @@ final class AnalyzerNavigationView extends BorderPane {
     Choice selected() { return selected; }
     boolean isCompact() { return compact.isManaged(); }
 
+    void onSelectionRequest(java.util.function.BiConsumer<SocialSecurityAnalyzerJobController.Mode, Runnable> request) {
+        selectionRequest = Objects.requireNonNull(request);
+    }
+
+    void requestSelect(SocialSecurityAnalyzerJobController.Mode mode) {
+        requestSelect(mode, () -> { });
+    }
+
+    void requestSelect(SocialSecurityAnalyzerJobController.Mode mode, Runnable afterSelection) {
+        if (selected != null) {
+            compact.setValue(selected);
+            buttons.get(selected.mode()).setSelected(true);
+            if (selected.mode() == mode) {
+                afterSelection.run();
+                return;
+            }
+        }
+        selectionRequest.accept(mode, () -> { select(mode); afterSelection.run(); });
+    }
     void select(SocialSecurityAnalyzerJobController.Mode mode) {
         Choice choice = choices.stream().filter(item -> item.mode() == mode).findFirst().orElseThrow();
         boolean changed = selected != choice;

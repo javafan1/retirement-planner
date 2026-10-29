@@ -43,6 +43,7 @@ import javafx.scene.control.ButtonType;
 public class MainWindow {
 
     private final ApplicationController controller;
+    private final com.daviddunn.retirementplanner.ui.introduction.AnalyzerIntroductionGate introductionGate;
 
     private final BorderPane root;
 
@@ -94,6 +95,7 @@ public class MainWindow {
             com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager sharedThemes,
             boolean preparedStartup, Exception startupProjectionFailure) {
         this.controller = java.util.Objects.requireNonNull(controller);
+        this.introductionGate = new com.daviddunn.retirementplanner.ui.introduction.AnalyzerIntroductionGate(controller.getSettingsService());
         this.branding = java.util.Objects.requireNonNull(branding);
         this.themes = sharedThemes;
         this.applicationOwnedPreferences = preparedStartup;
@@ -335,16 +337,23 @@ public class MainWindow {
         Menu analysisMenu = new Menu("Analysis");
         MenuItem socialSecurityAnalyzerItem =
                 new MenuItem("Social Security Strategy Analyzer...");
-        socialSecurityAnalyzerItem.setOnAction(event ->
-                new SocialSecurityStrategyAnalyzerDialog(
-                        stage,
-                        controller).show());
+        socialSecurityAnalyzerItem.setOnAction(event -> requestIntroduction(
+                controller.getCurrentPlan().getHousehold().hasSpouse()
+                        ? com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.SOCIAL_SECURITY_ONLY
+                        : com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.SOCIAL_SECURITY_EXHAUSTIVE,
+                finished -> {
+                    try {
+                        var dialog = new SocialSecurityStrategyAnalyzerDialog(stage, controller);
+                        dialog.configureIntroductions();
+                        dialog.show();
+                    } finally { finished.run(); }
+                }));
         analysisMenu.getItems().add(socialSecurityAnalyzerItem);
         MenuItem monteCarloItem = new MenuItem("Monte Carlo Retirement Analysis...");
         monteCarloItem.setId("monte-carlo-analysis-menu");
-        monteCarloItem.setOnAction(event ->
-                new com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloAnalysisDialog(
-                        stage, controller).show());
+        monteCarloItem.setOnAction(event -> showIntroducedDialog(
+                com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.MONTE_CARLO_ANALYSIS,
+                () -> new com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloAnalysisDialog(stage, controller)));
         analysisMenu.getItems().add(monteCarloItem);
         MenuItem comparisonItem = new MenuItem("Monte Carlo Strategy Comparison...");
         comparisonItem.setId("monte-carlo-comparison-menu");
@@ -368,8 +377,9 @@ public class MainWindow {
         };
         updateComparison.run();
         analysisMenu.setOnShowing(event -> updateComparison.run());
-        comparisonItem.setOnAction(event -> new com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyComparisonDialog(
-                stage, controller).show());
+        comparisonItem.setOnAction(event -> showIntroducedDialog(
+                com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.MONTE_CARLO_COMPARISON,
+                () -> new com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyComparisonDialog(stage, controller)));
         analysisMenu.getItems().addAll(comparisonItem, comparisonNotice);
 
         Menu helpMenu = new Menu("Help");
@@ -381,6 +391,34 @@ public class MainWindow {
         return new MenuBar(fileMenu, analysisMenu, helpMenu);
     }
 
+    private void requestIntroduction(com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction entry,
+            java.util.function.Consumer<Runnable> launch) {
+        var owner = controller.getCurrentPlan();
+        if (owner == null) return;
+        var identity = owner.getPlanId();
+        var baseline = owner.getBaseline();
+        long revision = controller.getSourcePlanRevision();
+        introductionGate.request(stage, entry, !owner.getHousehold().hasSpouse(),
+                () -> !planOperationActive && !swappingProjections && controller.getCurrentPlan() == owner
+                        && java.util.Objects.equals(identity, owner.getPlanId()) && controller.getSourcePlanRevision() == revision
+                        && (entry != com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction.MONTE_CARLO_COMPARISON
+                            || owner.getBaseline() == baseline && com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyComparisonRunService.available(owner)
+                                && owner.getHousehold().hasSpouse() == baseline.getSnapshot().getHousehold().hasSpouse()),
+                launch);
+    }
+
+    private void showIntroducedDialog(com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction entry,
+            java.util.function.Supplier<Dialog<?>> create) {
+        requestIntroduction(entry, finished -> {
+            var dialog = create.get();
+            var previous = dialog.getOnHidden();
+            dialog.setOnHidden(event -> {
+                try { if (previous != null) previous.handle(event); }
+                finally { finished.run(); }
+            });
+            dialog.show();
+        });
+    }
     private TabPane createTabPane() {
 
         TabPane tabPane = new TabPane();
