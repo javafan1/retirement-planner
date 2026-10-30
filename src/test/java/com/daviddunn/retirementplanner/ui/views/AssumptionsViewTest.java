@@ -10,7 +10,6 @@ import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
 import com.daviddunn.retirementplanner.ui.help.HelpText;
 import javafx.application.Platform;
 import javafx.scene.control.*;
-import javafx.scene.layout.GridPane;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -61,10 +60,8 @@ class AssumptionsViewTest {
                 assertNotNull(field.getTooltip());
                 assertEquals(input[1], field.getTooltip().getText());
             }
-            GridPane grid = (GridPane) f.view.getChildren().getFirst();
-            assertFalse(grid.getChildren().stream().anyMatch(HelpIcon.class::isInstance));
-            assertFalse(grid.getChildren().stream()
-                    .anyMatch(node -> node.getStyleClass().contains("help-icon")));
+            assertTrue(f.view.lookupAll(".help-icon").isEmpty());
+            assertTrue(f.view.lookupAll("*").stream().noneMatch(HelpIcon.class::isInstance));
         });
     }
 

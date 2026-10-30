@@ -38,7 +38,9 @@ class PlanningHorizonLayoutTest {
         fx(() -> {
             Fixture f = new Fixture();
             List<String> labels = labels(f.view);
-            assertTrue(labels.indexOf("Planning Horizon") < labels.indexOf("Economic Assumptions"));
+            assertTrue(labels.contains("Planning Timeline"));
+            assertTrue(labels.contains("Economic & Investment Assumptions"));
+            assertTrue(labels.indexOf("Planning Timeline") < labels.indexOf("Economic & Investment Assumptions"));
             assertFalse(labels.contains("Death Scenario"));
             assertTrue(labels.contains("Assumed second death / end of household projection:"));
             field(f.view, "projectionLengthField").setText("32");
@@ -218,7 +220,9 @@ class PlanningHorizonLayoutTest {
     private static List<String> labels(Node node) {
         List<String> result = new ArrayList<>();
         if (node instanceof Label label) result.add(label.getText());
-        if (node instanceof Parent parent) {
+        if (node instanceof ScrollPane scroll) {
+            result.addAll(labels(scroll.getContent()));
+        } else if (node instanceof Parent parent) {
             for (Node child : parent.getChildrenUnmodifiable()) result.addAll(labels(child));
         }
         return result;

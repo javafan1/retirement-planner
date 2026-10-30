@@ -532,7 +532,131 @@ public class AssumptionsView extends VBox {
         updateDeathScenarioFields();
         if (guidedCreation) {
             configureGuidedCreation(grid);
+        } else {
+            configureSections(grid, buttonBar);
         }
+    }
+
+    /** Presentation only: reuse every original input, label, tooltip and action. */
+    private void configureSections(GridPane original, HBox buttons) {
+        InputHelp.link(survivorAgeLabel, survivorClaimingAgeComboBox);
+        if (survivorClaimingAgeComboBox.getAccessibleHelp() == null) {
+            survivorClaimingAgeComboBox.setAccessibleHelp(HelpText.SURVIVOR_BENEFIT_CLAIMING_AGE);
+        }
+        getStyleClass().add("assumptions-view");
+        getStylesheets().add(Objects.requireNonNull(getClass().getResource("/css/assumptions.css")).toExternalForm());
+        deathScenarioComboBox.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(DeathScenario value) {
+                if (value == null) return "";
+                return switch (value) {
+                    case BOTH_SURVIVE -> "Both survive";
+                    case PRIMARY_DIES -> "Primary dies";
+                    case SPOUSE_DIES -> "Spouse dies";
+                };
+            }
+            @Override public DeathScenario fromString(String text) {
+                return Arrays.stream(DeathScenario.values()).filter(value -> toString(value).equals(text))
+                        .findFirst().orElseThrow(() -> new IllegalArgumentException("Select a household survival scenario."));
+            }
+        });
+        VBox timeline = section(original, "Planning Timeline", projectionStartDatePicker, projectionLengthField);
+        original.getChildren().remove(openingRmdButton);
+        timeline.getChildren().add(openingRmdButton);
+        VBox survivor = section(original, "Household & Survivor Planning", deathScenarioComboBox, deathYearField,
+                survivorClaimingAgeComboBox, postDeathExpenseFactorField);
+        VBox economic = section(original, "Economic & Investment Assumptions", investmentReturnField,
+                inflationRateField, healthcareInflationField, socialSecurityColaField);
+        VBox tax = section(original, "Income Tax Assumptions", filingStatusComboBox, stateJurisdictionComboBox,
+                federalBracketGrowthField, standardDeductionGrowthField);
+        VBox adjustment = new VBox(8, inputRow(original, futureFederalMarginalRateAdjustmentField),
+                inputRow(original, futureFederalMarginalRateEffectiveYearField));
+        adjustment.getStyleClass().add("assumptions-rate-adjustment");
+        tax.getChildren().addAll(adjustment, inputRow(original, stateIncomeTaxRateField), inputRow(original, localIncomeTaxRateField));
+        VBox estate = section(original, "Estate & Heir Assumptions", estimatedHeirTaxRateField);
+        List<VBox> sections = List.of(timeline, survivor, economic, tax, estate);
+        HBox cards = new HBox(16);
+        cards.setId("assumptions-sections");
+        cards.setFillHeight(false);
+        VBox left = new VBox(16);
+        VBox right = new VBox(16);
+        left.setId("assumptions-left-column");
+        right.setId("assumptions-right-column");
+        left.setMinWidth(0);
+        right.setMinWidth(0);
+        HBox.setHgrow(left, javafx.scene.layout.Priority.ALWAYS);
+        HBox.setHgrow(right, javafx.scene.layout.Priority.ALWAYS);
+        cards.getChildren().addAll(left, right);
+        var wideLayout = cards.widthProperty().greaterThanOrEqualTo(1000);
+        left.prefWidthProperty().bind(javafx.beans.binding.Bindings.when(wideLayout)
+                .then(cards.widthProperty().subtract(16).divide(2)).otherwise(cards.widthProperty()));
+        right.prefWidthProperty().bind(cards.widthProperty().subtract(16).divide(2));
+        Runnable arrange = () -> {
+            boolean wide = wideLayout.get();
+            left.getChildren().clear();
+            right.getChildren().clear();
+            right.setVisible(wide);
+            right.setManaged(wide);
+            if (wide) {
+                left.getChildren().addAll(timeline, economic, estate);
+                right.getChildren().addAll(survivor, tax);
+            } else {
+                left.getChildren().addAll(sections);
+            }
+        };
+        wideLayout.addListener((observable, before, after) -> arrange.run());
+        arrange.run();
+        var scroll = new javafx.scene.control.ScrollPane(cards);
+        scroll.setId("assumptions-scroll");
+        scroll.setFitToWidth(true); scroll.setHbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setMinHeight(0);
+        VBox.setVgrow(scroll, javafx.scene.layout.Priority.ALWAYS);
+        buttons.setPadding(Insets.EMPTY);
+        var required = original.getChildren().stream().filter(Label.class::isInstance).map(Label.class::cast)
+                .filter(label -> label.getText().equals("* Required")).findFirst().orElseThrow();
+        original.getChildren().remove(required);
+        buttons.getChildren().add(required);
+        statusLabel.setWrapText(true);
+        statusLabel.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        VBox footer = new VBox(8, buttons, statusLabel);
+        footer.getStyleClass().add("assumptions-footer");
+        getChildren().setAll(scroll, footer);
+        setMinHeight(0);
+    }
+
+    private VBox section(GridPane original, String title, Control... inputs) {
+        Label heading = new Label(title);
+        heading.getStyleClass().add("assumptions-section-heading");
+        VBox card = new VBox(10, heading);
+        card.getStyleClass().add("assumptions-card");
+        card.setMaxHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        for (Control input : inputs) card.getChildren().add(inputRow(original, input));
+        return card;
+    }
+
+    private GridPane inputRow(GridPane original, Control input) {
+        Label label = original.getChildren().stream().filter(Label.class::isInstance).map(Label.class::cast)
+                .filter(candidate -> candidate.getLabelFor() == input).findFirst().orElseThrow();
+        javafx.scene.Node editor = input == projectionLengthField ? input.getParent() : input;
+        ((javafx.scene.layout.Pane) editor.getParent()).getChildren().remove(editor);
+        original.getChildren().remove(label);
+        label.setWrapText(true); label.setMaxWidth(Double.MAX_VALUE);
+        label.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        input.setMaxWidth(Double.MAX_VALUE);
+        if (editor instanceof HBox) HBox.setHgrow(input, javafx.scene.layout.Priority.ALWAYS);
+        GridPane row = new GridPane();
+        row.setHgap(12); row.setVgap(5);
+        row.getChildren().addAll(label, editor);
+        Runnable arrange = () -> {
+            boolean stacked = row.getWidth() < 430;
+            var labels = new javafx.scene.layout.ColumnConstraints(); labels.setPercentWidth(stacked ? 100 : 55);
+            var values = new javafx.scene.layout.ColumnConstraints(); values.setPercentWidth(45);
+            row.getColumnConstraints().setAll(stacked ? List.of(labels) : List.of(labels, values));
+            GridPane.setColumnIndex(label, 0); GridPane.setRowIndex(label, 0);
+            GridPane.setColumnIndex(editor, stacked ? 0 : 1); GridPane.setRowIndex(editor, stacked ? 1 : 0);
+        };
+        row.widthProperty().addListener((observable, before, after) -> arrange.run());
+        arrange.run();
+        return row;
     }
 
     private void configureGuidedCreation(GridPane fullGrid) {
@@ -787,12 +911,22 @@ public class AssumptionsView extends VBox {
 
     private void updateHouseholdPresentation() {
         boolean couple = currentPlan.getHousehold().hasSpouse();
-        GridPane inputGrid = (GridPane) deathScenarioComboBox.getParent();
-        int firstCoupleRow = GridPane.getRowIndex(deathScenarioComboBox);
-        int lastCoupleRow = GridPane.getRowIndex(postDeathExpenseFactorField);
-        inputGrid.getChildren().stream().filter(node -> GridPane.getRowIndex(node) != null
-                && GridPane.getRowIndex(node) >= firstCoupleRow && GridPane.getRowIndex(node) <= lastCoupleRow)
-                .forEach(node -> { node.setVisible(couple); node.setManaged(couple); });
+        if (guidedCreation) {
+            GridPane inputGrid = (GridPane) deathScenarioComboBox.getParent();
+            int firstCoupleRow = GridPane.getRowIndex(deathScenarioComboBox);
+            int lastCoupleRow = GridPane.getRowIndex(postDeathExpenseFactorField);
+            inputGrid.getChildren().stream().filter(node -> GridPane.getRowIndex(node) != null
+                    && GridPane.getRowIndex(node) >= firstCoupleRow && GridPane.getRowIndex(node) <= lastCoupleRow)
+                    .forEach(node -> { node.setVisible(couple); node.setManaged(couple); });
+        } else {
+            for (Control input : List.of(deathScenarioComboBox, deathYearField, survivorClaimingAgeComboBox, postDeathExpenseFactorField)) {
+                GridPane row = (GridPane) input.getParent();
+                row.getChildren().forEach(node -> { node.setVisible(couple); node.setManaged(couple); });
+                row.setVisible(couple); row.setManaged(couple);
+            }
+            var card = deathScenarioComboBox.getParent().getParent();
+            card.setVisible(couple); card.setManaged(couple);
+        }
         horizonLabel.setText(couple ? "Assumed second death / end of household projection:" : "Configured projection length:");
         String horizonHelpText = couple ? HelpText.PLANNING_HORIZON
                 : "Number of calendar years in the configured deterministic projection, including the starting year, which may be partial. Mortality-weighted analyses use their own lifetime scenarios.";
