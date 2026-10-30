@@ -146,7 +146,7 @@ public class MainWindow {
         });
 
         expensesView.setOnPlanChanged(
-                this::onPlanChanged);
+                this::onExpenseChanged);
 
         incomeSourcesView.setOnPlanChanged(
                 this::onPlanChanged);
@@ -1274,6 +1274,16 @@ public class MainWindow {
 
         refreshProjectionViews();
 
+        updateWindowTitle();
+    }
+
+    private void onExpenseChanged() {
+        boolean retain = controller.currentProjectionDeterministicallyApplicable();
+        controller.markModified(); // Always advance execution guards, including simulation-only edits.
+        if (retain) {
+            resultsSummaryView.refreshProjectionActions();
+            statusLabel.setText("Expense assumptions updated. Accepted deterministic results are unchanged.");
+        } else refreshProjectionViews();
         updateWindowTitle();
     }
 
