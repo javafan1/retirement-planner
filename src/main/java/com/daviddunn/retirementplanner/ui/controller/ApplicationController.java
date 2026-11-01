@@ -698,7 +698,7 @@ public class ApplicationController {
                                 currentProjection = current.projection();
                             }
                             projectionSnapshotNotice = current == null ? "Original current projection results were not recorded."
-                                    : current.snapshot().matches(owner) ? "Original projection restored from saved results."
+                                    : current.snapshot().matchesDeterministicInputs(owner) ? "Original projection restored from saved results."
                                     : "Outdated original projection — editable inputs differ from the accepted inputs.";
                         }
                     } finally { ready.complete(null); }
@@ -959,9 +959,10 @@ public class ApplicationController {
                 completedProjection = projection;
                 completedSummary = projectionSummaryService.summarize(executionPlan, projection);
                 var nonInvestable = nonInvestableAssetProjectionService.project(executionPlan.getNonInvestableAssets(), projection.getStartYear(), projection.getEndYear());
+                var retained = RetainedProjectionSnapshot.capture(projection);
                 complete = new CompleteProjectionSnapshot(1, java.util.UUID.randomUUID(), ownerIdentity, ownerIdentity, java.time.Instant.now(),
-                        inputDocument, CompleteProjectionSnapshot.digest(inputDocument), "Accepted normal projection; retained schema 1; original build version not recorded",
-                        RetainedProjectionSnapshot.capture(projection), nonInvestable.stream().map(CompleteProjectionSnapshot.NonInvestableYear::capture).toList(),
+                        inputDocument, CompleteProjectionSnapshot.digest(inputDocument), "Accepted normal projection; retained schema " + retained.schemaVersion() + "; original build version not recorded",
+                        retained, nonInvestable.stream().map(CompleteProjectionSnapshot.NonInvestableYear::capture).toList(),
                         CompleteProjectionSnapshot.Summary.capture(completedSummary), BreakEvenPlanSummary.from(executionPlan.getHousehold()));
                 completedChart = complete.chart(); // Validate/detach before publishing any accepted state.
             }
@@ -1189,7 +1190,7 @@ public class ApplicationController {
         var baseline = currentPlan.getBaseline();
         var context = currentDetailsContext;
         String status = context == null ? "Current projection inputs: Not recorded. Live plan values are not substituted."
-                : (getAcceptedProjectionSnapshot() != null ? currentProjectionInputsMatch() : context.sourceRevision() == sourcePlanRevision) ? "Current projection — frozen effective inputs"
+                : (getAcceptedProjectionSnapshot() != null ? currentProjectionDeterministicallyApplicable() : context.sourceRevision() == sourcePlanRevision) ? "Current projection — frozen effective inputs"
                 : "Potentially outdated projection — plan revision changed. Only frozen result inputs are compared.";
         return new com.daviddunn.retirementplanner.app.baseline.BaselineDetailsSession(baseline.getDescription(), baseline.getSavedAt(),
                 context == null ? null : context.runId(), context == null ? null : context.planIdentity(), context == null ? null : context.completedAt(),
@@ -1267,6 +1268,12 @@ public class ApplicationController {
 
     public void invalidateProjection() {
         projectionChanged();
+    }
+
+    /** Financial applicability is separate from exact configured-document swap eligibility. */
+    public boolean currentProjectionDeterministicallyApplicable() {
+        var snapshot = getAcceptedProjectionSnapshot();
+        return snapshot != null && currentProjection != null && snapshot.matchesDeterministicInputs(currentPlan);
     }
 
     public RetirementPlan newPlan() {

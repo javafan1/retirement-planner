@@ -80,6 +80,122 @@ class RothConversionMainWindowTest {
         });
     }
 
+    @Test void explicitApplyConfirmsAndCreatesOneModeledDestinationWithOneDirtyNotification() throws Exception {
+        fx(() -> {
+            WindowFixture f = new WindowFixture();
+            var plan = f.controller.getCurrentPlan();
+            var existingDestination = plan.getAccountPortfolio().getAccounts().stream()
+                    .filter(com.daviddunn.retirementplanner.domain.financial.RothIRA.class::isInstance)
+                    .findFirst().orElseThrow();
+            plan.getAccountPortfolio().removeAccount(existingDestination);
+            invoke(f.window, "loadCurrentPlan");
+            Stage stage = new Stage();
+            f.window.setStage(stage);
+            stage.setScene(f.window.createScene());
+            stage.show();
+            try {
+                long revision = f.controller.getSourcePlanRevision();
+                int beforeCount = plan.getAccountPortfolio().getAccounts().size();
+                field(f.roth, "conversionYearField").setText("2027");
+                AtomicInteger prompts = answerNextPrompt("Create Modeled Account");
+                assertTrue(f.roth.applyChanges());
+                assertEquals(1, prompts.get());
+                assertEquals(revision + 1, f.controller.getSourcePlanRevision());
+                assertEquals(beforeCount + 1, plan.getAccountPortfolio().getAccounts().size());
+                var created = plan.getAccountPortfolio().getAccounts().stream()
+                        .filter(com.daviddunn.retirementplanner.domain.financial.RothIRA.class::isInstance)
+                        .map(com.daviddunn.retirementplanner.domain.financial.RothIRA.class::cast)
+                        .findFirst().orElseThrow();
+                assertEquals(AccountOwnership.PRIMARY, created.getOwnership());
+                assertEquals(BigDecimal.ZERO, created.getCurrentBalance());
+                assertEquals("Primary Roth IRA (Modeled)", created.getName());
+                assertTrue(f.controller.isModified());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test void canceledDestinationConfirmationLeavesPlanAndRothDraftUntouched() throws Exception {
+        fx(() -> {
+            WindowFixture f = new WindowFixture();
+            var plan = f.controller.getCurrentPlan();
+            var existingDestination = plan.getAccountPortfolio().getAccounts().stream()
+                    .filter(com.daviddunn.retirementplanner.domain.financial.RothIRA.class::isInstance)
+                    .findFirst().orElseThrow();
+            plan.getAccountPortfolio().removeAccount(existingDestination);
+            invoke(f.window, "loadCurrentPlan");
+            Stage stage = new Stage();
+            f.window.setStage(stage);
+            stage.setScene(f.window.createScene());
+            stage.show();
+            try {
+                var saved = plan.getRothConversionRequest();
+                int beforeCount = plan.getAccountPortfolio().getAccounts().size();
+                long revision = f.controller.getSourcePlanRevision();
+                field(f.roth, "conversionYearField").setText("2028");
+                AtomicInteger prompts = answerNextPrompt("Cancel");
+                assertFalse(f.roth.applyChanges());
+                assertEquals(1, prompts.get());
+                assertSame(saved, plan.getRothConversionRequest());
+                assertEquals(beforeCount, plan.getAccountPortfolio().getAccounts().size());
+                assertEquals(revision, f.controller.getSourcePlanRevision());
+                assertEquals("2028", field(f.roth, "conversionYearField").getText());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test void summaryApplyUsesTheSameModeledDestinationTransaction() throws Exception {
+        fx(() -> {
+            WindowFixture f = new WindowFixture();
+            var plan = f.controller.getCurrentPlan();
+            var existingDestination = plan.getAccountPortfolio().getAccounts().stream()
+                    .filter(com.daviddunn.retirementplanner.domain.financial.RothIRA.class::isInstance)
+                    .findFirst().orElseThrow();
+            plan.getAccountPortfolio().removeAccount(existingDestination);
+            invoke(f.window, "loadCurrentPlan");
+            var summary = (ResultsSummaryView) control(f.window, "resultsSummaryView");
+            Stage stage = new Stage();
+            f.window.setStage(stage);
+            stage.setScene(f.window.createScene());
+            stage.show();
+            try {
+                var enabled = (CheckBox) control(summary, "rothEnabledCheckBox");
+                enabled.setSelected(true);
+                AtomicInteger prompts = answerNextPrompt("Create Modeled Account");
+                ((Button) control(summary, "applyRothButton")).fire();
+                assertEquals(1, prompts.get());
+                assertTrue(plan.getRothConversionRequest().isEnabled());
+                assertEquals(1, plan.getAccountPortfolio().getAccounts().stream()
+                        .filter(com.daviddunn.retirementplanner.domain.financial.RothIRA.class::isInstance).count());
+                assertTrue(f.controller.isModified());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test void ordinaryPlanSaveCannotCreateModeledDestinationsOrApplyThatDraft() throws Exception {
+        fx(() -> {
+            WindowFixture f = new WindowFixture();
+            var plan = f.controller.getCurrentPlan();
+            var existingDestination = plan.getAccountPortfolio().getAccounts().stream()
+                    .filter(com.daviddunn.retirementplanner.domain.financial.RothIRA.class::isInstance)
+                    .findFirst().orElseThrow();
+            plan.getAccountPortfolio().removeAccount(existingDestination);
+            invoke(f.window, "loadCurrentPlan");
+            var savedRequest = plan.getRothConversionRequest();
+            int beforeCount = plan.getAccountPortfolio().getAccounts().size();
+            field(f.roth, "conversionYearField").setText("2028");
+            assertFalse(f.roth.save(plan));
+            assertSame(savedRequest, plan.getRothConversionRequest());
+            assertEquals(beforeCount, plan.getAccountPortfolio().getAccounts().size());
+            assertEquals("2028", field(f.roth, "conversionYearField").getText());
+        });
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({"true,false", "false,true", "true,true"})
     void savePersistsAllDraftCombinationsAndRefreshPreservesThem(boolean household, boolean assumptions) throws Exception {
@@ -295,6 +411,10 @@ class RothConversionMainWindowTest {
             roth = control(window, "rothConversionView");
             controller.newPlan();
             var plan = controller.getCurrentPlan();
+            plan.getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.TraditionalIRA(
+                    "Supported source", AccountOwnership.PRIMARY, BigDecimal.ZERO));
+            plan.getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.RothIRA(
+                    "Existing modeled destination", AccountOwnership.PRIMARY, BigDecimal.ZERO));
             plan.setSpouse(new com.daviddunn.retirementplanner.domain.model.Person("", "", null));
             plan.getHousehold().getPrimaryPerson().setMortalityCategory(MortalityCategory.MALE);
             plan.getHousehold().getSpouse().setMortalityCategory(MortalityCategory.FEMALE);

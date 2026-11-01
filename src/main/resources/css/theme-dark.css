@@ -7,6 +7,13 @@
     -app-accent: #91b9ff;
     -app-warning: #f1c46f;
     -app-error: #ffaba5;
+    -app-hover-surface: #354052;
+    -app-selected-surface: #344b6c;
+    -app-selected-border: #91b9ff;
+    -app-calendar-arrow: #edf1f7;
+    -app-calendar-arrow-hover: #91b9ff;
+    -app-calendar-arrow-pressed: #ffffff;
+    -app-calendar-arrow-disabled: #778398;
     -fx-base: #292e38;
     -fx-background: -app-background;
     -fx-control-inner-background: -app-surface;
@@ -21,6 +28,16 @@
     -fx-selection-bar-non-focused: #3d4b60;
     -fx-box-border: -app-border;
     -fx-mark-color: -app-text;
+}
+.app-theme .new-plan-wizard, .app-theme.new-plan-wizard {
+    -app-background: #1e222a;
+    -app-text: #edf1f7;
+    -app-muted: #b9c4d6;
+    -app-border: #647084;
+    -app-accent: #91b9ff;
+    -app-hover-surface: #354052;
+    -app-selected-surface: #344b6c;
+    -app-selected-border: #91b9ff;
 }
 .app-theme .settings-notice { -fx-text-fill: -app-error; }
 .app-theme.tooltip, .app-theme .tooltip { -fx-background-color: #303b4c; -fx-text-fill: #edf1f7; }
@@ -46,9 +63,6 @@
 .app-theme .results-action-button:hover { -fx-background-color: derive(-app-surface, 15%); -fx-border-color: -app-accent; }
 .app-theme .projection-table .table-row-cell:hover { -fx-background-color: #354052; }
 .app-theme .projection-table .table-row-cell:selected { -fx-background-color: -fx-selection-bar; }
-.app-theme .new-plan-wizard .wizard-navigation-step:current {
-    -fx-background-color: #344b6c; -fx-text-fill: -app-text; -fx-border-color: -app-accent;
-}
 .app-theme .break-even-view .table-row-cell:sustained-break-even { -fx-background-color: #264538; }
 .app-theme .break-even-view .table-row-cell:sustained-break-even:selected { -fx-background-color: -fx-selection-bar; }
 .app-theme .metric-blue, .app-theme .assumption-title-blue { -fx-text-fill: #91b9ff; }

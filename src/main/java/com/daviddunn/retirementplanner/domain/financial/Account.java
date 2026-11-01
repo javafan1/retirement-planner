@@ -59,6 +59,21 @@ public abstract class Account {
     private final AccountOwnership ownership;
     private BigDecimal currentBalance;
     private OpeningRmdAccountData openingRmdAccountData;
+    private com.daviddunn.retirementplanner.domain.roth.EmployerRothConversionAvailability rothConversionAvailability;
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public com.daviddunn.retirementplanner.domain.roth.EmployerRothConversionAvailability getRothConversionAvailability() {
+        return rothConversionAvailability;
+    }
+
+    public void setRothConversionAvailability(
+            com.daviddunn.retirementplanner.domain.roth.EmployerRothConversionAvailability availability) {
+        if (availability != null && !com.daviddunn.retirementplanner.domain.roth.RothConversionEligibilityPolicy
+                .isEmployerPretaxSource(getType())) {
+            throw new IllegalArgumentException("Rollover/conversion availability applies only to traditional 401(k) and 403(b) accounts.");
+        }
+        rothConversionAvailability = availability;
+    }
     private RetirementParticipantFacts retirementParticipantFacts =
             RetirementParticipantFacts.UNKNOWN;
 
@@ -171,7 +186,10 @@ public abstract class Account {
 
     @JsonIgnore
     public boolean isEligibleForRothConversion() {
-        return false;
+        // Potential pretax source type only; projected execution also requires an
+        // ordinary same-owner Roth IRA, present owner and available funds.
+        return com.daviddunn.retirementplanner.domain.roth.RothConversionEligibilityPolicy
+                .isSupportedPretaxSource(getType());
     }
 
     @JsonIgnore

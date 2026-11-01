@@ -107,6 +107,7 @@ public class MainApplication extends Application {
             window = new MainWindow(controller, branding, themes, projectionFailure);
             window.setStage(stage);
             stage.setScene(window.createScene());
+            stage.setMaximized(true);
             stage.show(); // Keep a window alive throughout the handoff; never request focus repeatedly.
             if (splash != null) { splash.hide(); splash.setScene(null); splash = null; }
             logo = java.util.Optional.empty();

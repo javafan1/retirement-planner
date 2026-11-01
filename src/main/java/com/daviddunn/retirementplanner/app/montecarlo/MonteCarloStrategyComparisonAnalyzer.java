@@ -66,6 +66,8 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         Objects.requireNonNull(cancellation).throwIfCancellationRequested();
         var a = request.strategyA().copyForRun();
         var b = request.strategyB().copyForRun();
+        if (expensesA == null) ExpenseVolatilityAdmission.requireSupported(a);
+        if (expensesB == null) ExpenseVolatilityAdmission.requireSupported(b);
         if (expensesA != null) expensesA.validate(a);
         if (expensesB != null) expensesB.validate(b);
         if ((expensesA != null && expensesA.enabled()) || (expensesB != null && expensesB.enabled())) {

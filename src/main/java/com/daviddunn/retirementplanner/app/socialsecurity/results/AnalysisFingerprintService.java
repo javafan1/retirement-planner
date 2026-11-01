@@ -70,6 +70,9 @@ public final class AnalysisFingerprintService {
         }
         if (kind != AnalysisKind.COUPLE_SOCIAL_SECURITY && kind != AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY) {
             var f = (ObjectNode) tree(plan);
+            if (!kind.isMonteCarlo()) {
+                com.daviddunn.retirementplanner.app.projection.DeterministicExpenseInputs.removeVolatility(f);
+            }
             var allowed = Set.of("planId", "household", "accountPortfolio", "planningAssumptions", "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations", "projectionState");
             f.fieldNames().forEachRemaining(name -> { if (!allowed.contains(name)) throw new IllegalArgumentException("Unclassified plan field: " + name); });
             f.remove(List.of("planId", "baseline", "analyzerConfigurations", "projectionState"));

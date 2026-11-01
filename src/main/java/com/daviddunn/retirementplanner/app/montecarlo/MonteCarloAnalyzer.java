@@ -119,6 +119,7 @@ public final class MonteCarloAnalyzer {
         cancellation.throwIfCancellationRequested();
         Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
+        if (expenses == null) ExpenseVolatilityAdmission.requireSupported(plan);
         if (expenses != null) {
             expenses.validate(plan);
             if (expenses.enabled()) InternalExpenseRun.requireGeneratedWorlds(suppliedWorlds);
@@ -311,6 +312,7 @@ public final class MonteCarloAnalyzer {
         cancellation.throwIfCancellationRequested();
         Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
+        if (expenses == null) ExpenseVolatilityAdmission.requireSupported(plan);
         if (expenses != null) {
             expenses.validate(plan);
             if (expenses.enabled() && !returnModel.equals(MonteCarloScenarioGenerator.MODEL_VERSION)) {

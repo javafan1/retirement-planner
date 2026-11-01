@@ -5,7 +5,6 @@ import com.daviddunn.retirementplanner.domain.financial.Account;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedAccountBalance;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
-import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -14,10 +13,22 @@ import java.util.Objects;
 
 public final class ProjectedPortfolioRothConverter {
 
+    private final RothConversionEligibilityPolicy eligibility = new RothConversionEligibilityPolicy();
+
     public ProjectedPortfolio convert(
             ProjectedPortfolio portfolio,
             AccountOwnership ownership,
             BigDecimal amount) {
+        return convertForYear(portfolio, ownership, amount, null);
+    }
+
+    public ProjectedPortfolio convert(ProjectedPortfolio portfolio, AccountOwnership ownership,
+            BigDecimal amount, int calendarYear) {
+        return convertForYear(portfolio, ownership, amount, calendarYear);
+    }
+
+    private ProjectedPortfolio convertForYear(ProjectedPortfolio portfolio, AccountOwnership ownership,
+            BigDecimal amount, Integer calendarYear) {
 
         Objects.requireNonNull(
                 portfolio,
@@ -44,7 +55,7 @@ public final class ProjectedPortfolioRothConverter {
                 findSourceAccount(
                         portfolio,
                         ownership,
-                        amount);
+                        amount, calendarYear);
 
         ProjectedAccountBalance destination =
                 findProjectedDestinationAccount(
@@ -56,6 +67,11 @@ public final class ProjectedPortfolioRothConverter {
 
         Account destinationAccount =
                 destination.getAccount();
+
+        if (assess(sourceAccount, destinationAccount, Set.of(ownership), source.getBalance(), calendarYear)
+                .maximumConvertibleAmount().compareTo(amount) < 0) {
+            throw new IllegalStateException("No eligible tax-deferred account found.");
+        }
 
         ProjectedPortfolio updatedPortfolio =
                 portfolio.withWithdrawal(
@@ -88,6 +104,16 @@ public final class ProjectedPortfolioRothConverter {
             ProjectedPortfolio portfolio,
             BigDecimal amount,
             Set<AccountOwnership> eligibleOwners) {
+        return convertHouseholdForYear(portfolio, amount, eligibleOwners, null);
+    }
+
+    public ProjectedRothConversionResult convertHousehold(ProjectedPortfolio portfolio, BigDecimal amount,
+            Set<AccountOwnership> eligibleOwners, int calendarYear) {
+        return convertHouseholdForYear(portfolio, amount, eligibleOwners, calendarYear);
+    }
+
+    private ProjectedRothConversionResult convertHouseholdForYear(ProjectedPortfolio portfolio, BigDecimal amount,
+            Set<AccountOwnership> eligibleOwners, Integer calendarYear) {
         eligibleOwners = Set.copyOf(Objects.requireNonNull(eligibleOwners));
         Objects.requireNonNull(
                 portfolio,
@@ -136,13 +162,13 @@ public final class ProjectedPortfolioRothConverter {
 
                 Account sourceAccount = projected.getAccount();
 
-                if (sourceAccount.getOwnership() != ownership
-                        || !sourceAccount.isEligibleForRothConversion()) {
+                if (sourceAccount.getOwnership() != ownership) {
                     continue;
                 }
 
-                BigDecimal available = updatedPortfolio.getBalance(
-                        sourceAccount);
+                BigDecimal available = assess(
+                        sourceAccount, destinationAccount, eligibleOwners,
+                        updatedPortfolio.getBalance(sourceAccount), calendarYear).maximumConvertibleAmount();
 
                 if (available.signum() <= 0) {
                     continue;
@@ -184,22 +210,26 @@ public final class ProjectedPortfolioRothConverter {
     public BigDecimal getMaximumConvertibleAmount(
             ProjectedPortfolio portfolio,
             Set<AccountOwnership> eligibleOwners) {
+        return maximumForYear(portfolio, eligibleOwners, null);
+    }
+
+    public BigDecimal getMaximumConvertibleAmount(ProjectedPortfolio portfolio,
+            Set<AccountOwnership> eligibleOwners, int calendarYear) {
+        return maximumForYear(portfolio, eligibleOwners, calendarYear);
+    }
+
+    private BigDecimal maximumForYear(ProjectedPortfolio portfolio, Set<AccountOwnership> eligibleOwners,
+            Integer calendarYear) {
         Set<AccountOwnership> owners = Set.copyOf(Objects.requireNonNull(eligibleOwners));
         Objects.requireNonNull(
                 portfolio,
                 "Projected portfolio is required.");
 
         return portfolio.getAccountBalances().stream()
-                .filter(projected -> {
-                    AccountOwnership ownership = projected.getAccount()
-                            .getOwnership();
-                    return owners.contains(ownership) && ownership != AccountOwnership.JOINT
-                            && findDestinationAccount(portfolio, ownership)
-                            != null;
-                })
-                .filter(projected -> projected.getAccount()
-                        .isEligibleForRothConversion())
-                .map(ProjectedAccountBalance::getBalance)
+                .map(projected -> assess(
+                        projected.getAccount(),
+                        findDestinationAccount(portfolio, projected.getAccount().getOwnership()),
+                        owners, projected.getBalance(), calendarYear).maximumConvertibleAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
@@ -253,7 +283,7 @@ public final class ProjectedPortfolioRothConverter {
     private ProjectedAccountBalance findSourceAccount(
             ProjectedPortfolio portfolio,
             AccountOwnership ownership,
-            BigDecimal amount) {
+            BigDecimal amount, Integer calendarYear) {
 
 //        System.out.println();
 //        System.out.println("===== ROTH CONVERSION SOURCE CHECK =====");
@@ -286,8 +316,9 @@ public final class ProjectedPortfolioRothConverter {
                         projected.getAccount().getOwnership()
                                 == ownership)
                 .filter(projected ->
-                        projected.getAccount()
-                                .isEligibleForRothConversion())
+                        RothConversionEligibilityPolicy.isSupportedPretaxSource(projected.getAccount().getType()))
+                .filter(projected -> eligibility.availabilityAt(projected.getAccount(), calendarYear)
+                        != RothConversionEligibilityPolicy.EmployerDistributionAvailability.UNAVAILABLE)
                 .filter(projected ->
                         projected.getBalance()
                                 .compareTo(amount) >= 0)
@@ -307,9 +338,7 @@ public final class ProjectedPortfolioRothConverter {
                         projected.getAccount().getOwnership()
                                 == ownership)
                 .filter(projected ->
-                        projected.getAccount()
-                                .getProjectionAssetType()
-                                == ProjectionAssetType.ROTH)
+                        RothConversionEligibilityPolicy.isSupportedDestination(projected.getAccount().getType()))
                 .findFirst()
                 .orElseThrow(() ->
                         new IllegalStateException(
@@ -324,9 +353,15 @@ public final class ProjectedPortfolioRothConverter {
                 .stream()
                 .map(ProjectedAccountBalance::getAccount)
                 .filter(account -> account.getOwnership() == ownership)
-                .filter(account -> account.getProjectionAssetType()
-                        == ProjectionAssetType.ROTH)
+                .filter(account -> RothConversionEligibilityPolicy.isSupportedDestination(account.getType()))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private RothConversionEligibilityPolicy.Assessment assess(Account source, Account destination,
+            Set<AccountOwnership> owners, BigDecimal balance, Integer calendarYear) {
+        return calendarYear == null
+                ? eligibility.assessUnderLegacyEmployerAssumption(source, destination, owners, balance)
+                : eligibility.assessForYear(source, destination, owners, balance, calendarYear);
     }
 }

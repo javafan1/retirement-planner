@@ -40,6 +40,11 @@ class AccountsWizardStepTest {
             ((ComboBox<AccountType>) field(dialog, "typeCombo")).setValue(type);
             ((TextField) field(dialog, "nameField")).setText("Initial account");
             ((TextField) field(dialog, "balanceField")).setText("123456.78");
+            if (type == AccountType.TRADITIONAL_401K || type == AccountType.TRADITIONAL_403B) {
+                ((ComboBox<com.daviddunn.retirementplanner.domain.roth.EmployerRothConversionAvailability.Status>)
+                        dialog.getDialogPane().lookup("#employer-roth-availability")).setValue(
+                        com.daviddunn.retirementplanner.domain.roth.EmployerRothConversionAvailability.Status.AVAILABLE);
+            }
             if (type == AccountType.INHERITED_ROTH_IRA || type == AccountType.INHERITED_TRADITIONAL_IRA) {
                 ((DatePicker) field(dialog, "originalOwnerDobPicker")).setValue(LocalDate.of(1930, 1, 1));
                 ((DatePicker) field(dialog, "originalOwnerDeathPicker")).setValue(LocalDate.of(2024, 1, 1));

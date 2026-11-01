@@ -7,6 +7,7 @@ import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.ui.summary.ProjectionYearDetailsRequest;
 import com.daviddunn.retirementplanner.domain.projection.summary.ProjectionSummary;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionDestinationService;
 import com.daviddunn.retirementplanner.ui.charts.PortfolioChartView;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 import com.daviddunn.retirementplanner.ui.views.RothConversionView;
@@ -43,6 +44,7 @@ import javafx.scene.control.ButtonType;
 public class MainWindow {
 
     private final ApplicationController controller;
+    private final RothConversionDestinationService rothDestinationService = new RothConversionDestinationService();
     private final com.daviddunn.retirementplanner.ui.introduction.AnalyzerIntroductionGate introductionGate;
 
     private final BorderPane root;
@@ -175,16 +177,7 @@ public class MainWindow {
         resultsSummaryView.setOnBaselineDetails(this::showBaselineDetails);
         resultsSummaryView.setOnSwapProjections(this::swapCurrentAndBaseline);
 
-        rothConversionView.setOnPlanChanged(() -> {
-            if (collectingViewEdits) {
-                controller.markModified();
-                controller.invalidateProjection();
-                updateWindowTitle();
-            }
-            else {
-                onPlanChanged();
-            }
-        });
+        rothConversionView.setTransactionalApplyHandler(this::applyRothConversionRequest);
 
         resultsSummaryView.setOnYearDoubleClick(
                 this::showProjectionYearSummary);
@@ -221,20 +214,7 @@ public class MainWindow {
                     //updateWindowTitle();
                 });
 
-        resultsSummaryView.setOnRothConversionApply(
-                request -> {
-
-                    controller
-                            .getCurrentPlan()
-                            .setRothConversionRequest(
-                                    request);
-
-                    controller.markModified();
-
-                    refreshAllViews();
-
-                    //updateWindowTitle();
-                });
+        resultsSummaryView.setRothConversionTransactionHandler(this::applyRothConversionRequest);
 
         resultsSummaryView.setOnSocialSecurityApply(
                 updates -> {
@@ -1275,6 +1255,43 @@ public class MainWindow {
         refreshProjectionViews();
 
         updateWindowTitle();
+    }
+
+    /** Shared transactional Apply boundary for both Roth conversion configuration surfaces. */
+    private boolean applyRothConversionRequest(RothConversionRequest request) {
+        RetirementPlan plan = controller.getCurrentPlan();
+        if (plan == null) {
+            return false;
+        }
+        try {
+            var requiredOwners = rothDestinationService.ownersRequiringDestination(plan, request);
+            if (!requiredOwners.isEmpty()
+                    && !RothDestinationCreationDialog.confirm(stage, requiredOwners)) {
+                return false;
+            }
+            var result = rothDestinationService.apply(plan, request);
+            if (result.changed()) {
+                controller.markModified();
+                if (collectingViewEdits) {
+                    controller.invalidateProjection();
+                    updateWindowTitle();
+                } else {
+                    refreshAllViews();
+                }
+            }
+            return true;
+        } catch (RuntimeException failure) {
+            String message = failure.getMessage() == null
+                    ? "Roth conversion changes could not be applied."
+                    : failure.getMessage();
+            statusLabel.setText(message);
+            Alert alert = new Alert(Alert.AlertType.ERROR, message, ButtonType.OK);
+            alert.setTitle("Roth Conversion");
+            alert.setHeaderText("The conversion settings were not changed.");
+            if (stage != null) alert.initOwner(stage);
+            alert.showAndWait();
+            return false;
+        }
     }
 
     private void onExpenseChanged() {

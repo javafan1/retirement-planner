@@ -15,3 +15,24 @@
 .plan-operation-dialog { -fx-padding: 22; -fx-background-color: -fx-control-inner-background; -fx-border-color: -fx-box-border; -fx-border-width: 1; -fx-font-size: 14px; }
 .analyzer-introduction-title { -fx-font-size: 18px; -fx-font-weight: bold; }
 .app-theme .analyzer-introduction-warning { -fx-text-fill: -app-warning; -fx-font-weight: bold; }
+
+/* Keep Modena's calendar navigation behavior and shapes while giving the
+   arrows semantic foreground colors in both application themes. */
+.date-picker-popup > * > .spinner > .button > .left-arrow,
+.date-picker-popup > * > .spinner > .button > .right-arrow {
+    -fx-background-color: -app-calendar-arrow;
+}
+.date-picker-popup > * > .spinner > .button:hover > .left-arrow,
+.date-picker-popup > * > .spinner > .button:hover > .right-arrow {
+    -fx-background-color: -app-calendar-arrow-hover;
+}
+.date-picker-popup > * > .spinner > .button:armed > .left-arrow,
+.date-picker-popup > * > .spinner > .button:armed > .right-arrow,
+.date-picker-popup > * > .spinner > .button:pressed > .left-arrow,
+.date-picker-popup > * > .spinner > .button:pressed > .right-arrow {
+    -fx-background-color: -app-calendar-arrow-pressed;
+}
+.date-picker-popup > * > .spinner > .button:disabled > .left-arrow,
+.date-picker-popup > * > .spinner > .button:disabled > .right-arrow {
+    -fx-background-color: -app-calendar-arrow-disabled;
+}

@@ -10,7 +10,10 @@ import java.time.LocalDate;
 import java.util.Objects;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = ExpenseDeserializer.class)
 public class Expense {
+
+    private final BigDecimal annualExpenseVolatility;
 
     private final String description;
 
@@ -72,6 +75,12 @@ public class Expense {
             @JsonProperty("expenseType")
             ExpenseType expenseType) {
 
+        this(description, annualAmount, growthCategory, startDate, endDate, expenseType, null);
+    }
+
+    public Expense(String description, BigDecimal annualAmount, GrowthCategory growthCategory,
+            LocalDate startDate, LocalDate endDate, ExpenseType expenseType, BigDecimal annualExpenseVolatility) {
+
         this.description =
                 Objects.requireNonNull(
                         description,
@@ -96,6 +105,17 @@ public class Expense {
                         ? ExpenseType.RECURRING
                         : expenseType;
 
+        if (annualExpenseVolatility != null && (annualExpenseVolatility.signum() < 0
+                || annualExpenseVolatility.compareTo(BigDecimal.ONE) > 0)) {
+            throw new IllegalArgumentException("Annual expense volatility must be between 0% and 100%.");
+        }
+        this.annualExpenseVolatility = annualExpenseVolatility == null || annualExpenseVolatility.signum() == 0
+                ? null : annualExpenseVolatility;
+        if (this.annualExpenseVolatility != null
+                && (this.expenseType != ExpenseType.RECURRING || annualAmount.signum() < 0)) {
+            throw new IllegalArgumentException("Nonzero volatility requires a nonnegative recurring expense.");
+        }
+
         if (this.growthCategory == GrowthCategory.NONE
                 && this.expenseType != ExpenseType.RECURRING) {
             throw new IllegalArgumentException("No Inflation is supported only for recurring expenses.");
@@ -112,6 +132,16 @@ public class Expense {
 
     public String getDescription() {
         return description;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public BigDecimal getAnnualExpenseVolatility() {
+        return annualExpenseVolatility;
+    }
+
+    @JsonIgnore
+    public BigDecimal getEffectiveAnnualExpenseVolatility() {
+        return annualExpenseVolatility == null ? BigDecimal.ZERO : annualExpenseVolatility;
     }
 
     public BigDecimal getAnnualAmount() {

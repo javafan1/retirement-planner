@@ -21,6 +21,72 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.app.baseline.BaselineDetailsTest.set;
 
 class ProjectionSwapTest {
+    @Test void expenseViewCallbackRetainsChartsWithoutProjectionOrBreakEvenExecution() throws Exception {
+        com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport.startFx();
+        var c = pair(true);
+        com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport.fx(() -> {
+            var window = new com.daviddunn.retirementplanner.ui.MainWindow(c,
+                    com.daviddunn.retirementplanner.application.branding.ApplicationBranding.defaults(), null, null);
+            var accepted = c.getAcceptedProjectionSnapshot();
+            var displayed = c.peekCurrentProjection();
+            noCalculations(c);
+            ExpenseVolatilityCompatibilityTest.volatility(c.getCurrentPlan(), "0.25");
+            var callback = window.getClass().getDeclaredMethod("onExpenseChanged");
+            callback.setAccessible(true); callback.invoke(window);
+            assertSame(accepted, c.getAcceptedProjectionSnapshot());
+            assertSame(displayed, c.peekCurrentProjection());
+            assertTrue(c.isModified());
+            var summary = com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport
+                    .<com.daviddunn.retirementplanner.ui.views.ResultsSummaryView>field(window, "resultsSummaryView");
+            var swapButton = com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport
+                    .<javafx.scene.control.Button>field(summary, "swapProjectionsButton");
+            assertTrue(swapButton.isDisabled());
+        });
+    }
+    @Test void volatilitySaveAsAndRestartPreserveOriginalSnapshotAndConfiguredEditIndependently() throws Exception {
+        var c = pair(false);
+        var original = c.getAcceptedProjectionSnapshot();
+        var owner = c.getCurrentPlan().getPlanId();
+        ExpenseVolatilityCompatibilityTest.volatility(c.getCurrentPlan(), "0.12345678900");
+        c.markModified();
+        c.saveAs(dir.resolve("volatility-copy.json"));
+        c.getSnapshotCopyCompletion().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertNotEquals(owner, c.getCurrentPlan().getPlanId());
+        assertEquals(original.id(), c.getAcceptedProjectionSnapshot().id());
+        assertEquals(original.inputDigest(), c.getAcceptedProjectionSnapshot().inputDigest());
+        assertTrue(c.currentProjectionDeterministicallyApplicable());
+        assertFalse(c.currentProjectionInputsMatch());
+        var reopened = controller(new JsonRetirementPlanRepository());
+        noCalculations(reopened);
+        reopened.open(dir.resolve("volatility-copy.json"));
+        reopened.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(new BigDecimal("0.12345678900"), reopened.getCurrentPlan().getHousehold().getExpenses().getFirst().getAnnualExpenseVolatility());
+        assertEquals(original.id(), reopened.getAcceptedProjectionSnapshot().id());
+        assertTrue(reopened.currentProjectionDeterministicallyApplicable());
+        assertFalse(reopened.currentProjectionInputsMatch());
+        assertTrue(reopened.getProjectionSnapshotNotice().startsWith("Original projection restored"));
+        assertFalse(reopened.isModified());
+    }
+    @Test void volatilityOnlyEditsRetainFinancialResultsButNotExactSwapEligibilityOrOldAdmission() throws Exception {
+        var c = pair(true);
+        var accepted = c.getAcceptedProjectionSnapshot();
+        var displayed = c.peekCurrentProjection();
+        var prepared = c.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        long revision = c.getSourcePlanRevision();
+        ExpenseVolatilityCompatibilityTest.volatility(c.getCurrentPlan(), "0.25");
+        c.markModified();
+        noCalculations(c);
+        assertTrue(c.isModified());
+        assertTrue(c.getSourcePlanRevision() > revision);
+        assertTrue(c.currentProjectionDeterministicallyApplicable());
+        assertFalse(c.currentProjectionInputsMatch());
+        assertFalse(accepted.matches(c.getCurrentPlan()));
+        assertSame(displayed, c.getCurrentProjection());
+        assertSame(accepted, c.getAcceptedProjectionSnapshot());
+        assertFalse(c.projectionSwapUnavailableReason().isEmpty());
+        assertThrows(IllegalStateException.class, () -> c.commitProjectionSwap(prepared),
+                "Old prepared transitions must remain unauthorized");
+    }
     @TempDir Path dir;
     final List<ApplicationController> controllers = new ArrayList<>();
     ApplicationController controller(JsonRetirementPlanRepository repo) throws Exception {

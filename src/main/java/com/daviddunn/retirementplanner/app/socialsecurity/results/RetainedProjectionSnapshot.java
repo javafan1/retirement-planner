@@ -22,9 +22,14 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
         ProjectionMetrics metrics, WeightedSnapshots.Strategy strategy, Boolean advancedSocialSecurityPathUsed,
         List<String> warnings) {
     public static final int SCHEMA = 1;
+    public static final int AVAILABILITY_SCHEMA = 2;
     public RetainedProjectionSnapshot {
-        if (schemaVersion != SCHEMA) throw new IllegalArgumentException("Unsupported retained-projection schema.");
+        if (schemaVersion != SCHEMA && schemaVersion != AVAILABILITY_SCHEMA)
+            throw new IllegalArgumentException("Unsupported retained-projection schema.");
         accounts = List.copyOf(accounts); years = List.copyOf(years); warnings = List.copyOf(warnings);
+        boolean explicitAvailability = accounts.stream().anyMatch(a -> a.rothConversionAvailability() != null);
+        if ((schemaVersion == AVAILABILITY_SCHEMA) != explicitAvailability)
+            throw new IllegalArgumentException("Retained account availability/schema mismatch.");
         if ((strategy == null) != (advancedSocialSecurityPathUsed == null))
             throw new IllegalArgumentException("Incomplete retained strategy context.");
         if (strategy != null && metrics == null) throw new IllegalArgumentException("Retained strategy metrics are required.");
@@ -41,7 +46,9 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
             WeightedSnapshots.Strategy strategy, Boolean advanced, List<String> warnings) {
         var registry = new CaptureRegistry();
         for (var year : projection.getYears()) for (var balance : year.getEndingAccountSnapshots()) registry.add(balance.getAccount());
-        return new RetainedProjectionSnapshot(SCHEMA, registry.accounts,
+        int version = registry.accounts.stream().anyMatch(a -> a.rothConversionAvailability() != null)
+                ? AVAILABILITY_SCHEMA : SCHEMA;
+        return new RetainedProjectionSnapshot(version, registry.accounts,
                 projection.getYears().stream().map(y -> Annual.capture(y, registry)).toList(), metrics, strategy, advanced, warnings);
     }
     public Projection restoreProjection() {
@@ -81,11 +88,21 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
             Map.entry(AccountType.BROKERAGE, BrokerageAccount.class), Map.entry(AccountType.CHECKING, CheckingAccount.class),
             Map.entry(AccountType.SAVINGS, SavingsAccount.class), Map.entry(AccountType.INHERITED_TRADITIONAL_IRA, InheritedTraditionalIRA.class),
             Map.entry(AccountType.INHERITED_ROTH_IRA, InheritedRothIRA.class));
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = AccountDataDecoder.class)
     public record AccountData(AccountType type, String name, AccountOwnership owner, BigDecimal currentBalance,
-            OpeningRmd openingRmd, RetirementParticipantFacts participant, Inherited inherited) {
+            OpeningRmd openingRmd, RetirementParticipantFacts participant, Inherited inherited,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            com.daviddunn.retirementplanner.domain.roth.EmployerRothConversionAvailability rothConversionAvailability) {
+        public AccountData(AccountType type, String name, AccountOwnership owner, BigDecimal currentBalance,
+                OpeningRmd openingRmd, RetirementParticipantFacts participant, Inherited inherited) {
+            this(type, name, owner, currentBalance, openingRmd, participant, inherited, null);
+        }
         public AccountData {
             Objects.requireNonNull(type); Objects.requireNonNull(name); Objects.requireNonNull(owner);
             Objects.requireNonNull(currentBalance); Objects.requireNonNull(participant);
+            if (rothConversionAvailability != null
+                    && !com.daviddunn.retirementplanner.domain.roth.RothConversionEligibilityPolicy.isEmployerPretaxSource(type))
+                throw new IllegalArgumentException("Availability belongs only to traditional employer accounts.");
             if ((inherited != null) != (type == AccountType.INHERITED_TRADITIONAL_IRA || type == AccountType.INHERITED_ROTH_IRA))
                 throw new IllegalArgumentException("Inherited account metadata mismatch.");
         }
@@ -97,14 +114,53 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
                 default -> null;
             };
             return new AccountData(a.getType(), a.getName(), a.getOwnership(), a.getCurrentBalance(), OpeningRmd.capture(a.getOpeningRmdAccountData()),
-                    a.getRetirementParticipantFacts(), Inherited.capture(inherited));
+                    a.getRetirementParticipantFacts(), Inherited.capture(inherited), a.getRothConversionAvailability());
         }
         Account restore() {
             Account a = inherited == null ? AccountFactory.create(type, name, owner, currentBalance)
                     : AccountFactory.createInherited(type, name, owner, currentBalance, inherited.restore());
             a.setRetirementParticipantFacts(participant);
             a.setOpeningRmdAccountData(openingRmd == null ? null : openingRmd.restore());
+            a.setRothConversionAvailability(rothConversionAvailability);
             return a;
+        }
+    }
+
+    /** Read original tokens directly: tree round trips must not change BigDecimal precision or scale. */
+    public static final class AccountDataDecoder extends com.fasterxml.jackson.databind.JsonDeserializer<AccountData> {
+        @Override public AccountData deserialize(com.fasterxml.jackson.core.JsonParser parser,
+                com.fasterxml.jackson.databind.DeserializationContext context) throws java.io.IOException {
+            if (!parser.isExpectedStartObjectToken())
+                throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, "Invalid retained account.");
+            AccountType type = null; String name = null; AccountOwnership owner = null; BigDecimal balance = null;
+            OpeningRmd opening = null; RetirementParticipantFacts participant = null; Inherited inherited = null;
+            com.daviddunn.retirementplanner.domain.roth.EmployerRothConversionAvailability availability = null;
+            var seen = new HashSet<String>();
+            while (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.END_OBJECT) {
+                String field = parser.currentName();
+                if (field == null || !seen.add(field))
+                    throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, "Duplicate/invalid retained account field.");
+                parser.nextToken();
+                switch (field) {
+                    case "type" -> type = context.readValue(parser, AccountType.class);
+                    case "name" -> name = context.readValue(parser, String.class);
+                    case "owner" -> owner = context.readValue(parser, AccountOwnership.class);
+                    case "currentBalance" -> balance = context.readValue(parser, BigDecimal.class);
+                    case "openingRmd" -> opening = context.readValue(parser, OpeningRmd.class);
+                    case "participant" -> participant = context.readValue(parser, RetirementParticipantFacts.class);
+                    case "inherited" -> inherited = context.readValue(parser, Inherited.class);
+                    case "rothConversionAvailability" -> {
+                        if (parser.currentToken() == com.fasterxml.jackson.core.JsonToken.VALUE_NULL)
+                            throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, "Explicit retained availability cannot be null.");
+                        availability = context.readValue(parser,
+                                com.daviddunn.retirementplanner.domain.roth.EmployerRothConversionAvailability.class);
+                    }
+                    default -> throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, "Unknown retained account field: " + field);
+                }
+            }
+            if (!seen.containsAll(Set.of("type", "name", "owner", "currentBalance", "openingRmd", "participant", "inherited")))
+                throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, "Missing required retained account field.");
+            return new AccountData(type, name, owner, balance, opening, participant, inherited, availability);
         }
     }
     public record Balance(int account, BigDecimal endingBalance) { }

@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
@@ -83,6 +84,10 @@ public class ResultsSummaryView extends BorderPane {
 
     private final Button applyRothButton =
             new Button("Apply Roth Conversion");
+    private final Label rothAvailabilityLabel = new Label();
+    private RetirementPlan rothDraftOwner;
+    private RothConversionRequest rothLoadedRequest;
+    private List<Object> rothLoadedFields;
 
     private final Button applyDeathButton =
             new Button("Apply Planning Horizon");
@@ -196,6 +201,9 @@ public class ResultsSummaryView extends BorderPane {
 
     private Consumer<RothConversionRequest>
             rothConversionHandler;
+
+    private Predicate<RothConversionRequest>
+            rothConversionTransactionHandler;
 
     private Consumer<List<SocialSecurityUpdate>>
             socialSecurityHandler;
@@ -829,8 +837,14 @@ public class ResultsSummaryView extends BorderPane {
 
     private void updateRothControls() {
 
+        var availability = com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.assess(currentPlan);
+        rothAvailabilityLabel.setText(availability.guidance());
+        boolean savedEnabled = currentPlan != null && currentPlan.getRothConversionRequest() != null
+                && currentPlan.getRothConversionRequest().isEnabled();
+        rothEnabledCheckBox.setDisable(!availability.canEnable() && !savedEnabled);
+
         boolean enabled =
-                rothEnabledCheckBox.isSelected();
+                rothEnabledCheckBox.isSelected() && availability.canEnable();
 
         RothConversionStrategy strategy =
                 rothStrategyComboBox.getValue();
@@ -1732,11 +1746,15 @@ public class ResultsSummaryView extends BorderPane {
                         (observable, oldValue, newValue) ->
                                 updateRothControls());
 
-        return createPanel(
+        rothAvailabilityLabel.setWrapText(true);
+        rothAvailabilityLabel.setAccessibleText("Roth conversion availability");
+        var panel = createPanel(
                 heading,
                 grid,
                 applyRothButton,
                 "assumption-card");
+        panel.getChildren().add(1, rothAvailabilityLabel);
+        return panel;
     }
 
 
@@ -2556,6 +2574,11 @@ public class ResultsSummaryView extends BorderPane {
     public void setBreakEvenAnalysis(BreakEvenAnalysisResult analysis) {
         breakEvenAnalysis = analysis;
         breakEvenButton.setDisable((analysis == null || analysis.comparableYearCount() == 0) && !controller.canRequestBreakEven());
+        refreshProjectionActions();
+    }
+
+    /** Refresh command eligibility without rebuilding charts or invoking an analysis. */
+    public void refreshProjectionActions() {
         String swapReason = controller.projectionSwapUnavailableReason();
         swapProjectionsButton.setDisable(currentPlan != controller.getCurrentPlan() || !swapReason.isEmpty());
         swapProjectionsButton.setTooltip(new Tooltip(swapReason.isEmpty() ? "Exchange original saved projection roles; no calculation runs." : swapReason));
@@ -2984,7 +3007,7 @@ public class ResultsSummaryView extends BorderPane {
     private void applyRothConversion() {
 
         if (currentPlan == null
-                || rothConversionHandler == null) {
+                || rothConversionHandler == null && rothConversionTransactionHandler == null) {
 
             return;
         }
@@ -3002,11 +3025,14 @@ public class ResultsSummaryView extends BorderPane {
              */
             if (!enabled) {
 
-                rothConversionHandler.accept(
-                        null);
+                submitRothConversion(
+                        com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.disabled(
+                                currentPlan.getRothConversionRequest()));
 
                 return;
             }
+
+            var saved = currentPlan.getRothConversionRequest();
 
             RothConversionStrategy strategy =
                     rothStrategyComboBox.getValue();
@@ -3033,7 +3059,7 @@ public class ResultsSummaryView extends BorderPane {
                             startYearText);
 
             BigDecimal annualAmount =
-                    BigDecimal.ZERO;
+                    saved == null ? BigDecimal.ZERO : saved.getAnnualAmount();
 
             BigDecimal customTargetTaxableIncome =
                     null;
@@ -3104,8 +3130,8 @@ public class ResultsSummaryView extends BorderPane {
                             frequency,
                             customTargetTaxableIncome);
 
-            rothConversionHandler.accept(
-                    request);
+            com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.validateTransition(currentPlan, request);
+            submitRothConversion(request);
 
         } catch (NumberFormatException ex) {
 
@@ -3134,6 +3160,22 @@ public class ResultsSummaryView extends BorderPane {
 
         this.rothConversionHandler =
                 handler;
+    }
+
+    /** Installs the shared confirm-and-commit boundary used by the application window. */
+    public void setRothConversionTransactionHandler(Predicate<RothConversionRequest> handler) {
+        this.rothConversionTransactionHandler = handler;
+    }
+
+    private boolean submitRothConversion(RothConversionRequest request) {
+        if (rothConversionTransactionHandler != null) {
+            return rothConversionTransactionHandler.test(request);
+        }
+        if (rothConversionHandler != null) {
+            rothConversionHandler.accept(request);
+            return true;
+        }
+        return false;
     }
 
 
@@ -3386,6 +3428,28 @@ public class ResultsSummaryView extends BorderPane {
 
     private void loadRothConversion(
             RetirementPlan plan) {
+
+        boolean keepDraft = rothDraftOwner == plan && rothLoadedFields != null
+                && !rothLoadedFields.equals(rothUiFields())
+                && com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.same(
+                        rothLoadedRequest, plan.getRothConversionRequest());
+        if (keepDraft) {
+            updateRothControls();
+            return;
+        }
+        loadRothConversionFields(plan);
+        rothDraftOwner = plan;
+        rothLoadedRequest = plan.getRothConversionRequest();
+        rothLoadedFields = rothUiFields();
+    }
+
+    private List<Object> rothUiFields() {
+        return java.util.Arrays.asList(rothEnabledCheckBox.isSelected(), rothStrategyComboBox.getValue(),
+                rothStartYearField.getText(), rothAmountField.getText(), rothTargetTaxableIncomeField.getText(),
+                rothFrequencyComboBox.getValue(), rothStopRuleComboBox.getValue());
+    }
+
+    private void loadRothConversionFields(RetirementPlan plan) {
 
         RothConversionRequest request =
                 plan.getRothConversionRequest();

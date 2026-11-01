@@ -7,6 +7,13 @@
     -app-accent: #235dc4;
     -app-warning: #855400;
     -app-error: #a12622;
+    -app-hover-surface: #eaf1fa;
+    -app-selected-surface: #dbe9f8;
+    -app-selected-border: #365f89;
+    -app-calendar-arrow: #334155;
+    -app-calendar-arrow-hover: #235dc4;
+    -app-calendar-arrow-pressed: #17213d;
+    -app-calendar-arrow-disabled: #8a96a9;
     -fx-base: #ececec;
     -fx-background: -app-background;
     -fx-control-inner-background: -app-surface;
@@ -19,6 +26,16 @@
     -fx-selection-bar: #235dc4;
     -fx-selection-bar-non-focused: #d4e2f7;
     -fx-box-border: -app-border;
+}
+.app-theme .new-plan-wizard, .app-theme.new-plan-wizard {
+    -app-background: #f7f9fc;
+    -app-text: #17213d;
+    -app-muted: #526079;
+    -app-border: #ccd6e4;
+    -app-accent: #235dc4;
+    -app-hover-surface: #eaf1fa;
+    -app-selected-surface: #dbe9f8;
+    -app-selected-border: #365f89;
 }
 .app-theme .settings-notice { -fx-text-fill: -app-error; }
 .app-theme.tooltip, .app-theme .tooltip { -fx-background-color: #313a49; -fx-text-fill: white; }

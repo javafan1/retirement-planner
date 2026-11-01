@@ -294,6 +294,8 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
             item.setAccessibleText(item.getText());
             item.setDisable(!visited.contains(index));
             item.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("current"), index == stepIndex);
+            item.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("visited"),
+                    index != stepIndex && visited.contains(index));
         }
         stepLabel.setAccessibleText(stepLabel.getText());
         visible(button(backType), steps.size() > 1);

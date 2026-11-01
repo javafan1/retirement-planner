@@ -123,7 +123,7 @@ class RothConversionViewTest {
         });
     }
 
-    @Test void disableAndReenableRevertsAndExplicitDisableRemovesRequest() throws Exception {
+    @Test void disableAndReenableRevertsAndExplicitDisablePreservesConfiguration() throws Exception {
         fx(() -> {
             Fixture f = new Fixture();
             CheckBox enabled = control(f.view, "enabledCheckBox");
@@ -135,7 +135,9 @@ class RothConversionViewTest {
             enabled.setSelected(false);
             field(f.view, "conversionYearField").setText("invalid");
             assertTrue(f.view.applyChanges());
-            assertNull(f.request());
+            assertFalse(f.request().isEnabled());
+            assertEquals(f.original.getAnnualAmount(), f.request().getAnnualAmount());
+            assertEquals(f.original.getStartYear(), f.request().getStartYear());
             clean(f.view);
             assertEquals(1, f.events.get());
         });
@@ -254,6 +256,9 @@ class RothConversionViewTest {
                 RothConversionStopRule.FIRST_HOUSEHOLD_RMD, RothConversionStrategy.FIXED_AMOUNT,
                 RothConversionFrequency.ONE_TIME);
         Fixture() {
+            controller.getCurrentPlan().getAccountPortfolio().addAccount(
+                    new com.daviddunn.retirementplanner.domain.financial.TraditionalIRA(
+                            "Supported source", com.daviddunn.retirementplanner.domain.model.AccountOwnership.PRIMARY, BigDecimal.ZERO));
             controller.getCurrentPlan().setRothConversionRequest(original);
             view.load(controller.getCurrentPlan());
             view.setOnPlanChanged(() -> {

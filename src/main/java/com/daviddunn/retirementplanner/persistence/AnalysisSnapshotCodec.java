@@ -265,6 +265,7 @@ public final class AnalysisSnapshotCodec {
         types.addAll(List.of(ExhaustiveSnapshot.class.getDeclaredClasses()));
         types.addAll(List.of(RetainedProjectionSnapshot.class.getDeclaredClasses()));
         types.addAll(List.of(RetainedProjectionSnapshot.class,
+                com.daviddunn.retirementplanner.domain.roth.EmployerRothConversionAvailability.class,
                 com.daviddunn.retirementplanner.domain.projection.HouseholdCashSettlement.class,
                 com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult.class,
                 com.daviddunn.retirementplanner.domain.projection.summary.ProjectionMetrics.class,

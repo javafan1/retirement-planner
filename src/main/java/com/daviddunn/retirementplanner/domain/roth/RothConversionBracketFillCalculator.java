@@ -447,7 +447,7 @@ public final class RothConversionBracketFillCalculator {
 
             List<IncomeSourceAttribution> trialSources = new ArrayList<>(supplementalSources);
             trialSources.addAll(conversionAttribution
-                    .convertHousehold(portfolio, rothConversion, conversionOwners)
+                    .convertHousehold(portfolio, rothConversion, conversionOwners, projectionDate.getYear())
                     .getIncomeSources(projectionDate.getYear()));
 
             TaxFundingResult taxFundingResult =

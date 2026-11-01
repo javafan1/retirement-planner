@@ -17,18 +17,17 @@ class ResultsSummaryRothValidationTest {
 
         int disabledCheck =
                 method.indexOf("if (!enabled)");
-        int clearRequest =
+        int preserveRequest =
                 method.indexOf(
-                        "rothConversionHandler.accept(\n" +
-                                "                        null)");
+                        "RothConversionConfiguration.disabled(");
         int startYearParse =
                 method.indexOf(
                         "Integer.parseInt(\n" +
                                 "                            startYearText)");
 
         assertTrue(disabledCheck >= 0);
-        assertTrue(clearRequest > disabledCheck);
-        assertTrue(startYearParse > clearRequest);
+        assertTrue(preserveRequest > disabledCheck);
+        assertTrue(startYearParse > preserveRequest);
     }
 
     @Test

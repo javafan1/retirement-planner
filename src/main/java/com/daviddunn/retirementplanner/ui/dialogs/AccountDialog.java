@@ -16,8 +16,12 @@ import com.daviddunn.retirementplanner.domain.model.AccountType;
 import com.daviddunn.retirementplanner.domain.model.BeneficiaryRelationship;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.control.*;
+import javafx.scene.Node;
 import javafx.scene.layout.GridPane;
+import javafx.stage.Screen;
+import javafx.stage.Window;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -32,6 +36,8 @@ public class AccountDialog extends Dialog<Account> {
     private final ComboBox<AccountOwnership> ownershipCombo;
     private final TextField balanceField;
     private final RetirementParticipantFactsEditor participantFactsEditor;
+    private final com.daviddunn.retirementplanner.ui.controls.EmployerRothAvailabilityEditor availabilityEditor;
+    private ScrollPane formScrollPane;
     private boolean guidedCreation;
 
     private final Label originalOwnerDobLabel;
@@ -109,6 +115,10 @@ public class AccountDialog extends Dialog<Account> {
         participantFactsEditor = new RetirementParticipantFactsEditor(
                 account == null ? RetirementParticipantFacts.UNKNOWN
                         : account.getRetirementParticipantFacts());
+        availabilityEditor = new com.daviddunn.retirementplanner.ui.controls.EmployerRothAvailabilityEditor(
+                account == null ? null : account.getRothConversionAvailability(),
+                account != null && com.daviddunn.retirementplanner.domain.roth.RothConversionEligibilityPolicy
+                        .isEmployerPretaxSource(account.getType()) && account.getRothConversionAvailability() == null);
 
         /*
          * Inherited-account fields
@@ -256,6 +266,7 @@ public class AccountDialog extends Dialog<Account> {
                 1,
                 row);
         grid.add(participantFactsEditor, 0, row + 1, 2, 1);
+        grid.add(availabilityEditor, 0, row + 2, 2, 1);
 
         /*
          * Show inherited fields only when appropriate.
@@ -281,10 +292,18 @@ public class AccountDialog extends Dialog<Account> {
         participantFactsEditor.setAnimated(false);
         participantFactsEditor.expandedProperty().addListener(
                 (observable, oldValue, newValue) -> resizeToContent());
+        availabilityEditor.setOnPreferredHeightChanged(this::resizeToContent);
+
+        setResizable(true);
+        setOnShowing(event -> installScrollableForm());
+        setOnShown(event -> resizeToContent());
 
         getDialogPane().getButtonTypes().addAll(
                 ButtonType.OK,
                 ButtonType.CANCEL);
+        getDialogPane().lookupButton(ButtonType.OK).addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            if (availabilityEditor.isManaged() && !availabilityEditor.validateInput()) event.consume();
+        });
 
         setResultConverter(button -> {
 
@@ -351,6 +370,9 @@ public class AccountDialog extends Dialog<Account> {
             if (result.supportsRetirementParticipantFacts()) {
                 result.setRetirementParticipantFacts(participantFactsEditor.value());
             }
+            if (com.daviddunn.retirementplanner.domain.roth.RothConversionEligibilityPolicy.isEmployerPretaxSource(type)) {
+                result.setRothConversionAvailability(availabilityEditor.value());
+            }
             return result;
         });
     }
@@ -398,13 +420,66 @@ public class AccountDialog extends Dialog<Account> {
 
             if (getDialogPane().getScene() != null &&
                     getDialogPane().getScene().getWindow() != null) {
-
-                getDialogPane()
-                        .getScene()
-                        .getWindow()
-                        .sizeToScene();
+                applyScreenBounds();
             }
         });
+    }
+
+    private void installScrollableForm() {
+        if (formScrollPane != null) return;
+        Node form = getDialogPane().getContent();
+        formScrollPane = new ScrollPane(form);
+        formScrollPane.setId("account-dialog-form-scroll");
+        formScrollPane.setFitToWidth(true);
+        formScrollPane.setFitToHeight(false);
+        formScrollPane.setPannable(true);
+        formScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        formScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        formScrollPane.setStyle("-fx-background-color: transparent; -fx-background: transparent;");
+        getDialogPane().setContent(formScrollPane);
+        getDialogPane().setPrefWidth(560);
+    }
+
+    /** Keeps the DialogPane action bar outside the bounded, scrollable form. */
+    private void applyScreenBounds() {
+        if (formScrollPane == null || getDialogPane().getScene() == null) return;
+        Window dialogWindow = getDialogPane().getScene().getWindow();
+        Rectangle2D visual = visualBounds(dialogWindow);
+        double outerMargin = 24;
+        double maxWindowHeight = Math.max(320, visual.getHeight() - outerMargin);
+        double maxWindowWidth = Math.max(280, visual.getWidth() - outerMargin);
+        double maxFormHeight = Math.max(220, maxWindowHeight - 170);
+
+        getDialogPane().setMaxWidth(maxWindowWidth);
+        getDialogPane().setPrefWidth(Math.min(560, maxWindowWidth));
+        formScrollPane.setMaxWidth(maxWindowWidth - 24);
+        formScrollPane.setMaxHeight(maxFormHeight);
+        getDialogPane().applyCss();
+        getDialogPane().layout();
+        Node form = formScrollPane.getContent();
+        double naturalHeight = form.prefHeight(Math.max(200, formScrollPane.getWidth()));
+        if (!Double.isFinite(naturalHeight) || naturalHeight <= 0) naturalHeight = maxFormHeight;
+        formScrollPane.setPrefViewportHeight(Math.min(naturalHeight, maxFormHeight));
+
+        if (dialogWindow instanceof javafx.stage.Stage stage) {
+            stage.setMaxHeight(maxWindowHeight);
+            stage.setMaxWidth(maxWindowWidth);
+            stage.sizeToScene();
+            if (stage.getHeight() > maxWindowHeight) stage.setHeight(maxWindowHeight);
+            if (stage.getWidth() > maxWindowWidth) stage.setWidth(maxWindowWidth);
+        }
+    }
+
+    private Rectangle2D visualBounds(Window dialogWindow) {
+        Window owner = getOwner();
+        double x = owner == null ? dialogWindow.getX() : owner.getX();
+        double y = owner == null ? dialogWindow.getY() : owner.getY();
+        double width = owner == null ? dialogWindow.getWidth() : owner.getWidth();
+        double height = owner == null ? dialogWindow.getHeight() : owner.getHeight();
+        return Screen.getScreensForRectangle(x, y, width, height).stream()
+                .findFirst()
+                .orElse(Screen.getPrimary())
+                .getVisualBounds();
     }
 
     private void updateForAccountTypeChange() {
@@ -414,6 +489,10 @@ public class AccountDialog extends Dialog<Account> {
                 || type == AccountType.TRADITIONAL_403B || type == AccountType.ROTH_401K;
         participantFactsEditor.setVisible(employer && !guidedCreation);
         participantFactsEditor.setManaged(employer && !guidedCreation);
+        boolean traditionalEmployer = com.daviddunn.retirementplanner.domain.roth.RothConversionEligibilityPolicy
+                .isEmployerPretaxSource(type);
+        availabilityEditor.setVisible(traditionalEmployer);
+        availabilityEditor.setManaged(traditionalEmployer);
 
         updateOwnershipChoices();
         updateInheritedFieldsVisibility();

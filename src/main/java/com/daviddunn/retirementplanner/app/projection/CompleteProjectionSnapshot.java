@@ -65,6 +65,22 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
         catch (Exception failure) { throw new IllegalArgumentException("Invalid projection inputs.", failure); }
     }
     public boolean matches(RetirementPlan plan) { return inputDigest.equals(digest(freeze(plan))); }
+    public boolean matchesDeterministicInputs(RetirementPlan plan) {
+        return sameDeterministicInputs(inputsDocument, freeze(plan));
+    }
+    public static boolean sameDeterministicInputs(String original, String current) {
+        try {
+            var exact = JSON.copy().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                    .setNodeFactory(com.fasterxml.jackson.databind.node.JsonNodeFactory.withExactBigDecimals(true));
+            var before = exact.readTree(original);
+            var after = exact.readTree(current);
+            DeterministicExpenseInputs.removeVolatility(before);
+            DeterministicExpenseInputs.removeVolatility(after);
+            return JSON.writeValueAsString(before).equals(JSON.writeValueAsString(after));
+        } catch (Exception failure) {
+            throw new IllegalArgumentException("Cannot assess deterministic inputs.", failure);
+        }
+    }
     public CompleteProjectionSnapshot ownedBy(UUID identity) {
         return new CompleteProjectionSnapshot(version, id, identity, sourcePlanId, acceptedAt, inputsDocument, inputDigest,
                 provenance, annual, nonInvestable, summary, people);

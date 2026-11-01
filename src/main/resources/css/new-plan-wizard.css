@@ -1,5 +1,15 @@
 .new-plan-wizard {
     -fx-background-color: -fx-background;
+    /* Fallbacks for isolated wizard previews/tests; ApplicationThemeManager
+       overrides these on the same root in the running application. */
+    -app-background: #f7f9fc;
+    -app-text: #17213d;
+    -app-muted: #526079;
+    -app-border: #ccd6e4;
+    -app-accent: #235dc4;
+    -app-hover-surface: #eaf1fa;
+    -app-selected-surface: #dbe9f8;
+    -app-selected-border: #365f89;
 }
 
 .new-plan-wizard .wizard-title {
@@ -60,22 +70,37 @@
 .new-plan-wizard .wizard-navigation-step {
     -fx-alignment: center-left;
     -fx-padding: 10px;
-    -fx-background-color: -fx-background;
-    -fx-text-fill: -fx-text-base-color;
+    -fx-background-color: -app-background;
+    -fx-text-fill: -app-text;
+    -fx-border-color: transparent;
+    -fx-border-width: 0 0 0 3px;
+}
+.new-plan-wizard .wizard-navigation-step:visited {
+    -fx-border-color: transparent transparent transparent -app-border;
+}
+.new-plan-wizard .wizard-navigation-step:hover {
+    -fx-background-color: -app-hover-surface;
 }
 .new-plan-wizard .wizard-navigation-step:current {
-    -fx-background-color: #dbe9f8;
+    -fx-background-color: -app-selected-surface;
+    -fx-text-fill: -app-text;
     -fx-font-weight: bold;
-    -fx-border-color: #365f89;
+    -fx-border-color: transparent transparent transparent -app-selected-border;
+}
+.new-plan-wizard .wizard-navigation-step:current:hover {
+    -fx-background-color: -app-selected-surface;
+}
+.new-plan-wizard .wizard-navigation-step:disabled:hover {
+    -fx-background-color: -app-background;
 }
 .new-plan-wizard .wizard-navigation-step:disabled {
-    -fx-opacity: 1;
-    -fx-text-fill: -fx-text-base-color;
-    -fx-background-color: -fx-background;
+    -fx-opacity: 0.78;
+    -fx-text-fill: -app-muted;
+    -fx-background-color: -app-background;
 }
 .new-plan-wizard .wizard-navigation-step:focused,
 .new-plan-wizard .wizard-help-button:focused {
-    -fx-border-color: -fx-text-base-color;
+    -fx-border-color: -app-accent;
     -fx-border-width: 2px;
 }
 .new-plan-wizard .wizard-field-row { -fx-padding: 4px 0 8px 0; }

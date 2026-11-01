@@ -14,6 +14,20 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 class Phase12FAnalyzerSwapTest {
+    @ParameterizedTest @EnumSource(AnalysisKind.class)
+    void volatilityEditRejectsEveryOlderAnalyzerAdmissionWithoutChangingAcceptedProjection(AnalysisKind kind) throws Exception {
+        var c = fixtures.controller(kind.shape() == AnalysisKind.Shape.COUPLE);
+        c.getCurrentProjection();
+        var projection = c.getAcceptedProjectionSnapshot();
+        var token = c.prepareAnalyzerAssociation(kind, "a".repeat(64));
+        var completion = fixtures.completion(c, token);
+        com.daviddunn.retirementplanner.persistence.ExpenseVolatilityCompatibilityTest.volatility(c.getCurrentPlan(), "0.25");
+        c.markModified();
+        assertTrue(c.currentProjectionDeterministicallyApplicable());
+        assertSame(projection, c.getAcceptedProjectionSnapshot());
+        assertFalse(c.associateAnalyzer(token, completion));
+        assertTrue(c.getAnalyzerAssociations(projection.id()).isEmpty());
+    }
     @TempDir Path directory;
     Phase12EAssociationTest fixtures;
     @BeforeAll static void preparePayloads() throws Exception { Phase12EAssociationTest.fixtures(); }

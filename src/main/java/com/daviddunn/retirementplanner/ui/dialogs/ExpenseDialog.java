@@ -21,6 +21,10 @@ public class ExpenseDialog extends Dialog<Expense> {
 
     private final TextField descriptionField;
     private final TextField annualAmountField;
+    private final TextField volatilityField = new TextField("0");
+    private final Label volatilityLabel = new Label("Annual Expense Volatility (%):");
+    private final Label volatilityNotice = new Label();
+    private String originalVolatilityText = "0";
 
     private final ComboBox<ExpenseType> expenseTypeComboBox;
     private final ComboBox<GrowthCategory> growthCategoryComboBox;
@@ -61,6 +65,15 @@ public class ExpenseDialog extends Dialog<Expense> {
 
         annualAmountField = new TextField();
         annualAmountField.setPrefColumnCount(12);
+        volatilityField.setPrefColumnCount(10);
+        volatilityField.setAccessibleText("Annual Expense Volatility (%)");
+        volatilityNotice.setWrapText(true);
+        volatilityNotice.setMaxWidth(330);
+        volatilityNotice.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        if (expense != null) {
+            originalVolatilityText = expense.getEffectiveAnnualExpenseVolatility().movePointRight(2).toPlainString();
+            volatilityField.setText(originalVolatilityText);
+        }
 
         expenseTypeComboBox = new ComboBox<>();
         expenseTypeComboBox.getItems().addAll(
@@ -185,6 +198,10 @@ public class ExpenseDialog extends Dialog<Expense> {
                 1,
                 row++);
 
+        grid.add(volatilityLabel, 0, row);
+        grid.add(volatilityField, 1, row++);
+        grid.add(volatilityNotice, 0, row++, 2, 1);
+
         grid.add(
                 effectiveDateLabel,
                 0,
@@ -210,6 +227,12 @@ public class ExpenseDialog extends Dialog<Expense> {
         InputHelp.install(growthCategoryComboBox, "General Inflation and Healthcare Inflation each use the corresponding existing plan assumption once. No Inflation keeps the entered recurring amount fixed in nominal dollars; existing active-year, opening-year proration and survivor adjustments still apply. One-time purchases retain General Inflation and hide this selector.");
         InputHelp.install(effectiveDatePicker, "First active date for recurring spending; blank means no start restriction. For a one-time expense, a purchase date is required. Recurring expenses are included by calendar-year overlap, with opening-year proration from the projection start.");
         InputHelp.install(endDatePicker, "Optional last active date for a recurring expense; blank means no scheduled end. A calendar year is included when the expense overlaps it. One-time expenses instead use their purchase date.");
+        InputHelp.install(volatilityField, "Controls how much this recurring expense may vary from year to year during Monte Carlo simulations. "
+                + "For example, 20% volatility introduces annual spending variation around the expected expense. "
+                + "It does not change deterministic projections or the expense's selected inflation setting. "
+                + "This is an annual relative standard deviation, not a maximum increase or decrease. "
+                + "Stochastic expense execution is not yet available; nonzero settings currently block Monte Carlo runs.");
+        annualAmountField.textProperty().addListener((observable, before, after) -> updateVolatilityAvailability());
         InputHelp.linkGridLabels(grid);
         getDialogPane().setContent(grid);
 
@@ -250,6 +273,7 @@ public class ExpenseDialog extends Dialog<Expense> {
                     new Field("Expense Type", expenseTypeComboBox, Kind.CHOICE, true),
                     new Field("Amount", annualAmountField, Kind.NUMBER, true),
                     new Field("Escalation", growthCategoryComboBox, Kind.CHOICE, true),
+                    new Field("Annual Expense Volatility (%)", volatilityField, Kind.NUMBER, true),
                     new Field("Effective Date", effectiveDatePicker, Kind.DATE, false),
                     new Field("End Date", endDatePicker, Kind.DATE, false)), () -> {
                         if (!validateAndBuildExpense()) throw new IllegalArgumentException("Please complete the expense.");
@@ -327,6 +351,22 @@ public class ExpenseDialog extends Dialog<Expense> {
                             ? GrowthCategory.GENERAL
                             : growthCategoryComboBox.getValue();
 
+            BigDecimal volatility = BigDecimal.ZERO;
+            if (expenseTypeComboBox.getValue() == ExpenseType.RECURRING) {
+                String text = volatilityField.getText().trim();
+                BigDecimal percent = new BigDecimal(text);
+                if (percent.signum() < 0 || percent.compareTo(new BigDecimal("100")) > 0
+                        || (!text.equals(originalVolatilityText) && percent.scale() > 2)) {
+                    showValidationError("Annual expense volatility must be 0–100%, with up to two decimal places for new values.");
+                    return false;
+                }
+                volatility = percent.movePointLeft(2);
+                if (annualAmount.signum() < 0 && volatility.signum() > 0) {
+                    showValidationError("Negative legacy expenses cannot have nonzero volatility.");
+                    return false;
+                }
+            }
+
             result =
                     new Expense(
                             description,
@@ -334,7 +374,7 @@ public class ExpenseDialog extends Dialog<Expense> {
                             growthCategory,
                             effectiveDate,
                             endDate,
-                            expenseTypeComboBox.getValue());
+                            expenseTypeComboBox.getValue(), volatility);
             return true;
 
         }
@@ -409,6 +449,30 @@ public class ExpenseDialog extends Dialog<Expense> {
 
         growthCategoryComboBox.setVisible(!oneTime);
         growthCategoryComboBox.setManaged(!oneTime);
+        if (oneTime && !volatilityField.getText().equals("0")) {
+            volatilityField.setText("0");
+            volatilityNotice.setText("Annual expense volatility was cleared: one-time expenses do not support it.");
+        }
+        volatilityLabel.setVisible(!oneTime);
+        volatilityLabel.setManaged(!oneTime);
+        volatilityField.setVisible(!oneTime);
+        volatilityField.setManaged(!oneTime);
+        updateVolatilityAvailability();
+    }
+
+    private void updateVolatilityAvailability() {
+        boolean negative = false;
+        try { negative = new BigDecimal(annualAmountField.getText().trim()).signum() < 0; }
+        catch (NumberFormatException ignored) { /* Amount validation remains authoritative on Save. */ }
+        // Keep an imported/just-edited positive value editable so the user can clear it.
+        boolean zero = false;
+        try { zero = new BigDecimal(volatilityField.getText().trim()).signum() == 0; }
+        catch (NumberFormatException ignored) { /* Save reports the invalid value. */ }
+        volatilityField.setDisable(negative && zero);
+        if (negative) volatilityNotice.setText("Negative legacy expenses cannot have nonzero annual expense volatility. Enter 0% before using a negative amount.");
+        else if (!volatilityNotice.getText().startsWith("Annual expense volatility was cleared")) volatilityNotice.setText("");
+        volatilityNotice.setVisible(!volatilityNotice.getText().isEmpty());
+        volatilityNotice.setManaged(volatilityNotice.isVisible());
     }
 
 

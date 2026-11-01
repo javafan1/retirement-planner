@@ -742,12 +742,12 @@ public class ProjectionEngine {
         rothConversion = rothConversion.min(
                 projectedPortfolioRothConverter
                         .getMaximumConvertibleAmount(
-                                portfolioAfterAdditionalWithdrawal, eligibleOwners));
+                                portfolioAfterAdditionalWithdrawal, eligibleOwners, calendarYear));
 
         ProjectedRothConversionResult rothConversionResult =
                 projectedPortfolioRothConverter.convertHousehold(
                         portfolioAfterAdditionalWithdrawal,
-                        rothConversion, eligibleOwners);
+                        rothConversion, eligibleOwners, calendarYear);
 
         rothConversion = rothConversionResult.getTotalConversion();
 

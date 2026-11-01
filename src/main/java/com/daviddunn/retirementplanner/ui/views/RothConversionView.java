@@ -28,8 +28,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
+import java.util.function.Predicate;
 
 public class RothConversionView extends VBox {
+
+    private final Label availabilityLabel = new Label();
 
     private final CheckBox enabledCheckBox;
 
@@ -64,6 +67,7 @@ public class RothConversionView extends VBox {
     private RetirementPlan currentPlan;
 
     private Runnable onPlanChanged;
+    private Predicate<RothConversionRequest> transactionalApplyHandler;
 
 
     public RothConversionView() {
@@ -348,7 +352,10 @@ public class RothConversionView extends VBox {
                 new Label();
 
 
+        availabilityLabel.setWrapText(true);
+        availabilityLabel.setAccessibleText("Roth conversion availability");
         getChildren().addAll(
+                availabilityLabel,
                 grid,
                 buttonBar,
                 statusLabel);
@@ -375,7 +382,12 @@ public class RothConversionView extends VBox {
 
     private void updateStrategyFields() {
 
-        boolean disabled = !enabledCheckBox.isSelected();
+        var availability = com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.assess(currentPlan);
+        availabilityLabel.setText(availability.guidance());
+        boolean savedEnabled = currentPlan != null && currentPlan.getRothConversionRequest() != null
+                && currentPlan.getRothConversionRequest().isEnabled();
+        enabledCheckBox.setDisable(!availability.canEnable() && !savedEnabled);
+        boolean disabled = !enabledCheckBox.isSelected() || !availability.canEnable();
         for (Control control : List.of(strategyComboBox, conversionYearField, conversionAmountField,
                 targetTaxableIncomeField, frequencyComboBox, stopRuleComboBox)) {
             control.setDisable(disabled);
@@ -537,7 +549,41 @@ public class RothConversionView extends VBox {
 
 
     public boolean save(RetirementPlan plan) {
-        return plan == currentPlan && applyChanges();
+        if (plan != currentPlan || currentPlan == null) {
+            return false;
+        }
+        RothConversionRequest updated;
+        try {
+            updated = readValidated();
+        } catch (InputException exception) {
+            showValidation(exception);
+            return false;
+        }
+        if (com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.same(
+                updated, currentPlan.getRothConversionRequest())) {
+            return true;
+        }
+        if (updated != null && updated.isEnabled()
+                && !new com.daviddunn.retirementplanner.domain.roth.RothConversionDestinationService()
+                .ownersRequiringDestination(currentPlan, updated).isEmpty()) {
+            statusLabel.setText("Apply the Roth conversion settings first to confirm and create the modeled Roth IRA destination; Save did not create an account.");
+            return false;
+        }
+        if (transactionalApplyHandler != null) {
+            try {
+                boolean applied = transactionalApplyHandler.test(updated);
+                if (applied) load(currentPlan);
+                return applied;
+            } catch (RuntimeException exception) {
+                statusLabel.setText(exception.getMessage() == null
+                        ? "Roth conversion changes could not be saved."
+                        : exception.getMessage());
+                return false;
+            }
+        }
+        currentPlan.setRothConversionRequest(updated);
+        if (onPlanChanged != null) onPlanChanged.run();
+        return true;
     }
 
     public void refresh(RetirementPlan plan) {
@@ -545,6 +591,7 @@ public class RothConversionView extends VBox {
             load(plan);
         }
         else {
+            updateStrategyFields();
             updateDirty();
         }
     }
@@ -591,6 +638,23 @@ public class RothConversionView extends VBox {
             return false;
         }
         boolean changed = !values(updated).equals(values(currentPlan.getRothConversionRequest()));
+        if (transactionalApplyHandler != null) {
+            boolean applied;
+            try {
+                applied = transactionalApplyHandler.test(updated);
+            } catch (RuntimeException exception) {
+                statusLabel.setText(exception.getMessage() == null
+                        ? "Roth conversion changes could not be applied."
+                        : exception.getMessage());
+                return false;
+            }
+            if (!applied) {
+                return false;
+            }
+            load(currentPlan);
+            statusLabel.setText("Roth conversion applied.");
+            return true;
+        }
         if (changed) {
             // The immutable request is fully validated before the only model write.
             currentPlan.setRothConversionRequest(updated);
@@ -619,9 +683,9 @@ public class RothConversionView extends VBox {
     private RothConversionRequest readValidated() {
         RothConversionRequest applied = currentPlan.getRothConversionRequest();
         if (!enabledCheckBox.isSelected()) {
-            // Explicit disable still removes the request. Preserve an already disabled
-            // persisted configuration during an unrelated Save.
-            return applied != null && !applied.isEnabled() ? applied : null;
+            // Explicit disable retains every saved configuration field. Legacy null
+            // remains null, and unrelated Save never invents a schedule.
+            return com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.disabled(applied);
         }
         RothConversionStrategy strategy = read(strategyComboBox, "Conversion strategy", () ->
                 Objects.requireNonNull(strategyComboBox.getValue(), "A selection is required."));
@@ -642,7 +706,11 @@ public class RothConversionView extends VBox {
                 Objects.requireNonNull(frequencyComboBox.getValue(), "A selection is required."));
         RothConversionStopRule stop = read(stopRuleComboBox, "Stop rule", () ->
                 Objects.requireNonNull(stopRuleComboBox.getValue(), "A selection is required."));
-        return new RothConversionRequest(true, year, amount, stop, strategy, frequency, target);
+        var proposed = new RothConversionRequest(true, year, amount, stop, strategy, frequency, target);
+        return read(enabledCheckBox, "Conversion availability", () -> {
+            com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.validateTransition(currentPlan, proposed);
+            return proposed;
+        });
     }
 
     private static List<Object> values(RothConversionRequest request) {
@@ -693,5 +761,10 @@ public class RothConversionView extends VBox {
 
     public void setOnPlanChanged(Runnable onPlanChanged) {
         this.onPlanChanged = onPlanChanged;
+    }
+
+    /** Installs the shared confirm-and-commit boundary used by the application window. */
+    public void setTransactionalApplyHandler(Predicate<RothConversionRequest> handler) {
+        this.transactionalApplyHandler = handler;
     }
 }

@@ -30,6 +30,8 @@ public final class MonteCarloStrategyComparisonRunService {
         var a = copier.copy(current);
         var b = copier.copy(new RetirementPlan(snapshot.getHousehold(), snapshot.getAccountPortfolio(),
                 snapshot.getPlanningAssumptions(), snapshot.getRothConversionRequest(), snapshot.getNonInvestableAssets()));
+        ExpenseVolatilityAdmission.requireSupported(a);
+        ExpenseVolatilityAdmission.requireSupported(b);
         if (!ProjectionReadiness.isReady(a) || !ProjectionReadiness.isReady(b)) {
             throw new IllegalArgumentException("Both strategies require birth dates and a projection start date.");
         }

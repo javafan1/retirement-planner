@@ -20,6 +20,7 @@ public final class MonteCarloRunService {
                                      AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
         long started = System.nanoTime();
         cancellation.throwIfCancellationRequested();
+        com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireSupported(frozenPlan);
         var result = new MonteCarloAnalyzer().analyzeMortality(frozenPlan, request, progress, cancellation);
         cancellation.throwIfCancellationRequested();
         var people = BreakEvenPlanSummary.from(frozenPlan.getHousehold());
@@ -34,6 +35,7 @@ public final class MonteCarloRunService {
         long started = System.nanoTime();
         cancellation.throwIfCancellationRequested();
         ProjectionEngine engine = new ProjectionEngine();
+        com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireSupported(frozenPlan);
         ProjectionExecutionResult reference = cachedReference == null
                 ? engine.projectWithOutcome(frozenPlan)
                 : new ProjectionExecutionResult.Completed(cachedReference.getYears());

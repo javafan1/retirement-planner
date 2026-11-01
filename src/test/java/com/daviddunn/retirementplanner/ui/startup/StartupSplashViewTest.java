@@ -34,6 +34,33 @@ class StartupSplashViewTest {
     private static <T> T fx(Callable<T> action) throws Exception {
         var task = new FutureTask<>(action); Platform.runLater(task); return task.get(30, TimeUnit.SECONDS);
     }
+    @Test void mainApplicationOpensMaximized() throws Exception {
+        var repository = new JsonApplicationSettingsRepository(directory.resolve("settings.json"));
+        var store = new AnalysisResultStore(new JsonAnalysisSnapshotRepository(directory.resolve("analysis")));
+        try (var settings = new ApplicationSettingsService(repository)) {
+            var controller = fx(() -> new ApplicationController(new JsonRetirementPlanRepository(), repository, store, settings));
+            try {
+                fx(() -> {
+                    try (var themes = ApplicationThemeManager.start(ApplicationTheme.LIGHT)) {
+                        var application = new MainApplication();
+                        for (var entry : Map.of("controller", (Object) controller, "branding", ApplicationBranding.defaults(), "themes", themes).entrySet()) {
+                            var field = MainApplication.class.getDeclaredField(entry.getKey());
+                            field.setAccessible(true); field.set(application, entry.getValue());
+                        }
+                        var stage = new Stage();
+                        try {
+                            var show = MainApplication.class.getDeclaredMethod("showMain", Stage.class, Exception.class);
+                            show.setAccessible(true); show.invoke(application, stage, null);
+                            assertTrue(stage.isShowing());
+                            assertTrue(stage.isMaximized());
+                            assertFalse(stage.isFullScreen());
+                        } finally { stage.hide(); }
+                    }
+                    return null;
+                });
+            } finally { controller.getAnalysisParameters().shutdown(); }
+        } finally { store.shutdownIfIdle(); }
+    }
     @Test void productionImagesDecodeAndReferenceSheetIsNeverEligible() throws Exception {
         fx(() -> {
             var image = BrandingImages.load(ApplicationBranding.defaults().logoResource()).orElseThrow();
