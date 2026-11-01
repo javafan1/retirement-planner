@@ -9,6 +9,9 @@ import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitStartDateCalculator;
+import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.ui.help.HelpText;
 import com.daviddunn.retirementplanner.ui.rmd.OpeningRmdWorkflowService;
 import javafx.beans.property.ReadOnlyBooleanProperty;
@@ -21,6 +24,7 @@ import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -28,6 +32,7 @@ import javafx.scene.layout.VBox;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -62,6 +67,9 @@ public class AssumptionsView extends VBox {
     private final TextField inflationRateField;
     private final TextField healthcareInflationField;
     private final TextField socialSecurityColaField;
+    private final VBox socialSecurityBenefitRows = new VBox(8);
+    private final List<SocialSecurityDraftRow> socialSecurityDraftRows = new ArrayList<>();
+    private VBox socialSecurityBenefitsCard;
 
     /*
      * Tax assumptions.
@@ -566,6 +574,13 @@ public class AssumptionsView extends VBox {
                 survivorClaimingAgeComboBox, postDeathExpenseFactorField);
         VBox economic = section(original, "Economic & Investment Assumptions", investmentReturnField,
                 inflationRateField, healthcareInflationField, socialSecurityColaField);
+        socialSecurityBenefitsCard = new VBox(
+                10,
+                sectionHeading("Social Security Claiming Ages & Benefits"),
+                socialSecurityBenefitRows);
+        socialSecurityBenefitsCard.setId("assumptions-social-security-benefits");
+        socialSecurityBenefitsCard.getStyleClass().add("assumptions-card");
+        socialSecurityBenefitsCard.setMaxHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         VBox tax = section(original, "Income Tax Assumptions", filingStatusComboBox, stateJurisdictionComboBox,
                 federalBracketGrowthField, standardDeductionGrowthField);
         VBox adjustment = new VBox(8, inputRow(original, futureFederalMarginalRateAdjustmentField),
@@ -573,7 +588,7 @@ public class AssumptionsView extends VBox {
         adjustment.getStyleClass().add("assumptions-rate-adjustment");
         tax.getChildren().addAll(adjustment, inputRow(original, stateIncomeTaxRateField), inputRow(original, localIncomeTaxRateField));
         VBox estate = section(original, "Estate & Heir Assumptions", estimatedHeirTaxRateField);
-        List<VBox> sections = List.of(timeline, survivor, economic, tax, estate);
+        List<VBox> sections = List.of(timeline, survivor, economic, socialSecurityBenefitsCard, tax, estate);
         HBox cards = new HBox(16);
         cards.setId("assumptions-sections");
         cards.setFillHeight(false);
@@ -597,7 +612,7 @@ public class AssumptionsView extends VBox {
             right.setVisible(wide);
             right.setManaged(wide);
             if (wide) {
-                left.getChildren().addAll(timeline, economic, estate);
+                left.getChildren().addAll(timeline, economic, socialSecurityBenefitsCard, estate);
                 right.getChildren().addAll(survivor, tax);
             } else {
                 left.getChildren().addAll(sections);
@@ -624,13 +639,145 @@ public class AssumptionsView extends VBox {
     }
 
     private VBox section(GridPane original, String title, Control... inputs) {
-        Label heading = new Label(title);
-        heading.getStyleClass().add("assumptions-section-heading");
+        Label heading = sectionHeading(title);
         VBox card = new VBox(10, heading);
         card.getStyleClass().add("assumptions-card");
         card.setMaxHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         for (Control input : inputs) card.getChildren().add(inputRow(original, input));
         return card;
+    }
+
+    private Label sectionHeading(String title) {
+        Label heading = new Label(title);
+        heading.getStyleClass().add("assumptions-section-heading");
+        return heading;
+    }
+
+    private void loadSocialSecurityBenefitRows(RetirementPlan plan) {
+        socialSecurityBenefitRows.getChildren().clear();
+        socialSecurityDraftRows.clear();
+        addSocialSecurityBenefitRow(plan.getHousehold().getPrimaryPerson());
+        plan.getHousehold().spouse().ifPresent(this::addSocialSecurityBenefitRow);
+        if (socialSecurityBenefitsCard != null) {
+            socialSecurityBenefitsCard.setVisible(!socialSecurityDraftRows.isEmpty());
+            socialSecurityBenefitsCard.setManaged(!socialSecurityDraftRows.isEmpty());
+        }
+    }
+
+    private void addSocialSecurityBenefitRow(Person person) {
+        person.getIncomeSources().stream()
+                .filter(SocialSecurityIncome.class::isInstance)
+                .map(SocialSecurityIncome.class::cast)
+                .findFirst().ifPresent(source -> {
+                    Label owner = new Label(person.getFirstName() + " — Claiming Age");
+                    owner.getStyleClass().add("assumption-person-label");
+                    ComboBox<Integer> age = new ComboBox<>();
+                    age.getItems().setAll(62, 63, 64, 65, 66, 67, 68, 69, 70);
+                    age.setValue(source.getClaimingAge());
+                    age.setId(person == currentPlan.getHousehold().getPrimaryPerson()
+                            ? "primary-social-security-claiming-age" : "spouse-social-security-claiming-age");
+                    InputHelp.install(age, PlanningInputHelp.CLAIMING_AGE);
+                    InputHelp.link(owner, age);
+                    Label amount = new Label();
+                    amount.getStyleClass().add("assumption-value");
+                    Label amountTitle = new Label("Monthly Benefit (" + source.getBenefitValuationYear() + " dollars)");
+                    amountTitle.setWrapText(true);
+                    amountTitle.getStyleClass().add("assumption-label");
+                    amountTitle.setLabelFor(amount);
+                    SocialSecurityBenefitPreview.update(person, source, age.getValue(), amount);
+                    SocialSecurityDraftRow draft = new SocialSecurityDraftRow(person, source, age);
+                    age.valueProperty().addListener((observable, before, value) -> {
+                        SocialSecurityBenefitPreview.update(person, source, value, amount);
+                        updateDirty();
+                    });
+                    GridPane claimingAgeRow = alignedPresentationRow(owner, age);
+                    GridPane benefitRow = alignedPresentationRow(amountTitle, amount);
+                    VBox personRows = new VBox(6, claimingAgeRow, benefitRow);
+                    Tooltip tooltip = new Tooltip(SocialSecurityBenefitPreview.explanation(source));
+                    tooltip.setWrapText(true);
+                    tooltip.setMaxWidth(360);
+                    amountTitle.setTooltip(tooltip);
+                    socialSecurityBenefitRows.getChildren().add(personRows);
+                    socialSecurityDraftRows.add(draft);
+                });
+    }
+
+    private GridPane alignedPresentationRow(Label label, Control value) {
+        label.setWrapText(true);
+        label.setMaxWidth(Double.MAX_VALUE);
+        label.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        label.setLabelFor(value);
+        value.setMaxWidth(Double.MAX_VALUE);
+        GridPane row = new GridPane();
+        row.setHgap(12);
+        row.setVgap(5);
+        row.add(label, 0, 0);
+        row.add(value, 1, 0);
+        Runnable arrange = () -> {
+            boolean stacked = row.getWidth() < 430;
+            var labels = new javafx.scene.layout.ColumnConstraints();
+            labels.setPercentWidth(stacked ? 100 : 55);
+            var values = new javafx.scene.layout.ColumnConstraints();
+            values.setPercentWidth(45);
+            row.getColumnConstraints().setAll(stacked ? List.of(labels) : List.of(labels, values));
+            GridPane.setColumnIndex(label, 0);
+            GridPane.setRowIndex(label, 0);
+            GridPane.setColumnIndex(value, stacked ? 0 : 1);
+            GridPane.setRowIndex(value, stacked ? 1 : 0);
+        };
+        row.widthProperty().addListener((observable, before, after) -> arrange.run());
+        arrange.run();
+        return row;
+    }
+
+    private List<SocialSecurityIncome> readUpdatedSocialSecuritySources() {
+        List<SocialSecurityIncome> updated = new ArrayList<>();
+        for (SocialSecurityDraftRow row : socialSecurityDraftRows) {
+            Integer age = row.age.getValue();
+            if (age == null) {
+                throw new InputException(row.age, "Social Security claiming age: Select an age from 62 to 70.");
+            }
+            LocalDate start = SocialSecurityBenefitStartDateCalculator.calculate(row.person, age).orElse(null);
+            if (start == null) {
+                throw new InputException(row.age, "Social Security claiming age: A valid date of birth is required.");
+            }
+            SocialSecurityIncome old = row.source;
+            updated.add(new SocialSecurityIncome(old.getName(), old.getOwnership(), start, old.getEndDate(),
+                    old.getFullRetirementMonthlyBenefit(), age, old.getAnnualColaRate(), old.getBenefitValuationYear()));
+        }
+        return updated;
+    }
+
+    private boolean socialSecurityChanged(List<SocialSecurityIncome> updated) {
+        for (int index = 0; index < socialSecurityDraftRows.size(); index++) {
+            SocialSecurityIncome proposed = updated.get(index);
+            SocialSecurityIncome original = socialSecurityDraftRows.get(index).source;
+            if (proposed.getClaimingAge() != original.getClaimingAge()
+                    || !Objects.equals(proposed.getStartDate(), original.getStartDate())) return true;
+        }
+        return false;
+    }
+
+    private void applySocialSecuritySources(List<SocialSecurityIncome> updated) {
+        for (int index = 0; index < socialSecurityDraftRows.size(); index++) {
+            SocialSecurityDraftRow row = socialSecurityDraftRows.get(index);
+            SocialSecurityIncome proposed = updated.get(index);
+            if (proposed.getClaimingAge() != row.source.getClaimingAge()
+                    || !Objects.equals(proposed.getStartDate(), row.source.getStartDate())) {
+                row.person.replaceIncomeSource(row.source, proposed);
+            }
+        }
+    }
+
+    private static final class SocialSecurityDraftRow {
+        private final Person person;
+        private final SocialSecurityIncome source;
+        private final ComboBox<Integer> age;
+        private SocialSecurityDraftRow(Person person, SocialSecurityIncome source, ComboBox<Integer> age) {
+            this.person = person;
+            this.source = source;
+            this.age = age;
+        }
     }
 
     private GridPane inputRow(GridPane original, Control input) {
@@ -766,6 +913,7 @@ public class AssumptionsView extends VBox {
         currentPlan = Objects.requireNonNull(plan);
         loading = true;
         updateHouseholdPresentation();
+        loadSocialSecurityBenefitRows(plan);
 
         PlanningAssumptions assumptions =
                 plan.getPlanningAssumptions();
@@ -970,6 +1118,7 @@ public class AssumptionsView extends VBox {
         clearGuidedErrors();
         try {
             readValidated();
+            readUpdatedSocialSecuritySources();
             return true;
         }
         catch (InputException exception) {
@@ -986,8 +1135,10 @@ public class AssumptionsView extends VBox {
         }
         clearGuidedErrors();
         PlanningAssumptions updated;
+        List<SocialSecurityIncome> updatedSocialSecurity;
         try {
             updated = readValidated();
+            updatedSocialSecurity = readUpdatedSocialSecuritySources();
         }
         catch (InputException exception) {
             statusLabel.setText(exception.getMessage());
@@ -996,10 +1147,12 @@ public class AssumptionsView extends VBox {
             updateDirty();
             return false;
         }
-        boolean changed = !values(updated).equals(values(currentPlan.getPlanningAssumptions()));
+        boolean assumptionsChanged = !values(updated).equals(values(currentPlan.getPlanningAssumptions()));
+        boolean changed = assumptionsChanged || socialSecurityChanged(updatedSocialSecurity);
         if (changed) {
             // All parsing and domain validation completes before the single model write.
-            currentPlan.setPlanningAssumptions(updated);
+            if (assumptionsChanged) currentPlan.setPlanningAssumptions(updated);
+            applySocialSecuritySources(updatedSocialSecurity);
         }
         load(currentPlan);
         statusLabel.setText("Assumptions applied.");
@@ -1014,8 +1167,11 @@ public class AssumptionsView extends VBox {
             return;
         }
         try {
-            dirty.set(currentPlan != null
-                    && !values(readValidated()).equals(values(currentPlan.getPlanningAssumptions())));
+            boolean assumptionsDiffer = currentPlan != null
+                    && !values(readValidated()).equals(values(currentPlan.getPlanningAssumptions()));
+            boolean socialSecurityDiffers = socialSecurityDraftRows.stream()
+                    .anyMatch(row -> row.age.getValue() == null || row.age.getValue() != row.source.getClaimingAge());
+            dirty.set(currentPlan != null && (assumptionsDiffer || socialSecurityDiffers));
         }
         catch (InputException exception) {
             dirty.set(currentPlan != null);

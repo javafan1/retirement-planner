@@ -148,6 +148,39 @@ class ResultsSummarySocialSecurityPreviewTest {
         fx(()->{checkRows(view(c),2026,true);return null;});
     }
 
+    @Test void summaryHidesFutureFederalRateControlsAndEconomicApplyPreservesTheirPersistedValues() throws Exception {
+        var c=controller();
+        var p=plan(true,70,"0.025",2026);
+        var original=p.getPlanningAssumptions();
+        var originalTax=new TaxAssumptions(new BigDecimal("0.02"),new BigDecimal("0.03"),
+                new BigDecimal("0.04"),new BigDecimal("0.01"),
+                com.daviddunn.retirementplanner.domain.rules.FilingStatus.MARRIED_FILING_JOINTLY,
+                new BigDecimal("0.25"),new BigDecimal("0.025"),2035);
+        p.setPlanningAssumptions(new PlanningAssumptions(original.getEconomicAssumptions(),originalTax,
+                original.getWithdrawalAssumptions(),original.getDeathScenarioAssumptions(),
+                original.getProjectionLengthYears(),original.getProjectionStartDate(),original.getStateTaxAssumptions()));
+        c.newPlan(p);c.getCurrentProjection();
+        var result=new java.util.concurrent.atomic.AtomicReference<PlanningAssumptions>();
+        fx(()->{
+            var summary=view(c);
+            summary.setOnEconomicAssumptionsApply(result::set);
+            assertFalse(summary.lookupAll(".assumption-label").stream().filter(Label.class::isInstance)
+                    .map(Label.class::cast).anyMatch(label -> label.getText().contains("Future Federal Tax Rate Change")
+                            || label.getText().contains("Effective Federal Tax Change Year")));
+            assertFalse(Arrays.stream(ResultsSummaryView.class.getDeclaredFields())
+                    .anyMatch(f -> f.getName().contains("futureFederalMarginalRate")),
+                    "Summary should not own duplicated federal-rate-change controls");
+            ((TextField)field(summary,"investmentReturnField")).setText("4.5");
+            ((Button)field(summary,"applyEconomicButton")).fire();
+            return null;
+        });
+        assertNotNull(result.get());
+        assertSame(originalTax,result.get().getTaxAssumptions());
+        assertEquals(new BigDecimal("0.025"),result.get().getTaxAssumptions().getFutureFederalMarginalRateAdjustment());
+        assertEquals(2035,result.get().getTaxAssumptions().getFutureFederalMarginalRateEffectiveYear());
+        assertEquals(0,new BigDecimal("0.045").compareTo(result.get().getEconomicAssumptions().getExpectedAnnualInvestmentReturn()));
+    }
+
     @Test void actualSummaryControlsRenderInBothThemesAtSupportedSizes() throws Exception {
         var c=controller();c.newPlan(plan(true,70,"0.025",2026));c.getCurrentProjection();rejectProjection(c);
         fx(()->{

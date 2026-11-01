@@ -40,7 +40,7 @@ class NewPlanWizardLifecycleTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void newMenuOpensWizardAndCancelPreservesPlanFileDirtyRevisionCacheAndTabDrafts(boolean dirty) throws Exception {
+    void newMenuOpensWizardAndCancelPreservesPlanFileDirtyRevisionCacheAndViewDrafts(boolean dirty) throws Exception {
         fx(() -> {
             Fixture f = new Fixture();
             var current = f.controller.getCurrentPlan();
@@ -56,9 +56,8 @@ class NewPlanWizardLifecycleTest {
             var file = f.controller.getCurrentFile();
             TextField inflation = field(f.assumptions, "inflationRateField");
             inflation.setText("unapplied invalid draft");
-            var tabs = (TabPane) f.root.getCenter();
-            tabs.getSelectionModel().select(2);
-            var selected = tabs.getSelectionModel().getSelectedItem();
+            f.viewItem("view-assumptions").fire();
+            String selected = (String) field(f.window, "selectedWorkspaceId");
             AtomicReference<Throwable> failure = new AtomicReference<>();
             Platform.runLater(() -> {
                 DialogPane pane = activeWizardPane();
@@ -86,7 +85,7 @@ class NewPlanWizardLifecycleTest {
             assertEquals(saved, Files.readString(file));
             assertEquals("unapplied invalid draft", inflation.getText());
             assertTrue(f.assumptions.isDirty());
-            assertSame(selected, tabs.getSelectionModel().getSelectedItem());
+            assertEquals(selected, field(f.window, "selectedWorkspaceId"));
         });
     }
 
@@ -150,8 +149,10 @@ class NewPlanWizardLifecycleTest {
                 assertEquals(LocalDate.of(1966, 7, 8), ((DatePicker) field(spouse, "birthDatePicker")).getValue());
                 assertEquals(MortalityCategory.MALE, ((ComboBox<?>) field(spouse, "mortalityCategory")).getValue());
             }
-            var tabs = (TabPane) f.root.getCenter();
-            assertSame(field(f.window, "resultsSummaryView"), tabs.getSelectionModel().getSelectedItem().getContent());
+            assertEquals("results-summary", field(f.window, "selectedWorkspaceId"));
+            assertTrue(field(f.window, "resultsSummaryView").equals(
+                    ((javafx.scene.layout.StackPane) f.root.getCenter()).getChildren().stream()
+                            .filter(javafx.scene.Node::isVisible).findFirst().orElseThrow()));
             assertFalse(f.household.isDirty());
             assertFalse(f.assumptions.isDirty());
             plan.getAccountPortfolio().addAccount(new BrokerageAccount("Funding", AccountOwnership.PRIMARY,
@@ -240,6 +241,13 @@ class NewPlanWizardLifecycleTest {
         MenuItem newItem() {
             return ((MenuBar) root.getTop()).getMenus().getFirst().getItems().stream()
                     .filter(item -> "New".equals(item.getText())).findFirst().orElseThrow();
+        }
+
+        RadioMenuItem viewItem(String id) {
+            return ((MenuBar) root.getTop()).getMenus().stream()
+                    .filter(menu -> "View".equals(menu.getText())).findFirst().orElseThrow()
+                    .getItems().stream().filter(item -> id.equals(item.getId()))
+                    .map(RadioMenuItem.class::cast).findFirst().orElseThrow();
         }
     }
 }

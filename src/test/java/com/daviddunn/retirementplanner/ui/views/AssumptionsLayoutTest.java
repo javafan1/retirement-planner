@@ -56,9 +56,9 @@ class AssumptionsLayoutTest {
                                     .filter(candidate -> candidate.getLabelFor() == input).findFirst().orElseThrow();
                             assertNotNull(label.getTooltip(), name);
                         }
-                        assertEquals(5, view.lookupAll(".assumptions-card").size());
+                        assertEquals(6, view.lookupAll(".assumptions-card").size());
                         assertEquals(Set.of("Planning Timeline", "Household & Survivor Planning", "Economic & Investment Assumptions",
-                                "Income Tax Assumptions", "Estate & Heir Assumptions"),
+                                "Social Security Claiming Ages & Benefits", "Income Tax Assumptions", "Estate & Heir Assumptions"),
                                 view.lookupAll(".assumptions-section-heading").stream().map(Label.class::cast).map(Label::getText)
                                         .collect(java.util.stream.Collectors.toSet()));
                         assertColumns(view);
@@ -176,9 +176,10 @@ class AssumptionsLayoutTest {
         boolean wide = body.getWidth() >= 1000;
         assertFalse(body.isFillHeight());
         assertEquals(wide, right.isManaged());
-        assertEquals(wide ? List.of("Planning Timeline", "Economic & Investment Assumptions", "Estate & Heir Assumptions")
+        assertEquals(wide ? List.of("Planning Timeline", "Economic & Investment Assumptions",
+                        "Social Security Claiming Ages & Benefits", "Estate & Heir Assumptions")
                         : List.of("Planning Timeline", "Household & Survivor Planning", "Economic & Investment Assumptions",
-                        "Income Tax Assumptions", "Estate & Heir Assumptions"), titles(left));
+                        "Social Security Claiming Ages & Benefits", "Income Tax Assumptions", "Estate & Heir Assumptions"), titles(left));
         assertEquals(wide ? List.of("Household & Survivor Planning", "Income Tax Assumptions") : List.of(), titles(right));
         if (wide) assertEquals(left.getWidth(), right.getWidth(), 1);
         assertStack(left); assertStack(right);

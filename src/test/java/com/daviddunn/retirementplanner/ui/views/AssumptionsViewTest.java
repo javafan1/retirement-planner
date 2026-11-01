@@ -5,11 +5,20 @@ import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
+import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 import com.daviddunn.retirementplanner.ui.controls.HelpIcon;
 import com.daviddunn.retirementplanner.ui.help.HelpText;
 import javafx.application.Platform;
 import javafx.scene.control.*;
+import javafx.scene.Scene;
+import javafx.scene.Node;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import com.daviddunn.retirementplanner.application.settings.ApplicationTheme;
+import com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -71,6 +80,174 @@ class AssumptionsViewTest {
             clean(new AssumptionsView());
             clean(new Fixture().view);
         });
+    }
+
+    @Test
+    void claimingAgeBenefitsPreviewMatchesValuationYearAndApplyCancelDraftSemantics() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            var primary = f.plan().getHousehold().getPrimaryPerson();
+            var spouse = f.plan().getHousehold().getSpouse();
+            SocialSecurityIncome primarySource = socialSecurity("Primary", AccountOwnership.PRIMARY, 70);
+            SocialSecurityIncome spouseSource = socialSecurity("Spouse", AccountOwnership.SPOUSE, 62);
+            primary.addIncomeSource(primarySource);
+            spouse.addIncomeSource(spouseSource);
+            f.view.load(f.plan());
+
+            @SuppressWarnings("unchecked")
+            var rows = (java.util.List<Object>) control(f.view, "socialSecurityDraftRows");
+            ComboBox<Integer> primaryAge = (ComboBox<Integer>) control(rows.get(0), "age");
+            ComboBox<Integer> spouseAge = (ComboBox<Integer>) control(rows.get(1), "age");
+            assertNotNull(primaryAge);
+            assertNotNull(spouseAge);
+            Label primaryBenefit = benefitValue(primaryAge);
+            Label spouseBenefit = benefitValue(spouseAge);
+            assertEquals("$3,720", primaryBenefit.getText());
+            assertEquals("$2,100", spouseBenefit.getText());
+            assertTrue(primaryBenefit.getAccessibleHelp().contains("2026 dollars"));
+
+            primaryAge.setValue(69);
+            assertEquals("$3,480", primaryBenefit.getText());
+            assertEquals(70, primarySource.getClaimingAge(), "Preview edits must remain a detached draft.");
+            dirty(f.view);
+            f.view.cancelChanges();
+            @SuppressWarnings("unchecked")
+            var restoredRows = (java.util.List<Object>) control(f.view, "socialSecurityDraftRows");
+            ComboBox<Integer> restoredPrimaryAge = (ComboBox<Integer>) control(restoredRows.get(0), "age");
+            assertEquals(70, restoredPrimaryAge.getValue());
+            assertEquals(70, primarySource.getClaimingAge());
+            clean(f.view);
+
+            restoredPrimaryAge.setValue(69);
+            ComboBox<Integer> restoredSpouseAge = (ComboBox<Integer>) control(restoredRows.get(1), "age");
+            restoredSpouseAge.setValue(65);
+            assertTrue(f.view.applyChanges());
+            assertEquals(69, primary.getIncomeSources().stream().filter(SocialSecurityIncome.class::isInstance)
+                    .map(SocialSecurityIncome.class::cast).findFirst().orElseThrow().getClaimingAge());
+            assertEquals(65, spouse.getIncomeSources().stream().filter(SocialSecurityIncome.class::isInstance)
+                    .map(SocialSecurityIncome.class::cast).findFirst().orElseThrow().getClaimingAge());
+            assertEquals(1, f.notifications.get());
+        });
+    }
+
+    @Test
+    void singlePersonAssumptionsShowsOnlyPrimaryBenefitWhenConfigured() throws Exception {
+        fx(() -> {
+            var controller = new CountingController();
+            var plan = controller.getCurrentPlan();
+            var primary = plan.getHousehold().getPrimaryPerson();
+            primary.setBirthDate(LocalDate.of(1960, 1, 1));
+            primary.addIncomeSource(socialSecurity("Primary", AccountOwnership.PRIMARY, 67));
+            AssumptionsView view = new AssumptionsView();
+            view.load(plan);
+            @SuppressWarnings("unchecked")
+            var rows = (java.util.List<Object>) control(view, "socialSecurityDraftRows");
+            assertEquals(1, rows.size());
+            ComboBox<Integer> age = (ComboBox<Integer>) control(rows.getFirst(), "age");
+            assertEquals("$3,000", benefitValue(age).getText());
+        });
+    }
+
+    @Test
+    void invalidClaimingAgeBlocksGlobalValidationBeforeAnyModelMutation() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            var person = f.plan().getHousehold().getPrimaryPerson();
+            var source = socialSecurity("Primary", AccountOwnership.PRIMARY, 70);
+            person.addIncomeSource(source);
+            f.view.load(f.plan());
+            @SuppressWarnings("unchecked")
+            var rows = (java.util.List<Object>) control(f.view, "socialSecurityDraftRows");
+            ComboBox<Integer> age = (ComboBox<Integer>) control(rows.getFirst(), "age");
+            age.setValue(null);
+            field(f.view, "investmentReturnField").setText("8.5");
+            assertFalse(f.view.validateChanges());
+            assertSame(source, person.getIncomeSources().stream().filter(SocialSecurityIncome.class::isInstance)
+                    .findFirst().orElseThrow());
+            assertRate("0.08", f.assumptions().getEconomicAssumptions().getExpectedAnnualInvestmentReturn());
+            assertTrue(f.view.isDirty());
+        });
+    }
+
+    @Test
+    void assumptionsBenefitControlsRenderInLightAndDarkAtSupportedSizes() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            var primary = f.plan().getHousehold().getPrimaryPerson();
+            primary.addIncomeSource(socialSecurity("Primary", AccountOwnership.PRIMARY, 70));
+            f.view.load(f.plan());
+            var themes = ApplicationThemeManager.start(ApplicationTheme.LIGHT);
+            Path output = Path.of("target/phase13ja/previews");
+            Files.createDirectories(output);
+            try {
+                for (ApplicationTheme theme : ApplicationTheme.values()) {
+                    themes.apply(theme);
+                    for (int width : new int[]{1180, 900}) {
+                        AssumptionsView preview = new AssumptionsView();
+                        preview.load(f.plan());
+                        Stage stage = new Stage();
+                        stage.setScene(new Scene(preview, width, width == 900 ? 650 : 820));
+                        stage.show();
+                        try {
+                            preview.applyCss();
+                            preview.layout();
+                            assertEquals(1, ((java.util.List<?>) control(preview, "socialSecurityDraftRows")).size());
+                            Node card = preview.lookup("#assumptions-social-security-benefits");
+                            assertNotNull(card);
+                            assertTrue(card.getStyleClass().contains("assumptions-card"));
+                            assertEquals("Social Security Claiming Ages & Benefits",
+                                    ((Label) ((VBox) card).getChildren().getFirst()).getText());
+                            assertTrue(card.getParent() instanceof VBox, "Benefits must occupy their own column card.");
+                            @SuppressWarnings("unchecked")
+                            ComboBox<Integer> age = (ComboBox<Integer>) preview.lookup("#primary-social-security-claiming-age");
+                            GridPane ageRow = (GridPane) age.getParent();
+                            GridPane benefitRow = (GridPane) benefitValue(age).getParent();
+                            assertEquals(1, GridPane.getColumnIndex(age));
+                            assertEquals(1, GridPane.getColumnIndex(benefitValue(age)));
+                            assertEquals(55.0, ageRow.getColumnConstraints().get(0).getPercentWidth());
+                            assertEquals(45.0, ageRow.getColumnConstraints().get(1).getPercentWidth());
+                            assertEquals(ageRow.getColumnConstraints().get(0).getPercentWidth(),
+                                    benefitRow.getColumnConstraints().get(0).getPercentWidth());
+                            assertEquals(ageRow.getColumnConstraints().get(1).getPercentWidth(),
+                                    benefitRow.getColumnConstraints().get(1).getPercentWidth());
+                            saveScreenshot(card, output.resolve("assumptions-social-security-" + theme + "-" + width + ".png"));
+                            saveScreenshot(preview, output.resolve("assumptions-" + theme + "-" + width + ".png"));
+                        } finally {
+                            stage.hide();
+                        }
+                    }
+                }
+            } finally {
+                themes.close();
+            }
+        });
+    }
+
+    private static void saveScreenshot(Node node, Path file) throws Exception {
+        var snapshot = node.snapshot(null, null);
+        var image = new java.awt.image.BufferedImage((int) snapshot.getWidth(), (int) snapshot.getHeight(),
+                java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) image.setRGB(x, y, snapshot.getPixelReader().getArgb(x, y));
+        }
+        javax.imageio.ImageIO.write(image, "png", file.toFile());
+    }
+
+    private static SocialSecurityIncome socialSecurity(String name, AccountOwnership owner, int age) {
+        LocalDate birth = owner == AccountOwnership.PRIMARY ? LocalDate.of(1963, 6, 4) : LocalDate.of(1965, 2, 28);
+        var person = new com.daviddunn.retirementplanner.domain.model.Person(name, "Test", birth);
+        var start = com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitStartDateCalculator
+                .calculate(person, age).orElseThrow();
+        return new SocialSecurityIncome(name, owner, start, null, new BigDecimal("3000"), age,
+                new BigDecimal("0.02"), 2026);
+    }
+
+    private static Label benefitValue(ComboBox<Integer> age) {
+        var personRows = (VBox) age.getParent().getParent();
+        var grid = (GridPane) personRows.getChildren().get(1);
+        return (Label) grid.getChildren().stream().filter(Label.class::isInstance)
+                .map(Label.class::cast).filter(label -> label.getStyleClass().contains("assumption-value"))
+                .findFirst().orElseThrow();
     }
 
     @ParameterizedTest

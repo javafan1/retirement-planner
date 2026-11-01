@@ -24,11 +24,14 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.SeparatorMenuItem;
-import javafx.scene.control.Tab;
-import javafx.scene.control.TabPane;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
+import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
@@ -36,6 +39,8 @@ import java.io.File;
 import java.math.BigDecimal;
 import java.util.function.Consumer;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
@@ -48,6 +53,11 @@ public class MainWindow {
     private final com.daviddunn.retirementplanner.ui.introduction.AnalyzerIntroductionGate introductionGate;
 
     private final BorderPane root;
+    private final StackPane workspace;
+    private final Map<String, Node> workspaceViews = new LinkedHashMap<>();
+    private final Map<String, RadioMenuItem> workspaceMenuItems = new LinkedHashMap<>();
+    private final Map<String, Node> workspaceFocusOwners = new LinkedHashMap<>();
+    private String selectedWorkspaceId = "results-summary";
 
     private final HouseholdView householdView;
     private final AccountsView accountsView;
@@ -121,11 +131,12 @@ public class MainWindow {
         statusLabel = new Label("Ready");
 
         root = new BorderPane();
+        workspace = createWorkspace();
 
         wireEvents();
 
         root.setTop(createMenuBar());
-        root.setCenter(createTabPane());
+        root.setCenter(workspace);
         root.setBottom(createStatusBar());
 
         //loadCurrentPlan();
@@ -265,6 +276,12 @@ public class MainWindow {
 
     public Scene createScene() {
         var scene = new Scene(root, 1200, 800);
+        scene.focusOwnerProperty().addListener((observable, previous, focused) -> {
+            Node activeView = workspaceViews.get(selectedWorkspaceId);
+            if (focused != null && isWithin(focused, activeView)) {
+                workspaceFocusOwners.put(selectedWorkspaceId, focused);
+            }
+        });
         if (themes == null) themes = com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(controller.getSettingsService().snapshot().getTheme());
         com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.prepare(scene);
         return scene;
@@ -313,6 +330,8 @@ public class MainWindow {
                 settingsItem,
                 new SeparatorMenuItem(),
                 exitItem);
+
+        Menu viewMenu = createViewMenu();
 
         Menu analysisMenu = new Menu("Analysis");
         MenuItem socialSecurityAnalyzerItem =
@@ -376,7 +395,7 @@ public class MainWindow {
 
         helpMenu.getItems().add(aboutItem);
 
-        return new MenuBar(fileMenu, analysisMenu, helpMenu);
+        return new MenuBar(fileMenu, viewMenu, analysisMenu, helpMenu);
     }
 
     private void requestIntroduction(com.daviddunn.retirementplanner.application.settings.AnalyzerIntroduction entry,
@@ -407,82 +426,113 @@ public class MainWindow {
             dialog.show();
         });
     }
-    private TabPane createTabPane() {
+    private StackPane createWorkspace() {
+        StackPane host = new StackPane();
+        host.setId("main-workspace");
+        host.setAccessibleRoleDescription("Main application workspace");
 
-        TabPane tabPane = new TabPane();
+        workspaceViews.put("results-summary", resultsSummaryView);
+        workspaceViews.put("yearly-detail", resultsView);
+        workspaceViews.put("household", householdView);
+        workspaceViews.put("accounts", accountsView);
+        workspaceViews.put("income", incomeSourcesView);
+        workspaceViews.put("expenses", expensesView);
+        workspaceViews.put("non-investable-assets", nonInvestableAssetsView);
+        workspaceViews.put("assumptions", assumptionsView);
+        workspaceViews.put("roth-conversions", rothConversionView);
 
-
-        tabPane.getTabs().add(
-                createTab(
-                        "Summary",
-                        resultsSummaryView));
-
-
-        tabPane.getTabs().add(
-                createTab("Yearly Detail", resultsView));
-
-       // tabPane.getTabs().add(
-       //         createTab("Dashboard", dashboardView));
-
-
-
-//        tabPane.getTabs().add(
-//                createTab("Charts",
-//                        portfolioChartView));
-
-
-        tabPane.getTabs().add(
-                createTab("Assumptions", assumptionsView));
-
-
-        tabPane.getTabs().add(
-                createTab(
-                        "Roth Conversion",
-                        rothConversionView));
-
-
-
-
-        tabPane.getTabs().add(
-                createTab("Accounts", accountsView));
-
-        tabPane.getTabs().add(
-                createTab("Income", incomeSourcesView));
-
-
-        tabPane.getTabs().add(
-                createTab("Expenses", expensesView));
-
-
-        tabPane.getTabs().add(
-                createTab("Household", householdView));
-
-        tabPane.getTabs().add(
-                createTab(
-                        "Non-Investable Assets",
-                        nonInvestableAssetsView));
-
-
-        //tabPane.getTabs().add(
-        //        createTab("Projection", projectionYearView));
-
-
-
-//        tabPane.getTabs().add(createTab("Accounts", accountsView));
-//        tabPane.getTabs().add(createTab("Income", incomeView));
-//        tabPane.getTabs().add(createTab("Expenses", expensesView));
-//        tabPane.getTabs().add(createTab("Assumptions", assumptionsView));
-//        tabPane.getTabs().add(createTab("Results", resultsView));
-
-        return tabPane;
+        workspaceViews.forEach((id, view) -> {
+            boolean selected = id.equals(selectedWorkspaceId);
+            view.setVisible(selected);
+            view.setManaged(selected);
+            host.getChildren().add(view);
+        });
+        return host;
     }
 
-    private Tab createTab(String title, javafx.scene.Node content) {
+    private Menu createViewMenu() {
+        Menu menu = new Menu("View");
+        menu.setId("view-menu");
+        ToggleGroup selection = new ToggleGroup();
 
-        Tab tab = new Tab(title, content);
-        tab.setClosable(false);
+        addWorkspaceMenuItem(menu, selection, "results-summary", "Results Summary");
+        addWorkspaceMenuItem(menu, selection, "yearly-detail", "Yearly Detail");
+        menu.getItems().add(new SeparatorMenuItem());
+        addWorkspaceMenuItem(menu, selection, "household", "Household");
+        addWorkspaceMenuItem(menu, selection, "accounts", "Accounts");
+        addWorkspaceMenuItem(menu, selection, "income", "Income");
+        addWorkspaceMenuItem(menu, selection, "expenses", "Expenses");
+        addWorkspaceMenuItem(menu, selection, "non-investable-assets", "Non-Investible Assets");
+        addWorkspaceMenuItem(menu, selection, "assumptions", "Assumptions");
+        addWorkspaceMenuItem(menu, selection, "roth-conversions", "Roth Conversions");
+        workspaceMenuItems.get(selectedWorkspaceId).setSelected(true);
+        return menu;
+    }
 
-        return tab;
+    private void addWorkspaceMenuItem(Menu menu, ToggleGroup selection, String viewId, String label) {
+        RadioMenuItem item = new RadioMenuItem(label);
+        item.setId("view-" + viewId);
+        item.setToggleGroup(selection);
+        item.setOnAction(event -> selectWorkspace(viewId));
+        menu.getItems().add(item);
+        workspaceMenuItems.put(viewId, item);
+    }
+
+    private void selectWorkspace(String viewId) {
+        Node next = workspaceViews.get(viewId);
+        if (next == null || viewId.equals(selectedWorkspaceId)) return;
+
+        Scene scene = root.getScene();
+        Node currentFocus = scene == null ? null : scene.getFocusOwner();
+        if (currentFocus != null && isWithin(currentFocus, workspaceViews.get(selectedWorkspaceId))) {
+            workspaceFocusOwners.put(selectedWorkspaceId, currentFocus);
+        }
+
+        selectedWorkspaceId = viewId;
+        workspaceViews.forEach((id, view) -> {
+            boolean selected = id.equals(viewId);
+            view.setVisible(selected);
+            view.setManaged(selected);
+        });
+        workspaceMenuItems.forEach((id, item) -> {
+            boolean selected = id.equals(viewId);
+            item.setSelected(selected);
+        });
+
+        javafx.application.Platform.runLater(() -> {
+            Node remembered = workspaceFocusOwners.get(viewId);
+            if (remembered != null && isVisibleWithin(remembered, next)) {
+                remembered.requestFocus();
+            }
+            else {
+                Node firstFocusable = firstFocusable(next);
+                if (firstFocusable != null) firstFocusable.requestFocus();
+                else next.requestFocus();
+            }
+        });
+    }
+
+    private static boolean isWithin(Node candidate, Node ancestor) {
+        if (candidate == null || ancestor == null) return false;
+        for (Node current = candidate; current != null; current = current.getParent()) {
+            if (current == ancestor) return true;
+        }
+        return false;
+    }
+
+    private static boolean isVisibleWithin(Node candidate, Node ancestor) {
+        return candidate != null && candidate.isVisible() && isWithin(candidate, ancestor);
+    }
+
+    private static Node firstFocusable(Node node) {
+        if (node.isFocusTraversable() && node.isVisible() && !node.isDisabled()) return node;
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                Node found = firstFocusable(child);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private javafx.scene.layout.VBox createStatusBar() {
@@ -1217,16 +1267,13 @@ public class MainWindow {
                             || !plan.getHousehold().getExpenses().isEmpty()) {
                         refreshProjectionViews();
                     }
-                    TabPane tabs = (TabPane) root.getCenter();
-                    tabs.getSelectionModel().select(tabs.getTabs().stream()
-                            .filter(tab -> tab.getContent() == resultsSummaryView)
-                            .findFirst().orElseThrow());
+                    selectWorkspace("results-summary");
                     if (controller.getCurrentFundingFailure().isPresent()) {
                         projectionFundingNotice.setText("Plan created successfully. " + projectionFundingNotice.getText());
-                        statusLabel.setText("New plan created; projection not completed. Continue editing using the tabs.");
+                        statusLabel.setText("New plan created; projection not completed. Continue editing using View.");
                     }
                     else {
-                        statusLabel.setText("New plan. Continue editing using the tabs.");
+                        statusLabel.setText("New plan. Continue editing using View.");
                     }
                 });
     }

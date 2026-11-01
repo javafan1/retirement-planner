@@ -124,8 +124,9 @@ class NewPlanFundingFailureTest {
             assertNotSame(previous, controller.getCurrentPlan());
             assertFalse(controller.hasCurrentFile());
             assertFalse(controller.isModified());
-            var tabs = (javafx.scene.control.TabPane) root.getCenter();
-            assertSame(field(window, "resultsSummaryView"), tabs.getSelectionModel().getSelectedItem().getContent());
+            var workspace = (javafx.scene.layout.StackPane) root.getCenter();
+            assertSame(field(window, "resultsSummaryView"), workspace.getChildren().stream()
+                    .filter(javafx.scene.Node::isVisible).findFirst().orElseThrow());
             Label notice = (Label) root.lookup("#projection-funding-notice");
             assertNotNull(notice);
             ResultsView results = field(window, "resultsView");

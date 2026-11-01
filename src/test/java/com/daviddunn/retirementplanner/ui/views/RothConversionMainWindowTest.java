@@ -351,22 +351,18 @@ class RothConversionMainWindowTest {
             f.household.cancelChanges();
             field(f.assumptions, "inflationRateField").setText("4");
             f.assumptions.cancelChanges();
-            SceneNavigation.visitTabs(f.window.createScene().getRoot());
+            SceneNavigation.visitViews(f.window.createScene().getRoot());
             assertEquals("invalid", field(f.roth, "conversionAmountField").getText());
             RothConversionViewTest.dirty(f.roth);
         });
     }
 
     private static class SceneNavigation {
-        static void visitTabs(javafx.scene.Node node) {
-            if (node instanceof TabPane tabs) {
-                for (Tab tab : tabs.getTabs()) {
-                    tabs.getSelectionModel().select(tab);
-                    visitTabs(tab.getContent());
-                }
-            }
-            else if (node instanceof javafx.scene.Parent parent) {
-                for (javafx.scene.Node child : parent.getChildrenUnmodifiable()) visitTabs(child);
+        static void visitViews(javafx.scene.Node node) {
+            if (node instanceof javafx.scene.layout.BorderPane root && root.getTop() instanceof MenuBar menuBar) {
+                menuBar.getMenus().stream().filter(menu -> "View".equals(menu.getText())).findFirst().orElseThrow()
+                        .getItems().stream().filter(item -> item instanceof RadioMenuItem)
+                        .map(RadioMenuItem.class::cast).forEach(RadioMenuItem::fire);
             }
         }
     }

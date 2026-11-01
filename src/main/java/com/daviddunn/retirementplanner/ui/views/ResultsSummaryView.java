@@ -9,7 +9,6 @@ import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
-import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAssetProjection;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionAssetType;
@@ -71,12 +70,6 @@ public class ResultsSummaryView extends BorderPane {
             new TextField();
 
     private final TextField inflationField =
-            new TextField();
-
-    private final TextField futureFederalMarginalRateChangeField =
-            new TextField();
-
-    private final TextField futureFederalMarginalRateEffectiveYearField =
             new TextField();
 
     private final Button applyEconomicButton =
@@ -398,8 +391,6 @@ public class ResultsSummaryView extends BorderPane {
 
         InputHelp.install(investmentReturnField, HelpText.INVESTMENT_RETURN);
         InputHelp.install(inflationField, HelpText.GENERAL_INFLATION);
-        InputHelp.install(futureFederalMarginalRateChangeField, PlanningInputHelp.RATE_CHANGE);
-        InputHelp.install(futureFederalMarginalRateEffectiveYearField, PlanningInputHelp.RATE_YEAR);
         InputHelp.install(rothEnabledCheckBox, RothInputHelp.ENABLE);
         InputHelp.install(rothStrategyComboBox, RothInputHelp.STRATEGY);
         InputHelp.install(rothStartYearField, RothInputHelp.YEAR);
@@ -1531,60 +1522,6 @@ public class ResultsSummaryView extends BorderPane {
                 1,
                 1);
 
-        Label futureFederalMarginalRateChangeLabel =
-                new Label("Future Federal Tax Rate Change");
-
-        futureFederalMarginalRateChangeLabel.getStyleClass().add(
-                "assumption-label");
-
-        futureFederalMarginalRateChangeLabel.setWrapText(true);
-
-        grid.add(
-                futureFederalMarginalRateChangeLabel,
-                0,
-                2);
-
-        futureFederalMarginalRateChangeField.getStyleClass().add(
-                "assumption-field");
-
-        futureFederalMarginalRateChangeField.setPromptText(
-                "Percentage points");
-
-        futureFederalMarginalRateChangeField.setAlignment(
-                Pos.CENTER_RIGHT);
-
-        grid.add(
-                futureFederalMarginalRateChangeField,
-                1,
-                2);
-
-        Label futureFederalMarginalRateEffectiveYearLabel =
-                new Label("Effective Federal Tax Change Year");
-
-        futureFederalMarginalRateEffectiveYearLabel.getStyleClass().add(
-                "assumption-label");
-
-        futureFederalMarginalRateEffectiveYearLabel.setWrapText(true);
-
-        grid.add(
-                futureFederalMarginalRateEffectiveYearLabel,
-                0,
-                3);
-
-        futureFederalMarginalRateEffectiveYearField.getStyleClass().add(
-                "assumption-field");
-
-        futureFederalMarginalRateEffectiveYearField.setPromptText(
-                "YYYY");
-
-        futureFederalMarginalRateEffectiveYearField.setAlignment(
-                Pos.CENTER_RIGHT);
-
-        grid.add(
-                futureFederalMarginalRateEffectiveYearField,
-                1,
-                3);
-
         return createPanel(
                 heading,
                 grid,
@@ -2613,25 +2550,6 @@ public class ResultsSummaryView extends BorderPane {
                         economic
                                 .getGeneralInflationRate()));
 
-        TaxAssumptions tax = assumptions.getTaxAssumptions();
-
-        BigDecimal futureFederalMarginalRateAdjustment =
-                tax.getFutureFederalMarginalRateAdjustment();
-
-        futureFederalMarginalRateChangeField.setText(
-                futureFederalMarginalRateAdjustment != null
-                        ? percentForField(
-                        futureFederalMarginalRateAdjustment)
-                        : "");
-
-        Integer futureFederalMarginalRateEffectiveYear =
-                tax.getFutureFederalMarginalRateEffectiveYear();
-
-        futureFederalMarginalRateEffectiveYearField.setText(
-                futureFederalMarginalRateEffectiveYear != null
-                        ? futureFederalMarginalRateEffectiveYear.toString()
-                        : "");
-
         DeathScenarioAssumptions death =
                 assumptions
                         .getDeathScenarioAssumptions();
@@ -2854,13 +2772,6 @@ public class ResultsSummaryView extends BorderPane {
                             inflationField
                                     .getText());
 
-            FutureFederalTaxRateChangeInput futureFederalRateChange =
-                    FutureFederalTaxRateChangeInput.parse(
-                            futureFederalMarginalRateChangeField
-                                    .getText(),
-                            futureFederalMarginalRateEffectiveYearField
-                                    .getText());
-
             PlanningAssumptions current =
                     currentPlan
                             .getPlanningAssumptions();
@@ -2878,25 +2789,10 @@ public class ResultsSummaryView extends BorderPane {
                             existingEconomic
                                     .getSocialSecurityColaRate());
 
-            TaxAssumptions existingTax =
-                    current.getTaxAssumptions();
-
-            TaxAssumptions updatedTax =
-                    new TaxAssumptions(
-                            existingTax.getFederalTaxBracketGrowthRate(),
-                            existingTax.getStandardDeductionGrowthRate(),
-                            existingTax.getStateIncomeTaxRate(),
-                            existingTax.getLocalIncomeTaxRate(),
-                            existingTax.getFilingStatus(),
-                            existingTax
-                                    .getEstimatedHeirTaxRateOnTaxDeferredAssets(),
-                            futureFederalRateChange.adjustment(),
-                            futureFederalRateChange.effectiveYear());
-
             PlanningAssumptions updated =
                     new PlanningAssumptions(
                             updatedEconomic,
-                            updatedTax,
+                            current.getTaxAssumptions(),
                             current
                                     .getWithdrawalAssumptions(),
                             current
@@ -3770,48 +3666,9 @@ public class ResultsSummaryView extends BorderPane {
             SocialSecurityIncome socialSecurity,
             ComboBox<Integer> ageCombo,
             Label benefitLabel) {
-
-        Integer claimingAge =
-                ageCombo.getValue();
-
-        String explanation =
-                "Monthly own-retirement benefit in "
-                        + socialSecurity.getBenefitValuationYear()
-                        + " dollars. The claiming-age adjustment is included. "
-                        + "COLA after that valuation year is not applied to this preview. "
-                        + "This is not the household payment including spousal or survivor benefits, "
-                        + "or the deposit after deductions.";
-        Tooltip tooltip = new Tooltip(explanation);
-        tooltip.setWrapText(true);
-        tooltip.setMaxWidth(360);
-        benefitLabel.setTooltip(tooltip);
-        benefitLabel.setAccessibleHelp(explanation);
-
-        if (claimingAge == null || person.getBirthDate() == null) {
-            benefitLabel.setText("-");
-            benefitLabel.setAccessibleText("Monthly own-retirement benefit unavailable.");
-            return;
-        }
-
-        // One valuation-year path for initial, restored and edited elections.
         // Annual projections and analyzers apply their own authoritative payment-year COLA.
-        BigDecimal monthlyBenefit =
-                SocialSecurityBenefitCalculator.calculateMonthlyBenefit(
-                        socialSecurity.getFullRetirementMonthlyBenefit(),
-                        person.getBirthDate(),
-                        claimingAge)
-                        .setScale(2, RoundingMode.HALF_UP);
-
-        benefitLabel.setText(
-                UIFormatters.money(monthlyBenefit));
-        benefitLabel.setAccessibleText(
-                "Monthly own-retirement benefit at age "
-                        + claimingAge
-                        + ": "
-                        + benefitLabel.getText()
-                        + " in "
-                        + socialSecurity.getBenefitValuationYear()
-                        + " dollars.");
+        SocialSecurityBenefitPreview.update(
+                person, socialSecurity, ageCombo.getValue(), benefitLabel);
     }
 
     private void applySocialSecurity() {
