@@ -33,6 +33,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.stage.FileChooser;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 import java.io.File;
@@ -73,6 +74,7 @@ public class MainWindow {
     private final NonInvestableAssetsView nonInvestableAssetsView;
 
     private Stage stage;
+    private Stage yearlyDetailsStage;
     private com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager themes;
     private final com.daviddunn.retirementplanner.application.branding.ApplicationBranding branding;
     private final boolean applicationOwnedPreferences;
@@ -192,6 +194,7 @@ public class MainWindow {
 
         resultsSummaryView.setOnYearDoubleClick(
                 this::showProjectionYearSummary);
+        resultsSummaryView.setOnYearlyDetailsRequested(this::showYearlyProjectionDetails);
 
         resultsSummaryView.setOnEconomicAssumptionsApply(
                 updatedAssumptions -> {
@@ -432,7 +435,6 @@ public class MainWindow {
         host.setAccessibleRoleDescription("Main application workspace");
 
         workspaceViews.put("results-summary", resultsSummaryView);
-        workspaceViews.put("yearly-detail", resultsView);
         workspaceViews.put("household", householdView);
         workspaceViews.put("accounts", accountsView);
         workspaceViews.put("income", incomeSourcesView);
@@ -456,7 +458,6 @@ public class MainWindow {
         ToggleGroup selection = new ToggleGroup();
 
         addWorkspaceMenuItem(menu, selection, "results-summary", "Results Summary");
-        addWorkspaceMenuItem(menu, selection, "yearly-detail", "Yearly Detail");
         menu.getItems().add(new SeparatorMenuItem());
         addWorkspaceMenuItem(menu, selection, "household", "Household");
         addWorkspaceMenuItem(menu, selection, "accounts", "Accounts");
@@ -1204,6 +1205,7 @@ public class MainWindow {
     public void setStage(Stage stage) {
 
         this.stage = stage;
+        stage.setOnHidden(event -> closeYearlyDetailsWindow());
         stage.setOnCloseRequest(event -> {
             if (planOperationActive || swappingProjections) {
                 event.consume();
@@ -1216,6 +1218,39 @@ public class MainWindow {
         });
 
         updateWindowTitle();
+    }
+
+    private void showYearlyProjectionDetails() {
+        if (stage == null || resultsView.getTable().getItems().isEmpty()) return;
+        if (yearlyDetailsStage == null) {
+            yearlyDetailsStage = new Stage();
+            yearlyDetailsStage.initOwner(stage);
+            yearlyDetailsStage.initModality(javafx.stage.Modality.NONE);
+            yearlyDetailsStage.setTitle(branding.productName() + " — Yearly Projection Details");
+            var bounds = Screen.getScreensForRectangle(stage.getX(), stage.getY(),
+                    Math.max(1, stage.getWidth()), Math.max(1, stage.getHeight()))
+                    .stream().findFirst().orElse(Screen.getPrimary()).getVisualBounds();
+            double usableWidth = Math.max(320, bounds.getWidth() - 32);
+            double usableHeight = Math.max(300, bounds.getHeight() - 80);
+            yearlyDetailsStage.setMinWidth(Math.min(760, usableWidth));
+            yearlyDetailsStage.setMinHeight(Math.min(500, usableHeight));
+            yearlyDetailsStage.setWidth(Math.min(1450, usableWidth));
+            yearlyDetailsStage.setHeight(Math.min(850, usableHeight));
+            yearlyDetailsStage.setX(bounds.getMinX() + Math.max(0, (bounds.getWidth() - yearlyDetailsStage.getWidth()) / 2));
+            yearlyDetailsStage.setY(bounds.getMinY() + Math.max(0, (bounds.getHeight() - yearlyDetailsStage.getHeight()) / 2));
+            Scene detailsScene = new Scene(resultsView);
+            com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.prepare(detailsScene);
+            yearlyDetailsStage.setScene(detailsScene);
+        }
+        if (!yearlyDetailsStage.isShowing()) yearlyDetailsStage.show();
+        yearlyDetailsStage.toFront();
+        yearlyDetailsStage.requestFocus();
+    }
+
+    private void closeYearlyDetailsWindow() {
+        if (yearlyDetailsStage != null && yearlyDetailsStage.isShowing()) {
+            yearlyDetailsStage.hide();
+        }
     }
 
 
@@ -1366,6 +1401,9 @@ public class MainWindow {
 
     private void handleProjectionFailure(
             Exception exception) {
+
+        resultsView.load(null, List.of());
+        resultsSummaryView.setYearlyDetailsAvailable(false);
 
         var unavailableMessage = ProjectionFailureMessages.stateTaxUnavailableMessage(exception);
         if (unavailableMessage.isPresent()) {

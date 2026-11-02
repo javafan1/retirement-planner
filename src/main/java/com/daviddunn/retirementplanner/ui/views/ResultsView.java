@@ -257,8 +257,12 @@ public class ResultsView extends BorderPane {
                 afterTaxEstateValueColumn,
                 netWorthColumn);
 
-        table.setColumnResizePolicy(
-                TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        table.getColumns().forEach(column -> {
+            double readableWidth = Math.max(82, column.getText().length() * 8.2 + 28);
+            column.setMinWidth(readableWidth);
+            column.setPrefWidth(readableWidth);
+        });
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
     }
 
     /**

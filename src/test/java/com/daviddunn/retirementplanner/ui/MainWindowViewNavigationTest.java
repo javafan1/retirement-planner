@@ -2,10 +2,13 @@ package com.daviddunn.retirementplanner.ui;
 
 import com.daviddunn.retirementplanner.application.settings.ApplicationTheme;
 import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
+import com.daviddunn.retirementplanner.domain.projection.Projection;
+import com.daviddunn.retirementplanner.testutil.ProjectionYearBuilder;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 import com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager;
 import com.daviddunn.retirementplanner.ui.views.AssumptionsView;
 import com.daviddunn.retirementplanner.ui.views.ResultsSummaryView;
+import com.daviddunn.retirementplanner.ui.views.ResultsView;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -34,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class MainWindowViewNavigationTest {
     private static final Map<String, String> LABELS = Map.of(
             "results-summary", "Results Summary",
-            "yearly-detail", "Yearly Detail",
             "household", "Household",
             "accounts", "Accounts",
             "income", "Income",
@@ -54,10 +56,10 @@ class MainWindowViewNavigationTest {
             assertEquals(List.of("File", "View", "Analysis", "Help"),
                     menuBar.getMenus().stream().map(Menu::getText).toList());
             Menu viewMenu = menuBar.getMenus().get(1);
-            assertEquals(List.of("Results Summary", "Yearly Detail", "|", "Household", "Accounts", "Income",
+            assertEquals(List.of("Results Summary", "|", "Household", "Accounts", "Income",
                             "Expenses", "Non-Investible Assets", "Assumptions", "Roth Conversions"),
                     viewMenu.getItems().stream().map(item -> item instanceof SeparatorMenuItem ? "|" : item.getText()).toList());
-            assertEquals(9, viewMenu.getItems().stream().filter(RadioMenuItem.class::isInstance).count());
+            assertEquals(8, viewMenu.getItems().stream().filter(RadioMenuItem.class::isInstance).count());
             assertTrue(viewMenu.getItems().stream().filter(item -> !(item instanceof SeparatorMenuItem))
                     .allMatch(RadioMenuItem.class::isInstance));
             assertEquals(List.of("Social Security Strategy Analyzer...", "Monte Carlo Retirement Analysis...",
@@ -66,7 +68,7 @@ class MainWindowViewNavigationTest {
                     .map(MenuItem::getText).filter(text -> text.endsWith("...")).toList());
 
             StackPane host = (StackPane) root.getCenter();
-            assertEquals(9, host.getChildren().size());
+            assertEquals(8, host.getChildren().size());
             ResultsSummaryView summary = field(window, "resultsSummaryView");
             Node keyAssumptions = summary.getRight();
             assertNotNull(keyAssumptions, "Summary must retain its right-hand Key Assumptions column.");
@@ -88,7 +90,7 @@ class MainWindowViewNavigationTest {
                 assertEquals(1, host.getChildren().stream().filter(Node::isManaged).count());
                 assertSame(field(window, "workspaceViews") instanceof Map<?, ?> views ? views.get(entry.getKey()) : null,
                         host.getChildren().stream().filter(Node::isVisible).findFirst().orElseThrow());
-                assertEquals(9, host.getChildren().size(), "Navigation must reuse the original view instances.");
+                assertEquals(8, host.getChildren().size(), "Navigation must reuse the original view instances.");
             }
             viewMenu.getItems().stream().filter(RadioMenuItem.class::isInstance).map(RadioMenuItem.class::cast)
                     .filter(item -> item.getId().equals("view-results-summary")).findFirst().orElseThrow().fire();
@@ -125,6 +127,118 @@ class MainWindowViewNavigationTest {
     }
 
     @Test
+    void summaryActionOpensOneOwnedModelessDetailsWindowWithoutChangingPlanOrProjection() throws Exception {
+        fx(() -> {
+            ApplicationController controller = new ApplicationController();
+            MainWindow window = new MainWindow(controller);
+            ApplicationThemeManager manager = ApplicationThemeManager.start(ApplicationTheme.LIGHT);
+            Stage owner = new Stage();
+            window.setStage(owner);
+            owner.setScene(window.createScene());
+            owner.setWidth(1180);
+            owner.setHeight(820);
+            owner.show();
+
+            Projection projection = new Projection();
+            var year = ProjectionYearBuilder.aProjectionYear().withCalendarYear(2027)
+                    .withPrimaryPersonAge(67).withBeginningInvestableAssets(100_000).build();
+            projection.addYear(year);
+            var details = (com.daviddunn.retirementplanner.ui.views.ResultsView) field(window, "resultsView");
+            var summary = (ResultsSummaryView) field(window, "resultsSummaryView");
+            details.load(projection, List.of());
+            summary.load(controller.getCurrentPlan(), projection, List.of());
+
+            Button action = field(summary, "yearlyDetailsButton");
+            assertNotNull(action);
+            assertFalse(action.isDisabled());
+            assertNotNull(summary.getRight(), "Key Assumptions remains on Summary's right side.");
+            TableView<?> summaryProjectionTable = field(summary, "projectionTable");
+            assertSame(summaryProjectionTable.getParent(), action.getParent().getParent(),
+                    "The action belongs to the projection table's own heading.");
+            Object projectionBefore = controller.peekCurrentProjection();
+            long revisionBefore = controller.getSourcePlanRevision();
+            boolean dirtyBefore = controller.isModified();
+
+            action.fire();
+            Stage detailStage = (Stage) field(window, "yearlyDetailsStage");
+            assertTrue(detailStage.isShowing());
+            assertSame(owner, detailStage.getOwner());
+            assertEquals(javafx.stage.Modality.NONE, detailStage.getModality());
+            assertSame(details, detailStage.getScene().getRoot());
+            assertTrue(owner.isShowing(), "Summary remains usable beside the modeless detail window.");
+            action.fire();
+            assertSame(detailStage, field(window, "yearlyDetailsStage"), "Repeated activation reuses one Stage.");
+            assertEquals(1, details.getTable().getItems().size());
+            assertSame(year, details.getTable().getItems().getFirst());
+            assertSame(projectionBefore, controller.peekCurrentProjection());
+            assertEquals(revisionBefore, controller.getSourcePlanRevision());
+            assertEquals(dirtyBefore, controller.isModified());
+
+            detailStage.close();
+            action.fire();
+            assertSame(detailStage, field(window, "yearlyDetailsStage"));
+            assertTrue(detailStage.isShowing(), "The existing detail window can be reopened.");
+            owner.hide();
+            assertFalse(detailStage.isShowing(), "Hiding the owner also dismisses the owned detail window.");
+            manager.close();
+            window.closeApplicationPreferences();
+        });
+    }
+
+    @Test
+    void yearlyDetailsActionIsDisabledWithoutProjectionAndViewMenuDoesNotContainDetails() throws Exception {
+        fx(() -> {
+            MainWindow window = new MainWindow(new ApplicationController());
+            BorderPane root = (BorderPane) window.createScene().getRoot();
+            ResultsSummaryView summary = field(window, "resultsSummaryView");
+            Button action = field(summary, "yearlyDetailsButton");
+            assertNotNull(action);
+            assertTrue(action.isDisabled());
+            Menu view = ((MenuBar) root.getTop()).getMenus().get(1);
+            assertFalse(view.getItems().stream().anyMatch(item -> "Yearly Detail".equals(item.getText())));
+            assertEquals(8, ((StackPane) root.getCenter()).getChildren().size());
+            window.closeApplicationPreferences();
+        });
+    }
+
+    @Test
+    void planRefreshWhileDetailsWindowIsOpenClearsOldRowsAndDisablesTheAction() throws Exception {
+        fx(() -> {
+            ApplicationController controller = new ApplicationController();
+            MainWindow window = new MainWindow(controller);
+            Stage owner = new Stage();
+            window.setStage(owner);
+            owner.setScene(window.createScene());
+            owner.show();
+            ResultsView details = field(window, "resultsView");
+            ResultsSummaryView summary = field(window, "resultsSummaryView");
+            Projection projection = new Projection();
+            projection.addYear(ProjectionYearBuilder.aProjectionYear().withCalendarYear(2028)
+                    .withPrimaryPersonAge(68).withBeginningInvestableAssets(10_000).build());
+            details.load(projection, List.of());
+            summary.load(controller.getCurrentPlan(), projection, List.of());
+            Button action = field(summary, "yearlyDetailsButton");
+            action.fire();
+            Stage detailStage = field(window, "yearlyDetailsStage");
+            assertTrue(detailStage.isShowing());
+            assertEquals(1, details.getTable().getItems().size());
+
+            var replacement = RetirementPlanFactory.createSinglePersonPlan();
+            controller.newPlan(replacement);
+            var load = MainWindow.class.getDeclaredMethod("loadCurrentPlan", boolean.class);
+            load.setAccessible(true);
+            load.invoke(window, false);
+
+            assertTrue(detailStage.isShowing());
+            assertTrue(details.getTable().getItems().isEmpty());
+            assertTrue(action.isDisabled());
+            assertSame(replacement, controller.getCurrentPlan());
+            owner.hide();
+            window.closeApplicationPreferences();
+        });
+    }
+
+    @Test
     void planReplacementRefreshReusesWorkspaceNodesAndKeepsSelectedView() throws Exception {
         fx(() -> {
             MainWindow window = new MainWindow(new ApplicationController());
@@ -146,7 +260,7 @@ class MainWindowViewNavigationTest {
             assertEquals("accounts", field(window, "selectedWorkspaceId"));
             assertTrue(viewItem(viewMenu, "accounts").isSelected());
             assertSame(accountsBefore, host.getChildren().stream().filter(Node::isVisible).findFirst().orElseThrow());
-            assertEquals(9, host.getChildren().size());
+            assertEquals(8, host.getChildren().size());
             assertSame(replacement, controller.getCurrentPlan());
             window.closeApplicationPreferences();
         });
@@ -163,6 +277,7 @@ class MainWindowViewNavigationTest {
             Scene scene = new Scene(root, width, height);
             ApplicationThemeManager manager = ApplicationThemeManager.start(ApplicationTheme.LIGHT);
             ApplicationThemeManager.prepare(scene);
+            window.setStage(stage);
             stage.setScene(scene);
             stage.setWidth(width);
             stage.setHeight(height);
@@ -170,20 +285,43 @@ class MainWindowViewNavigationTest {
             manager.apply(theme);
             Menu viewMenu = ((MenuBar) root.getTop()).getMenus().get(1);
 
+            Projection previewProjection = new Projection();
+            previewProjection.addYear(ProjectionYearBuilder.aProjectionYear().withCalendarYear(2027)
+                    .withPrimaryPersonAge(67).withBeginningInvestableAssets(100_000).build());
+            ResultsView details = field(window, "resultsView");
+            ResultsSummaryView summary = field(window, "resultsSummaryView");
+            details.load(previewProjection, List.of());
+            summary.load(controller.getCurrentPlan(), previewProjection, List.of());
+
             String variant = theme.name().toLowerCase(java.util.Locale.ROOT) + "-" + width + "x" + height;
             for (String id : LABELS.keySet()) {
                 viewItem(viewMenu, id).fire();
                 root.applyCss();
                 root.resize(width, height);
                 root.layout();
-                save(root, Path.of("target", "phase15b", "previews", variant, id + ".png"));
+                save(root, Path.of("target", "phase15c", "previews", variant, id + ".png"));
             }
             viewItem(viewMenu, "results-summary").fire();
+            Button detailsButton = field(summary, "yearlyDetailsButton");
+            assertFalse(detailsButton.isDisabled());
+            detailsButton.fire();
+            Stage detailsStage = field(window, "yearlyDetailsStage");
+            detailsStage.setWidth(width);
+            detailsStage.setHeight(height);
+            detailsStage.centerOnScreen();
+            detailsStage.getScene().getRoot().applyCss();
+            detailsStage.getScene().getRoot().layout();
+            save(detailsStage.getScene().getRoot(), Path.of("target", "phase15c", "previews", variant, "yearly-details.png"));
+            details.getTable().scrollToColumn(details.getTable().getColumns().getLast());
+            details.getTable().applyCss();
+            details.getTable().layout();
+            save(detailsStage.getScene().getRoot(), Path.of("target", "phase15c", "previews", variant, "yearly-details-scrolled.png"));
+            detailsStage.hide();
             viewMenu.show();
             Window.getWindows().stream().filter(PopupWindow.class::isInstance).filter(Window::isShowing)
                     .map(PopupWindow.class::cast).filter(popup -> popup.getScene() != null)
                     .findFirst().ifPresent(popup -> {
-                        try { save(popup.getScene().getRoot(), Path.of("target", "phase15b", "previews", variant, "view-menu-expanded.png")); }
+                        try { save(popup.getScene().getRoot(), Path.of("target", "phase15c", "previews", variant, "view-menu-expanded.png")); }
                         catch (Exception failure) { throw new RuntimeException(failure); }
                     });
             viewMenu.hide();

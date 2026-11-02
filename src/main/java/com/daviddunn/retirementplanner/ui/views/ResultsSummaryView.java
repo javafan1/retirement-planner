@@ -1357,11 +1357,15 @@ public class ResultsSummaryView extends BorderPane {
         subtitle.getStyleClass().add(
                 "section-subtitle");
 
-        HBox heading =
-                new HBox(
-                        6,
-                        title,
-                        subtitle);
+        yearlyDetailsButton.setId("view-yearly-details");
+        yearlyDetailsButton.setAccessibleHelp("Open the detailed annual projection table in a separate window.");
+        yearlyDetailsButton.setOnAction(event -> {
+            if (yearlyDetailsHandler != null && !yearlyDetailsButton.isDisabled()) {
+                yearlyDetailsHandler.run();
+            }
+        });
+        yearlyDetailsButton.setDisable(true);
+        HBox heading = new HBox(10, title, subtitle, yearlyDetailsButton);
 
         heading.setAlignment(
                 Pos.CENTER_LEFT);
@@ -2406,6 +2410,8 @@ public class ResultsSummaryView extends BorderPane {
     }
 
     private Button exportButton;
+    private final Button yearlyDetailsButton = new Button("View Yearly Details");
+    private Runnable yearlyDetailsHandler;
     private final Label horizonLabel = new Label();
 
     public void load(
@@ -2430,6 +2436,10 @@ public class ResultsSummaryView extends BorderPane {
         planningHorizonValue.setTooltip(new Tooltip(horizonLabel.getText()));
         boolean projectionAvailable = projection != null && !projection.isEmpty();
         exportButton.setDisable(!projectionAvailable);
+        yearlyDetailsButton.setDisable(!projectionAvailable);
+        yearlyDetailsButton.setTooltip(new Tooltip(projectionAvailable
+                ? "View the detailed year-by-year results for this projection."
+                : "A completed projection is required to view yearly details."));
         exportButton.setTooltip(new Tooltip(projectionAvailable ? "Export the completed projection." : "A completed projection is required to export results."));
         currentProjection = projection;
 
@@ -3098,6 +3108,18 @@ public class ResultsSummaryView extends BorderPane {
 
         this.yearDoubleClickHandler =
                 handler;
+    }
+
+    /** Registers the action that opens the existing detailed projection view. */
+    public void setOnYearlyDetailsRequested(Runnable handler) {
+        yearlyDetailsHandler = handler;
+    }
+
+    public void setYearlyDetailsAvailable(boolean available) {
+        yearlyDetailsButton.setDisable(!available);
+        yearlyDetailsButton.setTooltip(new Tooltip(available
+                ? "View the detailed year-by-year results for this projection."
+                : "A completed projection is required to view yearly details."));
     }
 
     private void exportProjectionCsv() {
