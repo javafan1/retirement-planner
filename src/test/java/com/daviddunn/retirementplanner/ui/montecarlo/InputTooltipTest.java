@@ -50,12 +50,14 @@ class InputTooltipTest {
         });
     }
 
-    @Test void householdHelpKeepsNamesOptionalAndValidationUnchanged() throws Exception {
+    @Test void householdHelpKeepsNameValidationAtTheEditBoundary() throws Exception {
         fx(() -> {
             var card = new PersonCard();
             var plan = MonteCarloComparisonFixtures.plan();
             var person = plan.getHousehold().getPrimaryPerson();
             card.load(person);
+            ((TextField) control(card, "firstNameField")).setText("Taylor");
+            ((TextField) control(card, "lastNameField")).setText("Morgan");
             var before = card.readValidated();
             audit(card, Set.of(control(card, "firstNameField"), control(card, "lastNameField")));
             check(control(card, "birthDatePicker"), "Medicare");

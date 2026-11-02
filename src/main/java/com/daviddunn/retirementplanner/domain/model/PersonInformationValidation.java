@@ -14,4 +14,9 @@ public final class PersonInformationValidation {
             throw new IllegalArgumentException("Mortality category is required.");
         }
     }
+
+    /** Validates names only at explicit person creation/edit boundaries; legacy model decoding is unchanged. */
+    public static String validateName(String name, String fieldName) {
+        return RequiredNameValidation.normalize(name, fieldName);
+    }
 }

@@ -16,8 +16,11 @@ public final class NewPlanDraft {
 
     public RetirementPlan complete() {
 
-        plan.getHousehold().members().forEach(person ->
-                PersonInformationValidation.validate(person.getBirthDate(), person.getMortalityCategory()));
+        plan.getHousehold().members().forEach(person -> {
+            PersonInformationValidation.validateName(person.getFirstName(), "First name");
+            PersonInformationValidation.validateName(person.getLastName(), "Last name");
+            PersonInformationValidation.validate(person.getBirthDate(), person.getMortalityCategory());
+        });
         plan.validateHouseholdReferences();
         return plan;
     }

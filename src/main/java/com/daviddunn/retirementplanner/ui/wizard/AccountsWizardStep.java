@@ -9,7 +9,7 @@ public final class AccountsWizardStep extends WizardListStep<Account> {
 
     public AccountsWizardStep(NewPlanDraft draft) {
         super(draft, "Accounts are optional. Enter opening balances in dollars as of the plan's projection start. "
-                        + "Account names are optional; choose the actual type and owner. A retirement account belongs to one person, not jointly. "
+                        + "Give each account a name and choose its actual type and owner. A retirement account belongs to one person, not jointly. "
                         + "Account labels do not establish retirement tax eligibility. You can edit details later.",
                 "No accounts yet. Adding accounts is optional.");
         table.setId("wizard-accounts");

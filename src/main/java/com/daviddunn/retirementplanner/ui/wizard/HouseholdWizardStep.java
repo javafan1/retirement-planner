@@ -42,12 +42,12 @@ public final class HouseholdWizardStep implements NewPlanWizardStep {
         validationMessage.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         validationMessage.visibleProperty().bind(validationMessage.textProperty().isNotEmpty());
         validationMessage.managedProperty().bind(validationMessage.visibleProperty());
-        Label required = new Label("* Required. First and last names are optional.");
+        Label required = new Label("* Required. First and last names are required for each included person.");
         required.getStyleClass().add("wizard-description");
         required.setWrapText(true);
         Label introduction = guidance("Welcome. Create a new retirement plan, then edit it in the existing tabs. "
                 + "Optional financial sections may be left empty. Creating does not save a file; plans stay local on your computer when saved.");
-        Label categoryHelp = guidance("Date of birth and mortality table category are required for each included person. "
+        Label categoryHelp = guidance("First and last names, date of birth and mortality table category are required for each included person. "
                 + "The category selects the table used for longevity calculations; it is not inferred from a name or birth date. "
                 + "Household selection does not change filing status.");
         householdChoices.getChildren().setAll(householdChoice, addSpouseButton);

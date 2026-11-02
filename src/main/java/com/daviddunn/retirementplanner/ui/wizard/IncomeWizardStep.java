@@ -9,7 +9,7 @@ import javafx.scene.control.Button;
 public final class IncomeWizardStep extends WizardListStep<Pension> {
 
     public IncomeWizardStep(NewPlanDraft draft) {
-        super(draft, "Pensions are optional. Enter gross monthly payments. Each pension has its own commencement date, "
+        super(draft, "Pensions are optional. Give each pension a name and enter gross monthly payments. Each pension has its own commencement date, "
                 + "not a universal retirement date. Survivor pension payments are different from Social Security survivor benefits.",
                 "No pensions entered (optional).");
         table.setId("wizard-pensions");
