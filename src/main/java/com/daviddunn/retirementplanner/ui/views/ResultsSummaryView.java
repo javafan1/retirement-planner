@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.views;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 import com.daviddunn.retirementplanner.ui.help.PlanningInputHelp;
 import com.daviddunn.retirementplanner.ui.help.RothInputHelp;
 import com.daviddunn.retirementplanner.app.export.ProjectionPdfExporter;
@@ -38,6 +39,8 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 
 import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.binding.BooleanBinding;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -65,6 +68,9 @@ import java.nio.file.Path;
 public class ResultsSummaryView extends BorderPane {
 
     private final ApplicationController controller;
+    private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
+    private final List<RequiredFieldSupport.Attachment> socialSecurityRequiredAttachments = new ArrayList<>();
+    private final SimpleBooleanProperty couplePlan = new SimpleBooleanProperty();
 
     private final TextField investmentReturnField =
             new TextField();
@@ -1526,6 +1532,9 @@ public class ResultsSummaryView extends BorderPane {
                 1,
                 1);
 
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(investmentLabel, investmentReturnField));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(inflationLabel, inflationField));
+
         return createPanel(
                 heading,
                 grid,
@@ -1647,6 +1656,25 @@ public class ResultsSummaryView extends BorderPane {
                 1,
                 5);
 
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(strategyLabel, rothStrategyComboBox,
+                rothEnabledCheckBox.selectedProperty()));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(startYearLabel, rothStartYearField,
+                rothEnabledCheckBox.selectedProperty()));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(frequencyLabel, rothFrequencyComboBox,
+                rothEnabledCheckBox.selectedProperty()));
+        BooleanBinding fixedAmountRequired = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> rothEnabledCheckBox.isSelected()
+                        && rothStrategyComboBox.getValue() == RothConversionStrategy.FIXED_AMOUNT,
+                rothEnabledCheckBox.selectedProperty(), rothStrategyComboBox.valueProperty());
+        BooleanBinding targetRequired = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> rothEnabledCheckBox.isSelected()
+                        && rothStrategyComboBox.getValue() == RothConversionStrategy.CUSTOM_TAXABLE_INCOME_TARGET,
+                rothEnabledCheckBox.selectedProperty(), rothStrategyComboBox.valueProperty());
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(rothAmountLabel, rothAmountField,
+                fixedAmountRequired));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(rothTargetTaxableIncomeLabel,
+                rothTargetTaxableIncomeField, targetRequired));
+
 //        Label stopRuleLabel =
 //                new Label("Stop Rule");
 //
@@ -1686,6 +1714,8 @@ public class ResultsSummaryView extends BorderPane {
                 .addListener(
                         (observable, oldValue, newValue) ->
                                 updateRothControls());
+
+        rothEnabledCheckBox.selectedProperty().addListener((observable, oldValue, newValue) -> updateRothControls());
 
         rothAvailabilityLabel.setWrapText(true);
         rothAvailabilityLabel.setAccessibleText("Roth conversion availability");
@@ -1749,6 +1779,15 @@ public class ResultsSummaryView extends BorderPane {
                 1,
                 1);
 
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(scenarioLabel, deathScenarioComboBox,
+                couplePlan));
+        BooleanBinding activeDeathScenario = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> couplePlan.get() && deathScenarioComboBox.getValue() != null
+                        && !"Both Survive".equals(deathScenarioComboBox.getValue()),
+                couplePlan, deathScenarioComboBox.valueProperty());
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(deathYearLabel, deathYearField,
+                activeDeathScenario));
+
         survivorAgeLabel.getStyleClass().add(
                 "assumption-label");
         survivorAgeLabel.setWrapText(true);
@@ -1769,6 +1808,9 @@ public class ResultsSummaryView extends BorderPane {
                 3,
                 2,
                 1);
+        InputHelp.link(survivorAgeLabel, survivorAgeComboBox);
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(survivorAgeLabel, survivorAgeComboBox,
+                activeDeathScenario));
         GridPane.setHgrow(survivorAgeComboBox, Priority.ALWAYS);
         survivorAgeComboBox.setMinWidth(0);
 
@@ -1783,6 +1825,7 @@ public class ResultsSummaryView extends BorderPane {
         horizonLabel.getStyleClass().add("assumption-label");
         InputHelp.install(projectionLengthField, HelpText.PLANNING_HORIZON);
         InputHelp.link(horizonLabel, projectionLengthField);
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(horizonLabel, projectionLengthField));
         projectionLengthField.getStyleClass().add("assumption-field");
         projectionLengthField.setPrefColumnCount(4);
         planningHorizonValue.getStyleClass().add("assumption-value");
@@ -2426,6 +2469,7 @@ public class ResultsSummaryView extends BorderPane {
 
         currentPlan = plan;
         boolean couple = plan.getHousehold().hasSpouse();
+        couplePlan.set(couple);
         GridPane deathGrid = (GridPane) deathScenarioComboBox.getParent();
         deathGrid.getChildren().stream().filter(node -> GridPane.getRowIndex(node) > 0)
                 .forEach(node -> { node.setVisible(couple); node.setManaged(couple); });
@@ -3493,6 +3537,9 @@ public class ResultsSummaryView extends BorderPane {
     private void loadSocialSecurity(
             RetirementPlan plan) {
 
+        socialSecurityRequiredAttachments.forEach(RequiredFieldSupport.Attachment::close);
+        socialSecurityRequiredAttachments.clear();
+
         socialSecurityContainer
                 .getChildren()
                 .clear();
@@ -3608,6 +3655,7 @@ public class ResultsSummaryView extends BorderPane {
 
         InputHelp.install(ageCombo, PlanningInputHelp.CLAIMING_AGE);
         InputHelp.link(personLabel, ageCombo);
+        socialSecurityRequiredAttachments.add(RequiredFieldSupport.attach(personLabel, ageCombo));
 
         Label benefitLabel =
                 new Label();
@@ -3681,6 +3729,14 @@ public class ResultsSummaryView extends BorderPane {
                         ageCombo,
                         benefitLabel));
 
+    }
+
+    /** Releases required-indicator listeners when the main application discards this view. */
+    public void dispose() {
+        requiredFieldAttachments.forEach(RequiredFieldSupport.Attachment::close);
+        requiredFieldAttachments.clear();
+        socialSecurityRequiredAttachments.forEach(RequiredFieldSupport.Attachment::close);
+        socialSecurityRequiredAttachments.clear();
     }
 
     private void updateSocialSecurityPreview(

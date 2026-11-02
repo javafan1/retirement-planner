@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.views;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 import com.daviddunn.retirementplanner.ui.help.RothInputHelp;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency;
@@ -26,6 +27,7 @@ import javafx.util.StringConverter;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.function.Predicate;
@@ -33,6 +35,10 @@ import java.util.function.Predicate;
 public class RothConversionView extends VBox {
 
     private final Label availabilityLabel = new Label();
+    private final Label strategyLabel = new Label("Strategy:");
+    private final Label conversionYearLabel = new Label("Conversion Year:");
+    private final Label stopRuleLabel = new Label("Stop Rule:");
+    private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
 
     private final CheckBox enabledCheckBox;
 
@@ -139,8 +145,7 @@ public class RothConversionView extends VBox {
          */
 
         grid.add(
-                new Label(
-                        "Strategy:"),
+                strategyLabel,
                 0,
                 row);
 
@@ -208,8 +213,7 @@ public class RothConversionView extends VBox {
          */
 
         grid.add(
-                new Label(
-                        "Conversion Year:"),
+                conversionYearLabel,
                 0,
                 row);
 
@@ -304,8 +308,7 @@ public class RothConversionView extends VBox {
          */
 
         grid.add(
-                new Label(
-                        "Stop Rule:"),
+                stopRuleLabel,
                 0,
                 row);
 
@@ -342,6 +345,25 @@ public class RothConversionView extends VBox {
         InputHelp.install(frequencyComboBox, RothInputHelp.FREQUENCY);
         InputHelp.install(stopRuleComboBox, RothInputHelp.STOP);
         InputHelp.linkGridLabels(grid);
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(strategyLabel, strategyComboBox,
+                enabledCheckBox.selectedProperty()));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(conversionYearLabel, conversionYearField,
+                enabledCheckBox.selectedProperty()));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(frequencyLabel, frequencyComboBox,
+                enabledCheckBox.selectedProperty()));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(stopRuleLabel, stopRuleComboBox,
+                enabledCheckBox.selectedProperty()));
+        var fixedAmountRequired = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> enabledCheckBox.isSelected() && strategyComboBox.getValue() == RothConversionStrategy.FIXED_AMOUNT,
+                enabledCheckBox.selectedProperty(), strategyComboBox.valueProperty());
+        var targetRequired = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> enabledCheckBox.isSelected()
+                        && strategyComboBox.getValue() == RothConversionStrategy.CUSTOM_TAXABLE_INCOME_TARGET,
+                enabledCheckBox.selectedProperty(), strategyComboBox.valueProperty());
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(conversionAmountLabel, conversionAmountField,
+                fixedAmountRequired));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(targetTaxableIncomeLabel, targetTaxableIncomeField,
+                targetRequired));
         applyButton.disableProperty().bind(dirty.not());
         cancelButton.disableProperty().bind(dirty.not());
         applyButton.setOnAction(event -> applyChanges());
@@ -354,9 +376,13 @@ public class RothConversionView extends VBox {
 
         availabilityLabel.setWrapText(true);
         availabilityLabel.setAccessibleText("Roth conversion availability");
+        Label requiredLegend = RequiredFieldSupport.createLegend();
+        requiredLegend.visibleProperty().bind(enabledCheckBox.selectedProperty());
+        requiredLegend.managedProperty().bind(enabledCheckBox.selectedProperty());
         getChildren().addAll(
                 availabilityLabel,
                 grid,
+                requiredLegend,
                 buttonBar,
                 statusLabel);
 
@@ -377,6 +403,12 @@ public class RothConversionView extends VBox {
          */
 
         updateStrategyFields();
+    }
+
+    /** Releases required-indicator listeners when this application view is discarded. */
+    public void dispose() {
+        requiredFieldAttachments.forEach(RequiredFieldSupport.Attachment::close);
+        requiredFieldAttachments.clear();
     }
 
 

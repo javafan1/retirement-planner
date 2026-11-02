@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAsset;
 
 import javafx.geometry.Insets;
@@ -9,6 +10,8 @@ import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 public class NonInvestableAssetDialog
         extends Dialog<NonInvestableAsset> {
@@ -16,6 +19,7 @@ public class NonInvestableAssetDialog
     private final TextField nameField;
     private final TextField valueField;
     private final TextField growthRateField;
+    private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
 
     public NonInvestableAssetDialog(
             NonInvestableAsset asset) {
@@ -85,8 +89,9 @@ public class NonInvestableAssetDialog
         grid.setPadding(
                 new Insets(15));
 
+        Label nameLabel = new Label("Asset Name:");
         grid.add(
-                new Label("Asset Name:"),
+                nameLabel,
                 0,
                 0);
 
@@ -95,8 +100,9 @@ public class NonInvestableAssetDialog
                 1,
                 0);
 
+        Label valueLabel = new Label("Current Value:");
         grid.add(
-                new Label("Current Value:"),
+                valueLabel,
                 0,
                 1);
 
@@ -105,8 +111,9 @@ public class NonInvestableAssetDialog
                 1,
                 1);
 
+        Label growthLabel = new Label("Growth Rate (%):");
         grid.add(
-                new Label("Growth Rate (%):"),
+                growthLabel,
                 0,
                 2);
 
@@ -114,9 +121,17 @@ public class NonInvestableAssetDialog
                 growthRateField,
                 1,
                 2);
+        grid.add(RequiredFieldSupport.createLegend(), 0, 3, 2, 1);
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(nameLabel, nameField));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(valueLabel, valueField));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(growthLabel, growthRateField));
 
         getDialogPane()
                 .setContent(grid);
+        setOnHidden(event -> {
+            requiredFieldAttachments.forEach(RequiredFieldSupport.Attachment::close);
+            requiredFieldAttachments.clear();
+        });
 
         InputHelp.install(valueField, "Current value in dollars of property or another non-investable asset. Included in Total Net Worth, but not available for portfolio withdrawals or included in after-tax investable estate.");
         InputHelp.install(growthRateField, "Annual appreciation percentage for this asset; enter 3 for 3%. Its projected value grows separately from investment accounts and does not fund spending.");

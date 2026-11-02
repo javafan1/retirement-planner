@@ -3,11 +3,16 @@ package com.daviddunn.retirementplanner.ui.controls;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableBooleanValue;
+import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Control;
 import javafx.scene.control.Label;
+import javafx.scene.paint.Paint;
+import javafx.scene.text.Font;
 import javafx.scene.text.Text;
+import javafx.scene.text.TextAlignment;
+import javafx.scene.text.TextFlow;
 
 import java.util.Objects;
 
@@ -19,6 +24,11 @@ public final class RequiredFieldSupport {
     private static final Object ATTACHMENT_KEY = new Object();
 
     private RequiredFieldSupport() { }
+
+    /** True while the shared indicator owns this label's inline presentation. */
+    public static boolean isAttached(Label label) {
+        return label != null && label.getProperties().get(ATTACHMENT_KEY) instanceof Attachment;
+    }
 
     /** Attaches an always-required marker. The returned attachment should be closed with its form. */
     public static Attachment attach(Label label, Control control) {
@@ -69,9 +79,9 @@ public final class RequiredFieldSupport {
                 label.getGraphic(), label.getContentDisplay(), label.getGraphicTextGap(), control.getAccessibleHelp());
         label.getProperties().put(ATTACHMENT_KEY, attachment);
         if (associated == null) label.setLabelFor(control);
-        label.setContentDisplay(ContentDisplay.RIGHT);
-        label.setGraphicTextGap(Math.max(3, attachment.originalGraphicTextGap));
-        label.setGraphic(attachment.indicator);
+        label.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        label.setGraphicTextGap(0);
+        label.setGraphic(attachment.inlineContent);
         attachment.refresh();
         required.addListener(attachment.requiredListener);
         label.visibleProperty().addListener(attachment.labelVisibleListener);
@@ -97,6 +107,9 @@ public final class RequiredFieldSupport {
         private boolean writingAccessibleHelp;
         private boolean closed;
         private final Text indicator = new Text("*");
+        private final Text labelText = new Text();
+        private final Text indicatorGap = new Text(" ");
+        private final TextFlow inlineContent = new TextFlow(labelText, indicatorGap, indicator);
 
         private final ChangeListener<Boolean> requiredListener = (observable, oldValue, newValue) -> refresh();
         private final ChangeListener<Boolean> labelVisibleListener = (observable, oldValue, newValue) -> refresh();
@@ -108,6 +121,16 @@ public final class RequiredFieldSupport {
             baseAccessibleHelp = stripRequiredSuffix(newValue);
             applyAccessibleHelp();
         };
+        private final ChangeListener<String> labelTextListener = (observable, oldValue, newValue) -> updateInlineText(newValue);
+        private final ChangeListener<Font> labelFontListener = (observable, oldValue, newValue) -> {
+            labelText.setFont(newValue);
+            indicatorGap.setFont(newValue);
+        };
+        private final ChangeListener<Paint> labelFillListener = (observable, oldValue, newValue) -> {
+            labelText.setFill(newValue);
+            indicatorGap.setFill(newValue);
+        };
+        private final ChangeListener<TextAlignment> textAlignmentListener = (observable, oldValue, newValue) -> inlineContent.setTextAlignment(newValue);
 
         private Attachment(Label label, Control control, ObservableBooleanValue required,
                            boolean constantRequired, Node originalLabelFor, Node originalGraphic,
@@ -122,8 +145,21 @@ public final class RequiredFieldSupport {
             this.originalContentDisplay = originalContentDisplay;
             this.originalGraphicTextGap = originalGraphicTextGap;
             this.baseAccessibleHelp = originalAccessibleHelp;
+            updateInlineText(label.getText());
+            labelText.setFont(label.getFont());
+            labelText.setFill(label.getTextFill());
+            indicatorGap.setFont(label.getFont());
+            indicatorGap.setFill(label.getTextFill());
+            inlineContent.setTextAlignment(label.getTextAlignment());
+            inlineContent.setFocusTraversable(false);
+            inlineContent.setMouseTransparent(true);
+            inlineContent.setMaxWidth(Double.MAX_VALUE);
             indicator.getStyleClass().add("required-field-indicator");
             indicator.setFocusTraversable(false);
+            label.textProperty().addListener(labelTextListener);
+            label.fontProperty().addListener(labelFontListener);
+            label.textFillProperty().addListener(labelFillListener);
+            label.textAlignmentProperty().addListener(textAlignmentListener);
         }
 
         public boolean isRequired() { return required.get(); }
@@ -135,7 +171,23 @@ public final class RequiredFieldSupport {
                     && label.isManaged() && control.isManaged();
             indicator.setVisible(show);
             indicator.setManaged(show);
+            indicatorGap.setVisible(show);
+            indicatorGap.setManaged(show);
+            inlineContent.requestLayout();
             applyAccessibleHelp();
+        }
+
+        private void updateInlineText(String value) {
+            String visibleText = value == null ? "" : value;
+            String trimmed = visibleText.stripTrailing();
+            if (trimmed.endsWith("*")) {
+                int markerIndex = trimmed.length() - 1;
+                if (markerIndex == 0 || Character.isWhitespace(trimmed.charAt(markerIndex - 1))) {
+                    visibleText = trimmed.substring(0, markerIndex).stripTrailing();
+                }
+            }
+            labelText.setText(visibleText);
+            inlineContent.requestLayout();
         }
 
         private void applyAccessibleHelp() {
@@ -161,10 +213,16 @@ public final class RequiredFieldSupport {
             label.managedProperty().removeListener(labelManagedListener);
             control.managedProperty().removeListener(controlManagedListener);
             control.accessibleHelpProperty().removeListener(accessibleHelpListener);
+            label.textProperty().removeListener(labelTextListener);
+            label.fontProperty().removeListener(labelFontListener);
+            label.textFillProperty().removeListener(labelFillListener);
+            label.textAlignmentProperty().removeListener(textAlignmentListener);
             if (label.getProperties().get(ATTACHMENT_KEY) == this) label.getProperties().remove(ATTACHMENT_KEY);
-            if (label.getGraphic() == indicator) label.setGraphic(originalGraphic);
+            if (label.getGraphic() == inlineContent) label.setGraphic(originalGraphic);
             label.setContentDisplay(originalContentDisplay);
             label.setGraphicTextGap(originalGraphicTextGap);
+            labelText.setText("");
+            inlineContent.getChildren().clear();
             if (label.getLabelFor() == control && originalLabelFor == null) label.setLabelFor(null);
             if (Objects.equals(control.getAccessibleHelp(), lastAppliedHelp)) control.setAccessibleHelp(baseAccessibleHelp);
         }

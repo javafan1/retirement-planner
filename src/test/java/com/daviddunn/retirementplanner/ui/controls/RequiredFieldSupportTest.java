@@ -9,7 +9,10 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.MoveTo;
+import javafx.scene.shape.PathElement;
 import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -35,10 +38,12 @@ class RequiredFieldSupportTest {
     @Test void staticRequiredMarkerKeepsLabelTextAssociationAndCanBeDisposed() throws Exception {
         fx(() -> {
             Label label = new Label("Birth Date");
+            label.setAccessibleText("Date of birth");
             TextField field = new TextField();
             field.setId("birth-date");
             var marker = RequiredFieldSupport.attach(label, field);
             assertEquals("Birth Date", label.getText());
+            assertEquals("Date of birth", label.getAccessibleText());
             assertSame(field, label.getLabelFor());
             assertEquals("birth-date", field.getId());
             assertEquals("*", marker.indicatorNode().getText());
@@ -50,6 +55,7 @@ class RequiredFieldSupportTest {
             marker.close();
             assertNull(label.getGraphic());
             assertNull(label.getLabelFor());
+            assertEquals("Date of birth", label.getAccessibleText());
             assertNull(field.getAccessibleHelp());
             return null;
         });
@@ -129,6 +135,139 @@ class RequiredFieldSupportTest {
             assertFalse(legend.isFocusTraversable());
             return null;
         });
+    }
+
+    @Test void existingTrailingTextMarkerIsRenderedOnlyOnceWithoutChangingLabelText() throws Exception {
+        fx(() -> {
+            Label label = new Label("Account Balance *");
+            TextField input = new TextField();
+            var attachment = RequiredFieldSupport.attach(label, input);
+            try {
+                assertEquals("Account Balance *", label.getText());
+                TextFlow flow = (TextFlow) label.getGraphic();
+                assertEquals("Account Balance", ((Text) flow.getChildren().get(0)).getText());
+                assertEquals("*", attachment.indicatorNode().getText());
+                assertEquals(1, flow.getChildren().stream().filter(Text.class::isInstance)
+                        .map(Text.class::cast).filter(text -> "*".equals(text.getText())).count());
+            } finally {
+                attachment.close();
+            }
+            return null;
+        });
+    }
+
+    @Test void inlineMarkerFollowsWrappedTextAndResizesWithItsLabel() throws Exception {
+        var stageRef = new AtomicReference<Stage>();
+        fx(() -> {
+            Stage stage = new Stage(); stageRef.set(stage);
+            String wrappedText = "Assumed second death / end of household projection:";
+            Label label = new Label(wrappedText);
+            label.setWrapText(true);
+            label.setMaxWidth(Double.MAX_VALUE);
+            TextField field = new TextField();
+            var required = new SimpleBooleanProperty(true);
+            RequiredFieldSupport.attach(label, field, required);
+            var root = new VBox(4, label, field);
+            stage.setScene(new Scene(root, 300, 140));
+            stage.show();
+            label.setPrefWidth(270);
+            label.setMaxWidth(270);
+            root.applyCss(); root.layout();
+            label.setText("Birth Date");
+            root.applyCss(); root.layout();
+            assertMarkerAtTextEnd(label, 1);
+            label.setText(wrappedText);
+            root.applyCss(); root.layout();
+            assertMarkerAtTextEnd(label, 2);
+            label.setPrefWidth(140);
+            label.setMaxWidth(140);
+            root.applyCss(); root.layout();
+            assertMarkerAtTextEnd(label, 3);
+            label.setPrefWidth(105);
+            label.setMaxWidth(105);
+            root.applyCss(); root.layout();
+            assertMarkerAtTextEnd(label, 4);
+            label.setPrefWidth(60);
+            label.setMaxWidth(60);
+            root.applyCss(); root.layout();
+            int compactLineCount = renderedLineCount((TextFlow) label.getGraphic());
+            assertTrue(compactLineCount >= 5, "A narrow label should exercise compact wrapping.");
+            assertMarkerAtTextEnd(label, compactLineCount);
+            assertMarkerWrapsAfterText(label);
+            required.set(false);
+            root.applyCss(); root.layout();
+            assertFalse(((TextFlow) label.getGraphic()).getChildren().get(2).isVisible());
+            required.set(true);
+            root.applyCss(); root.layout();
+            assertMarkerAtTextEnd(label, compactLineCount);
+            label.setPrefWidth(-1);
+            label.setMaxWidth(Double.MAX_VALUE);
+            root.resize(440, 400);
+            root.applyCss(); root.layout();
+            double wideLabelWidth = label.getWidth();
+            int wideLineCount = renderedLineCount((TextFlow) label.getGraphic());
+            root.resize(210, 400);
+            root.applyCss(); root.layout();
+            assertTrue(label.getWidth() < wideLabelWidth, "Parent resizing should change the label's available width.");
+            int narrowLineCount = renderedLineCount((TextFlow) label.getGraphic());
+            assertTrue(narrowLineCount > wideLineCount, "Container resizing should reflow the inline label and marker: wide="
+                    + wideLineCount + ", narrow=" + narrowLineCount + ", widths=" + wideLabelWidth + "/" + label.getWidth());
+            assertMarkerAtTextEnd(label, narrowLineCount);
+            stage.close();
+            return null;
+        });
+    }
+
+    private static void assertMarkerAtTextEnd(Label label, int expectedLines) {
+        TextFlow flow = (TextFlow) label.getGraphic();
+        flow.applyCss(); flow.layout();
+        Text text = (Text) flow.getChildren().get(0);
+        Text marker = (Text) flow.getChildren().get(2);
+        assertTrue(marker.isVisible());
+        double lineHeight = text.getFont().getSize() * 1.3;
+        int renderedLines = renderedLineCount(flow);
+        assertEquals(expectedLines, renderedLines,
+                "Fixture should wrap to " + expectedLines + " lines at label width " + label.getWidth());
+
+        PathElement[] caret = flow.caretShape(text.getText().length(), true);
+        MoveTo caretStart = null;
+        for (PathElement element : caret) if (element instanceof MoveTo moveTo) {
+            caretStart = moveTo;
+            break;
+        }
+        assertNotNull(caretStart, "TextFlow should provide the insertion point after the final label character.");
+        var markerBounds = marker.getBoundsInParent();
+        double caretX = caretStart.getX();
+        double caretY = caretStart.getY();
+        boolean followsOnSameLine = Math.abs(markerBounds.getMinY() - caretY) <= lineHeight
+                && markerBounds.getMinX() >= caretX - 2;
+        boolean wrapsAfterFinalCharacter = markerBounds.getMinY() > caretY
+                && markerBounds.getMinX() <= flow.getInsets().getLeft() + 4;
+        assertTrue(followsOnSameLine || wrapsAfterFinalCharacter,
+                () -> "Marker must follow the final character or wrap directly below it; caret=("
+                        + caretX + "," + caretY + "), marker=" + markerBounds + ", flow=" + flow.getBoundsInLocal());
+    }
+
+    private static int renderedLineCount(TextFlow flow) {
+        flow.applyCss(); flow.layout();
+        Text text = (Text) flow.getChildren().get(0);
+        double lineHeight = text.getFont().getSize() * 1.3;
+        return Math.max(1, (int) Math.round(flow.getHeight() / lineHeight));
+    }
+
+    private static void assertMarkerWrapsAfterText(Label label) {
+        TextFlow flow = (TextFlow) label.getGraphic();
+        Text text = (Text) flow.getChildren().get(0);
+        Text marker = (Text) flow.getChildren().get(2);
+        MoveTo caret = null;
+        for (PathElement element : flow.caretShape(text.getText().length(), true)) {
+            if (element instanceof MoveTo moveTo) { caret = moveTo; break; }
+        }
+        assertNotNull(caret);
+        assertTrue(marker.getBoundsInParent().getMinY() > caret.getY(),
+                "When no room remains after the final character, the marker should move to the next line.");
+        assertTrue(marker.getBoundsInParent().getMinX() <= flow.getInsets().getLeft() + 4,
+                "A wrapped marker should start at the next line's leading edge.");
     }
 
     @Test void themeChangesRestyleRequiredIndicatorAndRenderCompactFixture() throws Exception {

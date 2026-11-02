@@ -46,6 +46,70 @@ class HouseholdViewTest {
     }
 
     @Test
+    void requiredIndicatorsFollowPrimaryAndSpouseValidationWithoutChangingLabelText() throws Exception {
+        fx(() -> {
+            var f = new Fixture();
+            Label primaryBirth = label(card(f.view, 0), "Birth Date:");
+            Label primaryMortality = label(card(f.view, 0), "Mortality category:");
+            Label primaryFirstName = label(card(f.view, 0), "First Name:");
+            Label primaryLastName = label(card(f.view, 0), "Last Name:");
+            Label spouseBirth = label(card(f.view, 1), "Birth Date:");
+            Label spouseMortality = label(card(f.view, 1), "Mortality category:");
+            Label spouseFirstName = label(card(f.view, 1), "First Name:");
+            Label spouseLastName = label(card(f.view, 1), "Last Name:");
+            assertRequired(primaryBirth, true);
+            assertRequired(primaryMortality, true);
+            assertRequired(primaryFirstName, true);
+            assertRequired(primaryLastName, true);
+            assertRequired(spouseBirth, true);
+            assertRequired(spouseMortality, true);
+            assertRequired(spouseFirstName, true);
+            assertRequired(spouseLastName, true);
+            assertEquals("Birth Date:", primaryBirth.getText());
+            assertTrue(primaryBirth.getLabelFor().getAccessibleHelp().contains("Required"));
+            f.view.getChildren().stream().filter(CheckBox.class::isInstance).map(CheckBox.class::cast)
+                    .findFirst().orElseThrow().setSelected(false);
+            assertRequired(spouseBirth, false);
+            assertRequired(spouseMortality, false);
+            assertRequired(spouseFirstName, false);
+            assertRequired(spouseLastName, false);
+            assertTrue(spouseBirth.getLabelFor().getAccessibleHelp() == null
+                    || !spouseBirth.getLabelFor().getAccessibleHelp().contains("Required"));
+            f.view.getChildren().stream().filter(CheckBox.class::isInstance).map(CheckBox.class::cast)
+                    .findFirst().orElseThrow().setSelected(true);
+            assertRequired(spouseBirth, true);
+            assertRequired(spouseFirstName, true);
+        });
+    }
+
+    @Test
+    void blankNameRejectsHouseholdApplyAtomicallyAndUntouchedLegacyNamesRemainSaveable() throws Exception {
+        fx(() -> {
+            var f = new Fixture();
+            last(f.view, 1).setText(" \u2003 ");
+            assertFalse(f.view.applyChanges());
+            assertEquals("Last name is required.", status(f.view).getText());
+            assertEquals("Family", f.spouse().getLastName());
+            assertEquals(0, f.notifications.get());
+            last(f.view, 1).setText(" Family ");
+            assertTrue(f.view.applyChanges());
+            assertEquals("Family", f.spouse().getLastName());
+            assertEquals(1, f.notifications.get());
+
+            var legacy = new com.daviddunn.retirementplanner.domain.model.RetirementPlan(
+                    new com.daviddunn.retirementplanner.domain.model.Household(
+                            new Person("", "  ", LocalDate.of(1960, 1, 1)), f.spouse()),
+                    f.controller.getCurrentPlan().getAccountPortfolio(),
+                    f.controller.getCurrentPlan().getPlanningAssumptions());
+            legacy.getHousehold().getPrimaryPerson().setMortalityCategory(MortalityCategory.MALE);
+            f.view.load(legacy);
+            assertTrue(f.view.save(legacy));
+            assertEquals("", legacy.getHousehold().getPrimaryPerson().getFirstName());
+            assertEquals("  ", legacy.getHousehold().getPrimaryPerson().getLastName());
+        });
+    }
+
+    @Test
     void mortalityCategoryLoadsEditsCancelsAndPersistsWithOneNotification() throws Exception {
         fx(() -> {
             var f = new Fixture();
@@ -289,13 +353,13 @@ class HouseholdViewTest {
     }
 
     @Test
-    void meaningfulNameWhitespaceIsPreserved() throws Exception {
+    void surroundingNameWhitespaceIsTrimmedOnApply() throws Exception {
         fx(() -> {
             var f = new Fixture();
             first(f.view, 0).setText(" Primary ");
             dirty(f.view);
             assertTrue(f.view.applyChanges());
-            assertEquals(" Primary ", f.primary().getFirstName());
+            assertEquals("Primary", f.primary().getFirstName());
             clean(f.view);
         });
     }
@@ -353,6 +417,10 @@ class HouseholdViewTest {
             date(view, 1).setValue(LocalDate.of(1962, 1, 1));
             category(view, 0).setValue(MortalityCategory.MALE);
             category(view, 1).setValue(MortalityCategory.FEMALE);
+            first(view, 0).setText("Alex");
+            last(view, 0).setText("Primary");
+            first(view, 1).setText("Sam");
+            last(view, 1).setText("Spouse");
             assertTrue(view.applyChanges());
             assertTrue(controller.isModified());
             assertTrue(stage.getTitle().endsWith(" *"));
@@ -417,6 +485,20 @@ class HouseholdViewTest {
     }
     private static Label status(HouseholdView view) {
         return (Label) view.getChildren().filtered(node -> node instanceof Label).getFirst();
+    }
+    private static Label label(PersonCard card, String text) {
+        return card.getChildren().stream().filter(Label.class::isInstance).map(Label.class::cast)
+                .filter(candidate -> candidate.getText().equals(text)).findFirst().orElseThrow();
+    }
+    private static void assertRequired(Label label, boolean expected) {
+        var marker = label.getGraphic() instanceof javafx.scene.text.TextFlow flow
+                ? flow.getChildren().stream().filter(javafx.scene.text.Text.class::isInstance)
+                    .map(javafx.scene.text.Text.class::cast)
+                    .filter(text -> text.getStyleClass().contains("required-field-indicator"))
+                    .findFirst().orElse(null)
+                : null;
+        assertEquals(expected, marker != null && marker.isVisible());
+        if (expected) assertEquals("*", marker.getText());
     }
     private static void clean(HouseholdView view) {
         assertFalse(view.isDirty());

@@ -26,6 +26,8 @@ class IncomeWizardStepTest {
     static NewPlanDraft populatedHousehold(boolean couple) {
         var draft = new NewPlanDraft();
         var primary = draft.getPlan().getHousehold().getPrimaryPerson();
+        primary.setFirstName("Alex");
+        primary.setLastName("Example");
         primary.setBirthDate(LocalDate.of(1964, 5, 6));
         primary.setMortalityCategory(MortalityCategory.FEMALE);
         if (couple) {

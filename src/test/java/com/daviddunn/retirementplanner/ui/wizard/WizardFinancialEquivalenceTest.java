@@ -41,8 +41,8 @@ class WizardFinancialEquivalenceTest {
         boolean couple() { return this == COUPLE; }
         boolean populated() { return this != EMPTY; }
         LocalDate birth() { return LocalDate.of(this == EMPTY ? 2000 : this == OPENING_RMD ? 1950 : 1964, 5, 6); }
-        String first() { return this == EMPTY || this == OPENING_RMD ? "" : "Alex"; }
-        String last() { return first().isEmpty() ? "" : "Example"; }
+        String first() { return "Alex"; }
+        String last() { return "Example"; }
     }
 
     private static final LocalDate START = LocalDate.of(2027, 7, 1);

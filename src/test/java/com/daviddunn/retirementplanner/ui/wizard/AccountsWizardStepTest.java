@@ -86,6 +86,7 @@ class AccountsWizardStepTest {
             dialog.show();
             try {
                 TextField balance = field(dialog, "balanceField");
+                ((TextField) field(dialog, "nameField")).setText("Retirement account");
                 balance.setText("not money");
                 button(dialog.getDialogPane(), "OK").fire();
                 assertTrue(dialog.isShowing());

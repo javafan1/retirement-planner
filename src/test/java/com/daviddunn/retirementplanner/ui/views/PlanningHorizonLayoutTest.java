@@ -212,6 +212,14 @@ class PlanningHorizonLayoutTest {
     }
 
     private static void assertRenderedText(Node node, String expected) {
+        if (node instanceof Label label) {
+            assertEquals(expected, label.getText());
+            if (label.getGraphic() instanceof javafx.scene.text.TextFlow flow) {
+                assertTrue(flow.getChildren().stream().filter(Text.class::isInstance)
+                        .map(Text.class::cast).anyMatch(text -> expected.equals(text.getText())));
+            }
+            return;
+        }
         Text text = (Text) node.lookup(".text");
         assertNotNull(text);
         assertEquals(expected, text.getText(), "Rendered text should not have an ellipsis");

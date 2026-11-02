@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Field;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Kind;
@@ -14,6 +15,8 @@ import javafx.scene.layout.GridPane;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ExpenseDialog extends Dialog<Expense> {
 
@@ -39,6 +42,7 @@ public class ExpenseDialog extends Dialog<Expense> {
     private Expense result;
 
     private final Label growthCategoryLabel;
+    private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
 
 
 
@@ -158,8 +162,9 @@ public class ExpenseDialog extends Dialog<Expense> {
 
         int row = 0;
 
+        Label descriptionLabel = new Label("Description:");
         grid.add(
-                new Label("Description:"),
+                descriptionLabel,
                 0,
                 row);
 
@@ -168,8 +173,9 @@ public class ExpenseDialog extends Dialog<Expense> {
                 1,
                 row++);
 
+        Label expenseTypeLabel = new Label("Expense Type:");
         grid.add(
-                new Label("Expense Type:"),
+                expenseTypeLabel,
                 0,
                 row);
 
@@ -221,6 +227,15 @@ public class ExpenseDialog extends Dialog<Expense> {
                 endDatePicker,
                 1,
                 row++);
+        grid.add(RequiredFieldSupport.createLegend(), 0, row, 2, 1);
+
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(descriptionLabel, descriptionField));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(expenseTypeLabel, expenseTypeComboBox));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(amountLabel, annualAmountField));
+        var oneTime = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> expenseTypeComboBox.getValue() == ExpenseType.ONE_TIME,
+                expenseTypeComboBox.valueProperty());
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(effectiveDateLabel, effectiveDatePicker, oneTime));
 
         InputHelp.install(expenseTypeComboBox, "Recurring expenses repeat in active calendar years. One Time records a purchase in its purchase year, uses General Inflation, and is not reduced by the post-death expense factor.");
         InputHelp.install(annualAmountField, "Dollars in the projection's opening-year spending base: annual spending for Recurring, or the single purchase amount for One Time. Later-starting expenses use that same base. Inflation applies only under the selected escalation policy.");
@@ -235,6 +250,10 @@ public class ExpenseDialog extends Dialog<Expense> {
         annualAmountField.textProperty().addListener((observable, before, after) -> updateVolatilityAvailability());
         InputHelp.linkGridLabels(grid);
         getDialogPane().setContent(grid);
+        setOnHidden(event -> {
+            requiredFieldAttachments.forEach(RequiredFieldSupport.Attachment::close);
+            requiredFieldAttachments.clear();
+        });
 
         updateExpenseTypeControls(
                 expenseTypeComboBox.getValue());
@@ -419,12 +438,12 @@ public class ExpenseDialog extends Dialog<Expense> {
 
         amountLabel.setText(
                 oneTime
-                        ? (guidedCreation ? "Purchase Amount *" : "Purchase Amount:")
-                        : (guidedCreation ? "Annual Amount *" : "Annual Amount:"));
+                        ? "Purchase Amount:"
+                        : "Annual Amount:");
 
         effectiveDateLabel.setText(
                 oneTime
-                        ? (guidedCreation ? "Purchase Date *" : "Purchase Date:")
+                        ? "Purchase Date:"
                         : "Effective Date:");
 
         /*

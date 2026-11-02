@@ -34,6 +34,8 @@ class NewRetirementPlanWizardTest {
                     java.util.Locale.setDefault(java.util.Locale.Category.FORMAT, locale);
                     for (boolean guided : List.of(false, true)) {
                         var card = new com.daviddunn.retirementplanner.ui.components.PersonCard(guided);
+                        ((TextField) field(card, "firstNameField")).setText("Alex");
+                        ((TextField) field(card, "lastNameField")).setText("Example");
                         DatePicker date = field(card, "birthDatePicker");
                         ((ComboBox<MortalityCategory>) field(card, "mortalityCategory")).setValue(MortalityCategory.MALE);
                         String prefix = locale.equals(java.util.Locale.US) ? "5/6/" : "6/5/";
@@ -74,8 +76,14 @@ class NewRetirementPlanWizardTest {
                 assertNull(pane.lookup("#wizard-remove-spouse"));
                 var labels = descendants(pane).filter(Label.class::isInstance)
                         .map(Label.class::cast).map(Label::getText).toList();
-                assertTrue(labels.contains("Birth Date *"));
-                assertTrue(labels.contains("Mortality category *"));
+                assertTrue(labels.contains("Birth Date:"));
+                assertTrue(labels.contains("Mortality category:"));
+                var primaryLabels = descendants(person(pane, "primary")).filter(Label.class::isInstance)
+                        .map(Label.class::cast).toList();
+                assertTrue(hasRequiredMarker(primaryLabels.stream().filter(label -> label.getText().equals("Birth Date:"))
+                        .findFirst().orElseThrow()));
+                assertTrue(hasRequiredMarker(primaryLabels.stream().filter(label -> label.getText().equals("Mortality category:"))
+                        .findFirst().orElseThrow()));
                 assertTrue(labels.contains("First Name:"));
                 assertTrue(labels.contains("Last Name:"));
                 assertTrue(labels.stream().anyMatch(text -> text.startsWith("* Required")));
@@ -87,6 +95,13 @@ class NewRetirementPlanWizardTest {
             }
             finally { wizard.close(); }
         });
+    }
+
+    private static boolean hasRequiredMarker(Label label) {
+        return label.getGraphic() instanceof javafx.scene.text.TextFlow flow
+                && flow.getChildren().stream().filter(javafx.scene.text.Text.class::isInstance)
+                    .map(javafx.scene.text.Text.class::cast)
+                    .anyMatch(text -> text.getStyleClass().contains("required-field-indicator") && text.isVisible());
     }
 
     @Test
@@ -134,12 +149,16 @@ class NewRetirementPlanWizardTest {
     }
 
     @Test
-    void namesRemainOptionalAndTypedDateAndFemaleCategoryCreateOnePerson() throws Exception {
+    void requiredNamesAreTrimmedAndTypedDateAndFemaleCategoryCreateOnePerson() throws Exception {
         fx(() -> {
             var wizard = householdWizard();
             wizard.show();
             var pane = wizard.getDialogPane();
             var card = person(pane, "primary");
+            TextField first = field(card, "firstNameField");
+            TextField last = field(card, "lastNameField");
+            first.setText("  Zoë 李 ");
+            last.setText(" O’Neil-Smith ");
             ComboBox<MortalityCategory> category = field(card, "mortalityCategory");
             category.setValue(MortalityCategory.FEMALE);
             DatePicker date = field(card, "birthDatePicker");
@@ -150,13 +169,34 @@ class NewRetirementPlanWizardTest {
             assertNotNull(plan);
             assertEquals(1, plan.getHousehold().members().size());
             assertFalse(plan.getHousehold().hasSpouse());
-            assertEquals("", plan.getHousehold().getPrimaryPerson().getFirstName());
-            assertEquals("", plan.getHousehold().getPrimaryPerson().getLastName());
+            assertEquals("Zoë 李", plan.getHousehold().getPrimaryPerson().getFirstName());
+            assertEquals("O’Neil-Smith", plan.getHousehold().getPrimaryPerson().getLastName());
             assertEquals(PRIMARY_DATE, plan.getHousehold().getPrimaryPerson().getBirthDate());
             assertEquals(MortalityCategory.FEMALE, plan.getHousehold().getPrimaryPerson().getMortalityCategory());
             assertTrue(plan.getAccountPortfolio().getAccounts().isEmpty());
             assertTrue(plan.getHousehold().getPrimaryPerson().getIncomeSources().isEmpty());
             assertNull(plan.getPlanningAssumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge());
+        });
+    }
+
+    @Test
+    void wizardRequiresNonWhitespaceNamesAfterExistingPersonFieldsAreValid() throws Exception {
+        fx(() -> {
+            var wizard = householdWizard();
+            wizard.show();
+            try {
+                var pane = wizard.getDialogPane();
+                var card = person(pane, "primary");
+                DatePicker date = field(card, "birthDatePicker");
+                date.setValue(PRIMARY_DATE);
+                ((ComboBox<MortalityCategory>) field(card, "mortalityCategory")).setValue(MortalityCategory.FEMALE);
+                ((TextField) field(card, "firstNameField")).setText("   ");
+                ((TextField) field(card, "lastNameField")).setText("Family");
+                button(pane, "Create Plan").fire();
+                assertTrue(wizard.isShowing());
+                assertTrue(((Label) pane.lookup("#wizard-validation")).getText().contains("First name is required"));
+                assertNull(wizard.getResult());
+            } finally { wizard.close(); }
         });
     }
 
@@ -275,6 +315,8 @@ class NewRetirementPlanWizardTest {
         fx(() -> {
             var draft = new NewPlanDraft();
             var primary = draft.getPlan().getHousehold().getPrimaryPerson();
+            primary.setFirstName("Taylor");
+            primary.setLastName("Morgan");
             primary.setBirthDate(PRIMARY_DATE);
             primary.setMortalityCategory(MortalityCategory.MALE);
             StubStep first = new StubStep("First");

@@ -143,6 +143,7 @@ class RothAvailabilityUiTest {
             dialog.show();
             try {
                 ((ComboBox<AccountType>) field(dialog, "typeCombo")).setValue(AccountType.TRADITIONAL_401K);
+                ((TextField) field(dialog, "nameField")).setText("Employer plan");
                 ((TextField) field(dialog, "balanceField")).setText("100000");
                 ((Button) dialog.getDialogPane().lookupButton(ButtonType.OK)).fire();
                 assertTrue(dialog.isShowing());
@@ -179,6 +180,7 @@ class RothAvailabilityUiTest {
             try {
                 var type = (ComboBox<AccountType>) field(dialog, "typeCombo");
                 type.setValue(accountType);
+                ((TextField) field(dialog, "nameField")).setText("Employer plan");
                 ((TextField) field(dialog, "balanceField")).setText("100000");
                 var status = (ComboBox<EmployerRothConversionAvailability.Status>)
                         dialog.getDialogPane().lookup("#employer-roth-availability");
@@ -223,6 +225,7 @@ class RothAvailabilityUiTest {
                 dialog.show();
                 try {
                     ((ComboBox<AccountType>) field(dialog, "typeCombo")).setValue(AccountType.TRADITIONAL_403B);
+                    ((TextField) field(dialog, "nameField")).setText("Employer plan");
                     ((TextField) field(dialog, "balanceField")).setText("100000");
                     ((ComboBox<EmployerRothConversionAvailability.Status>) dialog.getDialogPane()
                             .lookup("#employer-roth-availability"))
@@ -242,6 +245,7 @@ class RothAvailabilityUiTest {
             blank.show();
             try {
                 ((ComboBox<AccountType>) field(blank, "typeCombo")).setValue(AccountType.TRADITIONAL_401K);
+                ((TextField) field(blank, "nameField")).setText("Employer plan");
                 ((TextField) field(blank, "balanceField")).setText("100000");
                 ((ComboBox<EmployerRothConversionAvailability.Status>) blank.getDialogPane()
                         .lookup("#employer-roth-availability"))

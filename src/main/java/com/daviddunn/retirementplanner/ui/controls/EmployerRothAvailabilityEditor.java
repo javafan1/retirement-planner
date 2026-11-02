@@ -3,6 +3,9 @@ package com.daviddunn.retirementplanner.ui.controls;
 import com.daviddunn.retirementplanner.domain.roth.EmployerRothConversionAvailability;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
+import javafx.beans.binding.Bindings;
+import java.util.ArrayList;
+import java.util.List;
 import java.time.Year;
 
 /** Detached account-editor inputs; never mutates an account. */
@@ -13,6 +16,8 @@ public final class EmployerRothAvailabilityEditor extends VBox {
     private final boolean legacy;
     private final Label error = new Label();
     private final Label yearLabel = new Label("First eligible calendar year (optional)");
+    private final Label statusLabel = new Label("Availability status:");
+    private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
     private Runnable preferredHeightChanged = () -> { };
 
     public EmployerRothAvailabilityEditor(EmployerRothConversionAvailability original, boolean legacy) {
@@ -52,7 +57,12 @@ public final class EmployerRothAvailabilityEditor extends VBox {
         error.managedProperty().bind(error.textProperty().isNotEmpty());
         error.visibleProperty().bind(error.managedProperty());
         yearLabel.setLabelFor(year);
-        getChildren().addAll(heading, help, replaceLegacy, status, yearLabel, year, error);
+        statusLabel.setLabelFor(status);
+        getChildren().addAll(heading, help, replaceLegacy, statusLabel, status, yearLabel, year, error);
+        var statusRequired = Bindings.createBooleanBinding(
+                () -> isVisible() && isManaged() && (!legacy || replaceLegacy.isSelected()),
+                visibleProperty(), managedProperty(), replaceLegacy.selectedProperty());
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(statusLabel, status, statusRequired));
         status.valueProperty().addListener((o, a, b) -> update());
         replaceLegacy.selectedProperty().addListener((o, a, b) -> update());
         update();
@@ -97,5 +107,11 @@ public final class EmployerRothAvailabilityEditor extends VBox {
             if (status.getValue() == null) status.requestFocus(); else year.requestFocus();
             return false;
         }
+    }
+
+    /** Releases indicator listeners when the containing account dialog closes. */
+    public void close() {
+        requiredFieldAttachments.forEach(RequiredFieldSupport.Attachment::close);
+        requiredFieldAttachments.clear();
     }
 }

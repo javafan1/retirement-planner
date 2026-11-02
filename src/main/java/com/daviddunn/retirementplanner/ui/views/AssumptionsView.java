@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.views;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 import com.daviddunn.retirementplanner.ui.wizard.WizardFieldRow;
 import com.daviddunn.retirementplanner.ui.help.PlanningInputHelp;
 import com.daviddunn.retirementplanner.domain.model.DeathScenario;
@@ -16,6 +17,8 @@ import com.daviddunn.retirementplanner.ui.help.HelpText;
 import com.daviddunn.retirementplanner.ui.rmd.OpeningRmdWorkflowService;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyBooleanWrapper;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.value.ObservableBooleanValue;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
@@ -87,6 +90,9 @@ public class AssumptionsView extends VBox {
 
     private final Label statusLabel;
     private final java.util.Map<Control, WizardFieldRow> guidedRows = new java.util.HashMap<>();
+    private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
+    private final List<RequiredFieldSupport.Attachment> socialSecurityRequiredAttachments = new ArrayList<>();
+    private final SimpleBooleanProperty coupleHousehold = new SimpleBooleanProperty();
     private final TitledPane guidedAdvanced = new TitledPane();
     private final Button openingRmdButton;
 
@@ -413,10 +419,13 @@ public class AssumptionsView extends VBox {
         stateJurisdictionComboBox.setVisibleRowCount(11);
         stateJurisdictionComboBox.setId("state-of-residence");
         InputHelp.install(stateJurisdictionComboBox, "Full-year residence for every projection year. Michigan uses the modeled retirement rules; Alaska, Florida, Nevada, New Hampshire, South Dakota, Tennessee, Texas and Wyoming have no modeled individual state income tax under validated 2026 rules, projected forward without tax-law forecasting. Illinois subtracts assessed federally taxable qualified retirement income; unassessed pension qualification is conservatively taxable. Pennsylvania supports ordinary IRA retirement receipts, complete IRA-to-Roth IRA transfers, Social Security and ordinary investments; missing plan qualification or basis/history makes the projection unavailable. Illinois and Pennsylvania use the 2026 baseline without future indexing. Local taxes, part-year moves and income sourced to other states are not modeled.");
-        Label stateLabel = new Label("State of Residence *");
+        Label stateLabel = new Label("State of Residence");
         stateLabel.setLabelFor(stateJurisdictionComboBox);
         grid.add(stateLabel, 0, row);
-        grid.add(new Label("* Required"), 2, row);
+        Label requiredLegend = guidedCreation
+                ? new Label("* Required") : RequiredFieldSupport.createLegend();
+        requiredLegend.setId("assumptions-required-legend");
+        grid.add(requiredLegend, 2, row);
         grid.add(stateJurisdictionComboBox, 1, row++);
         stateJurisdictionComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
         grid.add(
@@ -514,6 +523,36 @@ public class AssumptionsView extends VBox {
         InputHelp.install(estimatedHeirTaxRateField, PlanningInputHelp.HEIR_RATE);
         InputHelp.install(openingRmdButton, PlanningInputHelp.OPENING_RMD);
         InputHelp.linkGridLabels(grid);
+        InputHelp.link(horizonLabel, projectionLengthField);
+        InputHelp.link(survivorAgeLabel, survivorClaimingAgeComboBox);
+        attachRequired(grid, projectionStartDatePicker);
+        attachRequired(grid, projectionLengthField);
+        attachRequired(grid, postDeathExpenseFactorField);
+        attachRequired(grid, investmentReturnField);
+        attachRequired(grid, inflationRateField);
+        attachRequired(grid, healthcareInflationField);
+        attachRequired(grid, socialSecurityColaField);
+        attachRequired(grid, filingStatusComboBox);
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(stateLabel, stateJurisdictionComboBox));
+        attachRequired(grid, federalBracketGrowthField);
+        attachRequired(grid, standardDeductionGrowthField);
+        attachRequired(grid, stateIncomeTaxRateField);
+        attachRequired(grid, localIncomeTaxRateField);
+        attachRequired(grid, estimatedHeirTaxRateField);
+        var rateChangeActive = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> !futureFederalMarginalRateAdjustmentField.getText().isBlank()
+                        || !futureFederalMarginalRateEffectiveYearField.getText().isBlank(),
+                futureFederalMarginalRateAdjustmentField.textProperty(),
+                futureFederalMarginalRateEffectiveYearField.textProperty());
+        attachRequired(grid, futureFederalMarginalRateAdjustmentField, rateChangeActive);
+        attachRequired(grid, futureFederalMarginalRateEffectiveYearField, rateChangeActive);
+        var activeDeathScenario = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> coupleHousehold.get() && deathScenarioComboBox.getValue() != null
+                        && deathScenarioComboBox.getValue() != DeathScenario.BOTH_SURVIVE,
+                coupleHousehold, deathScenarioComboBox.valueProperty());
+        attachRequired(grid, deathScenarioComboBox, coupleHousehold);
+        attachRequired(grid, deathYearField, activeDeathScenario);
+        attachRequired(grid, survivorClaimingAgeComboBox, activeDeathScenario);
         HBox buttonBar = new HBox(10, applyButton, cancelButton);
         buttonBar.setPadding(new Insets(10));
         getChildren().addAll(grid, buttonBar, statusLabel);
@@ -627,7 +666,7 @@ public class AssumptionsView extends VBox {
         VBox.setVgrow(scroll, javafx.scene.layout.Priority.ALWAYS);
         buttons.setPadding(Insets.EMPTY);
         var required = original.getChildren().stream().filter(Label.class::isInstance).map(Label.class::cast)
-                .filter(label -> label.getText().equals("* Required")).findFirst().orElseThrow();
+                .filter(label -> "assumptions-required-legend".equals(label.getId())).findFirst().orElseThrow();
         original.getChildren().remove(required);
         buttons.getChildren().add(required);
         statusLabel.setWrapText(true);
@@ -647,6 +686,27 @@ public class AssumptionsView extends VBox {
         return card;
     }
 
+    private void attachRequired(GridPane grid, Control input) {
+        attachRequired(grid, input, new SimpleBooleanProperty(true));
+    }
+
+    private void attachRequired(GridPane grid, Control input, ObservableBooleanValue required) {
+        Label label = grid.getChildren().stream()
+                .filter(Label.class::isInstance).map(Label.class::cast)
+                .filter(candidate -> candidate.getLabelFor() == input)
+                .findFirst().orElseThrow(() -> new IllegalStateException(
+                        "Missing associated label for required Assumptions control " + input.getId()));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(label, input, required));
+    }
+
+    /** Releases indicator listeners when the main application discards this view. */
+    public void dispose() {
+        requiredFieldAttachments.forEach(RequiredFieldSupport.Attachment::close);
+        requiredFieldAttachments.clear();
+        socialSecurityRequiredAttachments.forEach(RequiredFieldSupport.Attachment::close);
+        socialSecurityRequiredAttachments.clear();
+    }
+
     private Label sectionHeading(String title) {
         Label heading = new Label(title);
         heading.getStyleClass().add("assumptions-section-heading");
@@ -654,6 +714,8 @@ public class AssumptionsView extends VBox {
     }
 
     private void loadSocialSecurityBenefitRows(RetirementPlan plan) {
+        socialSecurityRequiredAttachments.forEach(RequiredFieldSupport.Attachment::close);
+        socialSecurityRequiredAttachments.clear();
         socialSecurityBenefitRows.getChildren().clear();
         socialSecurityDraftRows.clear();
         addSocialSecurityBenefitRow(plan.getHousehold().getPrimaryPerson());
@@ -678,6 +740,7 @@ public class AssumptionsView extends VBox {
                             ? "primary-social-security-claiming-age" : "spouse-social-security-claiming-age");
                     InputHelp.install(age, PlanningInputHelp.CLAIMING_AGE);
                     InputHelp.link(owner, age);
+                    socialSecurityRequiredAttachments.add(RequiredFieldSupport.attach(owner, age));
                     Label amount = new Label();
                     amount.getStyleClass().add("assumption-value");
                     Label amountTitle = new Label("Monthly Benefit (" + source.getBenefitValuationYear() + " dollars)");
@@ -1059,6 +1122,7 @@ public class AssumptionsView extends VBox {
 
     private void updateHouseholdPresentation() {
         boolean couple = currentPlan.getHousehold().hasSpouse();
+        coupleHousehold.set(couple);
         if (guidedCreation) {
             GridPane inputGrid = (GridPane) deathScenarioComboBox.getParent();
             int firstCoupleRow = GridPane.getRowIndex(deathScenarioComboBox);

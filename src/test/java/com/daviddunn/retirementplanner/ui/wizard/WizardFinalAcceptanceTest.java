@@ -45,6 +45,9 @@ class WizardFinalAcceptanceTest {
             reference.set(dialog);
             dialog.show();
             var pane = dialog.getDialogPane();
+            if (kind == Editor.ACCOUNT || kind == Editor.PENSION) {
+                ((TextField) pane.lookup("#wizard-input-name")).setText("Valid editor name");
+            }
             if (kind == Editor.PENSION) {
                 ((DatePicker) pane.lookup("#wizard-input-start-date")).setValue(LocalDate.of(2027, 1, 1));
                 ((TextField) pane.lookup("#wizard-input-annual-cola-rate")).setText("0.0175");
@@ -69,14 +72,18 @@ class WizardFinalAcceptanceTest {
                 assertTrue(dialog.isShowing());
                 assertTrue(error.isVisible() && !error.getText().isBlank());
                 assertTrue(amount.getPseudoClassStates().contains(javafx.css.PseudoClass.getPseudoClass("invalid")));
-                assertSame(amount, pane.getScene().getFocusOwner());
+                assertSame(amount, pane.getScene().getFocusOwner(), "Validation should restore amount focus; actual focus owner="
+                        + pane.getScene().getFocusOwner());
                 var bounds = amount.localToScene(amount.getBoundsInLocal());
                 assertTrue(bounds.getMinY() >= 0 && bounds.getMaxY() <= pane.getScene().getHeight());
                 String message = error.getText();
                 ((TextField) pane.lookup(kind == Editor.SPENDING ? "#wizard-input-description" : "#wizard-input-name")).setText("Unrelated label");
                 assertEquals(message, error.getText());
                 assertNotNull(amount.getAccessibleHelp());
-                assertTrue(pane.lookupAll(".label").stream().map(Label.class::cast).anyMatch(label -> label.getLabelFor() == amount && label.getText().contains("*")));
+                assertTrue(pane.lookupAll(".label").stream().map(Label.class::cast).anyMatch(label ->
+                        label.getLabelFor() == amount && (label.getText().contains("*")
+                                || label.getGraphic() instanceof javafx.scene.Parent graphic
+                                && !graphic.lookupAll(".required-field-indicator").isEmpty())));
                 amount.setText("1234.5600");
                 button(pane, "OK").fire();
                 assertFalse(dialog.isShowing());
@@ -93,7 +100,7 @@ class WizardFinalAcceptanceTest {
         fx(() -> {
             var wizard = new NewRetirementPlanWizard(null);
             reference.set(wizard); wizard.show();
-            fill(person(wizard.getDialogPane(), "primary"), "", "", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
+            fill(person(wizard.getDialogPane(), "primary"), "Alex", "Example", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
             for (int index = 0; index < 5; index++) button(wizard.getDialogPane(), "Next").fire();
             Control input = (Control) wizard.getDialogPane().lookup("#wizard-assumption-" + name);
             if (input instanceof DatePicker picker) picker.getEditor().setText("malformed date");
@@ -138,6 +145,7 @@ class WizardFinalAcceptanceTest {
             pension.show();
             try {
                 var pane = pension.getDialogPane();
+                ((TextField) pane.lookup("#wizard-input-name")).setText("Primary pension");
                 ((TextField) pane.lookup("#wizard-input-monthly-benefit")).setText("1234.5600");
                 ((TextField) pane.lookup("#wizard-input-annual-cola-rate")).setText("0.0175");
                 ((DatePicker) pane.lookup("#wizard-input-start-date")).getEditor().setText("malformed date");
@@ -154,6 +162,7 @@ class WizardFinalAcceptanceTest {
             account.show();
             try {
                 var pane = account.getDialogPane();
+                ((TextField) pane.lookup("#wizard-input-name")).setText("Retirement account");
                 @SuppressWarnings("unchecked") var type = (ComboBox<AccountType>) pane.lookup("#wizard-input-type");
                 @SuppressWarnings("unchecked") var owner = (ComboBox<AccountOwnership>) pane.lookup("#wizard-input-owner");
                 type.setValue(AccountType.BROKERAGE); owner.setValue(AccountOwnership.JOINT);
@@ -175,7 +184,7 @@ class WizardFinalAcceptanceTest {
         fx(() -> {
             var wizard = new NewRetirementPlanWizard(null);
             reference.set(wizard); wizard.show();
-            fill(person(wizard.getDialogPane(), "primary"), "", "", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
+            fill(person(wizard.getDialogPane(), "primary"), "Alex", "Example", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
             assertTrue(button(wizard.getDialogPane(), "Next").isDefaultButton());
             assertTrue(button(wizard.getDialogPane(), "Cancel").isCancelButton());
         });
@@ -200,7 +209,7 @@ class WizardFinalAcceptanceTest {
             var wizard = new NewRetirementPlanWizard(null);
             reference.set(wizard); wizard.show();
             var pane = wizard.getDialogPane();
-            fill(person(pane, "primary"), "", "", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
+            fill(person(pane, "primary"), "Alex", "Example", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
             for (int index = 0; index < 5; index++) button(pane, "Next").fire();
             input.set((TextField) pane.lookup("#wizard-assumption-return"));
             input.get().setText("pending uncommitted rate");

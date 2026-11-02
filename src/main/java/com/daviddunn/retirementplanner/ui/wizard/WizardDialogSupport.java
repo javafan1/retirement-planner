@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.wizard;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 import com.daviddunn.retirementplanner.util.Money;
 import javafx.css.PseudoClass;
 import javafx.event.ActionEvent;
@@ -54,7 +55,9 @@ public final class WizardDialogSupport {
                     .filter(label -> Objects.equals(GridPane.getRowIndex(label), GridPane.getRowIndex(input)))
                     .filter(label -> GridPane.getColumnIndex(label) == null || GridPane.getColumnIndex(label) == 0)
                     .findFirst().ifPresent(label -> {
-                        label.setText(field.name() + (field.required() ? " *" : ""));
+                        if (!RequiredFieldSupport.isAttached(label)) {
+                            label.setText(field.name() + (field.required() ? " *" : ""));
+                        }
                         label.setLabelFor(input);
                     });
         }
@@ -63,6 +66,8 @@ public final class WizardDialogSupport {
         ColumnConstraints inputs = new ColumnConstraints();
         inputs.setHgrow(Priority.ALWAYS);
         grid.getColumnConstraints().setAll(labels, inputs);
+        // Shared editors may already carry the common legend; this wrapper supplies its own legacy legend.
+        grid.getChildren().removeIf(node -> node.getStyleClass().contains("required-field-legend"));
         VBox body = new VBox(10, new Label("* Required"), grid, error);
         body.setPadding(new javafx.geometry.Insets(10));
         dialog.getDialogPane().setContent(body);

@@ -55,7 +55,9 @@ class ExpensesWizardStepTest {
                 ((ComboBox<ExpenseType>) field(dialog, "expenseTypeComboBox")).setValue(ExpenseType.ONE_TIME);
                 button(dialog.getDialogPane(), "OK").fire();
                 assertTrue(dialog.isShowing());
-                assertTrue(((Label) field(dialog, "effectiveDateLabel")).getText().contains("*"));
+                Label purchaseDate = (Label) field(dialog, "effectiveDateLabel");
+                assertEquals("Purchase Date:", purchaseDate.getText());
+                assertTrue(hasRequiredMarker(purchaseDate));
                 assertFalse(((DatePicker) field(dialog, "endDatePicker")).isManaged());
                 ((DatePicker) field(dialog, "effectiveDatePicker")).setValue(LocalDate.of(2032, 6, 1));
                 button(dialog.getDialogPane(), "OK").fire();
@@ -66,6 +68,13 @@ class ExpensesWizardStepTest {
             }
             finally { dialog.close(); }
         });
+    }
+
+    private static boolean hasRequiredMarker(Label label) {
+        return label.getGraphic() instanceof javafx.scene.text.TextFlow flow
+                && flow.getChildren().stream().filter(javafx.scene.text.Text.class::isInstance)
+                    .map(javafx.scene.text.Text.class::cast)
+                    .anyMatch(text -> text.getStyleClass().contains("required-field-indicator") && text.isVisible());
     }
 
     @Test void descriptionMalformedAmountAndReversedDatesProduceInlineErrors() throws Exception {

@@ -204,7 +204,10 @@ class RothConversionMainWindowTest {
             Path file = temporaryDirectory.resolve("combined.json");
             f.controller.saveAs(file);
             long revision = f.controller.getSourcePlanRevision();
-            if (household) householdName(f.household).setText("Saved name");
+            if (household) {
+                householdName(f.household).setText("Saved name");
+                setHouseholdLastNames(f.household);
+            }
             if (assumptions) field(f.assumptions, "inflationRateField").setText("3.75");
             field(f.roth, "conversionYearField").setText("2027");
             invoke(f.window, "refreshAllViews");
@@ -344,7 +347,8 @@ class RothConversionMainWindowTest {
             WindowFixture f = new WindowFixture();
             field(f.roth, "conversionAmountField").setText("invalid");
             householdName(f.household).setText("Applied name");
-            assertTrue(f.household.applyChanges());
+            setHouseholdLastNames(f.household);
+            assertTrue(f.household.applyChanges(), ((Label) control(f.household, "statusLabel")).getText());
             field(f.assumptions, "inflationRateField").setText("3.75");
             assertTrue(f.assumptions.applyChanges());
             householdName(f.household).setText("Cancelled name");
@@ -368,7 +372,18 @@ class RothConversionMainWindowTest {
     }
     private static TextField householdName(HouseholdView view) {
         PersonCard card = (PersonCard) ((TitledPane) view.getChildren().getFirst()).getContent();
-        return (TextField) card.getChildren().get(1);
+        try { return control(card, "firstNameField"); }
+        catch (Exception exception) { throw new AssertionError(exception); }
+    }
+
+    private static void setHouseholdLastNames(HouseholdView view) throws Exception {
+        var primary = (PersonCard) ((TitledPane) view.getChildren().getFirst()).getContent();
+        TextField primaryFirst = control(primary, "firstNameField");
+        if (primaryFirst.getText().isBlank()) primaryFirst.setText("Primary");
+        ((TextField) control(primary, "lastNameField")).setText("Example");
+        var spouse = (PersonCard) ((TitledPane) view.getChildren().get(2)).getContent();
+        ((TextField) control(spouse, "firstNameField")).setText("Spouse");
+        ((TextField) control(spouse, "lastNameField")).setText("Example");
     }
 
     private static Object invoke(Object target, String name) throws Exception {

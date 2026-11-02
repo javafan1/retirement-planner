@@ -319,6 +319,10 @@ class AssumptionsMainWindowTest {
             controller.newPlan();
             var plan = controller.getCurrentPlan();
             plan.setSpouse(new com.daviddunn.retirementplanner.domain.model.Person("", "", null));
+            plan.getHousehold().getPrimaryPerson().setFirstName("Primary");
+            plan.getHousehold().getPrimaryPerson().setLastName("Example");
+            plan.getHousehold().getSpouse().setFirstName("Spouse");
+            plan.getHousehold().getSpouse().setLastName("Example");
             plan.getHousehold().getPrimaryPerson().setMortalityCategory(MortalityCategory.MALE);
             plan.getHousehold().getSpouse().setMortalityCategory(MortalityCategory.FEMALE);
             plan.getHousehold().getPrimaryPerson().setBirthDate(LocalDate.of(1960, 1, 1));
@@ -329,7 +333,17 @@ class AssumptionsMainWindowTest {
             plan.setPlanningAssumptions(new PlanningAssumptions(
                     a.getEconomicAssumptions(), a.getTaxAssumptions(), a.getWithdrawalAssumptions(),
                     a.getDeathScenarioAssumptions(), 3, LocalDate.of(2026, 1, 1)));
+            household.load(plan);
             invoke(window, "loadCurrentPlan");
+            household.load(controller.getCurrentPlan());
+            var primaryCard = (com.daviddunn.retirementplanner.ui.components.PersonCard)
+                    ((TitledPane) household.getChildren().getFirst()).getContent();
+            if (!"Example".equals(((TextField) primaryCard.getChildren().get(3)).getText()))
+                throw new AssertionError("Primary last name did not load: " + ((TextField) primaryCard.getChildren().get(3)).getText());
+            var spouseCard = (com.daviddunn.retirementplanner.ui.components.PersonCard)
+                    ((TitledPane) household.getChildren().get(2)).getContent();
+            if (!"Example".equals(((TextField) spouseCard.getChildren().get(3)).getText()))
+                throw new AssertionError("Spouse last name did not load: " + ((TextField) spouseCard.getChildren().get(3)).getText());
         }
     }
 }

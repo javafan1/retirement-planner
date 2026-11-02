@@ -39,7 +39,7 @@ class SevenStepWizardTest {
                         NewPlanWizardStep.StepKey.REVIEW), steps.stream().map(NewPlanWizardStep::key).toList());
                 wizard.show();
                 var pane = wizard.getDialogPane();
-                fill(person(pane, "primary"), "", "", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
+                fill(person(pane, "primary"), "Alex", "Example", LocalDate.of(1964, 5, 6), MortalityCategory.FEMALE);
                 for (int index = 0; index < 6; index++) button(pane, "Next").fire();
                 for (String section : List.of("household", "accounts", "social-security", "pensions", "spending", "assumptions")) {
                     Button edit = (Button) pane.lookup("#wizard-review-edit-" + section);

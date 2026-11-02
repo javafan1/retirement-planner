@@ -246,7 +246,8 @@ class NewPlanFundingFailureTest {
                         .map(w -> w.getScene().getRoot()).filter(DialogPane.class::isInstance).map(DialogPane.class::cast).findFirst().orElseThrow();
                 try {
                     dialog.lookupAll(".text-field").stream().map(TextField.class::cast)
-                            .filter(input -> input.getAccessibleHelp() != null && input.getAccessibleHelp().startsWith("Current account value"))
+                            .filter(input -> input.getTooltip() != null
+                                    && input.getTooltip().getText().contains("Current account value"))
                             .findFirst().orElseThrow().setText("10000");
                     button(dialog, "OK").fire();
                 }

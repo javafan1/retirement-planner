@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.ui.controls;
 import com.daviddunn.retirementplanner.domain.model.RetirementParticipantFacts;
 import com.daviddunn.retirementplanner.domain.model.RetirementParticipantFacts.SeparationStatus;
 import com.daviddunn.retirementplanner.domain.model.RetirementParticipantFacts.RetirementConditionsStatus;
+import javafx.beans.binding.Bindings;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
@@ -10,12 +11,16 @@ import javafx.scene.control.TitledPane;
 import javafx.scene.layout.GridPane;
 import javafx.util.StringConverter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /** Optional arrangement-level facts; never asks the user to decide state-tax qualification. */
 public final class RetirementParticipantFactsEditor extends TitledPane {
     private final ComboBox<SeparationStatus> separation = new ComboBox<>();
     private final DatePicker separationDate = new DatePicker();
     private final ComboBox<RetirementConditionsStatus> conditions = new ComboBox<>();
     private final DatePicker conditionsDate = new DatePicker();
+    private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
 
     public RetirementParticipantFactsEditor(RetirementParticipantFacts facts) {
         setText("Participant facts (optional)");
@@ -47,16 +52,29 @@ public final class RetirementParticipantFactsEditor extends TitledPane {
         grid.setHgap(10);
         grid.setVgap(8);
         grid.setPadding(new javafx.geometry.Insets(10));
-        grid.addRow(0, new Label("Separated from employer:"), separation);
+        Label separationLabel = new Label("Separated from employer:");
+        Label conditionsLabel = new Label("Plan retirement conditions:");
+        grid.addRow(0, separationLabel, separation);
         grid.addRow(1, new Label("Separation date (optional):"), separationDate);
-        grid.addRow(2, new Label("Plan retirement conditions:"), conditions);
+        grid.addRow(2, conditionsLabel, conditions);
         grid.addRow(3, new Label("Conditions met date (optional):"), conditionsDate);
         InputHelp.install(separation, "Whether this participant has separated from the employer sponsoring this arrangement. Unknown is allowed. This fact alone does not establish state-tax exemption.");
         InputHelp.install(separationDate, "Actual or planned separation date. A future event does not apply to earlier projection dates. Without a date, affirmative timing remains unknown.");
         InputHelp.install(conditions, "Whether this participant has met the arrangement's retirement conditions. Do not infer this from age, Social Security, pension commencement or RMDs. Unknown is allowed.");
         InputHelp.install(conditionsDate, "Actual or planned date retirement conditions were met. Without a date, affirmative timing remains unknown. This is not a tax qualification election.");
         InputHelp.linkGridLabels(grid);
+        var statusesRequired = Bindings.createBooleanBinding(
+                () -> isVisible() && isManaged() && isExpanded(),
+                visibleProperty(), managedProperty(), expandedProperty());
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(separationLabel, separation, statusesRequired));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(conditionsLabel, conditions, statusesRequired));
         setContent(grid);
+    }
+
+    /** Releases indicator listeners with the containing editor. */
+    public void close() {
+        requiredFieldAttachments.forEach(RequiredFieldSupport.Attachment::close);
+        requiredFieldAttachments.clear();
     }
 
     private static <E extends Enum<E>> StringConverter<E> labels(String... labels) {

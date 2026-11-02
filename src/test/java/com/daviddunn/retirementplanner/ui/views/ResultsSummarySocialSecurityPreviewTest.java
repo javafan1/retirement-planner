@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.financial.*;
 import com.daviddunn.retirementplanner.domain.income.*;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.projection.*;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy;
 import com.daviddunn.retirementplanner.persistence.*;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
 import com.daviddunn.retirementplanner.application.settings.ApplicationTheme;
@@ -119,6 +120,74 @@ class ResultsSummarySocialSecurityPreviewTest {
         var year=c.peekCurrentProjection().getYears().stream().filter(y->y.getCalendarYear()==2034).findFirst().orElseThrow();
         var expected=new BigDecimal("4960.00").multiply(BigDecimal.ONE.add(new BigDecimal(cola)).pow(8)).setScale(2,RoundingMode.HALF_UP).multiply(new BigDecimal("12"));
         assertEquals(0,expected.compareTo(year.getSocialSecurityResult().primaryOwnBenefit()));
+    }
+
+    @Test void keyAssumptionsRequirednessMatchesConditionalConfigurationAndSummaryLayoutRemainsPresent() throws Exception {
+        var c = controller();
+        var plan = plan(true, 70, "0", 2026);
+        plan.getAccountPortfolio().addAccount(new TraditionalIRA("Pretax", AccountOwnership.PRIMARY, new BigDecimal("50000")));
+        plan.getAccountPortfolio().addAccount(new RothIRA("Roth", AccountOwnership.PRIMARY, BigDecimal.ZERO));
+        c.newPlan(plan);
+        fx(() -> {
+            var view = new ResultsSummaryView(c);
+            view.load(plan, null, List.of());
+            var horizon = (TextField) field(view, "projectionLengthField");
+            assertTrue(marked(labelFor(view, horizon)));
+            var investment = (TextField) field(view, "investmentReturnField");
+            assertTrue(marked(labelFor(view, investment)));
+            var rothEnabled = (CheckBox) field(view, "rothEnabledCheckBox");
+            var rothStrategy = (ComboBox<RothConversionStrategy>) field(view, "rothStrategyComboBox");
+            Label strategyLabel = labelFor(view, rothStrategy);
+            Label amountLabel = (Label) field(view, "rothAmountLabel");
+            Label targetLabel = (Label) field(view, "rothTargetTaxableIncomeLabel");
+            assertFalse(marked(strategyLabel));
+            rothEnabled.setSelected(true);
+            assertTrue(marked(strategyLabel));
+            assertTrue(marked(amountLabel));
+            assertFalse(marked(targetLabel));
+            rothStrategy.setValue(RothConversionStrategy.CUSTOM_TAXABLE_INCOME_TARGET);
+            assertFalse(marked(amountLabel));
+            assertTrue(marked(targetLabel));
+            var scenario = (ComboBox<String>) field(view, "deathScenarioComboBox");
+            Label scenarioLabel = labelFor(view, scenario);
+            Label deathYearLabel = labelFor(view, (TextField) field(view, "deathYearField"));
+            assertTrue(marked(scenarioLabel));
+            assertFalse(marked(deathYearLabel));
+            scenario.setValue("Primary Dies");
+            assertTrue(marked(deathYearLabel));
+            var rows = (List<?>) field(view, "socialSecurityRows");
+            assertEquals(2, rows.size());
+            for (Object row : rows) {
+                var age = (ComboBox<Integer>) field(row, "claimingAgeCombo");
+                assertTrue(marked(labelFor(view, age)));
+            }
+            view.dispose();
+            return null;
+        });
+    }
+
+    private static Label labelFor(Parent root, Node input) {
+        Label found = labelForOrNull(root, input);
+        if (found == null) throw new AssertionError("Missing label for " + input);
+        return found;
+    }
+
+    private static Label labelForOrNull(Parent root, Node input) {
+        if (root instanceof Label label && label.getLabelFor() == input) return label;
+        if (root instanceof ScrollPane scroll && scroll.getContent() instanceof Parent content) {
+            Label found = labelForOrNull(content, input); if (found != null) return found;
+        }
+        for (Node child : root.getChildrenUnmodifiable()) if (child instanceof Parent parent) {
+            Label found = labelForOrNull(parent, input); if (found != null) return found;
+        }
+        return null;
+    }
+
+    private static boolean marked(Label label) {
+        if (!(label.getGraphic() instanceof javafx.scene.text.TextFlow flow)) return false;
+        return flow.getChildren().stream().filter(javafx.scene.text.Text.class::isInstance)
+                .map(javafx.scene.text.Text.class::cast)
+                .anyMatch(mark -> mark.getStyleClass().contains("required-field-indicator") && mark.isVisible());
     }
 
     @ParameterizedTest @ValueSource(booleans={false,true})

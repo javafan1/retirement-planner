@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 import com.daviddunn.retirementplanner.ui.help.PlanningInputHelp;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Field;
@@ -16,6 +17,8 @@ import javafx.scene.layout.GridPane;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SocialSecurityDialog
         extends Dialog<SocialSecurityIncome> {
@@ -30,6 +33,7 @@ public class SocialSecurityDialog
     private final CheckBox useTodaysDollarConventionCheckBox;
     private final Household household;
     private final Label startDateValidationLabel;
+    private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
 
     public SocialSecurityDialog(SocialSecurityIncome income, int benefitValuationYear, Household household,
                                 java.util.List<AccountOwnership> permittedOwners) {
@@ -126,7 +130,8 @@ public class SocialSecurityDialog
         grid.add(new Label("Name:"), 0, row);
         grid.add(nameField, 1, row++);
 
-        grid.add(new Label("Owner:"), 0, row);
+        Label ownerLabel = new Label("Owner:");
+        grid.add(ownerLabel, 0, row);
         grid.add(ownershipCombo, 1, row++);
 
         grid.add(new Label("Benefit Start Date:"), 0, row);
@@ -139,8 +144,8 @@ public class SocialSecurityDialog
 
         grid.add(startDateValidationLabel, 1, row++);
 
-        grid.add(new Label(
-                "Gross FRA Monthly Benefit ($/month):"), 0, row);
+        Label fraLabel = new Label("Gross FRA Monthly Benefit ($/month):");
+        grid.add(fraLabel, 0, row);
         grid.add(fraBenefitField, 1, row++);
 
         Label valuationYearLabel = new Label(
@@ -149,7 +154,8 @@ public class SocialSecurityDialog
         grid.add(valuationYearLabel, 0, row, 2, 1);
         row++;
 
-        grid.add(new Label("Claiming Age:"), 0, row);
+        Label claimingAgeLabel = new Label("Claiming Age:");
+        grid.add(claimingAgeLabel, 0, row);
         grid.add(claimingAgeCombo, 1, row++);
 
         Label help = new Label(
@@ -185,7 +191,15 @@ public class SocialSecurityDialog
         InputHelp.install(claimingAgeCombo, PlanningInputHelp.CLAIMING_AGE);
         InputHelp.install(useTodaysDollarConventionCheckBox, "For this legacy source, interpret the entered FRA benefit in the plan's projection-start-year dollars. Selecting this updates the valuation year on save; it does not convert the entered dollar amount.");
         InputHelp.linkGridLabels(grid);
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(ownerLabel, ownershipCombo));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(fraLabel, fraBenefitField));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(claimingAgeLabel, claimingAgeCombo));
+        grid.add(RequiredFieldSupport.createLegend(), 0, row + 1, 2, 1);
         getDialogPane().setContent(grid);
+        setOnHidden(event -> {
+            requiredFieldAttachments.forEach(RequiredFieldSupport.Attachment::close);
+            requiredFieldAttachments.clear();
+        });
 
         getDialogPane().getButtonTypes().addAll(
                 ButtonType.OK,

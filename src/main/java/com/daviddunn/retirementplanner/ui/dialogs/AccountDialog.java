@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.ui.dialogs;
 
 import com.daviddunn.retirementplanner.ui.controls.RetirementParticipantFactsEditor;
+import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 
 import com.daviddunn.retirementplanner.domain.model.RetirementParticipantFacts;
 
@@ -25,6 +26,7 @@ import javafx.stage.Window;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.ArrayList;
 import javafx.application.Platform;
 
 public class AccountDialog extends Dialog<Account> {
@@ -32,6 +34,8 @@ public class AccountDialog extends Dialog<Account> {
     private final boolean hasSpouse;
 
     private final TextField nameField;
+    private final Label nameLabel = new Label("Name:");
+    private final Label nameError = new Label();
     private final ComboBox<AccountType> typeCombo;
     private final ComboBox<AccountOwnership> ownershipCombo;
     private final TextField balanceField;
@@ -39,6 +43,7 @@ public class AccountDialog extends Dialog<Account> {
     private final com.daviddunn.retirementplanner.ui.controls.EmployerRothAvailabilityEditor availabilityEditor;
     private ScrollPane formScrollPane;
     private boolean guidedCreation;
+    private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
 
     private final Label originalOwnerDobLabel;
     private final DatePicker originalOwnerDobPicker;
@@ -67,7 +72,7 @@ public class AccountDialog extends Dialog<Account> {
             var converter = getResultConverter();
             var fields = java.util.List.of(
                     new WizardDialogSupport.Field("Name", nameField,
-                            WizardDialogSupport.Kind.TEXT, false),
+                            WizardDialogSupport.Kind.TEXT, true),
                     new WizardDialogSupport.Field("Type", typeCombo,
                             WizardDialogSupport.Kind.CHOICE, true),
                     new WizardDialogSupport.Field("Owner", ownershipCombo,
@@ -82,7 +87,7 @@ public class AccountDialog extends Dialog<Account> {
                             WizardDialogSupport.Kind.CHOICE, true));
             WizardDialogSupport.install(this, fields,
                     () -> converter.call(ButtonType.OK));
-            WizardDialogSupport.guidance(this, "Name is optional. Balance is required when adding an account: enter dollars as of projection start. "
+            WizardDialogSupport.guidance(this, "Name is required. Balance is required when adding an account: enter dollars as of projection start. "
                     + "Choose the actual owner; retirement accounts cannot be Joint.");
         }
     }
@@ -102,6 +107,10 @@ public class AccountDialog extends Dialog<Account> {
         }
 
         nameField = new TextField();
+        nameField.textProperty().addListener((observable, oldValue, newValue) -> {
+            nameError.setText("");
+            nameField.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), false);
+        });
 
         typeCombo = new ComboBox<>();
         typeCombo.getItems().addAll(
@@ -196,18 +205,23 @@ public class AccountDialog extends Dialog<Account> {
 
         int row = 0;
 
-        grid.add(
-                new Label("Name:"),
-                0,
-                row);
+        nameField.setId("account-name");
+        nameError.setId("account-name-error");
+        nameError.getStyleClass().add("wizard-field-error");
+        nameError.setWrapText(true);
+        nameError.managedProperty().bind(nameError.textProperty().isNotEmpty());
+        nameError.visibleProperty().bind(nameError.managedProperty());
+        grid.add(nameLabel, 0, row);
 
         grid.add(
                 nameField,
                 1,
                 row++);
+        grid.add(nameError, 0, row++, 2, 1);
 
+        Label typeLabel = new Label("Type:");
         grid.add(
-                new Label("Type:"),
+                typeLabel,
                 0,
                 row);
 
@@ -216,8 +230,9 @@ public class AccountDialog extends Dialog<Account> {
                 1,
                 row++);
 
+        Label ownerLabel = new Label("Owner:");
         grid.add(
-                new Label("Owner:"),
+                ownerLabel,
                 0,
                 row);
 
@@ -226,8 +241,9 @@ public class AccountDialog extends Dialog<Account> {
                 1,
                 row++);
 
+        Label balanceLabel = new Label("Current Balance:");
         grid.add(
-                new Label("Current Balance:"),
+                balanceLabel,
                 0,
                 row);
 
@@ -267,6 +283,21 @@ public class AccountDialog extends Dialog<Account> {
                 row);
         grid.add(participantFactsEditor, 0, row + 1, 2, 1);
         grid.add(availabilityEditor, 0, row + 2, 2, 1);
+        int legendRow = row + 3;
+        grid.add(RequiredFieldSupport.createLegend(), 0, legendRow, 2, 1);
+
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(nameLabel, nameField));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(typeLabel, typeCombo));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(ownerLabel, ownershipCombo));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(balanceLabel, balanceField));
+        var inheritedRequired = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> isInheritedType(typeCombo.getValue()), typeCombo.valueProperty());
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(originalOwnerDobLabel,
+                originalOwnerDobPicker, inheritedRequired));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(originalOwnerDeathLabel,
+                originalOwnerDeathPicker, inheritedRequired));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(beneficiaryRelationshipLabel,
+                beneficiaryRelationshipCombo, inheritedRequired));
 
         /*
          * Show inherited fields only when appropriate.
@@ -279,6 +310,7 @@ public class AccountDialog extends Dialog<Account> {
         updateForAccountTypeChange();
 
         InputHelp.install(typeCombo, "Account category determines modeled tax treatment, RMD rules and eligibility for withdrawals or Roth conversions. Inherited IRAs require original-owner and beneficiary information.");
+        InputHelp.install(nameField, "Display name for this modeled account. Leading and trailing whitespace is removed when saved.");
         InputHelp.install(ownershipCombo, "Person who owns the account. Retirement accounts require Primary or Spouse ownership; only eligible non-retirement accounts allow Joint. RMDs and Roth transfers follow the individual owner.");
         InputHelp.install(balanceField, "Current account value in dollars used as the opening investable balance. Enter the balance at the projection start; prior December 31 RMD balances are entered separately.");
         InputHelp.install(originalOwnerDobPicker, "Original deceased owner's birth date, not the beneficiary's. Required for inherited IRAs and used with death date and relationship to determine inherited-account RMD treatment.");
@@ -297,10 +329,28 @@ public class AccountDialog extends Dialog<Account> {
         setResizable(true);
         setOnShowing(event -> installScrollableForm());
         setOnShown(event -> resizeToContent());
+        setOnHidden(event -> {
+            requiredFieldAttachments.forEach(RequiredFieldSupport.Attachment::close);
+            requiredFieldAttachments.clear();
+            participantFactsEditor.close();
+            availabilityEditor.close();
+        });
 
         getDialogPane().getButtonTypes().addAll(
                 ButtonType.OK,
                 ButtonType.CANCEL);
+        getDialogPane().lookupButton(ButtonType.OK).addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            try {
+                com.daviddunn.retirementplanner.domain.model.RequiredNameValidation
+                        .normalize(nameField.getText(), "Account name");
+            } catch (IllegalArgumentException invalid) {
+                event.consume();
+                nameError.setText(invalid.getMessage());
+                nameField.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), true);
+                nameField.requestFocus();
+                Platform.runLater(() -> scrollTo(nameField));
+            }
+        });
         getDialogPane().lookupButton(ButtonType.OK).addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
             if (availabilityEditor.isManaged() && !availabilityEditor.validateInput()) event.consume();
         });
@@ -311,8 +361,8 @@ public class AccountDialog extends Dialog<Account> {
                 return null;
             }
 
-            String name =
-                    nameField.getText().trim();
+            String name = com.daviddunn.retirementplanner.domain.model.RequiredNameValidation
+                    .normalize(nameField.getText(), "Account name");
 
             AccountType type =
                     typeCombo.getValue();
@@ -423,6 +473,21 @@ public class AccountDialog extends Dialog<Account> {
                 applyScreenBounds();
             }
         });
+    }
+
+    private void scrollTo(Node node) {
+        if (formScrollPane == null || formScrollPane.getContent() == null) return;
+        var viewport = formScrollPane.getViewportBounds();
+        var content = formScrollPane.getContent();
+        var bounds = node.localToScene(node.getBoundsInLocal());
+        var viewportBounds = formScrollPane.localToScene(viewport);
+        double range = Math.max(1, content.getLayoutBounds().getHeight() - viewport.getHeight());
+        double delta = bounds.getMinY() < viewportBounds.getMinY()
+                ? bounds.getMinY() - viewportBounds.getMinY()
+                : bounds.getMaxY() > viewportBounds.getMaxY()
+                ? bounds.getMaxY() - viewportBounds.getMaxY() : 0;
+        if (delta != 0) formScrollPane.setVvalue(Math.max(0, Math.min(1,
+                formScrollPane.getVvalue() + delta / range)));
     }
 
     private void installScrollableForm() {

@@ -17,6 +17,57 @@ import static org.junit.jupiter.api.Assertions.*;
 class RothConversionViewTest {
     @BeforeAll static void startFx() throws Exception { AssumptionsViewTest.startFx(); }
 
+    @Test void requiredIndicatorsFollowEnabledStrategyWithoutChangingLabels() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            Label strategy = (Label) control(f.view, "strategyLabel");
+            Label year = (Label) control(f.view, "conversionYearLabel");
+            Label amount = (Label) control(f.view, "conversionAmountLabel");
+            Label target = (Label) control(f.view, "targetTaxableIncomeLabel");
+            Label frequency = (Label) control(f.view, "frequencyLabel");
+            Label stop = (Label) control(f.view, "stopRuleLabel");
+            CheckBox enabled = (CheckBox) control(f.view, "enabledCheckBox");
+            Label legend = (Label) f.view.getChildren().stream()
+                    .filter(Label.class::isInstance).filter(node -> ((Label) node).getStyleClass().contains("required-field-legend"))
+                    .findFirst().orElseThrow();
+            assertTrue(marked(strategy));
+            assertTrue(legend.isVisible());
+            enabled.setSelected(false);
+            assertFalse(marked(strategy));
+            assertFalse(legend.isVisible());
+            enabled.setSelected(true);
+            assertTrue(marked(strategy));
+            assertTrue(legend.isVisible());
+            assertTrue(marked(year));
+            assertTrue(marked(frequency));
+            assertTrue(marked(stop));
+            assertTrue(marked(amount));
+            assertFalse(marked(target));
+            ((ComboBox<RothConversionStrategy>) control(f.view, "strategyComboBox"))
+                    .setValue(RothConversionStrategy.CUSTOM_TAXABLE_INCOME_TARGET);
+            assertFalse(marked(amount));
+            assertTrue(marked(target));
+            assertEquals("Target Taxable Income:", target.getText());
+            ((CheckBox) control(f.view, "enabledCheckBox")).setSelected(false);
+            assertFalse(marked(strategy));
+            assertFalse(marked(target));
+            assertFalse(legend.isVisible());
+        });
+    }
+
+    private static boolean marked(Label label) {
+        javafx.scene.text.Text marker = requiredMarker(label);
+        return marker != null && marker.isVisible();
+    }
+
+    private static javafx.scene.text.Text requiredMarker(Label label) {
+        if (!(label.getGraphic() instanceof javafx.scene.text.TextFlow flow)) return null;
+        return flow.getChildren().stream().filter(javafx.scene.text.Text.class::isInstance)
+                .map(javafx.scene.text.Text.class::cast)
+                .filter(text -> text.getStyleClass().contains("required-field-indicator"))
+                .findFirst().orElse(null);
+    }
+
     @Test void initialCleanAndEquivalentApplyDoesNotNotify() throws Exception {
         fx(() -> {
             Fixture f = new Fixture();

@@ -54,6 +54,35 @@ class AssumptionsViewTest {
     }
 
     @Test
+    void requiredIndicatorsMirrorAssumptionsApplyConditionsAndPreserveText() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            Label start = associatedLabel(f.view, control(f.view, "projectionStartDatePicker"));
+            Label horizon = associatedLabel(f.view, control(f.view, "projectionLengthField"));
+            Label investment = associatedLabel(f.view, control(f.view, "investmentReturnField"));
+            Label state = associatedLabel(f.view, control(f.view, "stateJurisdictionComboBox"));
+            Label deathYear = associatedLabel(f.view, control(f.view, "deathYearField"));
+            Label futureRate = associatedLabel(f.view, control(f.view, "futureFederalMarginalRateAdjustmentField"));
+            Label futureYear = associatedLabel(f.view, control(f.view, "futureFederalMarginalRateEffectiveYearField"));
+            assertMarked(start, true);
+            assertMarked(horizon, true);
+            assertMarked(investment, true); // Prefilled, but parsed on every Apply.
+            assertMarked(state, true);
+            assertEquals("State of Residence", state.getText());
+            assertEquals(1, f.view.lookupAll(".required-field-legend").size());
+            assertMarked(deathYear, true);
+            assertMarked(futureRate, false);
+            assertMarked(futureYear, false);
+            @SuppressWarnings("unchecked") ComboBox<DeathScenario> scenario = control(f.view, "deathScenarioComboBox");
+            scenario.setValue(DeathScenario.BOTH_SURVIVE);
+            assertMarked(deathYear, false);
+            field(f.view, "futureFederalMarginalRateAdjustmentField").setText("2");
+            assertMarked(futureRate, true);
+            assertMarked(futureYear, true);
+        });
+    }
+
+    @Test
     void inputTooltipsRemainWithoutLabelSideHelpIcons() throws Exception {
         fx(() -> {
             Fixture f = new Fixture();
@@ -617,6 +646,45 @@ class AssumptionsViewTest {
 
     static TextField field(Object view, String name) throws Exception {
         return control(view, name);
+    }
+
+    private static Label associatedLabel(AssumptionsView view, javafx.scene.Node input) {
+        return findLabel(view, input);
+    }
+
+    private static Label findLabel(javafx.scene.Parent root, javafx.scene.Node input) {
+        Label found = findLabelOrNull(root, input);
+        if (found != null) return found;
+        throw new AssertionError("No label associated with input " + input);
+    }
+
+    private static Label findLabelOrNull(javafx.scene.Parent root, javafx.scene.Node input) {
+        if (root instanceof javafx.scene.control.Label label && label.getLabelFor() == input) return label;
+        if (root instanceof javafx.scene.control.ScrollPane scroll && scroll.getContent() instanceof javafx.scene.Parent content) {
+            Label found = findLabelOrNull(content, input);
+            if (found != null) return found;
+        }
+        if (root instanceof javafx.scene.control.TitledPane titled && titled.getContent() instanceof javafx.scene.Parent content) {
+            Label found = findLabelOrNull(content, input);
+            if (found != null) return found;
+        }
+        for (javafx.scene.Node child : root.getChildrenUnmodifiable()) {
+            if (child instanceof javafx.scene.Parent parent) {
+                Label found = findLabelOrNull(parent, input);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static void assertMarked(Label label, boolean expected) {
+        var marker = label.getGraphic() instanceof javafx.scene.text.TextFlow flow
+                ? flow.getChildren().stream().filter(javafx.scene.text.Text.class::isInstance)
+                    .map(javafx.scene.text.Text.class::cast)
+                    .filter(text -> text.getStyleClass().contains("required-field-indicator"))
+                    .findFirst().orElse(null)
+                : null;
+        assertEquals(expected, marker != null && marker.isVisible(), label.getText());
     }
 
     @SuppressWarnings("unchecked")

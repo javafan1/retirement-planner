@@ -10,6 +10,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
+import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 import javafx.scene.control.Label;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.HBox;
@@ -34,12 +35,16 @@ public class HouseholdView extends VBox {
 
         primaryPersonCard = new PersonCard();
         spousePersonCard = new PersonCard();
+        spousePersonCard.setRequired(false);
         spousePane = createSpousePane();
         includeSpouse.setId("include-spouse");
         InputHelp.install(includeSpouse, "Select to include a spouse in this household. Leave unchecked for a Primary-only plan. Removing a spouse is blocked while financial records depend on that person; nothing is deleted automatically.");
         spousePane.visibleProperty().bind(includeSpouse.selectedProperty());
         spousePane.managedProperty().bind(includeSpouse.selectedProperty());
-        includeSpouse.selectedProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        includeSpouse.selectedProperty().addListener((observable, oldValue, newValue) -> {
+            spousePersonCard.setRequired(newValue);
+            updateDirty();
+        });
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(Double.MAX_VALUE);
         statusLabel.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
@@ -49,7 +54,7 @@ public class HouseholdView extends VBox {
         cancelButton.disableProperty().bind(dirty.not());
         applyButton.setOnAction(event -> applyChanges());
         cancelButton.setOnAction(event -> cancelChanges());
-        HBox buttonBar = new HBox(10, applyButton, cancelButton);
+        HBox buttonBar = new HBox(10, applyButton, cancelButton, RequiredFieldSupport.createLegend());
         buttonBar.setPadding(new Insets(10));
 
         setSpacing(15);
@@ -107,6 +112,18 @@ public class HouseholdView extends VBox {
         if (currentPlan == null) {
             return false;
         }
+        if (!isDirty()) {
+            // A clean legacy household may still contain blank historical names.
+            // Saving or applying unrelated plan sections must not force migration.
+            try {
+                primaryPersonCard.validateExistingPersonInformation();
+                if (includeSpouse.isSelected()) spousePersonCard.validateExistingPersonInformation();
+                return true;
+            } catch (IllegalArgumentException exception) {
+                statusLabel.setText(exception.getMessage());
+                return false;
+            }
+        }
         PersonCard.Edit primary;
         PersonCard.Edit spouse;
         try {
@@ -116,10 +133,6 @@ public class HouseholdView extends VBox {
         catch (IllegalArgumentException exception) {
             statusLabel.setText(exception.getMessage());
             return false;
-        }
-
-        if (!isDirty()) {
-            return true;
         }
 
         // Validate all selected people and membership before changing existing person fields.
@@ -153,6 +166,12 @@ public class HouseholdView extends VBox {
         if (currentPlan != null) {
             load(currentPlan);
         }
+    }
+
+    /** Releases form-level required-indicator listeners when this view is discarded. */
+    public void dispose() {
+        primaryPersonCard.close();
+        spousePersonCard.close();
     }
 
     private void updateDirty() {
