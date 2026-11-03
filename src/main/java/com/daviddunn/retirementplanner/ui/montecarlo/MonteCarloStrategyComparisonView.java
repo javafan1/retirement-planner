@@ -17,7 +17,7 @@ import static com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloStrategyCo
 
 /** Analyzer controls and rendering; captures on FX and runs the existing analyzer on a worker. */
 public final class MonteCarloStrategyComparisonView extends VBox implements AutoCloseable {
-    private final MonteCarloPdfExportAction pdf = new MonteCarloPdfExportAction("mcc-export-pdf", this::canExportPdf, this::preparePdfReport);
+    private final MonteCarloPdfExportAction pdf;
     @FunctionalInterface
     public interface Work {
         MonteCarloStrategyComparisonRun run(MonteCarloStrategyComparisonRunService.Prepared input,
@@ -89,6 +89,9 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
                 MonteCarloSnapshotPresentationMapper::restoreComparison, restored -> session.restore(restored, true),
                 session::clearResult, this::refreshPersistence, session::busy);
         persistence.associationResolver(controller::analysisAssociation);
+        pdf = new MonteCarloPdfExportAction("mcc-export-pdf", this::canExportPdf, this::preparePdfReport,
+                session::result, identity -> !session.busy() && session.result() == identity,
+                ignored -> "monte-carlo-strategy-comparison.pdf");
         associated = new com.daviddunn.retirementplanner.ui.socialsecurity.AssociatedAnalyzerAction(controller,
                 () -> persistence.binding() == null ? null : persistence.binding().kind());
         savedStatus.accessibleTextProperty().bind(savedStatus.textProperty());

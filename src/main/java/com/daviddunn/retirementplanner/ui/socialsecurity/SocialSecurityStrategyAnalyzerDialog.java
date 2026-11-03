@@ -34,6 +34,12 @@ import com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameter
 /** Resizable, read-only Social Security strategy analysis window. */
 public final class SocialSecurityStrategyAnalyzerDialog {
     private final Button deterministicExportPdf = new Button("Export PDF");
+    private final javafx.scene.control.ProgressIndicator deterministicPdfProgress = pdfProgress();
+    private final javafx.scene.control.ProgressIndicator weightedPdfProgress = pdfProgress();
+    private final javafx.scene.control.ProgressIndicator socialSecurityPdfProgress = pdfProgress();
+    private final javafx.scene.control.ProgressIndicator quickPdfProgress = pdfProgress();
+    private com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<
+            com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport> pdfWorkflow = createPdfWorkflow();
     private IntegratedReportContext deterministicReportContext;
     private IntegratedReportContext weightedReportContext;
     private IntegratedSocialSecurityCompleteStrategySearchEntry deterministicSelectedEntry;
@@ -1907,40 +1913,25 @@ public final class SocialSecurityStrategyAnalyzerDialog {
 
     private void exportAdditionalPdf(boolean socialSecurity) {
         if (!canExportAdditionalPdf(socialSecurity)) return;
-        var chooser = new javafx.stage.FileChooser(); chooser.setTitle(socialSecurity ? "Export Social Security Only PDF" : "Export Quick Comparison PDF");
-        chooser.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
-        chooser.setInitialFileName(socialSecurity ? "Social-Security-Only-Analysis.pdf" : "Social-Security-Quick-Comparison.pdf");
-        var chosen = chooser.showSaveDialog(stage);
-        if (chosen == null || !canExportAdditionalPdf(socialSecurity)) return;
-        java.nio.file.Path destination = chosen.toPath();
-        if (!chosen.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) {
-            destination = java.nio.file.Path.of(destination + ".pdf");
-            if (java.nio.file.Files.exists(destination)) {
-                var confirm = new Alert(Alert.AlertType.CONFIRMATION, "Replace existing file " + destination.getFileName() + "?", ButtonType.YES, ButtonType.NO);
-                confirm.initOwner(stage);
-                if (confirm.showAndWait().orElse(ButtonType.NO) != ButtonType.YES) return;
-            }
-        }
-        if (!canExportAdditionalPdf(socialSecurity)) return;
-        try {
-            var capture = prepareAdditionalPdf(socialSecurity);
-            var binding = reportBinding(); var accepted = socialSecurity ? (Object) socialSecurityReport : quickReport;
-            var target = destination;
-            exportBusy = true; refreshExportActions();
-            var task = new javafx.concurrent.Task<Void>() {
-                @Override protected Void call() throws Exception {
-                    new com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerPdfExporter().export(capture.get(), target); return null;
-                }
-            };
-            java.util.function.BooleanSupplier stillOwned = () -> !disposed && stage.isShowing() && java.util.Objects.equals(binding, reportBinding())
-                    && accepted == (socialSecurity ? socialSecurityReport : quickReport);
-            task.setOnSucceeded(event -> {
-                exportBusy = false; refreshExportActions();
-                if (stillOwned.getAsBoolean()) { var alert = new Alert(Alert.AlertType.INFORMATION, "Analysis report saved to " + target); alert.initOwner(stage); alert.show(); }
-            });
-            task.setOnFailed(event -> { exportBusy = false; refreshExportActions(); if (stillOwned.getAsBoolean()) showPdfError(task.getException()); });
-            Thread.ofVirtual().name("completed-social-security-pdf").start(task);
-        } catch (RuntimeException failure) { exportBusy = false; refreshExportActions(); if (!disposed) showPdfError(failure); }
+        String filename = socialSecurity ? "Social-Security-Only-Analysis.pdf" : "Social-Security-Quick-Comparison.pdf";
+        Object accepted = socialSecurity ? socialSecurityReport : quickReport;
+        Object binding = reportBinding();
+        var button = socialSecurity ? socialSecurityExportPdf : quickExportPdf;
+        var spinner = socialSecurity ? socialSecurityPdfProgress : quickPdfProgress;
+        pdfWorkflow.start(new com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator.Request<>(
+                stage, filename, () -> canExportAdditionalPdf(socialSecurity),
+                () -> prepareAdditionalPdf(socialSecurity).get(),
+                (report, destination) -> new com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerPdfExporter().export(report, destination),
+                () -> true,
+                (choice, path) -> {
+                    if (choice == com.daviddunn.retirementplanner.ui.pdf.PdfExportChoice.SAVE
+                            && additionalResultStillCurrent(socialSecurity, accepted, binding)) {
+                        var alert = new Alert(Alert.AlertType.INFORMATION, "Analysis report saved to " + path);
+                        alert.initOwner(stage); alert.show();
+                    }
+                },
+                failure -> showWorkflowPdfFailure(failure),
+                busy -> setPdfBusy(button, spinner, busy)));
     }
 
     private com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport capturePdfReport(boolean weighted) {
@@ -1974,52 +1965,96 @@ public final class SocialSecurityStrategyAnalyzerDialog {
 
     private void exportPdf(boolean weighted) {
         if (!canExportPdf(weighted)) return;
-        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
-        chooser.setTitle("Export Integrated Analysis PDF");
-        chooser.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
-        chooser.setInitialFileName(weighted ? "Social-Security-Integrated-Longevity-Weighted-Analysis.pdf"
-                : "Social-Security-Integrated-Deterministic-Analysis.pdf");
-        java.io.File file = chooser.showSaveDialog(stage);
-        if (file == null || !canExportPdf(weighted)) return;
-        try {
-            var report = capturePdfReport(weighted);
-            exportBusy = true;
-            refreshExportActions();
-            javafx.concurrent.Task<Void> task = new javafx.concurrent.Task<>() {
-                @Override protected Void call() throws Exception {
-                    new com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerPdfExporter().export(report, file.toPath());
-                    return null;
-                }
-            };
-            task.setOnSucceeded(event -> {
-                exportBusy = false;
-                refreshExportActions();
-                Alert alert = new Alert(Alert.AlertType.INFORMATION, "Analysis report saved to " + file.getAbsolutePath());
-                alert.initOwner(stage);
-                alert.setTitle("Export PDF");
-                alert.setHeaderText("PDF export complete");
-                alert.show();
-            });
-            task.setOnFailed(event -> {
-                exportBusy = false;
-                refreshExportActions();
-                showPdfError(task.getException());
-            });
-            Thread.ofVirtual().name("integrated-analysis-pdf").start(task);
-        } catch (RuntimeException failure) {
-            exportBusy = false;
-            refreshExportActions();
-            showPdfError(failure);
+        String filename = weighted ? "Social-Security-Integrated-Longevity-Weighted-Analysis.pdf"
+                : "Social-Security-Integrated-Deterministic-Analysis.pdf";
+        Object accepted = weighted ? weightedPresentation : exhaustivePresentation;
+        Object binding = reportBinding();
+        var button = weighted ? weightedView.exportPdf : deterministicExportPdf;
+        var spinner = weighted ? weightedPdfProgress : deterministicPdfProgress;
+        pdfWorkflow.start(new com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator.Request<>(
+                stage, filename, () -> canExportPdf(weighted), () -> capturePdfReport(weighted),
+                (report, destination) -> new com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerPdfExporter().export(report, destination),
+                () -> true,
+                (choice, path) -> {
+                    if (choice == com.daviddunn.retirementplanner.ui.pdf.PdfExportChoice.SAVE
+                            && integratedResultStillCurrent(weighted, accepted, binding)) {
+                        Alert alert = new Alert(Alert.AlertType.INFORMATION, "Analysis report saved to " + path);
+                        alert.initOwner(stage); alert.setTitle("Export PDF"); alert.setHeaderText("PDF export complete"); alert.show();
+                    }
+                },
+                failure -> showWorkflowPdfFailure(failure),
+                busy -> setPdfBusy(button, spinner, busy)));
+    }
+
+    private boolean additionalResultStillCurrent(boolean socialSecurity, Object accepted, Object binding) {
+        return !disposed && stage.isShowing() && java.util.Objects.equals(binding, reportBinding())
+                && accepted == (socialSecurity ? socialSecurityReport : quickReport)
+                && canExportAdditionalPdf(socialSecurity);
+    }
+
+    private boolean integratedResultStillCurrent(boolean weighted, Object accepted, Object binding) {
+        return !disposed && stage.isShowing() && java.util.Objects.equals(binding, reportBinding())
+                && accepted == (weighted ? weightedPresentation : exhaustivePresentation) && canExportPdf(weighted);
+    }
+
+    private void setPdfBusy(Button button, javafx.scene.control.ProgressIndicator spinner, boolean busy) {
+        exportBusy = busy;
+        button.setGraphic(busy ? spinner : null);
+        refreshExportActions();
+    }
+
+    private void showWorkflowPdfFailure(com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator.PdfExportFailure failure) {
+        Window owner = stage.isShowing() ? stage : stage.getOwner();
+        if (failure.retainedPreview() != null) {
+            com.daviddunn.retirementplanner.ui.pdf.PdfExportDialogs.showFailure(owner, failure);
+        } else {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            if (owner != null) alert.initOwner(owner);
+            alert.setTitle("Export PDF");
+            alert.setHeaderText("Unable to export analysis report");
+            alert.setContentText(SocialSecurityAnalysisFailurePresentation.message(failure.cause()));
+            alert.show();
         }
     }
 
-    private void showPdfError(Throwable failure) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.initOwner(stage);
-        alert.setTitle("Export PDF");
-        alert.setHeaderText("Unable to export analysis report");
-        alert.setContentText(SocialSecurityAnalysisFailurePresentation.message(failure));
-        alert.show();
+    private static javafx.scene.control.ProgressIndicator pdfProgress() {
+        var progress = new javafx.scene.control.ProgressIndicator();
+        progress.setPrefSize(15, 15);
+        progress.setMaxSize(15, 15);
+        return progress;
+    }
+
+    private static com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<
+            com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport> createPdfWorkflow() {
+        var chooser = (com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator.DestinationChooser)
+                SocialSecurityStrategyAnalyzerDialog::choosePdfDestination;
+        return com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowFactory.create("Export Integrated Analysis PDF", chooser);
+    }
+
+    private static java.util.Optional<java.nio.file.Path> choosePdfDestination(Window owner, String suggestedFilename) {
+        var chooser = new javafx.stage.FileChooser();
+        chooser.setTitle(suggestedFilename.equals("Social-Security-Only-Analysis.pdf")
+                ? "Export Social Security Only PDF"
+                : suggestedFilename.equals("Social-Security-Quick-Comparison.pdf")
+                ? "Export Quick Comparison PDF" : "Export Integrated Analysis PDF");
+        chooser.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
+        chooser.setInitialFileName(suggestedFilename);
+        var file = chooser.showSaveDialog(owner);
+        if (file == null) return java.util.Optional.empty();
+        var destination = file.toPath();
+        boolean addsExtension = !file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf");
+        if (addsExtension) {
+            destination = java.nio.file.Path.of(destination + ".pdf");
+            if ((suggestedFilename.equals("Social-Security-Only-Analysis.pdf")
+                    || suggestedFilename.equals("Social-Security-Quick-Comparison.pdf"))
+                    && java.nio.file.Files.exists(destination)) {
+                var confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                        "Replace existing file " + destination.getFileName() + "?", ButtonType.YES, ButtonType.NO);
+                if (owner != null) confirm.initOwner(owner);
+                if (confirm.showAndWait().orElse(ButtonType.NO) != ButtonType.YES) return java.util.Optional.empty();
+            }
+        }
+        return java.util.Optional.of(destination);
     }
 
     private void refreshInputSummary() {

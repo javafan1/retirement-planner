@@ -65,6 +65,15 @@ public class MainApplication extends Application {
     public void start(Stage stage) {
         themes = ApplicationThemeManager.start(settings.snapshot().getTheme());
         startup = new ApplicationStartupCoordinator(javafx.application.Platform::runLater);
+        // Cleanup is independent best-effort work: neither the FX thread nor the
+        // startup coordinator waits for directory scanning or locked-file retries.
+        Thread.ofVirtual().name("pdf-preview-cleanup").start(() -> {
+            try {
+                new com.daviddunn.retirementplanner.ui.pdf.PdfPreviewStore(
+                        com.daviddunn.retirementplanner.ui.pdf.PdfPreviewStore.systemDefaultDirectory())
+                        .cleanupStale();
+            } catch (RuntimeException ignored) { }
+        });
         splash = new Stage(javafx.stage.StageStyle.UNDECORATED);
         splash.setTitle(branding.productName());
         icon.ifPresent(image -> { stage.getIcons().add(image); splash.getIcons().add(image); });

@@ -8,6 +8,7 @@ import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.FutureTask;
@@ -105,6 +106,118 @@ class IntegratedAnalyzerPdfStateTest {
             assertFalse(weighted.exportPdf.isDisabled());
             assertSame(entry, weighted.table.getSelectionModel().getSelectedItem());
         });
+    }
+
+    @Test void viewPdfUsesFrozenHeatMapSelectionAndDoesNotRunAnalysisAgain() throws Exception {
+        fx(f -> {
+            f.install();
+            var map = field(f.dialog, "deterministicHeatMap", ClaimingStrategyHeatMapView.class);
+            field(f.dialog, "deterministicResultTabs", TabPane.class).getSelectionModel()
+                    .select(field(f.dialog, "deterministicHeatMapTab", Tab.class));
+            ClaimingStrategyHeatMapViewTest.button(map, 70, 70).fire();
+            map.metric.setValue(ClaimingStrategyHeatMapMetric.DIFFERENCE_FROM_CURRENT);
+            var expectedGeneration = f.jobs.generation();
+            var opened = new java.util.concurrent.atomic.AtomicReference<Path>();
+            var store = new com.daviddunn.retirementplanner.ui.pdf.PdfPreviewStore(directory.resolve("social-security-preview"));
+            var workflow = new com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<IntegratedAnalyzerReport>(
+                    owner -> com.daviddunn.retirementplanner.ui.pdf.PdfExportChoice.VIEW,
+                    (owner, name) -> fail("View must not open a Save chooser"), store,
+                    path -> { assertTrue(Files.isRegularFile(path)); opened.set(path); }, Runnable::run, Runnable::run);
+            set(f.dialog, "pdfWorkflow", workflow);
+            invoke(f.dialog, "exportPdf", false);
+            assertNotNull(opened.get());
+            assertEquals(expectedGeneration, f.jobs.generation());
+            assertEquals(SocialSecurityAnalyzerJobController.State.IDLE, f.jobs.state());
+            assertEquals(ClaimingStrategyHeatMapMetric.DIFFERENCE_FROM_CURRENT, map.metric.getValue());
+            assertTrue(Files.size(opened.get()) > 0);
+            try (var document = org.apache.pdfbox.Loader.loadPDF(opened.get().toFile())) {
+                String text = new org.apache.pdfbox.text.PDFTextStripper().getText(document);
+                assertTrue(text.contains("Primary 70 / Spouse 70"));
+                assertTrue(text.contains("Difference from Current"));
+            }
+            var weighted = field(f.dialog, "weightedView", LongevityWeightedIntegratedView.class);
+            field(weighted, "resultTabs", TabPane.class).getSelectionModel().select(field(weighted, "heatMapTab", Tab.class));
+            ClaimingStrategyHeatMapViewTest.button(weighted.heatMap, 70, 70).fire();
+            weighted.heatMap.metric.setValue(ClaimingStrategyHeatMapMetric.FUTURE_DOLLAR_ESTATE);
+            invoke(f.dialog, "exportPdf", true);
+            try (var document = org.apache.pdfbox.Loader.loadPDF(opened.get().toFile())) {
+                String text = new org.apache.pdfbox.text.PDFTextStripper().getText(document);
+                assertTrue(text.contains("Longevity-Weighted"));
+                assertTrue(text.contains("Valuation date"));
+                assertTrue(text.contains("Primary Survivor Benefit Claiming Age"));
+            }
+            assertEquals(expectedGeneration, f.jobs.generation());
+        });
+    }
+
+    @Test void cancelingIntegratedPdfDoesNotCreateAPreviewOrRunAnalysis() throws Exception {
+        fx(f -> {
+            f.install();
+            var store = new com.daviddunn.retirementplanner.ui.pdf.PdfPreviewStore(directory.resolve("cancelled-social-security-preview"));
+            var workflow = new com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<IntegratedAnalyzerReport>(
+                    owner -> com.daviddunn.retirementplanner.ui.pdf.PdfExportChoice.CANCEL,
+                    (owner, name) -> fail("Cancel must not open a Save chooser"), store,
+                    path -> fail("Cancel must not open a viewer"), Runnable::run, Runnable::run);
+            set(f.dialog, "pdfWorkflow", workflow);
+            long generation = f.jobs.generation();
+            invoke(f.dialog, "exportPdf", true);
+            assertFalse(Files.exists(store.directory()));
+            assertFalse(workflow.isBusy());
+            assertEquals(generation, f.jobs.generation());
+        });
+    }
+
+    @Test void socialSecurityOnlyAndQuickActionsExportTheirFrozenReportWithoutAnalysisRuns() throws Exception {
+        SharedClaimingAgeGridTest.prepare();
+        fx(f -> {
+            f.install();
+            var now = java.time.Instant.parse("2026-11-03T12:00:00Z");
+            var ssSession = new SocialSecurityReportSession(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(),
+                    "Historical household", true, CoupleSocialSecurityPersistenceTest.fixture(true, false),
+                    SharedClaimingAgeGridTest.presentation, now.minusSeconds(10), now);
+            set(f.dialog, "socialSecurityReport", ssSession);
+            set(f.dialog, "socialSecurityReportBinding", invoke(f.dialog, "reportBinding"));
+            set(f.dialog, "socialSecurityResultCurrent", true);
+            var selected = SharedClaimingAgeGridTest.presentation.rankedStrategies().stream().limit(2).toList();
+            var comparison = SocialSecurityAndQuickPdfTest.comparison(selected);
+            var prepared = new QuickReportSession.Prepared(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(),
+                    IntegratedAnalyzerPdfReportTest.context(false), "a".repeat(64), java.util.UUID.randomUUID(), selected.size(),
+                    selected.stream().map(row -> new QuickReportSession.Candidate(row.rank(), row.cell().strategy(), row.cell().expectedValue())).toList(),
+                    List.of());
+            set(f.dialog, "quickReport", QuickReportSession.accepted(prepared, comparison, now));
+            set(f.dialog, "quickReportBinding", invoke(f.dialog, "reportBinding"));
+            invoke(f.dialog, "refreshExportActions");
+            assertTrue((boolean) invoke(f.dialog, "canExportAdditionalPdf", true));
+            assertTrue((boolean) invoke(f.dialog, "canExportAdditionalPdf", false));
+
+            Path ssPath = directory.resolve("ss-only-workflow.pdf");
+            set(f.dialog, "pdfWorkflow", saveWorkflow(ssPath));
+            long generation = f.jobs.generation();
+            invoke(f.dialog, "exportAdditionalPdf", true);
+            assertTrue(Files.isRegularFile(ssPath));
+            try (var pdf = org.apache.pdfbox.Loader.loadPDF(ssPath.toFile())) {
+                assertTrue(new org.apache.pdfbox.text.PDFTextStripper().getText(pdf).contains("Social Security Only"));
+            }
+
+            Path quickPath = directory.resolve("quick-workflow.pdf");
+            set(f.dialog, "pdfWorkflow", saveWorkflow(quickPath));
+            invoke(f.dialog, "exportAdditionalPdf", false);
+            assertTrue(Files.isRegularFile(quickPath));
+            try (var pdf = org.apache.pdfbox.Loader.loadPDF(quickPath.toFile())) {
+                String text = new org.apache.pdfbox.text.PDFTextStripper().getText(pdf);
+                assertTrue(text.contains("Quick Comparison"));
+            }
+            assertEquals(generation, f.jobs.generation());
+        });
+    }
+
+    private com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<IntegratedAnalyzerReport>
+            saveWorkflow(Path destination) {
+        return new com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<>(
+                owner -> com.daviddunn.retirementplanner.ui.pdf.PdfExportChoice.SAVE,
+                (owner, name) -> java.util.Optional.of(destination),
+                new com.daviddunn.retirementplanner.ui.pdf.PdfPreviewStore(directory.resolve("ss-save-preview")),
+                path -> fail("Save must not invoke a viewer"), Runnable::run, Runnable::run);
     }
 
     @Test void sharedPaletteMatchesActualFxCellBackground() throws Exception {

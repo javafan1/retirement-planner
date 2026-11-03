@@ -60,6 +60,13 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
+import com.daviddunn.retirementplanner.ui.pdf.PdfExportChoice;
+import com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator;
+import com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowFactory;
+import com.daviddunn.retirementplanner.app.export.ProjectionPdfReport;
+import com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService;
+import com.daviddunn.retirementplanner.app.socialsecurity.results.RetainedProjectionSnapshot;
+import java.util.concurrent.atomic.AtomicReference;
 
 import java.io.File;
 import java.io.IOException;
@@ -233,8 +240,8 @@ public class ResultsSummaryView extends BorderPane {
                 name, pdfChartModel, pdfAverageTaxRate, pdfHeirValue, pdfBaselineComparison);
     }
 
-    private final ProjectionPdfExporter projectionPdfExporter =
-            new ProjectionPdfExporter();
+    private final PdfExportWorkflowCoordinator<ProjectionPdfExportCapture> projectionPdfWorkflow =
+            createProjectionPdfWorkflow();
 
     private Projection currentProjection;
 
@@ -936,6 +943,8 @@ public class ResultsSummaryView extends BorderPane {
 
         exportButton =
                 new Button("Export");
+        projectionPdfProgress.setPrefSize(15, 15);
+        projectionPdfProgress.setMaxSize(15, 15);
 
         exportButton.getStyleClass().add(
                 "results-action-button");
@@ -2454,6 +2463,7 @@ public class ResultsSummaryView extends BorderPane {
 
     private Button exportButton;
     private final Button yearlyDetailsButton = new Button("View Yearly Details");
+    private final javafx.scene.control.ProgressIndicator projectionPdfProgress = new javafx.scene.control.ProgressIndicator();
     private Runnable yearlyDetailsHandler;
     private final Label horizonLabel = new Label();
 
@@ -3323,69 +3333,73 @@ public class ResultsSummaryView extends BorderPane {
 
             return;
         }
-
-        FileChooser fileChooser =
-                new FileChooser();
-
-        fileChooser.setTitle(
-                "Export Retirement Projection");
-
-        fileChooser.setInitialFileName(
-                "RetirementProjection.pdf");
-
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter(
-                        "PDF Files (*.pdf)",
-                        "*.pdf"));
-
         Window window =
                 getScene() == null
                         ? null
                         : getScene().getWindow();
+        RetirementPlan selectedPlan = currentPlan;
+        Projection selectedProjection = currentProjection;
+        AtomicReference<Projection> capturedProjection = new AtomicReference<>();
+        projectionPdfWorkflow.start(new PdfExportWorkflowCoordinator.Request<>(
+                window,
+                "RetirementProjection.pdf",
+                () -> currentPlan == selectedPlan && currentProjection == selectedProjection
+                        && selectedPlan == controller.getCurrentPlan()
+                        && selectedProjection != null && !selectedProjection.isEmpty(),
+                () -> {
+                    // Freeze all renderer inputs before dispatching background PDF I/O.
+                    RetirementPlan isolatedPlan = new RetirementPlanScenarioCopyService().copy(selectedPlan);
+                    Projection isolatedProjection = RetainedProjectionSnapshot.capture(selectedProjection).restoreProjection();
+                    capturedProjection.set(selectedProjection);
+                    return new ProjectionPdfExportCapture(isolatedPlan, isolatedProjection,
+                            List.copyOf(nonInvestableAssetProjections), prepareProjectionPdfReport());
+                },
+                (capture, destination) -> new ProjectionPdfExporter().export(capture.plan(),
+                        capture.projection(), capture.nonInvestableAssets(), capture.report(), destination),
+                () -> capturedProjection.get() != null,
+                (choice, path) -> {
+                    // A completed file belongs to its frozen projection. Only claim success as current
+                    // when that projection is still selected in this Summary.
+                    if (choice == PdfExportChoice.SAVE && currentPlan == selectedPlan
+                            && currentProjection == capturedProjection.get()
+                            && controller.currentProjectionInputsMatch()) {
+                        showInformation("Projection exported successfully.", path.toString());
+                    }
+                },
+                failure -> {
+                    failure.cause().printStackTrace();
+                    if (failure.retainedPreview() != null) {
+                        com.daviddunn.retirementplanner.ui.pdf.PdfExportDialogs.showFailure(window, failure);
+                    } else {
+                        showError("The projection could not be exported: "
+                                + (failure.cause() == null ? "Unknown error." : failure.cause().getMessage()));
+                    }
+                },
+                busy -> {
+                    exportButton.setDisable(busy || currentProjection == null || currentProjection.isEmpty());
+                    exportButton.setGraphic(busy ? projectionPdfProgress : null);
+                    exportButton.setAccessibleHelp(busy ? "PDF export is in progress." : null);
+                }));
+    }
 
-        File selectedFile =
-                fileChooser.showSaveDialog(window);
+    private record ProjectionPdfExportCapture(RetirementPlan plan, Projection projection,
+            List<NonInvestableAssetProjection> nonInvestableAssets, ProjectionPdfReport report) { }
 
-        if (selectedFile == null) {
-            return;
-        }
-
-        Path file =
-                selectedFile.toPath();
-
-        if (!file
-                .getFileName()
-                .toString()
-                .toLowerCase()
-                .endsWith(".pdf")) {
-
-            file =
-                    file.resolveSibling(
-                            file.getFileName()
-                                    .toString()
-                                    + ".pdf");
-        }
-
-        try {
-
-            projectionPdfExporter.export(
-                    currentPlan,
-                    currentProjection,
-                    nonInvestableAssetProjections,
-                    prepareProjectionPdfReport(),
-                    file);
-
-            showInformation(
-                    "Projection exported successfully.",
-                    file.toString());
-
-        } catch (IOException ex) {
-
-            ex.printStackTrace();
-
-            showError(
-                    "The projection could not be exported.");
-        }
+    private static PdfExportWorkflowCoordinator<ProjectionPdfExportCapture> createProjectionPdfWorkflow() {
+        PdfExportWorkflowCoordinator.DestinationChooser chooser = (owner, suggested) -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Export Retirement Projection");
+            fileChooser.setInitialFileName(suggested);
+            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF Files (*.pdf)", "*.pdf"));
+            File selected = fileChooser.showSaveDialog(owner);
+            if (selected == null) return Optional.empty();
+            Path file = selected.toPath();
+            if (!file.getFileName().toString().toLowerCase().endsWith(".pdf")) {
+                file = file.resolveSibling(file.getFileName().toString() + ".pdf");
+            }
+            return Optional.of(file);
+        };
+        return PdfExportWorkflowFactory.create("Export Retirement Projection", chooser);
     }
 
     private void loadRothConversion(

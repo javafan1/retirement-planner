@@ -128,4 +128,26 @@ class ProjectionPdfExportTest {
             javax.imageio.ImageIO.write(new PDFRenderer(doc).renderImageWithDPI(0, 110), "png",
                     file.resolveSibling("baseline-summary.png").toFile());
         }
-    }}
+    }
+    @Test void detachedProjectionCaptureRendersTheSamePdfContentWithoutReprojecting() throws Exception {
+        var plan = ProjectionChartReconciliationTest.roundingPlan();
+        var projection = new ProjectionEngine().project(plan);
+        var assets = new NonInvestableAssetProjectionService().project(plan.getNonInvestableAssets(),
+                projection.getStartYear(), projection.getEndYear());
+        var report = new ProjectionPdfReport("Frozen identity", ProjectionChartModel.from(projection.getYears(),
+                assets, com.daviddunn.retirementplanner.domain.breakeven.BreakEvenPlanSummary.from(plan.getHousehold()),
+                plan.getAccountPortfolio().getAccounts()), BigDecimal.ZERO, BigDecimal.ZERO, null);
+        var isolatedPlan = new com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService().copy(plan);
+        var isolatedProjection = com.daviddunn.retirementplanner.app.socialsecurity.results.RetainedProjectionSnapshot
+                .capture(projection).restoreProjection();
+        Path first = Path.of("target", "projection-pdf-preview", "direct-capture.pdf");
+        Path second = Path.of("target", "projection-pdf-preview", "detached-capture.pdf");
+        Files.createDirectories(first.getParent());
+        new ProjectionPdfExporter().export(plan, projection, assets, report, first);
+        new ProjectionPdfExporter().export(isolatedPlan, isolatedProjection, assets, report, second);
+        try (var direct = Loader.loadPDF(first.toFile()); var detached = Loader.loadPDF(second.toFile())) {
+            assertEquals(new PDFTextStripper().getText(direct), new PDFTextStripper().getText(detached));
+            assertEquals(direct.getNumberOfPages(), detached.getNumberOfPages());
+        }
+    }
+    }

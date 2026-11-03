@@ -138,6 +138,18 @@ class Phase12EAssociationTest {
         var output = Path.of("target/phase12e-previews"); Files.createDirectories(output);
         var work = fx(() -> {
             var view = prepared.view().get();
+            if (kind.isMonteCarlo()) {
+                assertNull(prepared.socialSecurityReport());
+                assertNotNull(prepared.monteCarloReport(), "Monte Carlo history has its own frozen report capture.");
+                var report = prepared.monteCarloReport().get();
+                assertTrue(report.context().stream().anyMatch(line -> line.contains("Original saved result | Started")));
+                assertTrue(report.context().stream().anyMatch(line -> line.contains(snapshot.completedAt().toString())));
+                assertTrue(report.context().stream().anyMatch(line -> line.contains("Seed:")));
+            } else {
+                var report = prepared.socialSecurityReport().get();
+                assertTrue(report.context().stream().anyMatch(line -> line.contains("Original saved analyzer result | Projection association")));
+                assertTrue(report.context().stream().anyMatch(line -> line.contains(snapshot.completedAt().toString())));
+            }
             var scroll = new javafx.scene.control.ScrollPane(view); scroll.setFitToWidth(true);
             boolean dark = kind.shape() == AnalysisKind.Shape.SINGLE;
             if (dark) scroll.setStyle("-fx-base:#202328;-fx-background:#202328;-fx-control-inner-background:#252830;-fx-text-inner-color:#f1f1f1;-fx-text-base-color:#f1f1f1;");

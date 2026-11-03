@@ -19,7 +19,13 @@ import java.util.function.*;
 /** Read-only, projection-owned history. No analysis controls, jobs or calculation factories. */
 public final class ProjectionAnalyzerHistoryDialog extends Dialog<Void> {
     private record Role(String name, UUID id) { @Override public String toString() { return name; } }
-    record Content(Supplier<Node> view, Function<Path, Runnable> export) { }
+    record Content(Supplier<Node> view, Function<Path, Runnable> export,
+            Supplier<IntegratedAnalyzerReport> socialSecurityReport,
+            Supplier<MonteCarloPdfReport> monteCarloReport) {
+        Content(Supplier<Node> view, Function<Path, Runnable> export) { this(view, export, null, null); }
+        Content(Supplier<Node> view, Function<Path, Runnable> export,
+                Supplier<IntegratedAnalyzerReport> socialSecurityReport) { this(view, export, socialSecurityReport, null); }
+    }
     private final ApplicationController source;
     private final Object owner;
     private final UUID ownerId;
@@ -28,6 +34,10 @@ public final class ProjectionAnalyzerHistoryDialog extends Dialog<Void> {
     private final Label notice = label("");
     private final VBox body = new VBox(10);
     private final Button export = new Button("Export PDF");
+    private final com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<IntegratedAnalyzerReport> socialSecurityPdfWorkflow =
+            createSocialSecurityPdfWorkflow();
+    private final com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<MonteCarloPdfReport> monteCarloPdfWorkflow =
+            createMonteCarloPdfWorkflow();
     private long generation;
     private boolean closed;
     private boolean exporting;
@@ -117,22 +127,54 @@ public final class ProjectionAnalyzerHistoryDialog extends Dialog<Void> {
                     + "\nOriginal assumptions are shown. Editable inputs and last-success slots do not change this association."
                     + (source.getCurrentPlan().getPendingAnalyzerAssociations().containsKey(ref.runId())
                     ? "\nHistorical pin pending ordinary plan Save; the last-success slot has its own save status." : "\nCommitted immutable historical component."));
-            export.setDisable(exporting);
+            export.setDisable(exporting || !hasFrozenPdfReport(content));
         }));
     }
 
     private void export() {
         if (!owned() || selected == null || selectedReference == null || !attached(selectedReference) || exporting) return;
-        var chooser = new FileChooser(); chooser.setTitle("Export Original Analyzer PDF");
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files", "*.pdf")); chooser.setInitialFileName("historical-analyzer.pdf");
-        var file = chooser.showSaveDialog(getDialogPane().getScene().getWindow()); if (file == null) return;
-        var work = selected.export().apply(file.toPath()); // capture selection on FX before background file work
-        exporting = true; export.setDisable(true); long ticket = generation;
-        source.getAnalysisResults().background(() -> { work.run(); return null; }).whenComplete((ignored, failure) -> Platform.runLater(() -> {
-            exporting = false; if (!owned()) return;
-            export.setDisable(selected == null || selectedReference == null || !attached(selectedReference));
-            if (ticket == generation && failure != null) notice.setText("PDF export failed. Original saved results were not changed.");
-        }));
+        if (!selectedReference.kind().isMonteCarlo() && selected.socialSecurityReport() != null) {
+            exportSocialSecurityHistory();
+            return;
+        }
+        if (selectedReference.kind().isMonteCarlo() && selected.monteCarloReport() != null) {
+            exportMonteCarloHistory();
+            return;
+        }
+        // Every supported saved result is reconstructed into a frozen report by prepare().
+        // Never fall back to the former direct Save chooser, which bypassed View/Save/Cancel.
+        export.setDisable(true);
+        notice.setText("PDF export is unavailable because this saved result has no supported frozen report.");
+    }
+
+    static boolean hasFrozenPdfReport(Content content) {
+        return content.socialSecurityReport() != null || content.monteCarloReport() != null;
+    }
+
+    private void exportSocialSecurityHistory() {
+        if (selected == null || selected.socialSecurityReport() == null) return;
+        startAssociatedPdfWorkflow(socialSecurityPdfWorkflow, selected.socialSecurityReport(),
+                (report, destination) -> new IntegratedAnalyzerPdfExporter().export(report, destination));
+    }
+
+    private static com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<IntegratedAnalyzerReport>
+            createSocialSecurityPdfWorkflow() {
+        return com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowFactory.create("Export Original Analyzer PDF",
+                ProjectionAnalyzerHistoryDialog::chooseHistoricalDestination);
+    }
+
+    private static com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<MonteCarloPdfReport>
+            createMonteCarloPdfWorkflow() {
+        return com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowFactory.create("Export Original Analyzer PDF",
+                ProjectionAnalyzerHistoryDialog::chooseHistoricalDestination);
+    }
+
+    private static Optional<Path> chooseHistoricalDestination(javafx.stage.Window owner, String suggested) {
+        var fileChooser = new FileChooser(); fileChooser.setTitle("Export Original Analyzer PDF");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files", "*.pdf"));
+        fileChooser.setInitialFileName(suggested);
+        var file = fileChooser.showSaveDialog(owner);
+        return file == null ? Optional.empty() : Optional.of(Path.of(file.toURI()));
     }
 
     static Content prepare(AnalysisSnapshot saved) {
@@ -163,10 +205,18 @@ public final class ProjectionAnalyzerHistoryDialog extends Dialog<Void> {
             var report = holder.get().report();
             return () -> { try { new IntegratedAnalyzerPdfExporter().export(report, path); }
                 catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); } };
-        });
+        }, () -> holder.get().report());
     }
 
     private static Content monte(AnalysisSnapshot saved, String durability, Supplier<MonteCarloPdfReport> reports, Supplier<Node> chart) {
+        Supplier<MonteCarloPdfReport> historicalReport = () -> {
+            var report = reports.get();
+            var context = new ArrayList<>(report.context());
+            context.add(durability);
+            context.add("Original saved result | Started " + saved.context().startedAt() + " | Completed " + saved.completedAt());
+            return new MonteCarloPdfReport(report.title(), report.type(), report.filename(), report.exportedAt(),
+                    context, report.chart(), report.sections());
+        };
         return new Content(() -> {
             var report = reports.get(); var box = new VBox(10, label(report.chart().title()), chart.get(), label(String.join("\n", report.context())));
             box.getStyleClass().add("mc-view");
@@ -179,13 +229,45 @@ public final class ProjectionAnalyzerHistoryDialog extends Dialog<Void> {
             }
             return box;
         }, path -> {
-            var r = reports.get(); var context = new ArrayList<>(r.context());
-            context.add(durability);
-            context.add("Original saved result | Started " + saved.context().startedAt() + " | Completed " + saved.completedAt());
-            var report = new MonteCarloPdfReport(r.title(), r.type(), r.filename(), r.exportedAt(), context, r.chart(), r.sections());
+            var report = historicalReport.get();
             return () -> { try { new MonteCarloPdfExporter().export(report, path); }
                 catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); } };
-        });
+        }, null, historicalReport);
+    }
+
+    private void exportMonteCarloHistory() {
+        if (selected == null || selected.monteCarloReport() == null) return;
+        startAssociatedPdfWorkflow(monteCarloPdfWorkflow, selected.monteCarloReport(),
+                (report, destination) -> new MonteCarloPdfExporter().export(report, destination));
+    }
+
+    private <R> void startAssociatedPdfWorkflow(
+            com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator<R> workflow,
+            Supplier<R> reportCapture,
+            com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator.PdfDocumentWriter<R> renderer) {
+        if (!owned() || selected == null || selectedReference == null || !attached(selectedReference) || exporting) return;
+        var capturedContent = selected;
+        var capturedReference = selectedReference;
+        var window = getDialogPane().getScene() == null ? null : getDialogPane().getScene().getWindow();
+        workflow.start(new com.daviddunn.retirementplanner.ui.pdf.PdfExportWorkflowCoordinator.Request<>(
+                window, "historical-analyzer.pdf",
+                () -> owned() && !exporting && selected == capturedContent && selectedReference == capturedReference
+                        && attached(capturedReference),
+                reportCapture,
+                renderer,
+                () -> true,
+                (choice, path) -> { /* Historical exports have no success notification. */ },
+                failure -> {
+                    javafx.stage.Window failureOwner = window != null && window.isShowing() ? window
+                            : window instanceof javafx.stage.Stage stage ? stage.getOwner() : null;
+                    if (failure.retainedPreview() != null || !owned()) {
+                        com.daviddunn.retirementplanner.ui.pdf.PdfExportDialogs.showFailure(failureOwner, failure);
+                    } else {
+                        notice.setText("PDF export failed. Original saved results were not changed.");
+                    }
+                },
+                busy -> { exporting = busy; export.setDisable(busy || selected == null || selectedReference == null
+                        || !attached(selectedReference) || !hasFrozenPdfReport(selected)); }));
     }
 
     private static final class SocialView extends VBox {

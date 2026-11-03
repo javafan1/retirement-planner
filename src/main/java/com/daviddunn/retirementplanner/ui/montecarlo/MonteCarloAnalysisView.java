@@ -28,7 +28,7 @@ import java.util.logging.Logger;
  * Controls collect inputs and render frozen results; financial work belongs to the worker service.
  */
 public final class MonteCarloAnalysisView extends VBox implements AutoCloseable {
-    private final MonteCarloPdfExportAction pdf = new MonteCarloPdfExportAction("mc-export-pdf", this::canExportPdf, this::preparePdfReport);
+    private final MonteCarloPdfExportAction pdf;
     @FunctionalInterface
     public interface RunWork {
         MonteCarloRun run(RetirementPlan plan, MonteCarloSettings settings, Projection reference,
@@ -119,6 +119,10 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                 MonteCarloSnapshotPresentationMapper::restoreRun, restored -> session.restore(restored, true),
                 session::clearResult, this::refreshPersistence, session::busy);
         persistence.associationResolver(controller::analysisAssociation);
+        pdf = new MonteCarloPdfExportAction("mc-export-pdf", this::canExportPdf, this::preparePdfReport,
+                session::result, identity -> !session.busy() && session.result() == identity,
+                identity -> ((MonteCarloRun) identity).mode() == MonteCarloMode.LONGEVITY_ADJUSTED
+                        ? "monte-carlo-longevity.pdf" : "monte-carlo-fixed.pdf");
         associated = new com.daviddunn.retirementplanner.ui.socialsecurity.AssociatedAnalyzerAction(controller,
                 () -> persistence.binding() == null ? null : persistence.binding().kind());
         savedStatus.setId("mc-saved-status");
