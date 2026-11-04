@@ -72,6 +72,40 @@ class ApplicationSettingsUiTest {
         }
     }
 
+    @Test void directoryDerivationExportOverrideSaveAndCancelUseDetachedDraft() throws Exception {
+        var plan = Files.createDirectory(directory.resolve("plans"));
+        var custom = Files.createDirectory(directory.resolve("pdfs"));
+        var settingsFile = directory.resolve("settings.json");
+        var settings = new ApplicationSettings();
+        settings.setDefaultPlanDirectory(plan.toString());
+        settings.setDefaultExportDirectory(custom.toString());
+        new JsonApplicationSettingsRepository(settingsFile).save(settings);
+        try (var service = new ApplicationSettingsService(new JsonApplicationSettingsRepository(settingsFile))) {
+            fx(() -> {
+                var manager = ApplicationThemeManager.start(ApplicationTheme.LIGHT);
+                var owner = new Stage(); owner.setScene(new Scene(new VBox(), 300, 150)); owner.show();
+                var dialog = new ApplicationSettingsDialog(owner, service, manager); dialog.show();
+                assertEquals(custom.toString(), field(dialog, "exportDirectory", TextField.class).getText());
+                var nextPlan = Files.createDirectory(directory.resolve("next-plans"));
+                field(dialog, "directory", TextField.class).setText(nextPlan.toString());
+                assertEquals(nextPlan.resolve("export").toString(), field(dialog, "exportDirectory", TextField.class).getText());
+                field(dialog, "exportDirectory", TextField.class).setText(custom.toString());
+                ((Button) dialog.getDialogPane().lookupButton(ButtonType.CANCEL)).fire();
+                assertEquals(plan.toString(), service.snapshot().getDefaultPlanDirectory());
+                assertEquals(custom.toString(), service.snapshot().getDefaultExportDirectory());
+                var saved = new ApplicationSettingsDialog(owner, service, manager); saved.show();
+                field(saved, "directory", TextField.class).setText(nextPlan.toString());
+                field(saved, "exportDirectory", TextField.class).setText(custom.toString());
+                ((Button) saved.getDialogPane().lookupButton(saved.getDialogPane().getButtonTypes().getFirst())).fire();
+                owner.close(); manager.close(); return null;
+            });
+            for (int i = 0; i < 300 && !Files.readString(settingsFile).contains("next-plans"); i++) Thread.sleep(20);
+            var restored = new JsonApplicationSettingsRepository(settingsFile).load();
+            assertEquals(plan.resolveSibling("next-plans").toString(), restored.getDefaultPlanDirectory());
+            assertEquals(custom.toString(), restored.getDefaultExportDirectory());
+        }
+    }
+
     @Test void existingNewPopupAndReplacedRootsFollowThemeWithoutDuplicateSheets() throws Exception {
         fx(() -> {
             var manager = ApplicationThemeManager.start(ApplicationTheme.LIGHT);

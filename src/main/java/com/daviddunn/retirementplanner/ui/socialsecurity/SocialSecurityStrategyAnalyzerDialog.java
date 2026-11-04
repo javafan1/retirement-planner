@@ -2039,6 +2039,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 ? "Export Quick Comparison PDF" : "Export Integrated Analysis PDF");
         chooser.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
         chooser.setInitialFileName(suggestedFilename);
+        if (!com.daviddunn.retirementplanner.ui.pdf.PdfExportDirectoryContext.prepare(chooser, owner)) return java.util.Optional.empty();
         var file = chooser.showSaveDialog(owner);
         if (file == null) return java.util.Optional.empty();
         var destination = file.toPath();

@@ -11,6 +11,7 @@ import javafx.event.ActionEvent;
 public final class ApplicationSettingsDialog extends Dialog<Void> {
     private final ComboBox<ApplicationTheme> theme = new ComboBox<>();
     private final TextField directory = new TextField();
+    private final TextField exportDirectory = new TextField();
     private final Label notice = new Label();
     private boolean saving;
     private boolean committed;
@@ -29,6 +30,21 @@ public final class ApplicationSettingsDialog extends Dialog<Void> {
         theme.valueProperty().addListener((o, old, next) -> { if (next != null) themes.apply(next); });
         directory.setText(initial.getDefaultPlanDirectory() == null ? "" : initial.getDefaultPlanDirectory());
         directory.setAccessibleText("Default retirement-plan directory");
+        directory.setId("default-plan-directory");
+        exportDirectory.setText(initial.getDefaultExportDirectory() == null ? "" : initial.getDefaultExportDirectory());
+        exportDirectory.setAccessibleText("Default export directory");
+        exportDirectory.setId("default-export-directory");
+        directory.textProperty().addListener((observable, oldValue, newValue) -> {
+            if (java.util.Objects.equals(oldValue, newValue)) return;
+            try {
+                var planPath = newValue == null || newValue.isBlank()
+                        ? java.nio.file.Path.of(System.getProperty("user.home"))
+                        : java.nio.file.Path.of(newValue.trim());
+                exportDirectory.setText(planPath.toAbsolutePath().normalize().resolve("export").toString());
+            } catch (RuntimeException invalidPath) {
+                notice.setText("Choose a valid retirement-plan directory before deriving the export directory.");
+            }
+        });
         var browse = new Button("Browse…"); var clear = new Button("Use System Default");
         clear.setOnAction(e -> directory.clear());
         browse.setOnAction(e -> {
@@ -46,8 +62,30 @@ public final class ApplicationSettingsDialog extends Dialog<Void> {
                         catch (RuntimeException unavailable) { notice.setText("Directory is no longer available. Try another location."); }
                     }));
         });
+        var browseExport = new Button("Browse…");
+        browseExport.setId("browse-default-export-directory");
+        browseExport.setOnAction(event -> {
+            var chooser = new DirectoryChooser();
+            chooser.setTitle("Default Export Directory");
+            try {
+                var current = java.nio.file.Path.of(exportDirectory.getText().trim());
+                if (java.nio.file.Files.isDirectory(current) && java.nio.file.Files.isReadable(current)) {
+                    chooser.setInitialDirectory(current.toFile());
+                }
+            } catch (RuntimeException ignored) { }
+            try {
+                var selected = chooser.showDialog(getOwner());
+                if (selected != null) exportDirectory.setText(selected.getAbsolutePath());
+            } catch (RuntimeException unavailable) {
+                notice.setText("Export directory is unavailable. Choose another location.");
+            }
+        });
         var themeLabel = new Label("Theme"); themeLabel.setLabelFor(theme);
         var folderLabel = new Label("Default retirement-plan directory"); folderLabel.setLabelFor(directory);
+        var exportFolderLabel = new Label("Default Export Directory"); exportFolderLabel.setLabelFor(exportDirectory);
+        var exportHelp = new Label("Used as the starting folder for Save PDF. Changing the retirement-plan directory resets this to its export subfolder; you can then choose a different folder.");
+        exportHelp.setWrapText(true);
+        exportHelp.setTooltip(new javafx.scene.control.Tooltip(exportHelp.getText()));
         var help = new Label("Used for plan Open and Save As. Existing plan Save and PDF/CSV exports keep their locations."); help.setWrapText(true);
         notice.setWrapText(true); notice.getStyleClass().add("settings-notice");
         var introductions = new Label("Analyzer Introductions");
@@ -61,7 +99,9 @@ public final class ApplicationSettingsDialog extends Dialog<Void> {
             notice.setText("Introductions will be shown again after Save.");
         });
         var body = new VBox(10, themeLabel, theme, folderLabel, directory, new HBox(8, browse, clear), help,
+                exportFolderLabel, new HBox(8, exportDirectory, browseExport), exportHelp,
                 new Separator(), introductions, introductionHelp, reset, notice);
+        HBox.setHgrow(exportDirectory, Priority.ALWAYS);
         body.setPadding(new javafx.geometry.Insets(14)); body.setMinWidth(0);
         var scroll = new ScrollPane(body); scroll.setFitToWidth(true);
         getDialogPane().setContent(scroll); getDialogPane().setPrefSize(600, 520);
@@ -71,7 +111,7 @@ public final class ApplicationSettingsDialog extends Dialog<Void> {
             e.consume(); if (saving) return;
             saving = true; body.setDisable(true); getDialogPane().lookupButton(save).setDisable(true);
             getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(true); notice.setText("Saving application preferences…");
-            service.savePreferences(theme.getValue(), directory.getText().trim(), resetIntroductions).whenComplete((ignored, failure) -> Platform.runLater(() -> {
+            service.savePreferences(theme.getValue(), directory.getText().trim(), exportDirectory.getText().trim(), resetIntroductions).whenComplete((ignored, failure) -> Platform.runLater(() -> {
                 saving = false; body.setDisable(false); getDialogPane().lookupButton(save).setDisable(false);
                 getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(false);
                 if (failure != null) { notice.setText("Preferences were not saved. Check the directory, permissions or settings recovery notice, then retry or Cancel."); return; }

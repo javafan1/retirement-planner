@@ -123,4 +123,43 @@ class ApplicationPreferencesTest {
             assertEquals(Path.of(".").toAbsolutePath().normalize().toString(), service.snapshot().getDefaultPlanDirectory());
         }
     }
+
+    @Test void legacySettingsDeriveAndPersistExportDirectoryWithoutChangingPlanPreference() throws Exception {
+        var file = directory.resolve("legacy-settings.json");
+        var planDirectory = Files.createDirectory(directory.resolve("plans"));
+        Files.writeString(file, "{\"defaultPlanDirectory\":\"" + planDirectory.toString().replace("\\", "\\\\") + "\"}");
+        try (var service = new ApplicationSettingsService(new JsonApplicationSettingsRepository(file))) {
+            var expected = planDirectory.resolve("export").toAbsolutePath().normalize().toString();
+            assertEquals(expected, service.snapshot().getDefaultExportDirectory());
+            // Loading is read-compatible; migration is persisted through the normal preference save path.
+            assertFalse(Files.readString(file).contains("defaultExportDirectory"));
+            service.savePreferences(service.snapshot().getTheme(), planDirectory.toString(), expected, false)
+                    .toCompletableFuture().get(5, TimeUnit.SECONDS);
+            var restored = new JsonApplicationSettingsRepository(file).load();
+            assertEquals(planDirectory.toString(), restored.getDefaultPlanDirectory());
+            assertEquals(expected, restored.getDefaultExportDirectory());
+        }
+    }
+
+    @Test void changingPlanDirectoryDerivesExportButExplicitExportOverridePersistsIndependently() throws Exception {
+        var first = Files.createDirectory(directory.resolve("first-plans"));
+        var second = Files.createDirectory(directory.resolve("second-plans"));
+        var custom = directory.resolve("custom-pdfs");
+        var file = directory.resolve("settings.json");
+        var settings = new ApplicationSettings();
+        settings.setDefaultPlanDirectory(first.toString());
+        settings.setDefaultExportDirectory(directory.resolve("old-custom").toString());
+        new JsonApplicationSettingsRepository(file).save(settings);
+        try (var service = new ApplicationSettingsService(new JsonApplicationSettingsRepository(file))) {
+            service.savePreferences(ApplicationTheme.LIGHT, second.toString()).toCompletableFuture().get(5, TimeUnit.SECONDS);
+            assertEquals(second.resolve("export").toAbsolutePath().normalize().toString(),
+                    service.snapshot().getDefaultExportDirectory());
+            service.savePreferences(ApplicationTheme.DARK, second.toString(), custom.toString(), false)
+                    .toCompletableFuture().get(5, TimeUnit.SECONDS);
+            assertEquals(second.toAbsolutePath().normalize().toString(), service.snapshot().getDefaultPlanDirectory());
+            assertEquals(custom.toAbsolutePath().normalize().toString(), service.snapshot().getDefaultExportDirectory());
+            assertEquals(custom.toAbsolutePath().normalize().toString(),
+                    new JsonApplicationSettingsRepository(file).load().getDefaultExportDirectory());
+        }
+    }
 }

@@ -71,6 +71,7 @@ final class IndividualPdfExportAction {
                     var fileChooser = new FileChooser(); fileChooser.setTitle("Export individual claiming PDF");
                     fileChooser.setInitialFileName(suggested);
                     fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF report", "*.pdf"));
+                    if (!com.daviddunn.retirementplanner.ui.pdf.PdfExportDirectoryContext.prepare(fileChooser, owner)) return java.util.Optional.empty();
                     var file = fileChooser.showSaveDialog(owner);
                     if (file == null) return java.util.Optional.empty();
                     Path destination = file.toPath();

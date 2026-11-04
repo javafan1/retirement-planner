@@ -98,6 +98,7 @@ final class MonteCarloPdfExportAction {
         chooser.setTitle("Export Monte Carlo PDF");
         chooser.setInitialFileName(suggestedFilename);
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF report", "*.pdf"));
+        if (!com.daviddunn.retirementplanner.ui.pdf.PdfExportDirectoryContext.prepare(chooser, owner)) return Optional.empty();
         File file = chooser.showSaveDialog(owner);
         if (file == null) return Optional.empty();
 

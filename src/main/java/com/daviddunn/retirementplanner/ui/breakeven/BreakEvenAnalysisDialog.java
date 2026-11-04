@@ -106,6 +106,7 @@ public final class BreakEvenAnalysisDialog extends Dialog<Void> {
             chooser.setTitle("Export Break-Even Analysis PDF");
             chooser.setInitialFileName(suggested);
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF report", "*.pdf"));
+            if (!com.daviddunn.retirementplanner.ui.pdf.PdfExportDirectoryContext.prepare(chooser, owner)) return Optional.empty();
             var file = chooser.showSaveDialog(owner);
             if (file == null) return Optional.empty();
             Path path = file.toPath();

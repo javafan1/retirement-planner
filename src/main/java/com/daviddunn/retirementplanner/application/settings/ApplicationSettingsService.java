@@ -22,6 +22,9 @@ public final class ApplicationSettingsService implements AutoCloseable {
     public ApplicationSettingsService(ApplicationSettingsRepository repository) {
         this.repository = Objects.requireNonNull(repository);
         committed = repository.load().copy();
+        if (committed.getDefaultExportDirectory() == null) {
+            committed.setDefaultExportDirectory(deriveExportDirectory(committed.getDefaultPlanDirectory()));
+        }
         worker.allowCoreThreadTimeOut(true);
         probes.allowCoreThreadTimeOut(true);
     }
@@ -60,21 +63,45 @@ public final class ApplicationSettingsService implements AutoCloseable {
     }
 
     public CompletionStage<Void> savePreferences(ApplicationTheme theme, String directory, boolean resetIntroductions) {
+        return savePreferences(theme, directory, null, resetIntroductions);
+    }
+
+    public CompletionStage<Void> savePreferences(ApplicationTheme theme, String directory,
+            String exportDirectory, boolean resetIntroductions) {
         Objects.requireNonNull(theme);
+        var previous = snapshot();
         return background(() -> {
             if (directory != null && directory.length() > 4096) throw new IllegalArgumentException("Directory preference is too long.");
             String normalized = directory == null || directory.isBlank() ? null : java.nio.file.Path.of(directory).toAbsolutePath().normalize().toString();
             if (normalized != null && !PlanDirectoryResolver.usable(normalized))
                 throw new IllegalArgumentException("Choose an existing readable and writable directory.");
-            return normalized;
-        }).thenCompose(normalized -> submit(worker, () -> {
+            String export = exportDirectory == null || exportDirectory.isBlank()
+                    ? (Objects.equals(normalized, previous.getDefaultPlanDirectory())
+                        ? previous.getDefaultExportDirectory() : deriveExportDirectory(normalized))
+                    : java.nio.file.Path.of(exportDirectory).toAbsolutePath().normalize().toString();
+            if (export.length() > 4096) throw new IllegalArgumentException("Directory preference is too long.");
+            return new String[] { normalized, export };
+        }).thenCompose(paths -> submit(worker, () -> {
             update(next -> {
                 next.setTheme(theme);
-                next.setDefaultPlanDirectory(normalized);
+                next.setDefaultPlanDirectory(paths[0]);
+                next.setDefaultExportDirectory(paths[1]);
                 if (resetIntroductions) next.setSuppressedAnalyzerIntroductions(java.util.Set.of());
             });
             return null;
         }));
+    }
+
+    private static String deriveExportDirectory(String planDirectory) {
+        java.nio.file.Path base;
+        try {
+            base = planDirectory == null || planDirectory.isBlank()
+                    ? java.nio.file.Path.of(System.getProperty("user.home"))
+                    : java.nio.file.Path.of(planDirectory);
+        } catch (RuntimeException invalidPlanPath) {
+            base = java.nio.file.Path.of(System.getProperty("user.home"));
+        }
+        return base.toAbsolutePath().normalize().resolve("export").toString();
     }
 
     public <T> CompletionStage<T> background(Supplier<T> task) {

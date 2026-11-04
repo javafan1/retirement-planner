@@ -3391,6 +3391,7 @@ public class ResultsSummaryView extends BorderPane {
             fileChooser.setTitle("Export Retirement Projection");
             fileChooser.setInitialFileName(suggested);
             fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF Files (*.pdf)", "*.pdf"));
+            if (!com.daviddunn.retirementplanner.ui.pdf.PdfExportDirectoryContext.prepare(fileChooser, owner)) return Optional.empty();
             File selected = fileChooser.showSaveDialog(owner);
             if (selected == null) return Optional.empty();
             Path file = selected.toPath();

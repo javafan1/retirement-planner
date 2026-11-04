@@ -16,6 +16,7 @@ public class ApplicationSettings {
 
     private ApplicationTheme theme = ApplicationTheme.LIGHT;
     private String defaultPlanDirectory;
+    private String defaultExportDirectory;
 
     public ApplicationTheme getTheme() { return theme; }
     public void setTheme(ApplicationTheme theme) { this.theme = java.util.Objects.requireNonNull(theme); }
@@ -24,12 +25,18 @@ public class ApplicationSettings {
         if (directory != null && directory.length() > 4096) throw new IllegalArgumentException("Directory preference is too long.");
         defaultPlanDirectory = directory == null || directory.isBlank() ? null : directory;
     }
+    public String getDefaultExportDirectory() { return defaultExportDirectory; }
+    public void setDefaultExportDirectory(String directory) {
+        if (directory != null && directory.length() > 4096) throw new IllegalArgumentException("Directory preference is too long.");
+        defaultExportDirectory = directory == null || directory.isBlank() ? null : directory;
+    }
 
     public ApplicationSettings copy() {
         var result = new ApplicationSettings();
         result.suppressedAnalyzerIntroductions = suppressedAnalyzerIntroductions;
         result.theme = theme;
         result.defaultPlanDirectory = defaultPlanDirectory;
+        result.defaultExportDirectory = defaultExportDirectory;
         result.automaticallyOpenLastPlan = automaticallyOpenLastPlan;
         result.lastOpenedPlan = lastOpenedPlan;
         return result;

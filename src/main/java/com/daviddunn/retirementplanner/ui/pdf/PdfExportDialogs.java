@@ -23,6 +23,7 @@ public final class PdfExportDialogs {
             chooser.setTitle(title);
             chooser.setInitialFileName(suggested);
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF report", "*.pdf"));
+            if (!PdfExportDirectoryContext.prepare(chooser, owner)) return Optional.empty();
             File selected = chooser.showSaveDialog(owner);
             return selected == null ? Optional.empty() : Optional.of(Path.of(selected.toURI()));
         };

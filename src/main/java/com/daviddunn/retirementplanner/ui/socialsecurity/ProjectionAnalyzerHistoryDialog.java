@@ -173,6 +173,7 @@ public final class ProjectionAnalyzerHistoryDialog extends Dialog<Void> {
         var fileChooser = new FileChooser(); fileChooser.setTitle("Export Original Analyzer PDF");
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files", "*.pdf"));
         fileChooser.setInitialFileName(suggested);
+        if (!com.daviddunn.retirementplanner.ui.pdf.PdfExportDirectoryContext.prepare(fileChooser, owner)) return Optional.empty();
         var file = fileChooser.showSaveDialog(owner);
         return file == null ? Optional.empty() : Optional.of(Path.of(file.toURI()));
     }

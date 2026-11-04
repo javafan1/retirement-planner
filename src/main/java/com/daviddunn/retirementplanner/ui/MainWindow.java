@@ -19,6 +19,7 @@ import com.daviddunn.retirementplanner.ui.dialogs.*;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.ButtonBar;
+import javafx.scene.control.Button;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
@@ -26,12 +27,16 @@ import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.Tooltip;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.geometry.Pos;
 import javafx.stage.FileChooser;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -42,6 +47,9 @@ import java.util.function.Consumer;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
+import org.kordamp.ikonli.javafx.FontIcon;
+import com.daviddunn.retirementplanner.ui.navigation.WorkspaceScreenFrame;
 
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
@@ -56,6 +64,7 @@ public class MainWindow {
     private final BorderPane root;
     private final StackPane workspace;
     private final Map<String, Node> workspaceViews = new LinkedHashMap<>();
+    private final Map<String, Node> workspaceScreens = new LinkedHashMap<>();
     private final Map<String, RadioMenuItem> workspaceMenuItems = new LinkedHashMap<>();
     private final Map<String, Node> workspaceFocusOwners = new LinkedHashMap<>();
     private String selectedWorkspaceId = "results-summary";
@@ -137,7 +146,7 @@ public class MainWindow {
 
         wireEvents();
 
-        root.setTop(createMenuBar());
+        root.setTop(createApplicationMenuRow());
         root.setCenter(workspace);
         root.setBottom(createStatusBar());
 
@@ -296,6 +305,37 @@ public class MainWindow {
         if (themes != null) themes.close();
     }
 
+    private HBox createApplicationMenuRow() {
+        MenuBar menuBar = createMenuBar();
+        menuBar.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(menuBar, Priority.ALWAYS);
+
+        FontIcon gear = new FontIcon(FontAwesomeSolid.COG);
+        gear.setMouseTransparent(true);
+        Button settingsButton = new Button(null, gear);
+        settingsButton.setId("application-settings-button");
+        settingsButton.setAccessibleText("Settings");
+        settingsButton.setAccessibleHelp("Open application settings");
+        settingsButton.setTooltip(new Tooltip("Settings"));
+        settingsButton.setFocusTraversable(true);
+        settingsButton.getStyleClass().add("settings-gear-button");
+        settingsButton.setOnAction(event -> openApplicationSettings());
+
+        HBox row = new HBox(menuBar, settingsButton);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("application-menu-row");
+        return row;
+    }
+
+    private void openApplicationSettings() {
+        if (themes == null) {
+            themes = com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(
+                    controller.getSettingsService().snapshot().getTheme());
+        }
+        new com.daviddunn.retirementplanner.ui.settings.ApplicationSettingsDialog(
+                root.getScene().getWindow(), controller.getSettingsService(), themes).showAndWait();
+    }
+
     private MenuBar createMenuBar() {
 
         Menu fileMenu = new Menu("File");
@@ -307,12 +347,6 @@ public class MainWindow {
         MenuItem saveBaselineItem =
                 new MenuItem("Save Current as Baseline");
         MenuItem exitItem = new MenuItem("Exit");
-        MenuItem settingsItem = new MenuItem("Application Settings…");
-        settingsItem.setOnAction(e -> {
-            if (themes == null) themes = com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager.start(controller.getSettingsService().snapshot().getTheme());
-            new com.daviddunn.retirementplanner.ui.settings.ApplicationSettingsDialog(root.getScene().getWindow(), controller.getSettingsService(), themes).showAndWait();
-        });
-
         saveItem.setOnAction(e -> onSave());
         saveAsItem.setOnAction(e -> onSaveAs());
         openItem.setOnAction(e -> onOpen());
@@ -329,8 +363,6 @@ public class MainWindow {
                 saveAsItem,
                 new SeparatorMenuItem(),
                 saveBaselineItem,
-                new SeparatorMenuItem(),
-                settingsItem,
                 new SeparatorMenuItem(),
                 exitItem);
 
@@ -443,11 +475,24 @@ public class MainWindow {
         workspaceViews.put("assumptions", assumptionsView);
         workspaceViews.put("roth-conversions", rothConversionView);
 
+        Map<String, String> inputTitles = Map.of(
+                "household", "Household",
+                "accounts", "Accounts",
+                "income", "Income",
+                "expenses", "Expenses",
+                "non-investable-assets", "Non-Investible Assets",
+                "assumptions", "Assumptions",
+                "roth-conversions", "Roth Conversions");
+
         workspaceViews.forEach((id, view) -> {
+            Node screen = id.equals("results-summary")
+                    ? view
+                    : new WorkspaceScreenFrame(inputTitles.get(id), id, view, this::navigateToResultsSummary);
             boolean selected = id.equals(selectedWorkspaceId);
-            view.setVisible(selected);
-            view.setManaged(selected);
-            host.getChildren().add(view);
+            screen.setVisible(selected);
+            screen.setManaged(selected);
+            workspaceScreens.put(id, screen);
+            host.getChildren().add(screen);
         });
         return host;
     }
@@ -480,17 +525,17 @@ public class MainWindow {
     }
 
     private void selectWorkspace(String viewId) {
-        Node next = workspaceViews.get(viewId);
+        Node next = workspaceScreens.get(viewId);
         if (next == null || viewId.equals(selectedWorkspaceId)) return;
 
         Scene scene = root.getScene();
         Node currentFocus = scene == null ? null : scene.getFocusOwner();
-        if (currentFocus != null && isWithin(currentFocus, workspaceViews.get(selectedWorkspaceId))) {
+        if (currentFocus != null && isWithin(currentFocus, workspaceScreens.get(selectedWorkspaceId))) {
             workspaceFocusOwners.put(selectedWorkspaceId, currentFocus);
         }
 
         selectedWorkspaceId = viewId;
-        workspaceViews.forEach((id, view) -> {
+        workspaceScreens.forEach((id, view) -> {
             boolean selected = id.equals(viewId);
             view.setVisible(selected);
             view.setManaged(selected);
@@ -506,11 +551,16 @@ public class MainWindow {
                 remembered.requestFocus();
             }
             else {
-                Node firstFocusable = firstFocusable(next);
+                Node content = workspaceViews.get(viewId);
+                Node firstFocusable = firstFocusable(content);
                 if (firstFocusable != null) firstFocusable.requestFocus();
-                else next.requestFocus();
+                else content.requestFocus();
             }
         });
+    }
+
+    private void navigateToResultsSummary() {
+        selectWorkspace("results-summary");
     }
 
     private static boolean isWithin(Node candidate, Node ancestor) {
@@ -1205,6 +1255,8 @@ public class MainWindow {
     public void setStage(Stage stage) {
 
         this.stage = stage;
+        com.daviddunn.retirementplanner.ui.pdf.PdfExportDirectoryContext.attach(
+                stage, controller.getSettingsService());
         stage.setOnHidden(event -> closeYearlyDetailsWindow());
         stage.setOnCloseRequest(event -> {
             if (planOperationActive || swappingProjections) {
