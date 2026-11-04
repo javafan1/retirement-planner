@@ -9,11 +9,13 @@ import com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager;
 import com.daviddunn.retirementplanner.ui.views.AssumptionsView;
 import com.daviddunn.retirementplanner.ui.views.ResultsSummaryView;
 import com.daviddunn.retirementplanner.ui.views.ResultsView;
+import com.daviddunn.retirementplanner.ui.navigation.WorkspaceScreenFrame;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.HBox;
 import javafx.stage.PopupWindow;
 import javafx.stage.Stage;
 import javafx.stage.Window;
@@ -52,7 +54,16 @@ class MainWindowViewNavigationTest {
         fx(() -> {
             MainWindow window = new MainWindow(new ApplicationController());
             BorderPane root = (BorderPane) window.createScene().getRoot();
-            MenuBar menuBar = (MenuBar) root.getTop();
+            MenuBar menuBar = MainWindowTestSupport.menuBar(root);
+            assertTrue(root.getTop() instanceof HBox, "Menus and Settings share the horizontal top row.");
+            Button settings = (Button) root.lookup("#application-settings-button");
+            assertNotNull(settings);
+            assertEquals("Settings", settings.getAccessibleText());
+            assertEquals("Settings", settings.getTooltip().getText());
+            assertTrue(settings.isFocusTraversable());
+            assertNotNull(((org.kordamp.ikonli.javafx.FontIcon) settings.getGraphic()).getIconCode());
+            assertFalse(menuBar.getMenus().getFirst().getItems().stream()
+                    .anyMatch(item -> item.getText() != null && item.getText().contains("Settings")));
             assertEquals(List.of("File", "View", "Analysis", "Help"),
                     menuBar.getMenus().stream().map(Menu::getText).toList());
             Menu viewMenu = menuBar.getMenus().get(1);
@@ -88,8 +99,10 @@ class MainWindowViewNavigationTest {
                 assertTrue(item.isSelected());
                 assertEquals(1, host.getChildren().stream().filter(Node::isVisible).count());
                 assertEquals(1, host.getChildren().stream().filter(Node::isManaged).count());
-                assertSame(field(window, "workspaceViews") instanceof Map<?, ?> views ? views.get(entry.getKey()) : null,
-                        host.getChildren().stream().filter(Node::isVisible).findFirst().orElseThrow());
+                Node visible = host.getChildren().stream().filter(Node::isVisible).findFirst().orElseThrow();
+                Node content = (Node) ((Map<?, ?>) field(window, "workspaceViews")).get(entry.getKey());
+                if (visible instanceof WorkspaceScreenFrame frame) assertSame(content, frame.getContent());
+                else assertSame(content, visible);
                 assertEquals(8, host.getChildren().size(), "Navigation must reuse the original view instances.");
             }
             viewMenu.getItems().stream().filter(RadioMenuItem.class::isInstance).map(RadioMenuItem.class::cast)
@@ -104,11 +117,108 @@ class MainWindowViewNavigationTest {
     }
 
     @Test
+    void settingsGearOpensExistingDialogAndStaysRightAligned() throws Exception {
+        fx(() -> {
+            ApplicationController controller = new ApplicationController();
+            MainWindow window = new MainWindow(controller);
+            ApplicationThemeManager themes = ApplicationThemeManager.start(ApplicationTheme.LIGHT);
+            Stage owner = new Stage();
+            window.setStage(owner);
+            Scene scene = window.createScene();
+            owner.setScene(scene);
+            owner.setWidth(900);
+            owner.setHeight(650);
+            owner.show();
+            scene.getRoot().applyCss();
+            scene.getRoot().layout();
+
+            Button settings = (Button) scene.lookup("#application-settings-button");
+            assertNotNull(settings);
+            assertEquals("Settings", settings.getAccessibleText());
+            assertEquals("Settings", settings.getTooltip().getText());
+            assertTrue(settings.isFocusTraversable());
+            MenuBar menuBar = MainWindowTestSupport.menuBar(scene.getRoot());
+            assertEquals(List.of("File", "View", "Analysis", "Help"),
+                    menuBar.getMenus().stream().map(Menu::getText).toList());
+            assertFalse(menuBar.getMenus().getFirst().getItems().stream()
+                    .anyMatch(item -> item.getText() != null && item.getText().contains("Settings")));
+            var settingsBounds = settings.localToScene(settings.getBoundsInLocal());
+            assertTrue(settingsBounds.getMaxX() >= scene.getWidth() - 12,
+                    "Settings gear remains at the right edge of the menu row.");
+
+            java.util.concurrent.atomic.AtomicReference<Stage> settingsWindow = new java.util.concurrent.atomic.AtomicReference<>();
+            javafx.application.Platform.runLater(() -> Window.getWindows().stream()
+                    .filter(Stage.class::isInstance).map(Stage.class::cast)
+                    .filter(candidate -> candidate != owner && candidate.getOwner() == owner && candidate.isShowing())
+                    .findFirst().ifPresent(candidate -> { settingsWindow.set(candidate); candidate.hide(); }));
+            settings.fire();
+            assertNotNull(settingsWindow.get(), "Settings button must open the existing owned settings dialog.");
+            assertEquals(javafx.stage.Modality.WINDOW_MODAL, settingsWindow.get().getModality());
+
+            owner.hide();
+            window.closeApplicationPreferences();
+        });
+    }
+
+    @Test
+    void closeButtonsOnAllInputViewsReturnToSummaryWithoutApplyingOrRecalculating() throws Exception {
+        fx(() -> {
+            ApplicationController controller = new ApplicationController();
+            MainWindow window = new MainWindow(controller);
+            BorderPane root = field(window, "root");
+            StackPane host = (StackPane) root.getCenter();
+            Menu viewMenu = MainWindowTestSupport.menuBar(root).getMenus().get(1);
+            ResultsSummaryView summary = field(window, "resultsSummaryView");
+            Node assumptionsColumn = summary.getRight();
+
+            var assumptions = (AssumptionsView) field(window, "assumptionsView");
+            TextField draft = field(assumptions, "inflationRateField");
+            draft.setText("pending close draft");
+            assertTrue(assumptions.isDirty());
+
+            var originalPlan = controller.getCurrentPlan();
+            Object originalProjection = controller.peekCurrentProjection();
+            long originalRevision = controller.getSourcePlanRevision();
+            boolean originalDirty = controller.isModified();
+            var screens = (Map<String, Node>) field(window, "workspaceScreens");
+
+            for (String id : List.of("household", "accounts", "income", "expenses",
+                    "non-investable-assets", "assumptions", "roth-conversions")) {
+                viewItem(viewMenu, id).fire();
+                assertInstanceOf(WorkspaceScreenFrame.class, screens.get(id));
+                var frame = (WorkspaceScreenFrame) screens.get(id);
+                assertEquals("Close", frame.getCloseButton().getText());
+                assertEquals("Close", frame.getCloseButton().getAccessibleText());
+                assertTrue(frame.getCloseButton().isFocusTraversable());
+                if (id.equals("accounts")) {
+                    host.setDisable(true);
+                    assertTrue(frame.getCloseButton().isDisabled(),
+                            "Workspace Close must respect MainWindow's existing busy-state disablement.");
+                    host.setDisable(false);
+                }
+                assertSame(frame, host.getChildren().stream().filter(Node::isVisible).findFirst().orElseThrow());
+                frame.getCloseButton().fire();
+                assertEquals("results-summary", field(window, "selectedWorkspaceId"), id);
+                assertSame(summary, host.getChildren().stream().filter(Node::isVisible).findFirst().orElseThrow());
+                assertSame(originalPlan, controller.getCurrentPlan());
+                assertSame(originalProjection, controller.peekCurrentProjection());
+                assertEquals(originalRevision, controller.getSourcePlanRevision());
+                assertEquals(originalDirty, controller.isModified());
+                assertEquals("pending close draft", draft.getText());
+                assertTrue(assumptions.isDirty());
+                assertSame(assumptionsColumn, summary.getRight());
+            }
+
+            window.closeApplicationPreferences();
+        });
+    }
+
+    @Test
     void draftEditsSurviveNavigationAndPlanViewRefreshWithoutApplyingThem() throws Exception {
         fx(() -> {
             MainWindow window = new MainWindow(new ApplicationController());
             BorderPane root = (BorderPane) window.createScene().getRoot();
-            Menu viewMenu = ((MenuBar) root.getTop()).getMenus().get(1);
+            Menu viewMenu = MainWindowTestSupport.menuBar(root).getMenus().get(1);
             AssumptionsView assumptions = field(window, "assumptionsView");
             TextField draft = field(assumptions, "inflationRateField");
             draft.setText("unapplied draft");
@@ -194,7 +304,7 @@ class MainWindowViewNavigationTest {
             Button action = field(summary, "yearlyDetailsButton");
             assertNotNull(action);
             assertTrue(action.isDisabled());
-            Menu view = ((MenuBar) root.getTop()).getMenus().get(1);
+            Menu view = MainWindowTestSupport.menuBar(root).getMenus().get(1);
             assertFalse(view.getItems().stream().anyMatch(item -> "Yearly Detail".equals(item.getText())));
             assertEquals(8, ((StackPane) root.getCenter()).getChildren().size());
             window.closeApplicationPreferences();
@@ -243,7 +353,7 @@ class MainWindowViewNavigationTest {
         fx(() -> {
             MainWindow window = new MainWindow(new ApplicationController());
             BorderPane root = (BorderPane) window.createScene().getRoot();
-            Menu viewMenu = ((MenuBar) root.getTop()).getMenus().get(1);
+            Menu viewMenu = MainWindowTestSupport.menuBar(root).getMenus().get(1);
             viewItem(viewMenu, "accounts").fire();
             StackPane host = (StackPane) root.getCenter();
             Node accountsBefore = field(window, "accountsView");
@@ -259,7 +369,9 @@ class MainWindowViewNavigationTest {
 
             assertEquals("accounts", field(window, "selectedWorkspaceId"));
             assertTrue(viewItem(viewMenu, "accounts").isSelected());
-            assertSame(accountsBefore, host.getChildren().stream().filter(Node::isVisible).findFirst().orElseThrow());
+            Node visible = host.getChildren().stream().filter(Node::isVisible).findFirst().orElseThrow();
+            assertInstanceOf(WorkspaceScreenFrame.class, visible);
+            assertSame(accountsBefore, ((WorkspaceScreenFrame) visible).getContent());
             assertEquals(8, host.getChildren().size());
             assertSame(replacement, controller.getCurrentPlan());
             window.closeApplicationPreferences();
@@ -283,7 +395,7 @@ class MainWindowViewNavigationTest {
             stage.setHeight(height);
             stage.show();
             manager.apply(theme);
-            Menu viewMenu = ((MenuBar) root.getTop()).getMenus().get(1);
+            Menu viewMenu = MainWindowTestSupport.menuBar(root).getMenus().get(1);
 
             Projection previewProjection = new Projection();
             previewProjection.addYear(ProjectionYearBuilder.aProjectionYear().withCalendarYear(2027)
@@ -299,7 +411,7 @@ class MainWindowViewNavigationTest {
                 root.applyCss();
                 root.resize(width, height);
                 root.layout();
-                save(root, Path.of("target", "phase15c", "previews", variant, id + ".png"));
+            save(root, Path.of("target", "phase15c", "previews", variant, id + ".png"));
             }
             viewItem(viewMenu, "results-summary").fire();
             Button detailsButton = field(summary, "yearlyDetailsButton");

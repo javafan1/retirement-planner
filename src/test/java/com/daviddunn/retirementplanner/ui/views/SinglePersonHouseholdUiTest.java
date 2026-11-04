@@ -258,7 +258,8 @@ public class SinglePersonHouseholdUiTest {
             active.open(file); active.getProjectionRestoration().toCompletableFuture().get(20, TimeUnit.SECONDS); invoke(window, "loadCurrentPlan");
             assertNotNull(active.getCurrentProjectionSummary());
             var root = field(window, "root", BorderPane.class);
-            var menu = ((MenuBar) root.getTop()).getMenus().stream().filter(m -> m.getText().equals("Analysis")).findFirst().orElseThrow();
+            var menu = com.daviddunn.retirementplanner.ui.MainWindowTestSupport.menuBar(root).getMenus().stream()
+                    .filter(m -> m.getText().equals("Analysis")).findFirst().orElseThrow();
             menu.getOnShowing().handle(null);
             assertFalse(menu.getItems().stream().filter(i -> "monte-carlo-analysis-menu".equals(i.getId())).findFirst().orElseThrow().isDisable());
             assertTrue(menu.getItems().stream().filter(i -> "monte-carlo-comparison-menu".equals(i.getId())).findFirst().orElseThrow().isDisable());

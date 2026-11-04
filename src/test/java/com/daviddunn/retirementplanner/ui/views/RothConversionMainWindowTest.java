@@ -363,7 +363,8 @@ class RothConversionMainWindowTest {
 
     private static class SceneNavigation {
         static void visitViews(javafx.scene.Node node) {
-            if (node instanceof javafx.scene.layout.BorderPane root && root.getTop() instanceof MenuBar menuBar) {
+            if (node instanceof javafx.scene.layout.BorderPane root) {
+                MenuBar menuBar = com.daviddunn.retirementplanner.ui.MainWindowTestSupport.menuBar(root);
                 menuBar.getMenus().stream().filter(menu -> "View".equals(menu.getText())).findFirst().orElseThrow()
                         .getItems().stream().filter(item -> item instanceof RadioMenuItem)
                         .map(RadioMenuItem.class::cast).forEach(RadioMenuItem::fire);

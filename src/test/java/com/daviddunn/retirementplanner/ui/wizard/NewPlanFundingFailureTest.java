@@ -118,7 +118,7 @@ class NewPlanFundingFailureTest {
                 catch (Throwable exception) { failure.set(exception); button(pane, "Cancel").fire(); }
             });
             var root = (javafx.scene.layout.BorderPane) window.createScene().getRoot();
-            ((MenuBar) root.getTop()).getMenus().getFirst().getItems().stream()
+            com.daviddunn.retirementplanner.ui.MainWindowTestSupport.menuBar(root).getMenus().getFirst().getItems().stream()
                     .filter(item -> item.getText().equals("New")).findFirst().orElseThrow().fire();
             if (failure.get() != null) throw new AssertionError(failure.get());
             assertNotSame(previous, controller.getCurrentPlan());

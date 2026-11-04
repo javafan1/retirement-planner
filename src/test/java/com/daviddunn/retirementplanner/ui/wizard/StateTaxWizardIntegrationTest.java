@@ -41,7 +41,7 @@ class StateTaxWizardIntegrationTest {
                 }
                 catch (Throwable error) { failure.set(error); button(pane, "Cancel").fire(); }
             });
-            ((MenuBar) root.getTop()).getMenus().getFirst().getItems().stream()
+            com.daviddunn.retirementplanner.ui.MainWindowTestSupport.menuBar(root).getMenus().getFirst().getItems().stream()
                     .filter(item -> item.getText().equals("New")).findFirst().orElseThrow().fire();
             if (failure.get() != null) throw new AssertionError(failure.get());
             assertNotSame(old, controller.getCurrentPlan());

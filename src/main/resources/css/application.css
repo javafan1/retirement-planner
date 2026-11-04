@@ -21,6 +21,52 @@
 .app-theme .pdf-export-choice { -fx-padding: 4 2 2 2; -fx-max-width: 440; }
 .app-theme .pdf-export-choice-pane .button:default { -fx-font-weight: bold; }
 
+.app-theme .application-menu-row {
+    -fx-background-color: -app-surface;
+}
+.app-theme .settings-gear-button,
+.app-theme .workspace-close-button {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-text-fill: -app-text;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-padding: 6 10;
+}
+.app-theme .settings-gear-button .ikonli-font-icon,
+.app-theme .workspace-close-button .ikonli-font-icon {
+    -fx-icon-color: -app-text;
+}
+.app-theme .settings-gear-button:hover,
+.app-theme .workspace-close-button:hover {
+    -fx-background-color: -app-hover-surface;
+    -fx-border-color: -app-border;
+}
+.app-theme .settings-gear-button:focused,
+.app-theme .workspace-close-button:focused {
+    -fx-background-color: -app-hover-surface;
+    -fx-border-color: -app-accent;
+}
+.app-theme .settings-gear-button:pressed,
+.app-theme .workspace-close-button:pressed {
+    -fx-background-color: -app-selected-surface;
+    -fx-border-color: -app-selected-border;
+}
+.app-theme .settings-gear-button:disabled,
+.app-theme .workspace-close-button:disabled {
+    -fx-opacity: 0.55;
+}
+.app-theme .workspace-screen-header {
+    -fx-background-color: -app-background;
+    -fx-border-color: transparent transparent -app-border transparent;
+    -fx-border-width: 0 0 1 0;
+}
+.app-theme .workspace-screen-title {
+    -fx-text-fill: -app-text;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
 /* Keep Modena's calendar navigation behavior and shapes while giving the
    arrows semantic foreground colors in both application themes. */
 .date-picker-popup > * > .spinner > .button > .left-arrow,

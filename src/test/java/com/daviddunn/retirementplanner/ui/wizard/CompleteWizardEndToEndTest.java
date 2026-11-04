@@ -146,7 +146,7 @@ class CompleteWizardEndToEndTest {
                 finally { button(pane, "Cancel").fire(); }
             });
             BorderPane root = (BorderPane) window.createScene().getRoot();
-            ((MenuBar) root.getTop()).getMenus().getFirst().getItems().stream().filter(item -> item.getText().equals("New"))
+            com.daviddunn.retirementplanner.ui.MainWindowTestSupport.menuBar(root).getMenus().getFirst().getItems().stream().filter(item -> item.getText().equals("New"))
                     .findFirst().orElseThrow().fire();
             if (failure.get() != null) throw new AssertionError(failure.get());
             assertSame(previous, controller.getCurrentPlan());
@@ -198,7 +198,7 @@ class CompleteWizardEndToEndTest {
             }
         });
         BorderPane root = (BorderPane) window.createScene().getRoot();
-        ((MenuBar) root.getTop()).getMenus().getFirst().getItems().stream().filter(item -> item.getText().equals("New"))
+        com.daviddunn.retirementplanner.ui.MainWindowTestSupport.menuBar(root).getMenus().getFirst().getItems().stream().filter(item -> item.getText().equals("New"))
                 .findFirst().orElseThrow().fire();
         if (failure.get() != null) throw new AssertionError(failure.get());
     }

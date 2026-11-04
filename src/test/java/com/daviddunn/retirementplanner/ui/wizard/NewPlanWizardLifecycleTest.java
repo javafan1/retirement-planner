@@ -239,12 +239,12 @@ class NewPlanWizardLifecycleTest {
         }
 
         MenuItem newItem() {
-            return ((MenuBar) root.getTop()).getMenus().getFirst().getItems().stream()
+            return com.daviddunn.retirementplanner.ui.MainWindowTestSupport.menuBar(root).getMenus().getFirst().getItems().stream()
                     .filter(item -> "New".equals(item.getText())).findFirst().orElseThrow();
         }
 
         RadioMenuItem viewItem(String id) {
-            return ((MenuBar) root.getTop()).getMenus().stream()
+            return com.daviddunn.retirementplanner.ui.MainWindowTestSupport.menuBar(root).getMenus().stream()
                     .filter(menu -> "View".equals(menu.getText())).findFirst().orElseThrow()
                     .getItems().stream().filter(item -> id.equals(item.getId()))
                     .map(RadioMenuItem.class::cast).findFirst().orElseThrow();
