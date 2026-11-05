@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.app.montecarlo;
 
 import com.daviddunn.retirementplanner.app.socialsecurity.SinglePersonMortalityAnalysisTest;
 import com.daviddunn.retirementplanner.domain.analysis.*;
+import com.daviddunn.retirementplanner.domain.breakeven.BreakEvenPlanSummary;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.roth.*;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.*;
@@ -314,6 +315,12 @@ class MonteCarloCapacityProbeTest {
             return node;
         }
         if (value instanceof Iterable<?> list) { var node = JSON.createArrayNode(); for (var e : list) node.add(tree(e)); return node; }
+        if (value instanceof BreakEvenPlanSummary summary) {
+            var node = JSON.createObjectNode();
+            node.set("primary", tree(summary.primary()));
+            node.set("spouse", tree(summary.spouse()));
+            return node;
+        }
         if (value.getClass().isRecord()) {
             var node = JSON.createObjectNode();
             for (var field : value.getClass().getRecordComponents()) node.set(field.getName(), tree(field.getAccessor().invoke(value)));
@@ -348,6 +355,7 @@ class MonteCarloCapacityProbeTest {
         if (c == MonteCarloLifetime.class) return read(node, node.has("spouse") ? MonteCarloLifetime.Couple.class : MonteCarloLifetime.Individual.class);
         if (c == LocalDate.class) return LocalDate.parse(node.asText());
         if (c == Year.class) return Year.parse(node.asText());
+        if (c == BreakEvenPlanSummary.class) return JSON.treeToValue(node, c);
         if (c.isEnum()) return Enum.valueOf((Class) c, node.asText());
         if (c.isRecord()) {
             var fields = c.getRecordComponents(); var values = new Object[fields.length]; var types = new Class<?>[fields.length];

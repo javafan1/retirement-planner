@@ -75,12 +75,26 @@ class AssumptionsViewTest {
             assertMarked(deathYear, true);
             assertMarked(futureRate, false);
             assertMarked(futureYear, false);
-            assertMarked(reduction, true);
-            assertMarked(reductionYear, true);
-            assertEquals("0", field(f.view, "socialSecurityBenefitReductionField").getText());
-            assertEquals("2032", field(f.view, "socialSecurityBenefitReductionYearField").getText());
+            assertMarked(reduction, false);
+            assertMarked(reductionYear, false);
+            assertEquals("", field(f.view, "socialSecurityBenefitReductionField").getText());
+            assertEquals("", field(f.view, "socialSecurityBenefitReductionYearField").getText());
             assertTrue(field(f.view, "socialSecurityBenefitReductionField").getTooltip().getText()
                     .contains("not an enacted change to Social Security law"));
+            assertTrue(field(f.view, "socialSecurityBenefitReductionField").getTooltip().getText()
+                    .contains("if either field is entered, both are required"));
+            field(f.view, "socialSecurityBenefitReductionField").setText("0");
+            assertMarked(reduction, false);
+            assertMarked(reductionYear, true);
+            field(f.view, "socialSecurityBenefitReductionYearField").setText("2032");
+            assertMarked(reduction, false);
+            assertMarked(reductionYear, false);
+            field(f.view, "socialSecurityBenefitReductionField").clear();
+            assertMarked(reduction, true);
+            assertMarked(reductionYear, false);
+            field(f.view, "socialSecurityBenefitReductionYearField").clear();
+            assertMarked(reduction, false);
+            assertMarked(reductionYear, false);
             @SuppressWarnings("unchecked") ComboBox<DeathScenario> scenario = control(f.view, "deathScenarioComboBox");
             scenario.setValue(DeathScenario.BOTH_SURVIVE);
             assertMarked(deathYear, false);
@@ -95,7 +109,7 @@ class AssumptionsViewTest {
         fx(() -> {
             Fixture f = new Fixture();
             var themes = ApplicationThemeManager.start(ApplicationTheme.LIGHT);
-            Path output = Path.of("target/phase19b4/previews");
+            Path output = Path.of("target/phase20/previews");
             Files.createDirectories(output);
             try {
                 for (var theme : ApplicationTheme.values()) {
@@ -111,7 +125,15 @@ class AssumptionsViewTest {
                             previewView.layout();
                             Node reduction = previewView.lookup("#assumptions-social-security-reduction");
                             assertNotNull(reduction);
-                            savePreview(reduction, output.resolve("assumptions-reduction-" + theme + "-" + width + ".png"));
+                            savePreview(reduction, output.resolve("assumptions-reduction-blank-" + theme + "-" + width + ".png"));
+                            field(previewView, "socialSecurityBenefitReductionField").setText("22");
+                            previewView.applyCss();
+                            previewView.layout();
+                            savePreview(reduction, output.resolve("assumptions-reduction-conditional-" + theme + "-" + width + ".png"));
+                            assertFalse(previewView.applyChanges());
+                            previewView.applyCss();
+                            previewView.layout();
+                            savePreview(previewView, output.resolve("assumptions-reduction-validation-" + theme + "-" + width + ".png"));
                         } finally {
                             stage.hide();
                             stage.setScene(null);
@@ -121,6 +143,39 @@ class AssumptionsViewTest {
             } finally {
                 themes.close();
             }
+        });
+    }
+
+    @Test
+    void guidedAssumptionsReductionPairUsesConditionalMarkersAndOptionalCopy() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            AssumptionsView guided = new AssumptionsView(true);
+            guided.load(f.plan());
+            TitledPane advanced = control(guided, "guidedAdvanced");
+            advanced.setExpanded(true);
+            TextField percent = field(guided, "socialSecurityBenefitReductionField");
+            TextField year = field(guided, "socialSecurityBenefitReductionYearField");
+            Label percentLabel = ((com.daviddunn.retirementplanner.ui.wizard.WizardFieldRow) percent.getParent())
+                    .getFieldLabel();
+            Label yearLabel = ((com.daviddunn.retirementplanner.ui.wizard.WizardFieldRow) year.getParent())
+                    .getFieldLabel();
+            assertFalse(percentLabel.getText().contains("*"));
+            assertFalse(yearLabel.getText().contains("*"));
+            assertMarked(percentLabel, false);
+            assertMarked(yearLabel, false);
+            VBox advancedFields = (VBox) advanced.getContent();
+            assertTrue(advancedFields.getChildren().stream().filter(Label.class::isInstance)
+                    .map(Label.class::cast).anyMatch(label -> label.getText().equals(
+                            "Optional. Leave both fields blank to use full scheduled Social Security benefits. "
+                                    + "If either field is entered, both are required.")));
+            year.setText("2032");
+            assertMarked(percentLabel, true);
+            assertMarked(yearLabel, false);
+            percent.setText("0");
+            assertMarked(percentLabel, false);
+            assertMarked(yearLabel, false);
+            guided.dispose();
         });
     }
 
@@ -173,6 +228,68 @@ class AssumptionsViewTest {
             assertEquals("22.5", field(f.view, "socialSecurityBenefitReductionField").getText());
             assertEquals("2035", field(f.view, "socialSecurityBenefitReductionYearField").getText());
             assertEquals(1, f.notifications.get());
+        });
+    }
+
+    @Test
+    void socialSecurityReductionPairIsOptionalAndNormalizesBlankDefaultsWithoutRevisionChanges() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            TextField percent = field(f.view, "socialSecurityBenefitReductionField");
+            TextField year = field(f.view, "socialSecurityBenefitReductionYearField");
+            assertEquals("", percent.getText());
+            assertEquals("", year.getText());
+            assertFalse(f.view.isDirty(), "Blank UI fields represent the existing 0% / 2032 domain defaults.");
+            assertTrue(f.view.applyChanges());
+            assertEquals(0, f.notifications.get());
+            assertEquals(BigDecimal.ZERO, f.assumptions().getEconomicAssumptions()
+                    .getSocialSecurityBenefitReductionPercent());
+            assertEquals(2032, f.assumptions().getEconomicAssumptions()
+                    .getSocialSecurityBenefitReductionEffectiveYear());
+
+            percent.setText("0");
+            year.setText("2034");
+            assertTrue(f.view.applyChanges());
+            assertEquals(BigDecimal.ZERO, f.assumptions().getEconomicAssumptions()
+                    .getSocialSecurityBenefitReductionPercent());
+            assertEquals(2034, f.assumptions().getEconomicAssumptions()
+                    .getSocialSecurityBenefitReductionEffectiveYear());
+            assertEquals(1, f.notifications.get());
+
+            percent.setText("0");
+            year.clear();
+            assertFalse(f.view.applyChanges(), "A populated zero is still an entered half of the pair.");
+            assertEquals("0", percent.getText());
+            assertEquals("", year.getText());
+            assertTrue(status(f.view).getText().contains("Reduction Effective Year"));
+            assertEquals(1, f.notifications.get());
+
+            percent.clear();
+            year.setText("2034");
+            assertFalse(f.view.applyChanges());
+            assertEquals("2034", year.getText());
+            assertTrue(status(f.view).getText().contains("Social Security Benefit Reduction"));
+            assertEquals(2034, f.assumptions().getEconomicAssumptions()
+                    .getSocialSecurityBenefitReductionEffectiveYear());
+        });
+    }
+
+    @Test
+    void defaultAndCustomZeroReductionYearDisplayPolicyPreservesNondefaultYear() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            var old = f.plan().getPlanningAssumptions();
+            var e = old.getEconomicAssumptions();
+            f.plan().setPlanningAssumptions(new PlanningAssumptions(
+                    new com.daviddunn.retirementplanner.domain.model.EconomicAssumptions(
+                            e.getExpectedAnnualInvestmentReturn(), e.getGeneralInflationRate(),
+                            e.getHealthcareInflationRate(), e.getSocialSecurityColaRate(), BigDecimal.ZERO, 2034),
+                    old.getTaxAssumptions(), old.getWithdrawalAssumptions(), old.getDeathScenarioAssumptions(),
+                    old.getProjectionLengthYears(), old.getProjectionStartDate(), old.getStateTaxAssumptions()));
+            f.view.load(f.plan());
+            assertEquals("0", field(f.view, "socialSecurityBenefitReductionField").getText());
+            assertEquals("2034", field(f.view, "socialSecurityBenefitReductionYearField").getText());
+            assertFalse(f.view.isDirty());
         });
     }
 

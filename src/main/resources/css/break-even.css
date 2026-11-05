@@ -48,6 +48,7 @@
 /* Compact disclosure and section spacing; chart/marker sizes remain unchanged. */
 .break-even-view .section-title { -fx-font-size: 14px; }
 .break-even-plan-summary { -fx-font-size: 13px; -fx-padding: 3px 0; -fx-text-fill: -fx-text-base-color; }
+.break-even-assumption-disclosure { -fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: -fx-text-base-color; }
 .break-even-view #break-even-insight-toggle { -fx-padding: 0 2px; }
 .break-even-view #break-even-insight-headline { -fx-font-weight: normal; }
 .break-even-view #break-even-selected-summary { -fx-font-weight: bold; -fx-text-fill: -fx-text-base-color; }

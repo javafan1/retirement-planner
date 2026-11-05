@@ -601,12 +601,12 @@ public class ApplicationController {
         var current = prepared.nextCurrent; var baseline = prepared.nextBaseline;
         projectionEpoch.incrementAndGet(); analyzerAdmissions.clear();
         currentProjectionSummary = current.summary(); currentNonInvestableAssetProjections = current.nonInvestable();
-        currentProjectionAssumptions = current.snapshot().people(); currentDetailsChart = current.chart();
+        currentProjectionAssumptions = current.assumptions(); currentDetailsChart = current.chart();
         currentDetailsContext = new com.daviddunn.retirementplanner.app.baseline.BaselineDetailsSession.Accepted(
                 current.inputs(), current.snapshot().id(), target.getPlanId(), current.snapshot().acceptedAt(), sourcePlanRevision + 1);
         currentProjection = current.projection(); currentFundingFailure = null;
         baselineProjection = baseline.projection(); baselineNonInvestableAssetProjections = baseline.nonInvestable();
-        baselineProjectionAssumptions = baseline.snapshot().people(); baselineDetailsInputs = baseline.inputs(); baselineDetailsChart = baseline.chart();
+        baselineProjectionAssumptions = baseline.assumptions(); baselineDetailsInputs = baseline.inputs(); baselineDetailsChart = baseline.chart();
         cachedBaselineIdentity = target.getBaseline();
         detailsComparison = null; detailsComparisonCurrent = null; detailsComparisonBaseline = null; detailsComparisonOwner = null;
         insightCurrentProjection = null; insightBaselineProjection = null; insightBaselineIdentity = null; breakEvenExplicitOnly = true;
@@ -649,13 +649,15 @@ public class ApplicationController {
     private record RestoredProjection(CompleteProjectionSnapshot snapshot, Projection projection,
             ProjectionSummary summary, List<NonInvestableAssetProjection> nonInvestable,
             com.daviddunn.retirementplanner.ui.charts.ProjectionChartModel chart,
-            com.daviddunn.retirementplanner.app.baseline.ProjectionInputs inputs) {
+            com.daviddunn.retirementplanner.app.baseline.ProjectionInputs inputs,
+            BreakEvenPlanSummary assumptions) {
         static RestoredProjection prepare(CompleteProjectionSnapshot snapshot) {
             if (snapshot == null) return null;
             var projection = snapshot.annual().restoreProjection();
             return new RestoredProjection(snapshot, projection, snapshot.summary().restore(projection),
                     snapshot.restoreNonInvestable(), snapshot.chart(),
-                    com.daviddunn.retirementplanner.app.baseline.ProjectionInputs.capture(snapshot.restoreInputs()));
+                    com.daviddunn.retirementplanner.app.baseline.ProjectionInputs.capture(snapshot.restoreInputs()),
+                    snapshot.restoreBreakEvenAssumptions());
         }
     }
     private record RestoredComponents(java.util.Map<java.util.UUID, CompleteProjectionSnapshot> objects,
@@ -699,7 +701,7 @@ public class ApplicationController {
                                 cachedBaselineIdentity = selectedBaseline;
                                 baselineProjection = baseline.projection();
                                 baselineNonInvestableAssetProjections = baseline.nonInvestable();
-                                baselineProjectionAssumptions = baseline.snapshot().people();
+                                baselineProjectionAssumptions = baseline.assumptions();
                                 baselineDetailsInputs = baseline.inputs();
                                 baselineDetailsChart = baseline.chart();
                             }
@@ -707,7 +709,7 @@ public class ApplicationController {
                             if (current != null) {
                                 currentProjectionSummary = current.summary();
                                 currentNonInvestableAssetProjections = current.nonInvestable();
-                                currentProjectionAssumptions = current.snapshot().people();
+                                currentProjectionAssumptions = current.assumptions();
                                 currentDetailsChart = current.chart();
                                 currentDetailsContext = new com.daviddunn.retirementplanner.app.baseline.BaselineDetailsSession.Accepted(
                                         current.inputs(), current.snapshot().id(), current.snapshot().owner().toString(),
@@ -980,7 +982,7 @@ public class ApplicationController {
                 complete = new CompleteProjectionSnapshot(1, java.util.UUID.randomUUID(), ownerIdentity, ownerIdentity, java.time.Instant.now(),
                         inputDocument, CompleteProjectionSnapshot.digest(inputDocument), "Accepted normal projection; retained schema " + retained.schemaVersion() + "; original build version not recorded",
                         retained, nonInvestable.stream().map(CompleteProjectionSnapshot.NonInvestableYear::capture).toList(),
-                        CompleteProjectionSnapshot.Summary.capture(completedSummary), BreakEvenPlanSummary.from(executionPlan.getHousehold()));
+                        CompleteProjectionSnapshot.Summary.capture(completedSummary), BreakEvenPlanSummary.from(executionPlan));
                 completedChart = complete.chart(); // Validate/detach before publishing any accepted state.
             }
             // Normal projection is synchronous today. The token also rejects reentrant/late work
@@ -992,7 +994,7 @@ public class ApplicationController {
                     currentFundingFailure = insufficient.fundingFailure();
                     return null; // Never expose a completed-year prefix as a complete projection.
                 }
-                currentProjectionAssumptions = complete.people();
+                currentProjectionAssumptions = complete.restoreBreakEvenAssumptions();
                 currentDetailsContext = new com.daviddunn.retirementplanner.app.baseline.BaselineDetailsSession.Accepted(
                         inputs, complete.id(), runPlan.getPlanId(), complete.acceptedAt(), revision);
                 attachSnapshot(complete);
@@ -1044,7 +1046,7 @@ public class ApplicationController {
                 if (original == null) return null;
                 baselineProjection = original.annual().restoreProjection();
                 baselineNonInvestableAssetProjections = original.restoreNonInvestable();
-                baselineProjectionAssumptions = original.people();
+                baselineProjectionAssumptions = original.restoreBreakEvenAssumptions();
                 baselineDetailsInputs = com.daviddunn.retirementplanner.app.baseline.ProjectionInputs.capture(original.restoreInputs());
                 baselineDetailsChart = original.chart();
                 return baselineProjection;
@@ -1060,8 +1062,7 @@ public class ApplicationController {
             if (currentPlan != owner || currentPlan.getBaseline() != selectedBaseline || cachedBaselineIdentity != selectedBaseline) return null;
             baselineProjection = prepared;
             baselineDetailsInputs = inputs;
-            baselineProjectionAssumptions = BreakEvenPlanSummary.from(
-                    selectedBaseline.getSnapshot().getHousehold());
+            baselineProjectionAssumptions = BreakEvenPlanSummary.from(selectedBaseline.getSnapshot());
         }
 
         return baselineProjection;

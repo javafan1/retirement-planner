@@ -60,6 +60,22 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
     public RetirementPlanSnapshot restoreInputs() {
         return restoreInputs(inputsDocument);
     }
+
+    /**
+     * Resolves display assumptions from this accepted projection's digest-validated frozen inputs.
+     * The denormalized people metadata is retained for its historical presentation contract; the
+     * reduction policy is sourced only from the associated input document.
+     */
+    public BreakEvenPlanSummary restoreBreakEvenAssumptions() {
+        var frozenInputs = restoreInputs();
+        var frozenPolicy = BreakEvenPlanSummary.from(frozenInputs).benefitReductionPolicy();
+        if (people.benefitReductionPolicy() != null
+                && !people.benefitReductionPolicy().equals(frozenPolicy)) {
+            throw new IllegalArgumentException("Projection reduction metadata does not match its frozen inputs.");
+        }
+        return people.withBenefitReductionPolicy(frozenPolicy);
+    }
+
     public static RetirementPlanSnapshot restoreInputs(String document) {
         try { return JSON.readValue(document, RetirementPlanSnapshot.class); }
         catch (Exception failure) { throw new IllegalArgumentException("Invalid projection inputs.", failure); }

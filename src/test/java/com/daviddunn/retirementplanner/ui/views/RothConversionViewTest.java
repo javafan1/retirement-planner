@@ -82,6 +82,28 @@ class RothConversionViewTest {
         });
     }
 
+    @Test void workspaceApplyCancelCallbacksRunOnlyAfterTheirExistingTransactions() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            AtomicInteger navigation = new AtomicInteger();
+            f.view.setOnWorkspaceEditCompleted(navigation::incrementAndGet);
+            field(f.view, "conversionYearField").setText("2027");
+            ((Button) control(f.view, "applyButton")).fire();
+            assertEquals(1, navigation.get());
+            assertEquals(2027, f.request().getStartYear());
+
+            field(f.view, "conversionYearField").setText("not a year");
+            ((Button) control(f.view, "applyButton")).fire();
+            assertEquals(1, navigation.get(), "Failed Apply must not leave the workspace.");
+            assertEquals("not a year", field(f.view, "conversionYearField").getText());
+
+            field(f.view, "conversionYearField").setText("2028");
+            ((Button) control(f.view, "cancelButton")).fire();
+            assertEquals(2, navigation.get());
+            assertEquals(2027, f.request().getStartYear(), "Cancel restores the last accepted request.");
+        });
+    }
+
     @ParameterizedTest
     @CsvSource({"conversionYearField,2027,2026", "conversionAmountField,2000,1000"})
     void editsAndManualRevertsUseTypedComparison(String name, String changed, String original) throws Exception {

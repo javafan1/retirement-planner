@@ -35,6 +35,15 @@ public final class BreakEvenPresentation {
     }
     public static String age(Integer value) { return value == null ? "Unavailable" : value.toString(); }
 
+    /** Null means a trustworthy zero reduction, or no disclosure is needed. Unknown provenance is explicit. */
+    public static String reductionDisclosure(BreakEvenPlanSummary plan) {
+        var policy = plan.benefitReductionPolicy();
+        if (policy == null) return "Social Security benefit reduction: Unavailable for this projection";
+        if (policy.reductionPercent().signum() == 0) return null;
+        return "Social Security benefit reduction: " + policy.reductionPercent().stripTrailingZeros().toPlainString()
+                + "% beginning " + policy.effectiveYear();
+    }
+
     public static String signedMoney(BigDecimal value) {
         return value.signum() > 0 ? "+" + money(value) : money(value);
     }

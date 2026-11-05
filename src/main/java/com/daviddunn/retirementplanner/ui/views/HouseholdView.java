@@ -29,6 +29,7 @@ public class HouseholdView extends VBox {
     private final ReadOnlyBooleanWrapper dirty = new ReadOnlyBooleanWrapper();
     private RetirementPlan currentPlan;
     private Runnable onPlanChanged;
+    private Runnable onWorkspaceEditCompleted;
     private boolean loading;
 
     public HouseholdView() {
@@ -52,8 +53,13 @@ public class HouseholdView extends VBox {
         spousePersonCard.setOnEdited(this::updateDirty);
         applyButton.disableProperty().bind(dirty.not());
         cancelButton.disableProperty().bind(dirty.not());
-        applyButton.setOnAction(event -> applyChanges());
-        cancelButton.setOnAction(event -> cancelChanges());
+        applyButton.setOnAction(event -> {
+            if (applyChanges() && onWorkspaceEditCompleted != null) onWorkspaceEditCompleted.run();
+        });
+        cancelButton.setOnAction(event -> {
+            cancelChanges();
+            if (onWorkspaceEditCompleted != null) onWorkspaceEditCompleted.run();
+        });
         HBox buttonBar = new HBox(10, applyButton, cancelButton, RequiredFieldSupport.createLegend());
         buttonBar.setPadding(new Insets(10));
 
@@ -105,6 +111,10 @@ public class HouseholdView extends VBox {
 
     public void setOnPlanChanged(Runnable onPlanChanged) {
         this.onPlanChanged = onPlanChanged;
+    }
+
+    public void setOnWorkspaceEditCompleted(Runnable callback) {
+        onWorkspaceEditCompleted = callback;
     }
 
     public boolean applyChanges() {

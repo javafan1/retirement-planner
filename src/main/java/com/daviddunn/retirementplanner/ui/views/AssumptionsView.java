@@ -72,6 +72,11 @@ public class AssumptionsView extends VBox {
     private final TextField socialSecurityColaField;
     private final TextField socialSecurityBenefitReductionField;
     private final TextField socialSecurityBenefitReductionYearField;
+    private final ObservableBooleanValue socialSecurityReductionPercentRequired;
+    private final ObservableBooleanValue socialSecurityReductionYearRequired;
+    private static final String SOCIAL_SECURITY_REDUCTION_OPTIONAL_HELP =
+            "Optional. Leave both fields blank to use full scheduled Social Security benefits. "
+                    + "If either field is entered, both are required.";
     private final VBox socialSecurityBenefitRows = new VBox(8);
     private final List<SocialSecurityDraftRow> socialSecurityDraftRows = new ArrayList<>();
     private VBox socialSecurityBenefitsCard;
@@ -93,6 +98,8 @@ public class AssumptionsView extends VBox {
     private final Label statusLabel;
     private final java.util.Map<Control, WizardFieldRow> guidedRows = new java.util.HashMap<>();
     private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
+    private final java.util.Map<Control, RequiredFieldSupport.Attachment> requiredAttachmentsByControl =
+            new java.util.IdentityHashMap<>();
     private final List<RequiredFieldSupport.Attachment> socialSecurityRequiredAttachments = new ArrayList<>();
     private final SimpleBooleanProperty coupleHousehold = new SimpleBooleanProperty();
     private final TitledPane guidedAdvanced = new TitledPane();
@@ -112,6 +119,7 @@ public class AssumptionsView extends VBox {
      */
     private Runnable onPlanChanged;
     private Runnable onOpeningRmdRequested;
+    private Runnable onWorkspaceEditCompleted;
 
     public AssumptionsView() {
 
@@ -182,6 +190,16 @@ public class AssumptionsView extends VBox {
         socialSecurityBenefitReductionField.setId("social-security-benefit-reduction-percent");
         socialSecurityBenefitReductionYearField = new TextField();
         socialSecurityBenefitReductionYearField.setId("social-security-benefit-reduction-year");
+        socialSecurityReductionPercentRequired = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> socialSecurityBenefitReductionField.getText().isBlank()
+                        && !socialSecurityBenefitReductionYearField.getText().isBlank(),
+                socialSecurityBenefitReductionField.textProperty(),
+                socialSecurityBenefitReductionYearField.textProperty());
+        socialSecurityReductionYearRequired = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> !socialSecurityBenefitReductionField.getText().isBlank()
+                        && socialSecurityBenefitReductionYearField.getText().isBlank(),
+                socialSecurityBenefitReductionField.textProperty(),
+                socialSecurityBenefitReductionYearField.textProperty());
 
         /*
          * Tax fields.
@@ -210,8 +228,13 @@ public class AssumptionsView extends VBox {
         statusLabel =
                 new Label();
 
-        applyButton.setOnAction(e -> applyChanges());
-        cancelButton.setOnAction(e -> cancelChanges());
+        applyButton.setOnAction(e -> {
+            if (applyChanges() && onWorkspaceEditCompleted != null) onWorkspaceEditCompleted.run();
+        });
+        cancelButton.setOnAction(e -> {
+            cancelChanges();
+            if (onWorkspaceEditCompleted != null) onWorkspaceEditCompleted.run();
+        });
         applyButton.disableProperty().bind(dirty.not());
         cancelButton.disableProperty().bind(dirty.not());
 
@@ -526,7 +549,7 @@ public class AssumptionsView extends VBox {
         InputHelp.install(inflationRateField, HelpText.GENERAL_INFLATION);
         InputHelp.install(healthcareInflationField, HelpText.HEALTHCARE_INFLATION);
         InputHelp.install(socialSecurityColaField, HelpText.SOCIAL_SECURITY_COLA);
-        String reductionHelp = "Allows you to model a potential future reduction in Social Security retirement and survivor benefits. Enter the percentage by which benefits would decrease and the calendar year when the reduction would begin. The reduction is assumed to remain in effect for all subsequent years. This is a planning scenario, not an enacted change to Social Security law. A value of 0% uses currently scheduled benefits.";
+        String reductionHelp = "Allows you to model a potential future reduction in Social Security retirement and survivor benefits. Enter the percentage by which benefits would decrease and the calendar year when the reduction would begin. The reduction is assumed to remain in effect for all subsequent years. This is a planning scenario, not an enacted change to Social Security law. A value of 0% uses currently scheduled benefits. Leave both fields blank to use full scheduled benefits; if either field is entered, both are required.";
         InputHelp.install(socialSecurityBenefitReductionField, reductionHelp);
         InputHelp.install(socialSecurityBenefitReductionYearField, reductionHelp);
         InputHelp.install(federalBracketGrowthField, PlanningInputHelp.BRACKET_GROWTH);
@@ -547,8 +570,8 @@ public class AssumptionsView extends VBox {
         attachRequired(grid, inflationRateField);
         attachRequired(grid, healthcareInflationField);
         attachRequired(grid, socialSecurityColaField);
-        attachRequired(grid, socialSecurityBenefitReductionField);
-        attachRequired(grid, socialSecurityBenefitReductionYearField);
+        attachRequired(grid, socialSecurityBenefitReductionField, socialSecurityReductionPercentRequired);
+        attachRequired(grid, socialSecurityBenefitReductionYearField, socialSecurityReductionYearRequired);
         attachRequired(grid, filingStatusComboBox);
         requiredFieldAttachments.add(RequiredFieldSupport.attach(stateLabel, stateJurisdictionComboBox));
         attachRequired(grid, federalBracketGrowthField);
@@ -637,8 +660,14 @@ public class AssumptionsView extends VBox {
         socialSecurityBenefitsCard.setId("assumptions-social-security-benefits");
         socialSecurityBenefitsCard.getStyleClass().add("assumptions-card");
         socialSecurityBenefitsCard.setMaxHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        Label socialSecurityReductionHelp = new Label(SOCIAL_SECURITY_REDUCTION_OPTIONAL_HELP);
+        socialSecurityReductionHelp.setId("social-security-reduction-optional-help");
+        socialSecurityReductionHelp.getStyleClass().add("assumptions-optional-help");
+        socialSecurityReductionHelp.setWrapText(true);
+        socialSecurityReductionHelp.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         VBox socialSecurityReductionCard = new VBox(8,
                 sectionHeading("Future Social Security Benefit Reduction"),
+                socialSecurityReductionHelp,
                 inputRow(original, socialSecurityBenefitReductionField),
                 inputRow(original, socialSecurityBenefitReductionYearField));
         socialSecurityReductionCard.setId("assumptions-social-security-reduction");
@@ -722,13 +751,24 @@ public class AssumptionsView extends VBox {
                 .filter(candidate -> candidate.getLabelFor() == input)
                 .findFirst().orElseThrow(() -> new IllegalStateException(
                         "Missing associated label for required Assumptions control " + input.getId()));
-        requiredFieldAttachments.add(RequiredFieldSupport.attach(label, input, required));
+        var attachment = RequiredFieldSupport.attach(label, input, required);
+        requiredFieldAttachments.add(attachment);
+        requiredAttachmentsByControl.put(input, attachment);
+    }
+
+    private void detachRequired(Control input) {
+        var attachment = requiredAttachmentsByControl.remove(input);
+        if (attachment != null) {
+            requiredFieldAttachments.remove(attachment);
+            attachment.close();
+        }
     }
 
     /** Releases indicator listeners when the main application discards this view. */
     public void dispose() {
         requiredFieldAttachments.forEach(RequiredFieldSupport.Attachment::close);
         requiredFieldAttachments.clear();
+        requiredAttachmentsByControl.clear();
         socialSecurityRequiredAttachments.forEach(RequiredFieldSupport.Attachment::close);
         socialSecurityRequiredAttachments.clear();
     }
@@ -928,9 +968,29 @@ public class AssumptionsView extends VBox {
             Label label = new Label(names.get(row) + " *");
             label.setLabelFor(input);
             if (row == 4 || row == 5 || row == 6 || row == 7) {
-                var field = new WizardFieldRow(names.get(row), WizardFieldRow.Requiredness.REQUIRED,
+                var requiredness = row == 6 || row == 7
+                        ? WizardFieldRow.Requiredness.CONDITIONALLY_REQUIRED
+                        : WizardFieldRow.Requiredness.REQUIRED;
+                var field = new WizardFieldRow(names.get(row), requiredness,
                         input, row == 7 ? "Calendar year" : "Percentage per year", input.getTooltip().getText());
                 guidedRows.put(input, field);
+                if (input == socialSecurityBenefitReductionField
+                        || input == socialSecurityBenefitReductionYearField) {
+                    detachRequired(input);
+                    ObservableBooleanValue required = input == socialSecurityBenefitReductionField
+                            ? socialSecurityReductionPercentRequired : socialSecurityReductionYearRequired;
+                    var attachment = RequiredFieldSupport.attach(field.getFieldLabel(), input, required);
+                    requiredFieldAttachments.add(attachment);
+                    requiredAttachmentsByControl.put(input, attachment);
+                }
+                if (input == socialSecurityBenefitReductionField) {
+                    Label optionalHelp = new Label(SOCIAL_SECURITY_REDUCTION_OPTIONAL_HELP);
+                    optionalHelp.setId("wizard-social-security-reduction-optional-help");
+                    optionalHelp.getStyleClass().add("assumptions-optional-help");
+                    optionalHelp.setWrapText(true);
+                    optionalHelp.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+                    advancedFields.getChildren().add(optionalHelp);
+                }
                 advancedFields.getChildren().add(field);
             }
             else if (row < 3) {
@@ -973,8 +1033,7 @@ public class AssumptionsView extends VBox {
         summary.textProperty().bind(javafx.beans.binding.Bindings.createStringBinding(() ->
                 "Healthcare inflation (entered %): " + pendingText(healthcareInflationField)
                         + " · Social Security COLA (entered %): " + pendingText(socialSecurityColaField)
-                        + " · Social Security benefit reduction: " + pendingText(socialSecurityBenefitReductionField)
-                        + " beginning " + pendingText(socialSecurityBenefitReductionYearField),
+                        + " · Social Security benefit reduction: " + reductionSummaryText(),
                 healthcareInflationField.textProperty(), socialSecurityColaField.textProperty(),
                 socialSecurityBenefitReductionField.textProperty(), socialSecurityBenefitReductionYearField.textProperty()));
         summary.visibleProperty().bind(guidedAdvanced.expandedProperty().not());
@@ -993,6 +1052,15 @@ public class AssumptionsView extends VBox {
 
     private static String pendingText(TextField field) {
         return field.getText().isBlank() ? "Needs attention (blank)" : field.getText();
+    }
+
+    private String reductionSummaryText() {
+        if (socialSecurityBenefitReductionField.getText().isBlank()
+                && socialSecurityBenefitReductionYearField.getText().isBlank()) {
+            return "Full scheduled benefits (optional)";
+        }
+        return pendingText(socialSecurityBenefitReductionField) + " beginning "
+                + pendingText(socialSecurityBenefitReductionYearField);
     }
 
     private void showGuidedError(Control input, String message) {
@@ -1096,10 +1164,13 @@ public class AssumptionsView extends VBox {
                 toPercent(
                         economicAssumptions
                                 .getSocialSecurityColaRate()));
-        socialSecurityBenefitReductionField.setText(
-                economicAssumptions.getSocialSecurityBenefitReductionPercent().stripTrailingZeros().toPlainString());
-        socialSecurityBenefitReductionYearField.setText(
-                Integer.toString(economicAssumptions.getSocialSecurityBenefitReductionEffectiveYear()));
+        boolean defaultSocialSecurityReduction = economicAssumptions.getSocialSecurityBenefitReductionPercent()
+                .compareTo(BigDecimal.ZERO) == 0
+                && economicAssumptions.getSocialSecurityBenefitReductionEffectiveYear() == 2032;
+        socialSecurityBenefitReductionField.setText(defaultSocialSecurityReduction ? ""
+                : economicAssumptions.getSocialSecurityBenefitReductionPercent().stripTrailingZeros().toPlainString());
+        socialSecurityBenefitReductionYearField.setText(defaultSocialSecurityReduction ? ""
+                : Integer.toString(economicAssumptions.getSocialSecurityBenefitReductionEffectiveYear()));
 
         /*
          * Tax assumptions.
@@ -1300,14 +1371,14 @@ public class AssumptionsView extends VBox {
             }
             return value;
         });
-        EconomicAssumptions existingEconomic = currentPlan.getPlanningAssumptions().getEconomicAssumptions();
+        SocialSecurityReductionDraft reduction = readSocialSecurityReduction();
         EconomicAssumptions economic = new EconomicAssumptions(
                 percent(investmentReturnField, "Annual investment return"),
                 percent(inflationRateField, "General inflation"),
                 percent(healthcareInflationField, "Healthcare inflation"),
                 percent(socialSecurityColaField, "Social Security COLA"),
-                reductionPercent(socialSecurityBenefitReductionField),
-                reductionYear(socialSecurityBenefitReductionYearField));
+                reduction.percent(),
+                reduction.effectiveYear());
         BigDecimal bracket = percent(federalBracketGrowthField, "Federal tax bracket growth");
         BigDecimal deduction = percent(standardDeductionGrowthField, "Standard deduction growth");
         PlanningAssumptions applied = currentPlan.getPlanningAssumptions();
@@ -1426,6 +1497,29 @@ public class AssumptionsView extends VBox {
         });
     }
 
+    private SocialSecurityReductionDraft readSocialSecurityReduction() {
+        boolean percentBlank = socialSecurityBenefitReductionField.getText().trim().isEmpty();
+        boolean yearBlank = socialSecurityBenefitReductionYearField.getText().trim().isEmpty();
+        if (percentBlank && yearBlank) {
+            return new SocialSecurityReductionDraft(BigDecimal.ZERO, 2032);
+        }
+        if (percentBlank) {
+            return read(socialSecurityBenefitReductionField, "Social Security Benefit Reduction", () -> {
+                throw new IllegalArgumentException("Enter a percentage when an effective year is specified.");
+            });
+        }
+        if (yearBlank) {
+            return read(socialSecurityBenefitReductionYearField, "Reduction Effective Year", () -> {
+                throw new IllegalArgumentException("Enter an effective year when a reduction percentage is specified.");
+            });
+        }
+        return new SocialSecurityReductionDraft(
+                reductionPercent(socialSecurityBenefitReductionField),
+                reductionYear(socialSecurityBenefitReductionYearField));
+    }
+
+    private record SocialSecurityReductionDraft(BigDecimal percent, int effectiveYear) { }
+
     private int reductionYear(TextField field) {
         return read(field, "Reduction Effective Year", () -> {
             String text = field.getText().trim();
@@ -1512,6 +1606,10 @@ public class AssumptionsView extends VBox {
             Runnable onOpeningRmdRequested) {
 
         this.onOpeningRmdRequested = onOpeningRmdRequested;
+    }
+
+    public void setOnWorkspaceEditCompleted(Runnable callback) {
+        onWorkspaceEditCompleted = callback;
     }
 
     private void requestOpeningRmdInformation() {

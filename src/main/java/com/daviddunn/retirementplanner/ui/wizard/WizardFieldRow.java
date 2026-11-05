@@ -64,4 +64,9 @@ public final class WizardFieldRow extends VBox {
     public void clearIssue() { setIssue(""); }
 
     public void focusInput() { input.requestFocus(); }
+
+    /** Returns the label associated with this existing input control. */
+    public Label getFieldLabel() {
+        return (Label) getChildren().get(0);
+    }
 }

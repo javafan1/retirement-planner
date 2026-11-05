@@ -104,6 +104,38 @@ class BreakEvenControllerTest {
         assertTrue(result.metrics().get(BreakEvenMetric.CUMULATIVE_SOCIAL_SECURITY).finalDifference().signum() < 0);
     }
 
+    @Test void breakEvenComparisonKeepsCurrentAndSavedBaselineReductionPoliciesIndependent() {
+        var controller = new ApplicationController();
+        var plan = controller.getCurrentPlan();
+        plan.setSpouse(new Person("Lisa", "", LocalDate.of(1965, 2, 28)));
+        var primary = plan.getHousehold().getPrimaryPerson();
+        primary.setFirstName("David");
+        primary.setBirthDate(LocalDate.of(1963, 6, 4));
+        primary.addIncomeSource(new SocialSecurityIncome("David SS", AccountOwnership.PRIMARY,
+                LocalDate.of(2033, 6, 4), null, new BigDecimal("3000"), 70, BigDecimal.ZERO, 2027));
+        plan.getHousehold().getSpouse().addIncomeSource(income(62));
+        plan.getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.BrokerageAccount(
+                "Funding", AccountOwnership.JOINT, new BigDecimal("1000000")));
+        installEconomicPolicy(plan, "17", 2034);
+        controller.getCurrentProjection();
+        controller.saveCurrentAsBaseline("Baseline reduction 17% in 2034");
+        var baselineProjection = controller.getBaselineProjection();
+
+        installEconomicPolicy(plan, "22", 2032);
+        controller.invalidateProjection();
+        controller.getCurrentProjection();
+        var currentProjection = controller.getCurrentProjection();
+        var result = controller.requestBreakEvenAnalysis();
+
+        assertNotNull(result);
+        assertEquals(new com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy(
+                new BigDecimal("17"), 2034), result.baselineAssumptions().benefitReductionPolicy());
+        assertEquals(new com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy(
+                new BigDecimal("22"), 2032), result.currentAssumptions().benefitReductionPolicy());
+        assertSame(baselineProjection, controller.getBaselineProjection());
+        assertSame(currentProjection, controller.getCurrentProjection());
+    }
+
     @Test void savedClaimingAssumptionsStayFrozenAfterCurrentEditsAndJsonRoundTrip() throws Exception {
         var plan = RetirementPlanFactory.createEmptyPlan();
         var spouse = plan.getHousehold().getSpouse();
@@ -188,6 +220,16 @@ class BreakEvenControllerTest {
     private static SocialSecurityIncome income(int age) {
         return new SocialSecurityIncome("SS", AccountOwnership.SPOUSE, LocalDate.of(1965 + age, 2, 28), null,
                 new BigDecimal("2000"), age, BigDecimal.ZERO);
+    }
+    private static void installEconomicPolicy(RetirementPlan plan, String percentage, int year) {
+        var existing = plan.getPlanningAssumptions();
+        var economic = existing.getEconomicAssumptions();
+        plan.setPlanningAssumptions(new PlanningAssumptions(
+                new EconomicAssumptions(economic.getExpectedAnnualInvestmentReturn(), economic.getGeneralInflationRate(),
+                        economic.getHealthcareInflationRate(), economic.getSocialSecurityColaRate(),
+                        new BigDecimal(percentage), year),
+                existing.getTaxAssumptions(), existing.getWithdrawalAssumptions(), existing.getDeathScenarioAssumptions(),
+                existing.getProjectionLengthYears(), existing.getProjectionStartDate(), existing.getStateTaxAssumptions()));
     }
     private static void set(Object target, String name, Object value) throws Exception {
         var field = target.getClass().getDeclaredField(name); field.setAccessible(true); field.set(target, value);

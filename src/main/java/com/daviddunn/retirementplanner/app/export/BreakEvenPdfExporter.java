@@ -63,10 +63,15 @@ public final class BreakEvenPdfExporter {
     }
 
     private static String plan(String heading, BreakEvenPlanSummary plan) {
-        if (!plan.hasSpouse()) return heading + ": " + plan.primary().name() + " - Social Security Claiming Age: " + BreakEvenPresentation.age(plan.primary().retirementClaimingAge());
-        return heading + ": " + plan.primary().name() + " — Social Security Claiming Age: "
-                + BreakEvenPresentation.age(plan.primary().retirementClaimingAge()) + "  ·  "
-                + plan.spouse().name() + " — Social Security Claiming Age: " + BreakEvenPresentation.age(plan.spouse().retirementClaimingAge());
+        String summary = !plan.hasSpouse()
+                ? heading + ": " + plan.primary().name() + " - Social Security Claiming Age: "
+                        + BreakEvenPresentation.age(plan.primary().retirementClaimingAge())
+                : heading + ": " + plan.primary().name() + " — Social Security Claiming Age: "
+                        + BreakEvenPresentation.age(plan.primary().retirementClaimingAge()) + "  ·  "
+                        + plan.spouse().name() + " — Social Security Claiming Age: "
+                        + BreakEvenPresentation.age(plan.spouse().retirementClaimingAge());
+        String disclosure = BreakEvenPresentation.reductionDisclosure(plan);
+        return disclosure == null ? summary : summary + "\n" + disclosure;
     }
     private static String values(String title, java.math.BigDecimal baseline, java.math.BigDecimal current, java.math.BigDecimal difference) {
         return title + " — Baseline: " + BreakEvenPresentation.money(baseline) + "; Current: "

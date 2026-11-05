@@ -119,6 +119,6 @@ class BreakEvenCompactLayoutTest {
         plan.getAccountPortfolio().addAccount(new BrokerageAccount("Brokerage", AccountOwnership.JOINT, new BigDecimal("500000")));
         plan.getAccountPortfolio().addAccount(new TraditionalIRA("IRA", AccountOwnership.PRIMARY, new BigDecimal("1500000")));
         plan.getAccountPortfolio().addAccount(new RothIRA("Roth", AccountOwnership.SPOUSE, new BigDecimal("100000")));
-        return new BreakEvenProjectionSnapshot(new ProjectionEngine().project(plan).getYears(), List.of(), BreakEvenPlanSummary.from(plan.getHousehold()));
+        return new BreakEvenProjectionSnapshot(new ProjectionEngine().project(plan).getYears(), List.of(), BreakEvenPlanSummary.from(plan));
     }
 }

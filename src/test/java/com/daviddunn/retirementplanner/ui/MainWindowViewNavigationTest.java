@@ -214,6 +214,48 @@ class MainWindowViewNavigationTest {
     }
 
     @Test
+    void assumptionsApplyFailureStaysPutWhileSuccessfulApplyAndCancelReturnToSummary() throws Exception {
+        fx(() -> {
+            ApplicationController controller = new ApplicationController();
+            MainWindow window = new MainWindow(controller);
+            BorderPane root = (BorderPane) window.createScene().getRoot();
+            Menu view = MainWindowTestSupport.menuBar(root).getMenus().get(1);
+            AssumptionsView assumptions = field(window, "assumptionsView");
+            ResultsSummaryView summary = field(window, "resultsSummaryView");
+            Node rightColumn = summary.getRight();
+            Long originalRevision = controller.getSourcePlanRevision();
+
+            viewItem(view, "assumptions").fire();
+            TextField percent = field(assumptions, "socialSecurityBenefitReductionField");
+            TextField year = field(assumptions, "socialSecurityBenefitReductionYearField");
+            percent.setText("22");
+            ((Button) field(assumptions, "applyButton")).fire();
+            assertEquals("assumptions", field(window, "selectedWorkspaceId"));
+            assertEquals("22", percent.getText(), "Invalid Apply preserves the incomplete pair draft.");
+            assertEquals(originalRevision, controller.getSourcePlanRevision());
+
+            year.setText("2032");
+            ((Button) field(assumptions, "applyButton")).fire();
+            assertEquals("results-summary", field(window, "selectedWorkspaceId"));
+            assertEquals(new java.math.BigDecimal("22"), controller.getCurrentPlan().getPlanningAssumptions()
+                    .getEconomicAssumptions().getSocialSecurityBenefitReductionPercent());
+            assertSame(rightColumn, summary.getRight());
+
+            viewItem(view, "assumptions").fire();
+            TextField inflation = field(assumptions, "inflationRateField");
+            String committedInflation = inflation.getText();
+            inflation.setText("4.25");
+            ((Button) field(assumptions, "cancelButton")).fire();
+            assertEquals("results-summary", field(window, "selectedWorkspaceId"));
+            assertEquals(committedInflation, inflation.getText(), "Cancel restores the last committed assumptions draft.");
+            assertEquals(new java.math.BigDecimal("22"), controller.getCurrentPlan().getPlanningAssumptions()
+                    .getEconomicAssumptions().getSocialSecurityBenefitReductionPercent());
+            assertSame(rightColumn, summary.getRight());
+            window.closeApplicationPreferences();
+        });
+    }
+
+    @Test
     void draftEditsSurviveNavigationAndPlanViewRefreshWithoutApplyingThem() throws Exception {
         fx(() -> {
             MainWindow window = new MainWindow(new ApplicationController());

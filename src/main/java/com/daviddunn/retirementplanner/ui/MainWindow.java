@@ -159,6 +159,11 @@ public class MainWindow {
 
     private void wireEvents() {
 
+        Runnable finishWorkspaceEdit = this::navigateToResultsSummary;
+        householdView.setOnWorkspaceEditCompleted(finishWorkspaceEdit);
+        assumptionsView.setOnWorkspaceEditCompleted(finishWorkspaceEdit);
+        rothConversionView.setOnWorkspaceEditCompleted(finishWorkspaceEdit);
+
         householdView.setOnPlanChanged(() -> {
             if (collectingViewEdits) {
                 controller.markModified();

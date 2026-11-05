@@ -73,6 +73,7 @@ public class RothConversionView extends VBox {
     private RetirementPlan currentPlan;
 
     private Runnable onPlanChanged;
+    private Runnable onWorkspaceEditCompleted;
     private Predicate<RothConversionRequest> transactionalApplyHandler;
 
 
@@ -366,8 +367,13 @@ public class RothConversionView extends VBox {
                 targetRequired));
         applyButton.disableProperty().bind(dirty.not());
         cancelButton.disableProperty().bind(dirty.not());
-        applyButton.setOnAction(event -> applyChanges());
-        cancelButton.setOnAction(event -> cancelChanges());
+        applyButton.setOnAction(event -> {
+            if (applyChanges() && onWorkspaceEditCompleted != null) onWorkspaceEditCompleted.run();
+        });
+        cancelButton.setOnAction(event -> {
+            cancelChanges();
+            if (onWorkspaceEditCompleted != null) onWorkspaceEditCompleted.run();
+        });
         HBox buttonBar = new HBox(10, applyButton, cancelButton);
         buttonBar.setPadding(new Insets(10));
         statusLabel =
@@ -798,5 +804,9 @@ public class RothConversionView extends VBox {
     /** Installs the shared confirm-and-commit boundary used by the application window. */
     public void setTransactionalApplyHandler(Predicate<RothConversionRequest> handler) {
         this.transactionalApplyHandler = handler;
+    }
+
+    public void setOnWorkspaceEditCompleted(Runnable callback) {
+        this.onWorkspaceEditCompleted = callback;
     }
 }

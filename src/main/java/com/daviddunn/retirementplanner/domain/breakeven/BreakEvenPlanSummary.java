@@ -3,11 +3,47 @@ package com.daviddunn.retirementplanner.domain.breakeven;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
+import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
+import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.baseline.RetirementPlanSnapshot;
+import com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 import java.time.Period;
 
 /** Immutable metadata captured with a projection, not read from live UI assumptions. */
-public record BreakEvenPlanSummary(PersonSummary primary, PersonSummary spouse) {
+public final class BreakEvenPlanSummary {
+    private final PersonSummary primary;
+    private final PersonSummary spouse;
+    @JsonIgnore
+    private final SocialSecurityBenefitReductionPolicy benefitReductionPolicy;
+
+    /** Original persisted two-property contract; older strict snapshot decoders remain compatible. */
+    @JsonCreator
+    public BreakEvenPlanSummary(@JsonProperty("primary") PersonSummary primary,
+            @JsonProperty("spouse") PersonSummary spouse) {
+        this(primary, spouse, null);
+    }
+
+    /** In-memory comparison metadata; policy provenance is persisted in the frozen plan inputs. */
+    public BreakEvenPlanSummary(PersonSummary primary, PersonSummary spouse,
+            SocialSecurityBenefitReductionPolicy benefitReductionPolicy) {
+        this.primary = java.util.Objects.requireNonNull(primary);
+        this.spouse = spouse;
+        this.benefitReductionPolicy = benefitReductionPolicy;
+    }
+
+    @JsonProperty("primary")
+    public PersonSummary primary() { return primary; }
+
+    @JsonProperty("spouse")
+    public PersonSummary spouse() { return spouse; }
+
+    @JsonIgnore
+    public SocialSecurityBenefitReductionPolicy benefitReductionPolicy() { return benefitReductionPolicy; }
+
     public record PersonSummary(String name, LocalDate birthDate, Integer retirementClaimingAge,
             LocalDate retirementClaimDate,
             com.daviddunn.retirementplanner.domain.model.MortalityCategory mortalityCategory) {
@@ -20,6 +56,20 @@ public record BreakEvenPlanSummary(PersonSummary primary, PersonSummary spouse) 
     }
 
     public static BreakEvenPlanSummary from(Household household) {
+        return from(household, null);
+    }
+
+    public static BreakEvenPlanSummary from(RetirementPlan plan) {
+        java.util.Objects.requireNonNull(plan);
+        return from(plan.getHousehold(), plan.getPlanningAssumptions().getEconomicAssumptions());
+    }
+
+    public static BreakEvenPlanSummary from(RetirementPlanSnapshot plan) {
+        java.util.Objects.requireNonNull(plan);
+        return from(plan.getHousehold(), plan.getPlanningAssumptions().getEconomicAssumptions());
+    }
+
+    public static BreakEvenPlanSummary from(Household household, EconomicAssumptions economicAssumptions) {
         PersonSummary primary = person(household.getPrimaryPerson(), "Primary");
         if (!household.hasSpouse() && primary.birthDate() != null && primary.retirementClaimingAge() != null) {
             primary = new PersonSummary(primary.name(), primary.birthDate(), primary.retirementClaimingAge(),
@@ -27,10 +77,34 @@ public record BreakEvenPlanSummary(PersonSummary primary, PersonSummary spouse) 
                             .calculateRetirementClaimDate(primary.birthDate(), primary.retirementClaimingAge()), primary.mortalityCategory());
         }
         return new BreakEvenPlanSummary(primary,
-                household.spouse().map(spouse -> person(spouse, "Spouse")).orElse(null));
+                household.spouse().map(spouse -> person(spouse, "Spouse")).orElse(null),
+                economicAssumptions == null ? null : new SocialSecurityBenefitReductionPolicy(
+                        economicAssumptions.getSocialSecurityBenefitReductionPercent(),
+                        economicAssumptions.getSocialSecurityBenefitReductionEffectiveYear()));
+    }
+
+    public BreakEvenPlanSummary withBenefitReductionPolicy(SocialSecurityBenefitReductionPolicy policy) {
+        return new BreakEvenPlanSummary(primary, spouse, java.util.Objects.requireNonNull(policy));
     }
 
     public boolean hasSpouse() { return spouse != null; }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        if (!(other instanceof BreakEvenPlanSummary that)) return false;
+        return java.util.Objects.equals(primary, that.primary)
+                && java.util.Objects.equals(spouse, that.spouse);
+    }
+
+    @Override
+    public int hashCode() { return java.util.Objects.hash(primary, spouse); }
+
+    @Override
+    public String toString() {
+        return "BreakEvenPlanSummary[primary=" + primary + ", spouse=" + spouse
+                + ", benefitReductionPolicy=" + benefitReductionPolicy + "]";
+    }
 
     private static PersonSummary person(Person person, String fallback) {
         if (person == null) return new PersonSummary(fallback, null, null);

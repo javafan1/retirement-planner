@@ -27,7 +27,7 @@ public record SinglePersonIntegratedAnalysis(
         int start = baseline.projection().getYears().getFirst().getCalendarYear();
         int end = baseline.projection().getYears().getLast().getCalendarYear();
         var assets = new NonInvestableAssetProjectionService().project(plan.getNonInvestableAssets(), start, end);
-        var summary = BreakEvenPlanSummary.from(plan.getHousehold());
+        var summary = BreakEvenPlanSummary.from(plan);
         var primary = summary.primary();
         var baselineSnapshot = new BreakEvenProjectionSnapshot(baseline.projection().getYears(), assets, summary);
         Map<Integer, BreakEvenAnalysisResult> comparisons = new LinkedHashMap<>();
@@ -37,7 +37,7 @@ public record SinglePersonIntegratedAnalysis(
                 var strategy = entry.strategy();
                 var candidate = new BreakEvenPlanSummary(new BreakEvenPlanSummary.PersonSummary(primary.name(),
                         primary.birthDate(), strategy.primaryRetirementAge(), strategy.primaryRetirementClaimDate(),
-                        primary.mortalityCategory()), null);
+                        primary.mortalityCategory()), null, summary.benefitReductionPolicy());
                 comparisons.put(strategy.primaryRetirementAge(), new BreakEvenAnalyzer().analyze(baselineSnapshot,
                         new BreakEvenProjectionSnapshot(detail.projection().getYears(), assets, candidate)));
             });

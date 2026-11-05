@@ -110,6 +110,29 @@ class HouseholdViewTest {
     }
 
     @Test
+    void workspaceApplyCallbackRunsOnlyAfterSuccessfulApplyAndCancelRunsAfterRevert() throws Exception {
+        fx(() -> {
+            var f = new Fixture();
+            AtomicInteger completed = new AtomicInteger();
+            f.view.setOnWorkspaceEditCompleted(completed::incrementAndGet);
+            TextField firstName = first(f.view, 0);
+            firstName.setText("   ");
+            button(f.view, 0).fire();
+            assertEquals(0, completed.get(), "Invalid Apply keeps the input workspace open.");
+            assertEquals("   ", firstName.getText());
+            firstName.setText("Primary edited");
+            button(f.view, 0).fire();
+            assertEquals(1, completed.get());
+            assertEquals("Primary edited", f.primary().getFirstName());
+
+            firstName.setText("draft only");
+            button(f.view, 1).fire();
+            assertEquals(2, completed.get());
+            assertEquals("Primary edited", firstName.getText());
+        });
+    }
+
+    @Test
     void mortalityCategoryLoadsEditsCancelsAndPersistsWithOneNotification() throws Exception {
         fx(() -> {
             var f = new Fixture();

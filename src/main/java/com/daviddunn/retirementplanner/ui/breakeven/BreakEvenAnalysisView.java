@@ -363,18 +363,31 @@ public final class BreakEvenAnalysisView extends VBox {
         }
     }
 
-    private Label planCard(String title, BreakEvenPlanSummary plan) {
+    private VBox planCard(String title, BreakEvenPlanSummary plan) {
+        Label summary;
         if (!plan.hasSpouse()) {
-            Label summary = label(title + " — SS claiming age: " + plan.primary().name() + " "
+            summary = label(title + " — SS claiming age: " + plan.primary().name() + " "
                     + BreakEvenPresentation.age(plan.primary().retirementClaimingAge()));
-            summary.getStyleClass().add("break-even-plan-summary");
-            return summary;
+        } else {
+            summary = label(title + " — SS claiming ages: " + plan.primary().name() + " "
+                    + BreakEvenPresentation.age(plan.primary().retirementClaimingAge()) + " · "
+                    + plan.spouse().name() + " " + BreakEvenPresentation.age(plan.spouse().retirementClaimingAge()));
         }
-        Label summary = label(title + " — SS claiming ages: " + plan.primary().name() + " "
-                + BreakEvenPresentation.age(plan.primary().retirementClaimingAge()) + " · "
-                + plan.spouse().name() + " " + BreakEvenPresentation.age(plan.spouse().retirementClaimingAge()));
         summary.getStyleClass().add("break-even-plan-summary");
-        return summary;
+        VBox card = new VBox(1);
+        card.setMinWidth(0);
+        card.setMaxWidth(Double.MAX_VALUE);
+        summary.setMaxWidth(Double.MAX_VALUE);
+        card.getChildren().add(summary);
+        String disclosureText = BreakEvenPresentation.reductionDisclosure(plan);
+        if (disclosureText != null) {
+            Label disclosure = label(disclosureText);
+            disclosure.setId(title.startsWith("Baseline")
+                    ? "break-even-baseline-reduction" : "break-even-current-reduction");
+            disclosure.getStyleClass().add("break-even-assumption-disclosure");
+            card.getChildren().add(disclosure);
+        }
+        return card;
     }
     private TableColumn<BreakEvenYearResult, String> column(String title, Function<BreakEvenYearResult, String> value) {
         var column = new TableColumn<BreakEvenYearResult, String>(title);
