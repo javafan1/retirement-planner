@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.income;
 
+import com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy;
 import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.Household;
@@ -22,8 +23,19 @@ public final class HouseholdSocialSecurityIncomeCalculator {
                 household,
                 projectionDate,
                 deathAssumptions,
-                socialSecurityColaRate)
+                socialSecurityColaRate,
+                SocialSecurityBenefitReductionPolicy.none())
                 .householdBenefit();
+    }
+
+    public BigDecimal calculateAnnualIncome(
+            Household household,
+            LocalDate projectionDate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal socialSecurityColaRate,
+            SocialSecurityBenefitReductionPolicy reductionPolicy) {
+        return calculate(household, projectionDate, deathAssumptions, socialSecurityColaRate,
+                reductionPolicy).householdBenefit();
     }
 
     public HouseholdSocialSecurityResult calculate(
@@ -31,26 +43,37 @@ public final class HouseholdSocialSecurityIncomeCalculator {
             LocalDate projectionDate,
             DeathScenarioAssumptions deathAssumptions,
             BigDecimal socialSecurityColaRate) {
+        return calculate(household, projectionDate, deathAssumptions, socialSecurityColaRate,
+                SocialSecurityBenefitReductionPolicy.none());
+    }
+
+    public HouseholdSocialSecurityResult calculate(
+            Household household,
+            LocalDate projectionDate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal socialSecurityColaRate,
+            SocialSecurityBenefitReductionPolicy reductionPolicy) {
 
         Objects.requireNonNull(household);
         Objects.requireNonNull(projectionDate);
         Objects.requireNonNull(deathAssumptions);
         Objects.requireNonNull(socialSecurityColaRate);
+        Objects.requireNonNull(reductionPolicy);
 
         if (deathAssumptions.getDeathScenario()
                 == DeathScenario.BOTH_SURVIVE
                 || !deathAssumptions.isDeathScenarioActive(
                 projectionDate.getYear())) {
 
-            BigDecimal primaryOwn = activeAnnualIncome(
+            BigDecimal primaryOwn = reductionPolicy.reduce(activeAnnualIncome(
                     household.getPrimaryPerson(),
                     projectionDate,
-                    socialSecurityColaRate);
+                    socialSecurityColaRate), projectionDate.getYear());
 
-            BigDecimal spouseOwn = activeAnnualIncome(
+            BigDecimal spouseOwn = reductionPolicy.reduce(activeAnnualIncome(
                             household.getSpouse(),
                             projectionDate,
-                            socialSecurityColaRate);
+                            socialSecurityColaRate), projectionDate.getYear());
 
             return new HouseholdSocialSecurityResult(
                     primaryOwn,
@@ -71,17 +94,17 @@ public final class HouseholdSocialSecurityIncomeCalculator {
                 ? household.getSpouse()
                 : household.getPrimaryPerson();
 
-        BigDecimal ownAnnualBenefit = activeAnnualIncome(
+        BigDecimal ownAnnualBenefit = reductionPolicy.reduce(activeAnnualIncome(
                 survivor,
                 projectionDate,
-                socialSecurityColaRate);
+                socialSecurityColaRate), projectionDate.getYear());
 
-        BigDecimal survivorAnnualBenefit = survivorAnnualBenefit(
+        BigDecimal survivorAnnualBenefit = reductionPolicy.reduce(survivorAnnualBenefit(
                 deceased,
                 survivor,
                 projectionDate,
                 deathAssumptions,
-                socialSecurityColaRate);
+                socialSecurityColaRate), projectionDate.getYear());
 
         BigDecimal householdBenefit = ownAnnualBenefit.max(
                 survivorAnnualBenefit);

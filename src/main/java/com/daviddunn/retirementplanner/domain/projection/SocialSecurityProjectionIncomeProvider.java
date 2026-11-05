@@ -12,6 +12,7 @@ import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityAnnualResult;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityClaimingElection;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityStrategyCalculator;
@@ -173,7 +174,8 @@ public final class SocialSecurityProjectionIncomeProvider {
                     : strategyCalculator.calculateOwnRetirement(election(household.getPrimaryPerson(), ownSources.getFirst(),
                             AccountOwnership.PRIMARY, claimDate), firstCalendarYear, lastCalendarYear,
                             plan.getPlanningAssumptions().getSocialSecurityColaRate(),
-                            deathView.deathDate(AccountOwnership.PRIMARY).orElse(null));
+                            deathView.deathDate(AccountOwnership.PRIMARY).orElse(null),
+                            benefitReductionPolicy(plan));
             Map<Integer, HouseholdSocialSecurityResult> results = new LinkedHashMap<>();
             for (int year = firstCalendarYear; year <= lastCalendarYear; year++) {
                 results.put(year, HouseholdSocialSecurityResult.primaryOnly(amounts.getOrDefault(year, BigDecimal.ZERO)));
@@ -249,7 +251,8 @@ public final class SocialSecurityProjectionIncomeProvider {
                 spouseSurvivorClaim,
                 primaryDeath,
                 spouseDeath,
-                plan.getPlanningAssumptions().getSocialSecurityColaRate());
+                plan.getPlanningAssumptions().getSocialSecurityColaRate(),
+                benefitReductionPolicy(plan));
 
         if (validationOnly) {
             if (validatedKey != null) validatedKey.accept(SocialSecurityStrategyCalculator.scheduleKey(request));
@@ -293,7 +296,8 @@ public final class SocialSecurityProjectionIncomeProvider {
             results.put(year, legacyCalculator.calculate(
                     plan.getHousehold(), LocalDate.of(year, 12, 31),
                     plan.getPlanningAssumptions().getDeathScenarioAssumptions(),
-                    plan.getPlanningAssumptions().getSocialSecurityColaRate()));
+                    plan.getPlanningAssumptions().getSocialSecurityColaRate(),
+                    benefitReductionPolicy(plan)));
         }
         return Map.copyOf(results);
     }
@@ -321,6 +325,13 @@ public final class SocialSecurityProjectionIncomeProvider {
                 .map(SocialSecurityIncome.class::cast)
                 .filter(source -> source.getOwnership() == ownership)
                 .toList();
+    }
+
+    private static SocialSecurityBenefitReductionPolicy benefitReductionPolicy(RetirementPlan plan) {
+        var assumptions = plan.getPlanningAssumptions().getEconomicAssumptions();
+        return new SocialSecurityBenefitReductionPolicy(
+                assumptions.getSocialSecurityBenefitReductionPercent(),
+                assumptions.getSocialSecurityBenefitReductionEffectiveYear());
     }
 
     private static SocialSecurityClaimingElection election(

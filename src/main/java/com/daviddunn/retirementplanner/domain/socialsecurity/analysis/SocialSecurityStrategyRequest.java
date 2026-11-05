@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.socialsecurity.analysis;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -22,7 +23,8 @@ public record SocialSecurityStrategyRequest(
         LocalDate spouseSurvivorClaimDate,
         LocalDate primaryDeathDate,
         LocalDate spouseDeathDate,
-        BigDecimal socialSecurityColaRate) {
+        BigDecimal socialSecurityColaRate,
+        SocialSecurityBenefitReductionPolicy benefitReductionPolicy) {
 
     private static final LocalDate MODERN_DEEMED_FILING_CUTOFF =
             LocalDate.of(1954, 1, 2);
@@ -39,6 +41,10 @@ public record SocialSecurityStrategyRequest(
         Objects.requireNonNull(
                 socialSecurityColaRate,
                 "Social Security COLA rate is required.");
+        if (benefitReductionPolicy == null) {
+            // Older retained requests predate this optional calculation input.
+            benefitReductionPolicy = SocialSecurityBenefitReductionPolicy.none();
+        }
 
         if (primaryElection.owner() != AccountOwnership.PRIMARY) {
             throw new IllegalArgumentException(
@@ -110,6 +116,23 @@ public record SocialSecurityStrategyRequest(
         }
     }
 
+    /** Backward-compatible request shape with the full pre-reduction inputs. */
+    public SocialSecurityStrategyRequest(
+            LocalDate analysisDate,
+            LocalDate analysisEndDate,
+            SocialSecurityClaimingElection primaryElection,
+            SocialSecurityClaimingElection spouseElection,
+            LocalDate primarySurvivorClaimDate,
+            LocalDate spouseSurvivorClaimDate,
+            LocalDate primaryDeathDate,
+            LocalDate spouseDeathDate,
+            BigDecimal socialSecurityColaRate) {
+        this(analysisDate, analysisEndDate, primaryElection, spouseElection,
+                primarySurvivorClaimDate, spouseSurvivorClaimDate,
+                primaryDeathDate, spouseDeathDate, socialSecurityColaRate,
+                SocialSecurityBenefitReductionPolicy.none());
+    }
+
     /**
      * Backward-compatible request shape for own/spousal-only analyses.
      */
@@ -131,7 +154,8 @@ public record SocialSecurityStrategyRequest(
                 null,
                 primaryDeathDate,
                 spouseDeathDate,
-                socialSecurityColaRate);
+                socialSecurityColaRate,
+                SocialSecurityBenefitReductionPolicy.none());
     }
 
     public LocalDate resolvedAnalysisEndDate() {

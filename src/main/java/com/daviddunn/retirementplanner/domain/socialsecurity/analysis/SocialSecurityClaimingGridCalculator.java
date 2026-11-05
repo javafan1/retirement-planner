@@ -105,7 +105,8 @@ public final class SocialSecurityClaimingGridCalculator {
                 base.spouseSurvivorClaimDate(),
                 base.primaryDeathDate(),
                 base.spouseDeathDate(),
-                base.socialSecurityColaRate());
+                base.socialSecurityColaRate(),
+                base.benefitReductionPolicy());
     }
 
     private static SocialSecurityClaimingElection electionWithClaimDate(

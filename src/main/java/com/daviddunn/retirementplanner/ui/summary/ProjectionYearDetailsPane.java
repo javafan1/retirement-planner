@@ -39,6 +39,7 @@ public class ProjectionYearDetailsPane
 
     private BigDecimal
             baselineNonInvestableAssetValue;
+    private String assumptionDisclosure;
 
     private final VBox content = new VBox(15);
     private final ScrollPane scrollPane = new ScrollPane(content);
@@ -96,6 +97,13 @@ public class ProjectionYearDetailsPane
         content.getChildren().add(
                 createTitle(year));
 
+        if (assumptionDisclosure != null) {
+            Label disclosure = new Label(assumptionDisclosure);
+            disclosure.setWrapText(true);
+            disclosure.getStyleClass().add("assumption-note");
+            content.getChildren().add(disclosure);
+        }
+
 
         GridPane grid =
                 createComparisonGrid();
@@ -144,6 +152,11 @@ public class ProjectionYearDetailsPane
 
         scrollPane.setVvalue(verticalPosition);
         scrollPane.setHvalue(horizontalPosition);
+    }
+
+    public void setAssumptionDisclosure(String value) {
+        assumptionDisclosure = value == null || value.isBlank() ? null : value;
+        if (year != null) setProjectionYear(year, baselineYear, nonInvestableAssetValue, baselineNonInvestableAssetValue);
     }
 
 

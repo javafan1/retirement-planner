@@ -24,6 +24,7 @@ public final class AnalysisSnapshotCodec {
     private static final Logger LOG = Logger.getLogger(AnalysisSnapshotCodec.class.getName());
     private final ObjectMapper mapper;
     private final ObjectMapper exactTrees;
+    private final ObjectMapper legacySocialSecurityMapper;
 
     public AnalysisSnapshotCodec() {
         var factory = JsonFactory.builder().streamReadConstraints(StreamReadConstraints.builder()
@@ -63,14 +64,24 @@ public final class AnalysisSnapshotCodec {
         mapper.registerModule(families);
         exactTrees = mapper.copy().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
         exactTrees.setNodeFactory(com.fasterxml.jackson.databind.node.JsonNodeFactory.withExactBigDecimals(true));
+        legacySocialSecurityMapper = mapper.copy().addMixIn(
+                com.daviddunn.retirementplanner.domain.socialsecurity.analysis.SocialSecurityStrategyRequest.class,
+                LegacySocialSecurityStrategyRequest.class);
     }
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties("benefitReductionPolicy")
+    private abstract static class LegacySocialSecurityStrategyRequest { }
 
     public record Content(AnalysisPayload payload, SnapshotContext context) { }
     public String digest(AnalysisPayload payload, SnapshotContext context) {
+        return digest(payload, context, mapper);
+    }
+
+    private String digest(AnalysisPayload payload, SnapshotContext context, ObjectMapper writer) {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
             try (var output = new DigestOutputStream(OutputStream.nullOutputStream(), digest)) {
-                mapper.writeValue(payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot
+                writer.writeValue(payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot
                         || payload instanceof QuickComparisonSnapshot || payload instanceof IndividualDeterministicSnapshot ? limited(output) : output,
                         new Content(payload, context));
             }
@@ -86,6 +97,8 @@ public final class AnalysisSnapshotCodec {
         catch (Exception failure) { throw AnalysisSnapshotSaveException.at(AnalysisSnapshotSaveException.Stage.DTO_VALIDATION, -1, -1, failure); }
         byte[] raw;
         try {
+            ObjectMapper snapshotMapper = usesLegacySocialSecurityRequestShape(snapshot)
+                    ? legacySocialSecurityMapper : mapper;
             if (snapshot.kind() == AnalysisKind.COUPLE_EXHAUSTIVE) {
                 com.fasterxml.jackson.databind.node.ObjectNode tree = exactTrees.valueToTree(snapshot);
                 tree.set("payload", new ExhaustiveSnapshotInterning(exactTrees).encode(
@@ -93,7 +106,7 @@ public final class AnalysisSnapshotCodec {
                 raw = exactTrees.writeValueAsBytes(tree);
             } else if (snapshot.kind().isMonteCarlo() || snapshot.kind() == AnalysisKind.COUPLE_QUICK
                     || snapshot.kind() == AnalysisKind.INDIVIDUAL_DETERMINISTIC) raw = boundedMonteCarloBytes(snapshot);
-            else raw = mapper.writeValueAsBytes(snapshot);
+            else raw = snapshotMapper.writeValueAsBytes(snapshot);
         }
         catch (Exception failure) { throw AnalysisSnapshotSaveException.at(AnalysisSnapshotSaveException.Stage.SERIALIZATION, -1, -1, failure); }
         if (snapshot.kind() == AnalysisKind.COUPLE_EXHAUSTIVE && (raw.length > MAX_RAW_BYTES
@@ -197,6 +210,8 @@ public final class AnalysisSnapshotCodec {
         try {
             var kind = AnalysisKind.valueOf(tree.path("kind").asText());
             AnalysisSnapshot snapshot;
+            boolean legacySocialSecurityRequest = kind == AnalysisKind.COUPLE_SOCIAL_SECURITY
+                    && supplyLegacyReductionPolicyDefault(tree);
             if (kind == AnalysisKind.COUPLE_EXHAUSTIVE) {
                 // Exact decimal tree parsing is scoped to this wire representation; legacy families are untouched.
                 var exact = (com.fasterxml.jackson.databind.node.ObjectNode) tree;
@@ -211,10 +226,26 @@ public final class AnalysisSnapshotCodec {
             } else if (kind.isMonteCarlo()) {
                 snapshot = mapper.readerFor(AnalysisSnapshot.class).without(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
                         .withAttribute("snapshot-kind", kind).readValue(raw);
+            } else if (legacySocialSecurityRequest) {
+                try (var parser = tree.traverse(exactTrees)) {
+                    snapshot = mapper.readerFor(AnalysisSnapshot.class).withAttribute("snapshot-kind", kind).readValue(parser);
+                }
             } else snapshot = mapper.readerFor(AnalysisSnapshot.class).withAttribute("snapshot-kind", kind).readValue(raw);
             validate(snapshot);
             return snapshot;
         } catch (RuntimeException e) { throw new IOException("Invalid analysis snapshot; the file was preserved.", e); }
+    }
+
+    /** Adds only the default for the known v1 couple-SS request field introduced after v1 snapshots existed. */
+    private static boolean supplyLegacyReductionPolicyDefault(com.fasterxml.jackson.databind.JsonNode root) {
+        var payload = root.path("payload");
+        var request = payload.path("request").path("base");
+        if (!(request instanceof com.fasterxml.jackson.databind.node.ObjectNode strategy)
+                || !strategy.has("analysisDate") || !strategy.has("primaryElection")
+                || !strategy.has("spouseElection") || !strategy.has("socialSecurityColaRate")
+                || strategy.has("benefitReductionPolicy")) return false;
+        strategy.putNull("benefitReductionPolicy");
+        return true;
     }
     private void checkDocument(byte[] raw) throws IOException {
         // One summary per numeric field family, rather than thousands of messages for a full search.
@@ -307,6 +338,18 @@ public final class AnalysisSnapshotCodec {
         if (s.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
                 && (!s.completedAt().equals(mc.completedAt()) || !s.context().startedAt().equals(mc.startedAt())))
             throw new IOException("Monte Carlo timestamps do not match the envelope.");
-        if (!digest(s.payload(), s.context()).equals(s.payloadDigest())) throw new IOException("Snapshot integrity check failed.");
+        if (digest(s.payload(), s.context()).equals(s.payloadDigest())) return;
+        if (s.kind() == AnalysisKind.COUPLE_SOCIAL_SECURITY
+                && usesLegacySocialSecurityRequestShape(s)
+                && digest(s.payload(), s.context(), legacySocialSecurityMapper).equals(s.payloadDigest())) return;
+        throw new IOException("Snapshot integrity check failed.");
+    }
+
+    /** Keep a pre-reduction v1 payload byte-compatible when Save As clones its immutable result. */
+    private boolean usesLegacySocialSecurityRequestShape(AnalysisSnapshot snapshot) {
+        return snapshot.kind() == AnalysisKind.COUPLE_SOCIAL_SECURITY
+                && ((CoupleSocialSecuritySnapshot) snapshot.payload()).request().base().benefitReductionPolicy()
+                        .equals(com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy.none())
+                && digest(snapshot.payload(), snapshot.context(), legacySocialSecurityMapper).equals(snapshot.payloadDigest());
     }
 }

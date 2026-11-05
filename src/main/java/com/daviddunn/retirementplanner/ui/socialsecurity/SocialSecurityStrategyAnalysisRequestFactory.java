@@ -4,6 +4,7 @@ import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.*;
 
 import java.math.BigDecimal;
@@ -115,7 +116,8 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
                         spouse.getBirthDate()),
                 primaryDeath,
                 spouseDeath,
-                plan.getPlanningAssumptions().getSocialSecurityColaRate());
+                plan.getPlanningAssumptions().getSocialSecurityColaRate(),
+                benefitReductionPolicy(plan));
         SocialSecurityMortalityWeightedClaimingGridRequest grid =
                 new SocialSecurityMortalityWeightedClaimingGridRequest(
                         base,
@@ -153,6 +155,13 @@ public final class SocialSecurityStrategyAnalysisRequestFactory {
             throw new IllegalArgumentException(owner + " birth date is required.");
         }
         return person;
+    }
+
+    private static SocialSecurityBenefitReductionPolicy benefitReductionPolicy(RetirementPlan plan) {
+        var assumptions = plan.getPlanningAssumptions().getEconomicAssumptions();
+        return new SocialSecurityBenefitReductionPolicy(
+                assumptions.getSocialSecurityBenefitReductionPercent(),
+                assumptions.getSocialSecurityBenefitReductionEffectiveYear());
     }
 
     private static SocialSecurityIncome source(

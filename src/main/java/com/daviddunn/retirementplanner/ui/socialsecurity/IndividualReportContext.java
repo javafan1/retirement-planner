@@ -25,6 +25,10 @@ record IndividualReportContext(String household, String primary, Instant started
                 + "; General Inflation: " + UIFormatters.percent(a.getGeneralInflationRate())
                 + "; Healthcare Inflation: " + UIFormatters.percent(a.getHealthcareInflationRate())
                 + "; Social Security COLA: " + UIFormatters.percent(a.getSocialSecurityColaRate()));
+        var reduction = a.getEconomicAssumptions().getSocialSecurityBenefitReductionPercent();
+        if (reduction.signum() > 0) lines.add("Social Security benefit reduction: "
+                + reduction.stripTrailingZeros().toPlainString() + "% beginning "
+                + a.getEconomicAssumptions().getSocialSecurityBenefitReductionEffectiveYear());
         lines.add("Filing status: " + t.getFilingStatus() + "; State of residence: "
                 + a.getStateTaxAssumptions().jurisdiction() + "; simplified state estimate; full-year resident"
                 + "; Estimated heir tax rate: " + UIFormatters.percent(t.getEstimatedHeirTaxRateOnTaxDeferredAssets()));

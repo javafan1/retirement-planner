@@ -99,6 +99,14 @@ public final class AnalysisFingerprintService {
     private JsonNode socialSecurity(RetirementPlan plan) {
         var s = mapper.createObjectNode();
         s.set("cola", tree(plan.getPlanningAssumptions().getSocialSecurityColaRate()));
+        var reduction = plan.getPlanningAssumptions().getEconomicAssumptions();
+        if (reduction.getSocialSecurityBenefitReductionPercent().compareTo(BigDecimal.ZERO) != 0) {
+            s.set("benefitReductionPercent", tree(reduction.getSocialSecurityBenefitReductionPercent()));
+        }
+        if (reduction.getSocialSecurityBenefitReductionPercent().compareTo(BigDecimal.ZERO) != 0
+                || reduction.getSocialSecurityBenefitReductionEffectiveYear() != 2032) {
+            s.put("benefitReductionEffectiveYear", reduction.getSocialSecurityBenefitReductionEffectiveYear());
+        }
         var people = s.putArray("people");
         var persons = new ArrayList<Person>(); persons.add(plan.getHousehold().getPrimaryPerson());
         plan.getHousehold().spouse().ifPresent(persons::add);

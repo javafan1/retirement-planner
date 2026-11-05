@@ -56,6 +56,29 @@ class SocialSecurityStrategyAnalysisRequestFactoryTest {
     }
 
     @Test
+    void freezesConfiguredReductionIntoSocialSecurityOnlyCandidateRequests() {
+        RetirementPlan plan = plan(true);
+        PlanningAssumptions old = plan.getPlanningAssumptions();
+        EconomicAssumptions previous = old.getEconomicAssumptions();
+        plan.setPlanningAssumptions(new PlanningAssumptions(
+                new EconomicAssumptions(previous.getExpectedAnnualInvestmentReturn(),
+                        previous.getGeneralInflationRate(), previous.getHealthcareInflationRate(),
+                        previous.getSocialSecurityColaRate(), new BigDecimal("22"), 2032),
+                old.getTaxAssumptions(), old.getWithdrawalAssumptions(),
+                old.getDeathScenarioAssumptions(), old.getProjectionLengthYears(),
+                old.getProjectionStartDate(), old.getStateTaxAssumptions()));
+
+        var context = new SocialSecurityStrategyAnalysisRequestFactory().create(
+                plan, SocialSecurityMortalityCategory.MALE,
+                SocialSecurityMortalityCategory.FEMALE, new BigDecimal("0.01"),
+                LocalDate.of(2026, 7, 1));
+
+        var policy = context.request().retirementGridRequest().baseStrategy().benefitReductionPolicy();
+        assertEquals(new com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy(
+                new BigDecimal("22"), 2032), policy);
+    }
+
+    @Test
     void missingSourceAndMortalityCategoryHaveActionableMessages() {
         IllegalArgumentException missingSource = assertThrows(
                 IllegalArgumentException.class,

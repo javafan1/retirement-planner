@@ -21,6 +21,35 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.app.baseline.BaselineDetailsTest.set;
 
 class ProjectionSwapTest {
+    @Test void swapsPreserveSocialSecurityReductionInputsIncludingZeroRateYear() throws Exception {
+        var c = pair(true);
+        var before = c.getCurrentPlan().getPlanningAssumptions();
+        var oldEconomic = before.getEconomicAssumptions();
+        var updatedEconomic = new EconomicAssumptions(oldEconomic.getExpectedAnnualInvestmentReturn(),
+                oldEconomic.getGeneralInflationRate(), oldEconomic.getHealthcareInflationRate(),
+                oldEconomic.getSocialSecurityColaRate(), new BigDecimal("17.25"), 2044);
+        c.getCurrentPlan().setPlanningAssumptions(new PlanningAssumptions(updatedEconomic,
+                before.getTaxAssumptions(), before.getWithdrawalAssumptions(), before.getDeathScenarioAssumptions(),
+                before.getProjectionLengthYears(), before.getProjectionStartDate(), before.getStateTaxAssumptions()));
+        c.markModified();
+        c.invalidateProjection();
+        c.getCurrentProjection();
+        c.save();
+        assertEquals(new BigDecimal("17.25"), c.getCurrentPlan().getPlanningAssumptions()
+                .getEconomicAssumptions().getSocialSecurityBenefitReductionPercent());
+
+        swap(c);
+        var baselineAssumptions = c.getCurrentPlan().getPlanningAssumptions().getEconomicAssumptions();
+        assertEquals(BigDecimal.ZERO, baselineAssumptions.getSocialSecurityBenefitReductionPercent());
+        assertEquals(2032, baselineAssumptions.getSocialSecurityBenefitReductionEffectiveYear());
+        c.save();
+
+        swap(c);
+        var restoredAssumptions = c.getCurrentPlan().getPlanningAssumptions().getEconomicAssumptions();
+        assertEquals(new BigDecimal("17.25"), restoredAssumptions.getSocialSecurityBenefitReductionPercent());
+        assertEquals(2044, restoredAssumptions.getSocialSecurityBenefitReductionEffectiveYear());
+    }
+
     @Test void expenseViewCallbackRetainsChartsWithoutProjectionOrBreakEvenExecution() throws Exception {
         com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport.startFx();
         var c = pair(true);

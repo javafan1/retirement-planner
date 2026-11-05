@@ -63,6 +63,11 @@ record SocialSecurityAnalyzerInputSummary(List<Row> rows) {
                 + "; independent household mortality; conditioned on the date above using next complete birthday intervals", "Mortality Assumptions"));
         rows.add(new Row("General inflation", percent(assumptions.getGeneralInflationRate()), "Economic Assumptions"));
         rows.add(new Row("Social Security COLA", percent(assumptions.getSocialSecurityColaRate()), "Economic Assumptions"));
+        var reduction = assumptions.getEconomicAssumptions().getSocialSecurityBenefitReductionPercent();
+        if (reduction.signum() > 0) {
+            rows.add(new Row("Social Security benefit reduction", reduction.stripTrailingZeros().toPlainString() + "% beginning "
+                    + assumptions.getEconomicAssumptions().getSocialSecurityBenefitReductionEffectiveYear(), "Economic Assumptions"));
+        }
         rows.add(new Row("Investment return assumptions", percent(assumptions.getInvestmentReturnRate()) + " annual portfolio return", "Economic Assumptions"));
         rows.add(new Row("Healthcare inflation", percent(assumptions.getHealthcareInflationRate()), "Economic Assumptions"));
         rows.add(new Row("Configured plan death scenario", human(death.getDeathScenario())

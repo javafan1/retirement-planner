@@ -65,6 +65,10 @@ public record SocialSecurityStrategyComparisonRequest(
                 strategyB.socialSecurityColaRate(),
                 "Strategies must use the same Social Security COLA rate.");
         validateSame(
+                strategyA.benefitReductionPolicy(),
+                strategyB.benefitReductionPolicy(),
+                "Strategies must use the same Social Security benefit reduction policy.");
+        validateSame(
                 YearMonth.from(strategyA.analysisDate()),
                 YearMonth.from(strategyB.analysisDate()),
                 "Strategies must use the same analysis date.");

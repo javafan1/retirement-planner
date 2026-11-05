@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.model;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
@@ -28,6 +29,10 @@ public final class EconomicAssumptions {
      */
     private final BigDecimal socialSecurityColaRate;
 
+    private final BigDecimal socialSecurityBenefitReductionPercent;
+
+    private final int socialSecurityBenefitReductionEffectiveYear;
+
     @JsonCreator
     public EconomicAssumptions(
 
@@ -48,7 +53,13 @@ public final class EconomicAssumptions {
             BigDecimal healthcareInflationRate,
 
             @JsonProperty("socialSecurityColaRate")
-            BigDecimal socialSecurityColaRate) {
+            BigDecimal socialSecurityColaRate,
+
+            @JsonProperty("socialSecurityBenefitReductionPercent")
+            BigDecimal socialSecurityBenefitReductionPercent,
+
+            @JsonProperty("socialSecurityBenefitReductionEffectiveYear")
+            Integer socialSecurityBenefitReductionEffectiveYear) {
 
         this.expectedAnnualInvestmentReturn =
                 Objects.requireNonNull(
@@ -86,6 +97,39 @@ public final class EconomicAssumptions {
                 socialSecurityColaRate != null
                         ? socialSecurityColaRate
                         : this.generalInflationRate;
+
+        this.socialSecurityBenefitReductionPercent =
+                socialSecurityBenefitReductionPercent != null
+                        ? socialSecurityBenefitReductionPercent
+                        : BigDecimal.ZERO;
+
+        if (this.socialSecurityBenefitReductionPercent.compareTo(BigDecimal.ZERO) < 0
+                || this.socialSecurityBenefitReductionPercent.compareTo(new BigDecimal("100")) > 0) {
+            throw new IllegalArgumentException(
+                    "Social Security benefit reduction must be between 0 and 100 percent.");
+        }
+
+        this.socialSecurityBenefitReductionEffectiveYear =
+                socialSecurityBenefitReductionEffectiveYear != null
+                        ? socialSecurityBenefitReductionEffectiveYear
+                        : 2032;
+
+        if (this.socialSecurityBenefitReductionEffectiveYear < 1000
+                || this.socialSecurityBenefitReductionEffectiveYear > 9999) {
+            throw new IllegalArgumentException(
+                    "Social Security benefit reduction effective year must be a four-digit calendar year.");
+        }
+    }
+
+    /** Compatibility constructor retaining the pre-reduction JSON/value shape. */
+    public EconomicAssumptions(
+            BigDecimal expectedAnnualInvestmentReturn,
+            BigDecimal legacyInflationRate,
+            BigDecimal generalInflationRate,
+            BigDecimal healthcareInflationRate,
+            BigDecimal socialSecurityColaRate) {
+        this(expectedAnnualInvestmentReturn, legacyInflationRate, generalInflationRate,
+                healthcareInflationRate, socialSecurityColaRate, null, null);
     }
 
     /*
@@ -102,7 +146,24 @@ public final class EconomicAssumptions {
                 null,
                 generalInflationRate,
                 healthcareInflationRate,
-                socialSecurityColaRate);
+                socialSecurityColaRate,
+                null,
+                null);
+    }
+
+    /** Full current economic-assumption constructor. */
+    public EconomicAssumptions(
+            BigDecimal expectedAnnualInvestmentReturn,
+            BigDecimal generalInflationRate,
+            BigDecimal healthcareInflationRate,
+            BigDecimal socialSecurityColaRate,
+            BigDecimal socialSecurityBenefitReductionPercent,
+            int socialSecurityBenefitReductionEffectiveYear) {
+
+        this(expectedAnnualInvestmentReturn, null, generalInflationRate,
+                healthcareInflationRate, socialSecurityColaRate,
+                socialSecurityBenefitReductionPercent,
+                socialSecurityBenefitReductionEffectiveYear);
     }
 
     /*
@@ -145,6 +206,62 @@ public final class EconomicAssumptions {
         return socialSecurityColaRate;
     }
 
+    @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = ZeroPercentFilter.class)
+    public BigDecimal getSocialSecurityBenefitReductionPercent() {
+        return socialSecurityBenefitReductionPercent;
+    }
+
+    @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = DefaultReductionYearFilter.class)
+    public int getSocialSecurityBenefitReductionEffectiveYear() {
+        return socialSecurityBenefitReductionEffectiveYear;
+    }
+
+    /** Omits the new default value from serialized legacy-shaped plans and fingerprints. */
+    public static final class ZeroPercentFilter {
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof BigDecimal value && value.compareTo(BigDecimal.ZERO) == 0;
+        }
+
+        @Override
+        public int hashCode() {
+            return BigDecimal.ZERO.hashCode();
+        }
+    }
+
+    /** Omits the new default value from serialized legacy-shaped plans and fingerprints. */
+    public static final class DefaultReductionYearFilter {
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Integer value && value == 2032;
+        }
+
+        @Override
+        public int hashCode() {
+            return Integer.hashCode(2032);
+        }
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        if (!(other instanceof EconomicAssumptions that)) return false;
+        return socialSecurityBenefitReductionEffectiveYear == that.socialSecurityBenefitReductionEffectiveYear
+                && expectedAnnualInvestmentReturn.equals(that.expectedAnnualInvestmentReturn)
+                && generalInflationRate.equals(that.generalInflationRate)
+                && healthcareInflationRate.equals(that.healthcareInflationRate)
+                && socialSecurityColaRate.equals(that.socialSecurityColaRate)
+                && socialSecurityBenefitReductionPercent.equals(that.socialSecurityBenefitReductionPercent);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(expectedAnnualInvestmentReturn, generalInflationRate,
+                healthcareInflationRate, socialSecurityColaRate,
+                socialSecurityBenefitReductionPercent,
+                socialSecurityBenefitReductionEffectiveYear);
+    }
+
     @Override
     public String toString() {
 
@@ -157,6 +274,10 @@ public final class EconomicAssumptions {
                 healthcareInflationRate +
                 ", socialSecurityColaRate=" +
                 socialSecurityColaRate +
+                ", socialSecurityBenefitReductionPercent=" +
+                socialSecurityBenefitReductionPercent +
+                ", socialSecurityBenefitReductionEffectiveYear=" +
+                socialSecurityBenefitReductionEffectiveYear +
                 '}';
     }
 }

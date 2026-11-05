@@ -24,7 +24,8 @@ import static com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport
 class AssumptionsLayoutTest {
     static final List<String> INPUTS = List.of("projectionStartDatePicker", "projectionLengthField", "deathScenarioComboBox",
             "deathYearField", "survivorClaimingAgeComboBox", "postDeathExpenseFactorField", "investmentReturnField",
-            "inflationRateField", "healthcareInflationField", "socialSecurityColaField", "filingStatusComboBox",
+            "inflationRateField", "healthcareInflationField", "socialSecurityColaField",
+            "socialSecurityBenefitReductionField", "socialSecurityBenefitReductionYearField", "filingStatusComboBox",
             "stateJurisdictionComboBox", "federalBracketGrowthField", "standardDeductionGrowthField",
             "futureFederalMarginalRateAdjustmentField", "futureFederalMarginalRateEffectiveYearField",
             "stateIncomeTaxRateField", "localIncomeTaxRateField", "estimatedHeirTaxRateField");
@@ -56,9 +57,10 @@ class AssumptionsLayoutTest {
                                     .filter(candidate -> candidate.getLabelFor() == input).findFirst().orElseThrow();
                             assertNotNull(label.getTooltip(), name);
                         }
-                        assertEquals(6, view.lookupAll(".assumptions-card").size());
+                        assertEquals(7, view.lookupAll(".assumptions-card").size());
                         assertEquals(Set.of("Planning Timeline", "Household & Survivor Planning", "Economic & Investment Assumptions",
-                                "Social Security Claiming Ages & Benefits", "Income Tax Assumptions", "Estate & Heir Assumptions"),
+                                "Social Security Claiming Ages & Benefits", "Future Social Security Benefit Reduction",
+                                "Income Tax Assumptions", "Estate & Heir Assumptions"),
                                 view.lookupAll(".assumptions-section-heading").stream().map(Label.class::cast).map(Label::getText)
                                         .collect(java.util.stream.Collectors.toSet()));
                         assertColumns(view);
@@ -177,9 +179,11 @@ class AssumptionsLayoutTest {
         assertFalse(body.isFillHeight());
         assertEquals(wide, right.isManaged());
         assertEquals(wide ? List.of("Planning Timeline", "Economic & Investment Assumptions",
-                        "Social Security Claiming Ages & Benefits", "Estate & Heir Assumptions")
+                        "Social Security Claiming Ages & Benefits", "Future Social Security Benefit Reduction",
+                        "Estate & Heir Assumptions")
                         : List.of("Planning Timeline", "Household & Survivor Planning", "Economic & Investment Assumptions",
-                        "Social Security Claiming Ages & Benefits", "Income Tax Assumptions", "Estate & Heir Assumptions"), titles(left));
+                        "Social Security Claiming Ages & Benefits", "Future Social Security Benefit Reduction",
+                        "Income Tax Assumptions", "Estate & Heir Assumptions"), titles(left));
         assertEquals(wide ? List.of("Household & Survivor Planning", "Income Tax Assumptions") : List.of(), titles(right));
         if (wide) assertEquals(left.getWidth(), right.getWidth(), 1);
         assertStack(left); assertStack(right);

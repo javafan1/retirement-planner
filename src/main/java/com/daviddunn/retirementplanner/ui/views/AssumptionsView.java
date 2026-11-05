@@ -70,6 +70,8 @@ public class AssumptionsView extends VBox {
     private final TextField inflationRateField;
     private final TextField healthcareInflationField;
     private final TextField socialSecurityColaField;
+    private final TextField socialSecurityBenefitReductionField;
+    private final TextField socialSecurityBenefitReductionYearField;
     private final VBox socialSecurityBenefitRows = new VBox(8);
     private final List<SocialSecurityDraftRow> socialSecurityDraftRows = new ArrayList<>();
     private VBox socialSecurityBenefitsCard;
@@ -175,6 +177,11 @@ public class AssumptionsView extends VBox {
 
         socialSecurityColaField =
                 new TextField();
+
+        socialSecurityBenefitReductionField = new TextField();
+        socialSecurityBenefitReductionField.setId("social-security-benefit-reduction-percent");
+        socialSecurityBenefitReductionYearField = new TextField();
+        socialSecurityBenefitReductionYearField.setId("social-security-benefit-reduction-year");
 
         /*
          * Tax fields.
@@ -383,6 +390,11 @@ public class AssumptionsView extends VBox {
                 1,
                 row++);
 
+        grid.add(new Label("Social Security Benefit Reduction (%):"), 0, row);
+        grid.add(socialSecurityBenefitReductionField, 1, row++);
+        grid.add(new Label("Reduction Effective Year:"), 0, row);
+        grid.add(socialSecurityBenefitReductionYearField, 1, row++);
+
         /*
          * =================================================
          * Tax Assumptions
@@ -514,6 +526,9 @@ public class AssumptionsView extends VBox {
         InputHelp.install(inflationRateField, HelpText.GENERAL_INFLATION);
         InputHelp.install(healthcareInflationField, HelpText.HEALTHCARE_INFLATION);
         InputHelp.install(socialSecurityColaField, HelpText.SOCIAL_SECURITY_COLA);
+        String reductionHelp = "Allows you to model a potential future reduction in Social Security retirement and survivor benefits. Enter the percentage by which benefits would decrease and the calendar year when the reduction would begin. The reduction is assumed to remain in effect for all subsequent years. This is a planning scenario, not an enacted change to Social Security law. A value of 0% uses currently scheduled benefits.";
+        InputHelp.install(socialSecurityBenefitReductionField, reductionHelp);
+        InputHelp.install(socialSecurityBenefitReductionYearField, reductionHelp);
         InputHelp.install(federalBracketGrowthField, PlanningInputHelp.BRACKET_GROWTH);
         InputHelp.install(standardDeductionGrowthField, PlanningInputHelp.DEDUCTION_GROWTH);
         InputHelp.install(futureFederalMarginalRateAdjustmentField, PlanningInputHelp.RATE_CHANGE);
@@ -532,6 +547,8 @@ public class AssumptionsView extends VBox {
         attachRequired(grid, inflationRateField);
         attachRequired(grid, healthcareInflationField);
         attachRequired(grid, socialSecurityColaField);
+        attachRequired(grid, socialSecurityBenefitReductionField);
+        attachRequired(grid, socialSecurityBenefitReductionYearField);
         attachRequired(grid, filingStatusComboBox);
         requiredFieldAttachments.add(RequiredFieldSupport.attach(stateLabel, stateJurisdictionComboBox));
         attachRequired(grid, federalBracketGrowthField);
@@ -620,6 +637,13 @@ public class AssumptionsView extends VBox {
         socialSecurityBenefitsCard.setId("assumptions-social-security-benefits");
         socialSecurityBenefitsCard.getStyleClass().add("assumptions-card");
         socialSecurityBenefitsCard.setMaxHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        VBox socialSecurityReductionCard = new VBox(8,
+                sectionHeading("Future Social Security Benefit Reduction"),
+                inputRow(original, socialSecurityBenefitReductionField),
+                inputRow(original, socialSecurityBenefitReductionYearField));
+        socialSecurityReductionCard.setId("assumptions-social-security-reduction");
+        socialSecurityReductionCard.getStyleClass().add("assumptions-card");
+        socialSecurityReductionCard.setMaxHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         VBox tax = section(original, "Income Tax Assumptions", filingStatusComboBox, stateJurisdictionComboBox,
                 federalBracketGrowthField, standardDeductionGrowthField);
         VBox adjustment = new VBox(8, inputRow(original, futureFederalMarginalRateAdjustmentField),
@@ -627,7 +651,8 @@ public class AssumptionsView extends VBox {
         adjustment.getStyleClass().add("assumptions-rate-adjustment");
         tax.getChildren().addAll(adjustment, inputRow(original, stateIncomeTaxRateField), inputRow(original, localIncomeTaxRateField));
         VBox estate = section(original, "Estate & Heir Assumptions", estimatedHeirTaxRateField);
-        List<VBox> sections = List.of(timeline, survivor, economic, socialSecurityBenefitsCard, tax, estate);
+        List<VBox> sections = List.of(timeline, survivor, economic, socialSecurityBenefitsCard,
+                socialSecurityReductionCard, tax, estate);
         HBox cards = new HBox(16);
         cards.setId("assumptions-sections");
         cards.setFillHeight(false);
@@ -651,7 +676,8 @@ public class AssumptionsView extends VBox {
             right.setVisible(wide);
             right.setManaged(wide);
             if (wide) {
-                left.getChildren().addAll(timeline, economic, socialSecurityBenefitsCard, estate);
+                left.getChildren().addAll(timeline, economic, socialSecurityBenefitsCard,
+                        socialSecurityReductionCard, estate);
                 right.getChildren().addAll(survivor, tax);
             } else {
                 left.getChildren().addAll(sections);
@@ -885,11 +911,14 @@ public class AssumptionsView extends VBox {
         compact.getColumnConstraints().addAll(labels, inputs);
         List<Control> controls = List.of(projectionStartDatePicker, projectionLengthField,
                 investmentReturnField, inflationRateField, healthcareInflationField,
-                socialSecurityColaField, filingStatusComboBox, stateJurisdictionComboBox);
+                socialSecurityColaField, socialSecurityBenefitReductionField,
+                socialSecurityBenefitReductionYearField, filingStatusComboBox, stateJurisdictionComboBox);
         List<String> names = List.of("Projection start date", "Projection length (years)",
                 "Investment return (%)", "General inflation (%)", "Healthcare inflation (%)",
-                "Social Security COLA (%)", "Filing status", "State of Residence");
-        List<String> ids = List.of("start", "length", "return", "inflation", "healthcare", "cola", "filing-status", "state-of-residence");
+                "Social Security COLA (%)", "Social Security Benefit Reduction (%)", "Reduction Effective Year",
+                "Filing status", "State of Residence");
+        List<String> ids = List.of("start", "length", "return", "inflation", "healthcare", "cola",
+                "social-security-reduction", "social-security-reduction-year", "filing-status", "state-of-residence");
         int basicRow = 0;
         for (int row = 0; row < controls.size(); row++) {
             Control input = controls.get(row);
@@ -898,9 +927,9 @@ public class AssumptionsView extends VBox {
             input.setMaxWidth(Double.MAX_VALUE);
             Label label = new Label(names.get(row) + " *");
             label.setLabelFor(input);
-            if (row == 4 || row == 5) {
+            if (row == 4 || row == 5 || row == 6 || row == 7) {
                 var field = new WizardFieldRow(names.get(row), WizardFieldRow.Requiredness.REQUIRED,
-                        input, "Percentage per year", input.getTooltip().getText());
+                        input, row == 7 ? "Calendar year" : "Percentage per year", input.getTooltip().getText());
                 guidedRows.put(input, field);
                 advancedFields.getChildren().add(field);
             }
@@ -932,7 +961,7 @@ public class AssumptionsView extends VBox {
         interpretation.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         guidedAdvanced.setId("wizard-advanced-assumptions");
         guidedAdvanced.setText("Advanced Assumptions");
-        guidedAdvanced.setAccessibleText("Advanced Assumptions: Healthcare inflation and plan-level Social Security COLA");
+        guidedAdvanced.setAccessibleText("Advanced Assumptions: healthcare inflation, Social Security COLA, and future Social Security benefit reduction");
         guidedAdvanced.setContent(advancedFields);
         guidedAdvanced.setAnimated(false);
         guidedAdvanced.setFocusTraversable(true);
@@ -943,8 +972,11 @@ public class AssumptionsView extends VBox {
         summary.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         summary.textProperty().bind(javafx.beans.binding.Bindings.createStringBinding(() ->
                 "Healthcare inflation (entered %): " + pendingText(healthcareInflationField)
-                        + " · Social Security COLA (entered %): " + pendingText(socialSecurityColaField),
-                healthcareInflationField.textProperty(), socialSecurityColaField.textProperty()));
+                        + " · Social Security COLA (entered %): " + pendingText(socialSecurityColaField)
+                        + " · Social Security benefit reduction: " + pendingText(socialSecurityBenefitReductionField)
+                        + " beginning " + pendingText(socialSecurityBenefitReductionYearField),
+                healthcareInflationField.textProperty(), socialSecurityColaField.textProperty(),
+                socialSecurityBenefitReductionField.textProperty(), socialSecurityBenefitReductionYearField.textProperty()));
         summary.visibleProperty().bind(guidedAdvanced.expandedProperty().not());
         summary.managedProperty().bind(summary.visibleProperty());
         getChildren().setAll(required, basicHeading, interpretation, compact, summary, guidedAdvanced, fullGrid, statusLabel);
@@ -965,7 +997,9 @@ public class AssumptionsView extends VBox {
 
     private void showGuidedError(Control input, String message) {
         if (!guidedCreation) return;
-        if (input == healthcareInflationField || input == socialSecurityColaField) guidedAdvanced.setExpanded(true);
+        if (input == healthcareInflationField || input == socialSecurityColaField
+                || input == socialSecurityBenefitReductionField || input == socialSecurityBenefitReductionYearField)
+            guidedAdvanced.setExpanded(true);
         input.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), true);
         if (guidedRows.containsKey(input)) guidedRows.get(input).setIssue(message);
     }
@@ -1062,6 +1096,10 @@ public class AssumptionsView extends VBox {
                 toPercent(
                         economicAssumptions
                                 .getSocialSecurityColaRate()));
+        socialSecurityBenefitReductionField.setText(
+                economicAssumptions.getSocialSecurityBenefitReductionPercent().stripTrailingZeros().toPlainString());
+        socialSecurityBenefitReductionYearField.setText(
+                Integer.toString(economicAssumptions.getSocialSecurityBenefitReductionEffectiveYear()));
 
         /*
          * Tax assumptions.
@@ -1245,7 +1283,8 @@ public class AssumptionsView extends VBox {
     private List<TextField> textFields() {
         return List.of(projectionLengthField, deathYearField, postDeathExpenseFactorField,
                 investmentReturnField, inflationRateField, healthcareInflationField,
-                socialSecurityColaField, federalBracketGrowthField, standardDeductionGrowthField,
+                socialSecurityColaField, socialSecurityBenefitReductionField,
+                socialSecurityBenefitReductionYearField, federalBracketGrowthField, standardDeductionGrowthField,
                 futureFederalMarginalRateAdjustmentField, futureFederalMarginalRateEffectiveYearField,
                 stateIncomeTaxRateField, localIncomeTaxRateField, estimatedHeirTaxRateField);
     }
@@ -1261,11 +1300,14 @@ public class AssumptionsView extends VBox {
             }
             return value;
         });
+        EconomicAssumptions existingEconomic = currentPlan.getPlanningAssumptions().getEconomicAssumptions();
         EconomicAssumptions economic = new EconomicAssumptions(
                 percent(investmentReturnField, "Annual investment return"),
                 percent(inflationRateField, "General inflation"),
                 percent(healthcareInflationField, "Healthcare inflation"),
-                percent(socialSecurityColaField, "Social Security COLA"));
+                percent(socialSecurityColaField, "Social Security COLA"),
+                reductionPercent(socialSecurityBenefitReductionField),
+                reductionYear(socialSecurityBenefitReductionYearField));
         BigDecimal bracket = percent(federalBracketGrowthField, "Federal tax bracket growth");
         BigDecimal deduction = percent(standardDeductionGrowthField, "Standard deduction growth");
         PlanningAssumptions applied = currentPlan.getPlanningAssumptions();
@@ -1359,6 +1401,8 @@ public class AssumptionsView extends VBox {
         return Arrays.<Object>asList(assumptions.getProjectionStartDate(), assumptions.getProjectionLengthYears(),
                 economic.getExpectedAnnualInvestmentReturn(), economic.getGeneralInflationRate(),
                 economic.getHealthcareInflationRate(), economic.getSocialSecurityColaRate(),
+                economic.getSocialSecurityBenefitReductionPercent(),
+                economic.getSocialSecurityBenefitReductionEffectiveYear(),
                 tax.getFilingStatus(), tax.getFederalTaxBracketGrowthRate(), tax.getStandardDeductionGrowthRate(),
                 tax.getFutureFederalMarginalRateAdjustment(), tax.getFutureFederalMarginalRateEffectiveYear(),
                 assumptions.getStateTaxAssumptions(), tax.getStateIncomeTaxRate(), tax.getLocalIncomeTaxRate(), tax.getEstimatedHeirTaxRateOnTaxDeferredAssets(),
@@ -1370,6 +1414,30 @@ public class AssumptionsView extends VBox {
 
     private BigDecimal percent(TextField field, String name) {
         return read(field, name, () -> parsePercent(field.getText()));
+    }
+
+    private BigDecimal reductionPercent(TextField field) {
+        return read(field, "Social Security Benefit Reduction", () -> {
+            BigDecimal value = new BigDecimal(field.getText().trim().replace("%", ""));
+            if (value.compareTo(BigDecimal.ZERO) < 0 || value.compareTo(new BigDecimal("100")) > 0) {
+                throw new IllegalArgumentException("Enter a percentage from 0 through 100.");
+            }
+            return value;
+        });
+    }
+
+    private int reductionYear(TextField field) {
+        return read(field, "Reduction Effective Year", () -> {
+            String text = field.getText().trim();
+            if (!text.matches("[0-9]{4}")) {
+                throw new IllegalArgumentException("Enter a four-digit calendar year from 1000 through 9999.");
+            }
+            int year = Integer.parseInt(text);
+            if (year < 1000 || year > 9999) {
+                throw new IllegalArgumentException("Enter a four-digit calendar year from 1000 through 9999.");
+            }
+            return year;
+        });
     }
 
     private static <T> T read(Control control, String name, Supplier<T> parser) {

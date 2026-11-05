@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.projection;
 
 import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
+import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.model.*;
@@ -75,6 +76,35 @@ class SocialSecurityProjectionIncomeProviderTest {
     }
 
     @Test
+    void strategyOverrideAndSurvivorBenefitsRetainPlanReductionPolicy() {
+        RetirementPlan baseline = plan(new DeathScenarioAssumptions(
+                DeathScenario.PRIMARY_DIES, 2032, 67), true);
+        RetirementPlan reduced = plan(new DeathScenarioAssumptions(
+                DeathScenario.PRIMARY_DIES, 2032, 67), true, "22", 2032);
+        Person primary = reduced.getHousehold().getPrimaryPerson();
+        Person spouse = reduced.getHousehold().getSpouse();
+        var strategy = new SocialSecurityHouseholdClaimingStrategy(68, 62,
+                LocalDate.of(2031, 6, 4), LocalDate.of(2027, 2, 28),
+                new SocialSecuritySurvivorClaimingCandidate(
+                        primary.getBirthDate().plusYears(67), 67, 0, "Age 67"),
+                new SocialSecuritySurvivorClaimingCandidate(
+                        spouse.getBirthDate().plusYears(67), 67, 0, "Age 67"));
+        var context = ProjectionEvaluationContext.withSocialSecurityStrategy(strategy);
+        var provider = new SocialSecurityProjectionIncomeProvider();
+        var full = provider.calculate(baseline, 2031, 2033, context);
+        var cut = provider.calculate(reduced, 2031, 2033, context);
+
+        assertMoney(full.get(2031).householdBenefit(), cut.get(2031).householdBenefit());
+        assertTrue(cut.get(2032).spouseSurvivorCandidate().signum() > 0);
+        assertTrue(cut.get(2032).householdBenefit().compareTo(
+                full.get(2032).householdBenefit()) < 0);
+        assertTrue(cut.get(2033).householdBenefit().compareTo(
+                full.get(2033).householdBenefit()) < 0);
+        assertMoney(cut.get(2032).householdBenefit(), cut.get(2032).primarySelectedBenefit()
+                .add(cut.get(2032).spouseSelectedBenefit()));
+    }
+
+    @Test
     void missingSpouseSourceRemainsSafeThroughIsolatedLegacyFallback() {
         RetirementPlan plan = plan(new DeathScenarioAssumptions(
                 DeathScenario.BOTH_SURVIVE, null), false);
@@ -83,6 +113,104 @@ class SocialSecurityProjectionIncomeProviderTest {
 
         assertTrue(results.get(2031).primaryOwnBenefit().signum() > 0);
         assertMoney(BigDecimal.ZERO, results.get(2031).spouseOwnBenefit());
+    }
+
+    @Test
+    void planReductionPolicyReachesLegacyAnnualAndSinglePersonOwnPaths() {
+        RetirementPlan legacy = plan(new DeathScenarioAssumptions(
+                DeathScenario.BOTH_SURVIVE, null), false, "10", 2031);
+        var legacyResult = new SocialSecurityProjectionIncomeProvider().calculate(legacy, 2030, 2031);
+        assertMoney(new BigDecimal("21000.00"), legacyResult.get(2030).householdBenefit());
+        assertMoney(new BigDecimal("33048.00"), legacyResult.get(2031).householdBenefit());
+
+        Person primary = new Person("Primary", "Planner", LocalDate.of(1963, 6, 4));
+        primary.addIncomeSource(source(AccountOwnership.PRIMARY, LocalDate.of(2030, 6, 4), "3000", 67));
+        var old = new EconomicAssumptions(BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO);
+        var economic = new EconomicAssumptions(old.getExpectedAnnualInvestmentReturn(),
+                old.getGeneralInflationRate(), old.getHealthcareInflationRate(),
+                old.getSocialSecurityColaRate(), new BigDecimal("10"), 2031);
+        var assumptions = new PlanningAssumptions(economic,
+                new TaxAssumptions(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO),
+                new WithdrawalAssumptions(WithdrawalStrategyType.TAXABLE_FIRST),
+                new DeathScenarioAssumptions(DeathScenario.BOTH_SURVIVE, null),
+                2, LocalDate.of(2030, 1, 1));
+        RetirementPlan single = new RetirementPlan(new Household(primary), new AccountPortfolio(), assumptions);
+        var singleResult = new SocialSecurityProjectionIncomeProvider().calculate(single, 2030, 2031);
+        assertMoney(new BigDecimal("21000.00"), singleResult.get(2030).householdBenefit());
+        assertMoney(new BigDecimal("32400.00"), singleResult.get(2031).householdBenefit());
+    }
+
+    @Test
+    void reducedBenefitsFlowOnceThroughProjectionTaxesCashFlowAndEstate() {
+        RetirementPlan baseline = plan(new DeathScenarioAssumptions(
+                DeathScenario.BOTH_SURVIVE, null), true, "0", 2032);
+        RetirementPlan reduced = plan(new DeathScenarioAssumptions(
+                DeathScenario.BOTH_SURVIVE, null), true, "22", 2032);
+        for (RetirementPlan candidate : java.util.List.of(baseline, reduced)) {
+            candidate.getHousehold().addExpense(new Expense("Retirement spending", new BigDecimal("80000")));
+            candidate.getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.BrokerageAccount(
+                    "Joint brokerage", AccountOwnership.JOINT, new BigDecimal("500000")));
+            candidate.getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.TraditionalIRA(
+                    "Primary IRA", AccountOwnership.PRIMARY, new BigDecimal("1000000")));
+            candidate.getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.RothIRA(
+                    "Primary Roth", AccountOwnership.PRIMARY, BigDecimal.ZERO));
+            candidate.setRothConversionRequest(new com.daviddunn.retirementplanner.domain.roth.RothConversionRequest(
+                    true, 2030, new BigDecimal("10000"),
+                    com.daviddunn.retirementplanner.domain.roth.RothConversionStopRule.NEVER,
+                    com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy.FILL_22_PERCENT_BRACKET,
+                    com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency.ANNUAL));
+        }
+
+        Projection baseProjection = new ProjectionEngine().project(baseline);
+        Projection reducedProjection = new ProjectionEngine().project(reduced);
+        var provider = new SocialSecurityProjectionIncomeProvider();
+        var reducedProvider = provider.calculate(reduced, 2030, 2033);
+
+        for (int i = 0; i < baseProjection.size(); i++) {
+            ProjectionYear baseYear = baseProjection.getYearAt(i);
+            ProjectionYear reducedYear = reducedProjection.getYearAt(i);
+            int year = baseYear.getCalendarYear();
+            HouseholdSocialSecurityResult payable = reducedProvider.get(year);
+            assertMoney(payable.householdBenefit(), reducedYear.getSocialSecurityResult().householdBenefit());
+            assertMoney(payable.householdBenefit(), reducedYear.getGuaranteedIncome());
+            assertMoney(baseYear.getSocialSecurityResult().householdBenefit(),
+                    baseYear.getGuaranteedIncome());
+            if (year < 2032) {
+                assertMoney(baseYear.getSocialSecurityResult().householdBenefit(), payable.householdBenefit());
+            } else {
+                assertEquals(-1, payable.householdBenefit().compareTo(
+                        baseYear.getSocialSecurityResult().householdBenefit()));
+            }
+
+            TaxIncome taxIncome = new TaxIncomeCalculator().calculate(
+                    reduced.getHousehold(), LocalDate.of(year, 12, 31),
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    reduced.getPlanningAssumptions().getSocialSecurityColaRate(),
+                    reduced.getPlanningAssumptions().getDeathScenarioAssumptions(), payable);
+            assertMoney(payable.householdBenefit(), taxIncome.getSocialSecurityIncome());
+        }
+
+        ProjectionYear beforeEffective = baseProjection.getYearAt(1);
+        ProjectionYear firstReducedYear = reducedProjection.getYearAt(2);
+        ProjectionYear baseFirstReducedYear = baseProjection.getYearAt(2);
+        assertTrue(firstReducedYear.getTaxableSocialSecurity().compareTo(
+                baseFirstReducedYear.getTaxableSocialSecurity()) < 0);
+        assertTrue(firstReducedYear.getPortfolioWithdrawal().compareTo(
+                baseFirstReducedYear.getPortfolioWithdrawal()) > 0);
+        assertTrue(firstReducedYear.getFederalIncomeTax().signum() >= 0);
+        assertTrue(firstReducedYear.getMichiganIncomeTax().signum() >= 0);
+        assertTrue(firstReducedYear.getRothConversion().signum() > 0);
+        assertMoney(firstReducedYear.getRothConversion(),
+                firstReducedYear.getPrimaryRothConversion()
+                        .add(firstReducedYear.getSpouseRothConversion()));
+        assertTrue(baseFirstReducedYear.getRothConversion().signum() > 0);
+        assertNotEquals(0, reducedProjection.getFinalInvestableAssets().compareTo(
+                baseProjection.getFinalInvestableAssets()));
+        assertNotEquals(0, reducedProjection.getLastYear().getAfterTaxEstateValue().compareTo(
+                baseProjection.getLastYear().getAfterTaxEstateValue()));
+        assertMoney(beforeEffective.getSocialSecurityResult().householdBenefit(),
+                reducedProjection.getYearAt(1).getSocialSecurityResult().householdBenefit());
     }
 
     @Test
@@ -170,6 +298,14 @@ class SocialSecurityProjectionIncomeProviderTest {
     private RetirementPlan plan(
             DeathScenarioAssumptions death,
             boolean includeSpouseSource) {
+        return plan(death, includeSpouseSource, "0", 2032);
+    }
+
+    private RetirementPlan plan(
+            DeathScenarioAssumptions death,
+            boolean includeSpouseSource,
+            String reductionPercent,
+            int reductionYear) {
         Person primary = new Person("Primary", "Planner", LocalDate.of(1963, 6, 4));
         Person spouse = new Person("Spouse", "Planner", LocalDate.of(1965, 2, 28));
         primary.addIncomeSource(source(AccountOwnership.PRIMARY,
@@ -180,7 +316,8 @@ class SocialSecurityProjectionIncomeProviderTest {
         }
         PlanningAssumptions assumptions = new PlanningAssumptions(
                 new EconomicAssumptions(BigDecimal.ZERO, BigDecimal.ZERO,
-                        BigDecimal.ZERO, new BigDecimal("0.02")),
+                        BigDecimal.ZERO, new BigDecimal("0.02"),
+                        new BigDecimal(reductionPercent), reductionYear),
                 new TaxAssumptions(BigDecimal.ZERO, BigDecimal.ZERO,
                         BigDecimal.ZERO, BigDecimal.ZERO),
                 new WithdrawalAssumptions(WithdrawalStrategyType.TAXABLE_FIRST),
@@ -213,7 +350,12 @@ class SocialSecurityProjectionIncomeProviderTest {
                 election(primary, primarySource, AccountOwnership.PRIMARY),
                 election(spouse, spouseSource, AccountOwnership.SPOUSE),
                 null, null, null, null,
-                plan.getPlanningAssumptions().getSocialSecurityColaRate());
+                plan.getPlanningAssumptions().getSocialSecurityColaRate(),
+                new com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy(
+                        plan.getPlanningAssumptions().getEconomicAssumptions()
+                                .getSocialSecurityBenefitReductionPercent(),
+                        plan.getPlanningAssumptions().getEconomicAssumptions()
+                                .getSocialSecurityBenefitReductionEffectiveYear()));
     }
 
     private SocialSecurityClaimingElection election(

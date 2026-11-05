@@ -103,6 +103,46 @@ class IntegratedSocialSecurityStrategyEvaluatorTest {
     }
 
     @Test
+    void integratedCandidateProjectionKeepsReductionFromFrozenPlan() {
+        RetirementPlan plan = plan();
+        var candidate = strategy(plan, 68, 66, 67, 67);
+        IntegratedSocialSecurityStrategyResult baseline = evaluator.evaluate(plan, candidate);
+        PlanningAssumptions old = plan.getPlanningAssumptions();
+        EconomicAssumptions economics = old.getEconomicAssumptions();
+        plan.setPlanningAssumptions(new PlanningAssumptions(
+                new EconomicAssumptions(economics.getExpectedAnnualInvestmentReturn(),
+                        economics.getGeneralInflationRate(), economics.getHealthcareInflationRate(),
+                        economics.getSocialSecurityColaRate(), new BigDecimal("17"), 2032),
+                old.getTaxAssumptions(), old.getWithdrawalAssumptions(),
+                old.getDeathScenarioAssumptions(), old.getProjectionLengthYears(),
+                old.getProjectionStartDate(), old.getStateTaxAssumptions()));
+        IntegratedSocialSecurityStrategyResult result = evaluator.evaluate(plan, candidate);
+        SocialSecurityLifetimeResult direct = new SocialSecurityStrategyCalculator()
+                .calculate(directRequest(plan, candidate));
+        for (SocialSecurityAnnualResult annual : direct.annualResults()) {
+            ProjectionYear year = result.projection().getYears().stream()
+                    .filter(value -> value.getCalendarYear() == annual.calendarYear())
+                    .findFirst().orElseThrow();
+            assertMoney(annual.householdBenefits(),
+                    year.getSocialSecurityResult().householdBenefit());
+        }
+        ProjectionYear prior = result.projection().getYears().stream()
+                .filter(value -> value.getCalendarYear() == 2031).findFirst().orElseThrow();
+        ProjectionYear effective = result.projection().getYears().stream()
+                .filter(value -> value.getCalendarYear() == 2032).findFirst().orElseThrow();
+        ProjectionYear baselinePrior = baseline.projection().getYears().stream()
+                .filter(value -> value.getCalendarYear() == 2031).findFirst().orElseThrow();
+        ProjectionYear baselineEffective = baseline.projection().getYears().stream()
+                .filter(value -> value.getCalendarYear() == 2032).findFirst().orElseThrow();
+        assertTrue(prior.getSocialSecurityResult().householdBenefit().signum() > 0);
+        assertTrue(effective.getSocialSecurityResult().householdBenefit().signum() > 0);
+        assertMoney(baselinePrior.getSocialSecurityResult().householdBenefit(),
+                prior.getSocialSecurityResult().householdBenefit());
+        assertTrue(effective.getSocialSecurityResult().householdBenefit().compareTo(
+                baselineEffective.getSocialSecurityResult().householdBenefit()) < 0);
+    }
+
+    @Test
     void rejectsAClaimDateThatDoesNotMatchTheCandidateAge() {
         RetirementPlan plan = plan();
         SocialSecurityHouseholdClaimingStrategy valid = strategy(plan, 62, 62, 60, 60);
@@ -442,7 +482,12 @@ class IntegratedSocialSecurityStrategyEvaluatorTest {
                 primaryDeath == null ? null
                         : strategy.spouseSurvivorElection().claimDate(),
                 primaryDeath, spouseDeath,
-                plan.getPlanningAssumptions().getSocialSecurityColaRate());
+                plan.getPlanningAssumptions().getSocialSecurityColaRate(),
+                new com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy(
+                        plan.getPlanningAssumptions().getEconomicAssumptions()
+                                .getSocialSecurityBenefitReductionPercent(),
+                        plan.getPlanningAssumptions().getEconomicAssumptions()
+                                .getSocialSecurityBenefitReductionEffectiveYear()));
     }
 
     private void assertMoney(BigDecimal expected, BigDecimal actual) {

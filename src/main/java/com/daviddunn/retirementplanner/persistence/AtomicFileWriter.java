@@ -69,13 +69,19 @@ final class AtomicFileWriter {
 
     List<String> write(Path selected, byte[] bytes, Verification verify, boolean planBackup)
             throws IOException {
-        return write(selected, bytes, verify, planBackup, path -> { });
+        return write(selected, bytes, verify, planBackup, path -> { }, null);
     }
 
     List<String> write(Path selected, byte[] bytes, Verification verify, boolean planBackup,
             Verification commitGuard) throws IOException {
+        return write(selected, bytes, verify, planBackup, commitGuard, null);
+    }
+
+    List<String> write(Path selected, byte[] bytes, Verification verify, boolean planBackup,
+            Verification commitGuard, PlanSaveDiagnostics diagnostics) throws IOException {
         synchronized (SAVE_LOCK) {
             Path target = selected.toAbsolutePath().normalize();
+            stage(diagnostics, PlanSaveDiagnostics.Stage.DESTINATION_CHECK);
             regularOrMissing(target);
             if (Files.exists(target)) {
                 if (!Files.isWritable(target)
@@ -91,11 +97,13 @@ final class AtomicFileWriter {
             boolean backupChanged = false;
             boolean committed = false;
             try {
-                Path prepared = prepare(target, bytes, temporary);
+                Path prepared = prepare(target, bytes, temporary, diagnostics);
+                stage(diagnostics, PlanSaveDiagnostics.Stage.CANDIDATE_VERIFICATION);
                 faults.before(Stage.VERIFY, prepared);
                 verify.verify(prepared);
                 commitGuard.verify(target);
                 if (planBackup && Files.exists(target)) {
+                    stage(diagnostics, PlanSaveDiagnostics.Stage.BACKUP_VERIFICATION);
                     // Verification of the old destination precedes ANY backup change.
                     verify.verify(target);
                     regularOrMissing(backup);
@@ -104,11 +112,12 @@ final class AtomicFileWriter {
                             || !java.util.Arrays.equals(Files.readAllBytes(owner(target)), ownership(target)))) {
                         throw new IOException("An unrecognized adjacent backup exists. Preserve or rename it before saving.");
                     }
-                    Path previous = prepare(target, Files.readAllBytes(target), temporary);
+                    Path previous = prepare(target, Files.readAllBytes(target), temporary, diagnostics);
                     verify.verify(previous);
                     if (Files.exists(backup)) {
-                        rollback = prepare(target, Files.readAllBytes(backup), temporary);
+                        rollback = prepare(target, Files.readAllBytes(backup), temporary, diagnostics);
                     }
+                    stage(diagnostics, PlanSaveDiagnostics.Stage.BACKUP_PUBLICATION);
                     faults.before(Stage.BACKUP, backup);
                     if (!Files.exists(owner(target))) {
                         Files.write(owner(target), ownership(target), StandardOpenOption.CREATE_NEW);
@@ -118,8 +127,10 @@ final class AtomicFileWriter {
                     Files.move(previous, backup, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                     backupChanged = true;
                 }
+                stage(diagnostics, PlanSaveDiagnostics.Stage.ATOMIC_TARGET_REPLACEMENT);
                 faults.before(Stage.REPLACE, target);
                 commitGuard.verify(target);
+                if (diagnostics != null) diagnostics.atomicReplacementAttemptedNow();
                 Files.move(prepared, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 committed = true;
                 return warnings;
@@ -154,20 +165,29 @@ final class AtomicFileWriter {
         }
     }
 
-    private Path prepare(Path target, byte[] bytes, List<Path> temporary) throws IOException {
+    private Path prepare(Path target, byte[] bytes, List<Path> temporary, PlanSaveDiagnostics diagnostics) throws IOException {
+        stage(diagnostics, PlanSaveDiagnostics.Stage.TEMP_FILE_CREATE);
         faults.before(Stage.CREATE, target);
         Path path = Files.createTempFile(target.getParent(), "." + target.getFileName() + ".rp-", ".tmp");
         temporary.add(path);
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.WRITE)) {
+            stage(diagnostics, PlanSaveDiagnostics.Stage.TEMP_FILE_WRITE);
             faults.before(Stage.WRITE, path);
+            if (diagnostics != null) diagnostics.fileWritingStartedNow();
             ByteBuffer buffer = ByteBuffer.wrap(bytes);
             while (buffer.hasRemaining()) {
                 channel.write(buffer);
             }
+            stage(diagnostics, PlanSaveDiagnostics.Stage.TEMP_FILE_FORCE);
             faults.before(Stage.FORCE, path);
             channel.force(true);
+            stage(diagnostics, PlanSaveDiagnostics.Stage.TEMP_FILE_CLOSE);
             faults.before(Stage.CLOSE, path);
         }
         return path;
+    }
+
+    private static void stage(PlanSaveDiagnostics diagnostics, PlanSaveDiagnostics.Stage stage) {
+        if (diagnostics != null) diagnostics.stage(stage);
     }
 }

@@ -76,6 +76,7 @@ class ProjectionPdfExportTest {
                     assertEquals(text, new PDFTextStripper().getText(second));
                     for (String heading : List.of("RETIREMENT PLAN PROJECTION REPORT", "EXECUTIVE RESULTS SUMMARY", "AVERAGE EFFECTIVE TAX RATE",
                             "PROJECTION SUMMARY", "KEY ASSUMPTIONS", "Social Security Claiming Age", "Roth Strategy", "Filing Status")) assertTrue(text.contains(heading), heading);
+                    assertFalse(text.contains("Social Security benefit reduction"), "Zero keeps the prior PDF assumptions block uncluttered.");
                     for (var metric : ProjectionChartMetric.values()) assertTrue(text.contains(metric.toString()), metric.toString());
                     assertTrue(text.contains("Taxable / Cash")); assertTrue(text.contains("Total Investable Assets (orange)"));
                     assertTrue(text.contains("Sam claims at 62")); assertTrue(text.contains("Alex claims at 70"));
@@ -104,6 +105,31 @@ class ProjectionPdfExportTest {
                 }
             } catch (java.io.IOException exception) { throw new java.io.UncheckedIOException(exception); }
         });
+    }
+
+    @Test void projectionPdfDisclosesNonzeroReductionFromTheCapturedPlan() throws Exception {
+        var plan = ProjectionChartReconciliationTest.roundingPlan();
+        var current = plan.getPlanningAssumptions();
+        var old = current.getEconomicAssumptions();
+        plan.setPlanningAssumptions(new com.daviddunn.retirementplanner.domain.model.PlanningAssumptions(
+                new com.daviddunn.retirementplanner.domain.model.EconomicAssumptions(old.getExpectedAnnualInvestmentReturn(),
+                        old.getGeneralInflationRate(), old.getHealthcareInflationRate(), old.getSocialSecurityColaRate(),
+                        new BigDecimal("22"), 2032), current.getTaxAssumptions(), current.getWithdrawalAssumptions(),
+                current.getDeathScenarioAssumptions(), current.getProjectionLengthYears(), current.getProjectionStartDate(),
+                current.getStateTaxAssumptions()));
+        var projection = new ProjectionEngine().project(plan);
+        var charts = ProjectionChartModel.from(projection.getYears(), List.of(),
+                com.daviddunn.retirementplanner.domain.breakeven.BreakEvenPlanSummary.from(plan.getHousehold()),
+                plan.getAccountPortfolio().getAccounts());
+        var report = new ProjectionPdfReport("Reduction source", charts, BigDecimal.ZERO, BigDecimal.ZERO, null);
+        Path file = Path.of("target", "projection-reduction-disclosure.pdf");
+        Files.createDirectories(file.getParent());
+        new ProjectionPdfExporter().export(plan, projection, List.of(), report, file);
+        try (var document = Loader.loadPDF(file.toFile())) {
+            String text = new PDFTextStripper().getText(document);
+            assertTrue(text.contains("Social Security benefit reduction"));
+            assertTrue(text.contains("22% beginning 2032"));
+        }
     }
     @Test void materialCompositionFailureKeepsTotalAndExistingBaselineValues() throws Exception {
         var plan = ProjectionChartReconciliationTest.roundingPlan();

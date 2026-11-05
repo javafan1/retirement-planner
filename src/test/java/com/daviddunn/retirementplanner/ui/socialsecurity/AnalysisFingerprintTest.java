@@ -127,6 +127,8 @@ class AnalysisFingerprintTest {
     @ParameterizedTest @org.junit.jupiter.params.provider.ValueSource(strings = {
             "economicAssumptions.expectedAnnualInvestmentReturn", "economicAssumptions.generalInflationRate",
             "economicAssumptions.healthcareInflationRate", "economicAssumptions.socialSecurityColaRate",
+            "economicAssumptions.socialSecurityBenefitReductionPercent",
+            "economicAssumptions.socialSecurityBenefitReductionEffectiveYear",
             "taxAssumptions.federalTaxBracketGrowthRate", "taxAssumptions.standardDeductionGrowthRate",
             "deathScenarioAssumptions.postDeathExpenseFactor"})
     void economicAndTaxFieldDependenciesAreModeSpecific(String path) throws Exception {
@@ -138,8 +140,13 @@ class AnalysisFingerprintTest {
             var old = kind.isMonteCarlo() ? null : service.fingerprint(kind, original, next);
             var root = mapper.readTree(mapper.writeValueAsBytes(original));
             var names = path.split("\\.");
-            ((com.fasterxml.jackson.databind.node.ObjectNode) root.get("planningAssumptions").get(names[0]))
-                    .put(names[1], new BigDecimal("0.07100"));
+            var assumptions = (com.fasterxml.jackson.databind.node.ObjectNode)
+                    root.get("planningAssumptions").get(names[0]);
+            if (names[1].equals("socialSecurityBenefitReductionEffectiveYear")) {
+                assumptions.put(names[1], 2033);
+            } else {
+                assumptions.put(names[1], new BigDecimal("0.07100"));
+            }
             var changed = mapper.treeToValue(root, RetirementPlan.class);
             if (kind.isMonteCarlo()) {
                 assertTrue(assertsMonteCarloDelegationGuard(kind, original, next));
@@ -147,7 +154,11 @@ class AnalysisFingerprintTest {
                 continue;
             }
             boolean ssOnly = kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY;
-            assertEquals(!ssOnly || path.endsWith("socialSecurityColaRate"), !old.equals(service.fingerprint(kind, changed, next)), kind + ":" + path);
+            boolean explicitSocialSecurityInput = path.endsWith("socialSecurityColaRate")
+                    || path.endsWith("socialSecurityBenefitReductionPercent")
+                    || path.endsWith("socialSecurityBenefitReductionEffectiveYear");
+            assertEquals(!ssOnly || explicitSocialSecurityInput,
+                    !old.equals(service.fingerprint(kind, changed, next)), kind + ":" + path);
             if (kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY && path.endsWith("generalInflationRate"))
                 assertNotEquals(service.effectiveContextFingerprint(kind, original), service.effectiveContextFingerprint(kind, changed));
         }

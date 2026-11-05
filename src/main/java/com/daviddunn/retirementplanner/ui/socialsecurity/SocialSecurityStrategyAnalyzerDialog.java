@@ -1679,6 +1679,11 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             SocialSecurityStrategyAnalysisContext context,
             SocialSecuritySurvivorClaimingOptimizationResult result) {
         SocialSecurityMortalityTableMetadata metadata = context.mortalityMetadata();
+        var reductionPolicy = context.request().retirementGridRequest().baseStrategy().benefitReductionPolicy();
+        String reductionText = reductionPolicy.reductionPercent().signum() > 0
+                ? "\nSocial Security benefit reduction: " + reductionPolicy.reductionPercent().stripTrailingZeros().toPlainString()
+                        + "% beginning " + reductionPolicy.effectiveYear()
+                : "";
         return "Mortality table: " + metadata.displayName()
                 + "\nSource: " + metadata.sourceName() + " — " + metadata.sourceVersion()
                 + "\nType: " + metadata.tableType()
@@ -1689,6 +1694,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 + "\nIndependence assumption: primary and spouse mortality are independent"
                 + "\nSocial Security COLA: " + percent(
                         context.request().retirementGridRequest().baseStrategy().socialSecurityColaRate())
+                + reductionText
                 + "\nReal discount rate: " + percent(
                         context.request().retirementGridRequest().realDiscountRate())
                 + "\nMortality conditioning date: " + DATE.format(context.longevityAssumptions().mortalityBaseDate())

@@ -4,6 +4,7 @@ import com.daviddunn.retirementplanner.domain.analysis.*;
 import com.daviddunn.retirementplanner.domain.estate.*;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.model.*;
+import com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy;
 import com.daviddunn.retirementplanner.domain.projection.*;
 import com.daviddunn.retirementplanner.domain.socialsecurity.analysis.*;
 import java.math.BigDecimal;
@@ -101,7 +102,12 @@ public final class SinglePersonMortalityAnalysis {
                 if (YearMonth.from(valuationDate).isAfter(last)) {
                     throw new IllegalArgumentException("Valuation date cannot follow the mortality horizon.");
                 }
-                var monthly = new SocialSecurityStrategyCalculator().calculateOwnRetirementMonthly(election, first, last, cola);
+                var economic = plan.getPlanningAssumptions().getEconomicAssumptions();
+                var reduction = new SocialSecurityBenefitReductionPolicy(
+                        economic.getSocialSecurityBenefitReductionPercent(),
+                        economic.getSocialSecurityBenefitReductionEffectiveYear());
+                var monthly = new SocialSecurityStrategyCalculator().calculateOwnRetirementMonthly(
+                        election, first, last, cola, reduction);
                 for (var month : monthly.entrySet()) {
                     cancellation.throwIfCancellationRequested();
                     var weight = mortality.probabilityOfReceipt(month.getKey());

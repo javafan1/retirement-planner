@@ -64,6 +64,8 @@ class AssumptionsViewTest {
             Label deathYear = associatedLabel(f.view, control(f.view, "deathYearField"));
             Label futureRate = associatedLabel(f.view, control(f.view, "futureFederalMarginalRateAdjustmentField"));
             Label futureYear = associatedLabel(f.view, control(f.view, "futureFederalMarginalRateEffectiveYearField"));
+            Label reduction = associatedLabel(f.view, control(f.view, "socialSecurityBenefitReductionField"));
+            Label reductionYear = associatedLabel(f.view, control(f.view, "socialSecurityBenefitReductionYearField"));
             assertMarked(start, true);
             assertMarked(horizon, true);
             assertMarked(investment, true); // Prefilled, but parsed on every Apply.
@@ -73,12 +75,104 @@ class AssumptionsViewTest {
             assertMarked(deathYear, true);
             assertMarked(futureRate, false);
             assertMarked(futureYear, false);
+            assertMarked(reduction, true);
+            assertMarked(reductionYear, true);
+            assertEquals("0", field(f.view, "socialSecurityBenefitReductionField").getText());
+            assertEquals("2032", field(f.view, "socialSecurityBenefitReductionYearField").getText());
+            assertTrue(field(f.view, "socialSecurityBenefitReductionField").getTooltip().getText()
+                    .contains("not an enacted change to Social Security law"));
             @SuppressWarnings("unchecked") ComboBox<DeathScenario> scenario = control(f.view, "deathScenarioComboBox");
             scenario.setValue(DeathScenario.BOTH_SURVIVE);
             assertMarked(deathYear, false);
             field(f.view, "futureFederalMarginalRateAdjustmentField").setText("2");
             assertMarked(futureRate, true);
             assertMarked(futureYear, true);
+        });
+    }
+
+    @Test
+    void reductionFieldsRenderInLightAndDarkAtSupportedWidths() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            var themes = ApplicationThemeManager.start(ApplicationTheme.LIGHT);
+            Path output = Path.of("target/phase19b4/previews");
+            Files.createDirectories(output);
+            try {
+                for (var theme : ApplicationTheme.values()) {
+                    for (int width : new int[]{1180, 900}) {
+                        themes.apply(theme);
+                        var previewView = new AssumptionsView();
+                        previewView.load(f.plan());
+                        Stage stage = new Stage();
+                        stage.setScene(new Scene(previewView, width, width == 900 ? 650 : 820));
+                        stage.show();
+                        try {
+                            previewView.applyCss();
+                            previewView.layout();
+                            Node reduction = previewView.lookup("#assumptions-social-security-reduction");
+                            assertNotNull(reduction);
+                            savePreview(reduction, output.resolve("assumptions-reduction-" + theme + "-" + width + ".png"));
+                        } finally {
+                            stage.hide();
+                            stage.setScene(null);
+                        }
+                    }
+                }
+            } finally {
+                themes.close();
+            }
+        });
+    }
+
+    private static void savePreview(Node node, Path path) throws Exception {
+        var snapshot = node.snapshot(null, null);
+        var image = new java.awt.image.BufferedImage((int) snapshot.getWidth(), (int) snapshot.getHeight(),
+                java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                image.setRGB(x, y, snapshot.getPixelReader().getArgb(x, y));
+            }
+        }
+        javax.imageio.ImageIO.write(image, "png", path.toFile());
+    }
+
+    @Test
+    void socialSecurityReductionApplyIsDraftBasedValidatedAndNotifiesOnce() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            var original = f.assumptions().getEconomicAssumptions();
+            TextField percent = field(f.view, "socialSecurityBenefitReductionField");
+            TextField year = field(f.view, "socialSecurityBenefitReductionYearField");
+            percent.setText("22.5");
+            year.setText("2035");
+            assertEquals(0, original.getSocialSecurityBenefitReductionPercent().compareTo(BigDecimal.ZERO),
+                    "Draft changes must not mutate committed assumptions.");
+            assertTrue(f.view.isDirty());
+            assertTrue(f.view.applyChanges());
+            var applied = f.assumptions().getEconomicAssumptions();
+            assertEquals(0, applied.getSocialSecurityBenefitReductionPercent().compareTo(new BigDecimal("22.5")));
+            assertEquals(2035, applied.getSocialSecurityBenefitReductionEffectiveYear());
+            assertEquals(1, f.notifications.get());
+            assertEquals(1, f.controller.invalidations);
+
+            percent.setText("100.01");
+            year.setText("999");
+            assertFalse(f.view.applyChanges());
+            assertEquals(0, f.assumptions().getEconomicAssumptions().getSocialSecurityBenefitReductionPercent()
+                    .compareTo(new BigDecimal("22.5")));
+            assertEquals("100.01", percent.getText());
+            assertEquals("Social Security Benefit Reduction: Enter a percentage from 0 through 100.", status(f.view).getText());
+
+            percent.setText("22.5");
+            year.setText("10000");
+            assertFalse(f.view.applyChanges());
+            assertTrue(status(f.view).getText().contains("Reduction Effective Year"));
+            assertEquals(2035, f.assumptions().getEconomicAssumptions().getSocialSecurityBenefitReductionEffectiveYear());
+
+            f.view.cancelChanges();
+            assertEquals("22.5", field(f.view, "socialSecurityBenefitReductionField").getText());
+            assertEquals("2035", field(f.view, "socialSecurityBenefitReductionYearField").getText());
+            assertEquals(1, f.notifications.get());
         });
     }
 
@@ -386,6 +480,32 @@ class AssumptionsViewTest {
             assertFalse(f.controller.hasCurrentFile());
             assertTrue(f.view.applyChanges());
             assertEquals(1, f.notifications.get());
+        });
+    }
+
+    @Test
+    void applyingExistingAssumptionsPreservesReductionFieldsWithoutAddingControls() throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            PlanningAssumptions existing = f.assumptions();
+            var oldEconomic = existing.getEconomicAssumptions();
+            var updatedEconomic = new com.daviddunn.retirementplanner.domain.model.EconomicAssumptions(
+                    oldEconomic.getExpectedAnnualInvestmentReturn(), oldEconomic.getGeneralInflationRate(),
+                    oldEconomic.getHealthcareInflationRate(), oldEconomic.getSocialSecurityColaRate(),
+                    new BigDecimal("17.2500"), 2048);
+            f.plan().setPlanningAssumptions(new PlanningAssumptions(updatedEconomic,
+                    existing.getTaxAssumptions(), existing.getWithdrawalAssumptions(),
+                    existing.getDeathScenarioAssumptions(), existing.getProjectionLengthYears(),
+                    existing.getProjectionStartDate(), existing.getStateTaxAssumptions()));
+            f.view.load(f.plan());
+
+            field(f.view, "inflationRateField").setText("3.1");
+            assertTrue(f.view.applyChanges());
+            var actual = f.assumptions().getEconomicAssumptions();
+            assertEquals(0, new BigDecimal("17.2500").compareTo(actual.getSocialSecurityBenefitReductionPercent()));
+            assertEquals(2048, actual.getSocialSecurityBenefitReductionEffectiveYear());
+            assertEquals(0, f.view.lookupAll("#socialSecurityBenefitReductionPercentField").size(),
+                    "Phase 19B1 persists the domain value without adding its UI fields.");
         });
     }
 

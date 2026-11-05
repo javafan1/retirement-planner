@@ -105,7 +105,8 @@ public final class SocialSecurityDeathAgeMatrixCalculator {
                 spouseSurvivorClaimDate,
                 primaryDeathDate,
                 spouseDeathDate,
-                base.socialSecurityColaRate());
+                base.socialSecurityColaRate(),
+                base.benefitReductionPolicy());
     }
 
     private static LocalDate reachableClaimDate(

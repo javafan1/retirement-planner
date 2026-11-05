@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
+import com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -70,6 +71,40 @@ class HouseholdSocialSecurityIncomeCalculatorTest {
         assertEquals(
                 result.primaryOwnBenefit().add(result.spouseOwnBenefit()),
                 result.householdBenefit());
+    }
+
+    @Test
+    void legacyAnnualPathReducesSelectedOwnerAnnualAmountsOnceAndReconciles() {
+        Household household = household(5000, 3000, 67, 67, 2030, 2032);
+        var policy = new SocialSecurityBenefitReductionPolicy(new BigDecimal("22"), 2035);
+        var bothSurvive = calculator.calculate(household, LocalDate.of(2035, 12, 31),
+                new DeathScenarioAssumptions(DeathScenario.BOTH_SURVIVE, null),
+                BigDecimal.ZERO, policy);
+        assertEquals(new BigDecimal("46800.00"), bothSurvive.primaryOwnBenefit());
+        assertEquals(new BigDecimal("28080.00"), bothSurvive.spouseOwnBenefit());
+        assertEquals(new BigDecimal("74880.00"), bothSurvive.householdBenefit());
+        assertEquals(bothSurvive.primaryOwnBenefit().add(bothSurvive.spouseOwnBenefit()),
+                bothSurvive.householdBenefit());
+
+        var survivor = calculator.calculate(household, LocalDate.of(2035, 12, 31),
+                new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2035, 67),
+                BigDecimal.ZERO, policy);
+        assertEquals(SocialSecurityBenefitSelection.SURVIVOR, survivor.spouseSelection());
+        assertEquals(new BigDecimal("46800.00"), survivor.spouseSurvivorCandidate());
+        assertEquals(new BigDecimal("46800.00"), survivor.householdBenefit());
+    }
+
+    @Test
+    void legacyAnnualPathUsesPaymentYearAndRetainsNoReductionOverload() {
+        Household household = household(5000, 3000, 67, 67, 2030, 2032);
+        var assumptions = new DeathScenarioAssumptions(DeathScenario.BOTH_SURVIVE, null);
+        var policy = new SocialSecurityBenefitReductionPolicy(new BigDecimal("10"), 2036);
+        assertEquals(new BigDecimal("96000.00"), calculator.calculate(household,
+                LocalDate.of(2035, 12, 31), assumptions, BigDecimal.ZERO, policy).householdBenefit());
+        assertEquals(new BigDecimal("86400.00"), calculator.calculate(household,
+                LocalDate.of(2036, 12, 31), assumptions, BigDecimal.ZERO, policy).householdBenefit());
+        assertEquals(new BigDecimal("96000.00"), calculator.calculate(household,
+                LocalDate.of(2036, 12, 31), assumptions, BigDecimal.ZERO).householdBenefit());
     }
 
     @Test

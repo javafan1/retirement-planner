@@ -9,10 +9,17 @@ import java.util.List;
 public record ProjectionYearDetailsRequest(
         List<ProjectionYear> years,
         ProjectionYear initialYear,
-        List<NonInvestableAssetProjection> nonInvestableAssets) {
+        List<NonInvestableAssetProjection> nonInvestableAssets,
+        String assumptionDisclosure) {
+
+    public ProjectionYearDetailsRequest(List<ProjectionYear> years, ProjectionYear initialYear,
+            List<NonInvestableAssetProjection> nonInvestableAssets) {
+        this(years, initialYear, nonInvestableAssets, null);
+    }
 
     public ProjectionYearDetailsRequest {
         years = years == null ? List.of() : List.copyOf(years);
         nonInvestableAssets = nonInvestableAssets == null ? List.of() : List.copyOf(nonInvestableAssets);
+        assumptionDisclosure = assumptionDisclosure == null || assumptionDisclosure.isBlank() ? null : assumptionDisclosure;
     }
 }

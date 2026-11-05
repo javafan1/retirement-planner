@@ -68,8 +68,14 @@ final class AnalyzerConfigurationLayout {
 
     static String individualPlan(RetirementPlan plan) {
         var assumptions = plan.getPlanningAssumptions();
+        var reduction = assumptions.getEconomicAssumptions().getSocialSecurityBenefitReductionPercent();
+        String reductionText = reduction.signum() > 0
+                ? "; Social Security benefit reduction " + reduction.stripTrailingZeros().toPlainString()
+                        + "% beginning " + assumptions.getEconomicAssumptions().getSocialSecurityBenefitReductionEffectiveYear()
+                : "";
         return household(plan, true) + "\nProjection start " + assumptions.getProjectionStartDate()
                 + "; configured horizon " + assumptions.getProjectionLengthYears() + " calendar years"
-                + "; plan Social Security COLA " + assumptions.getSocialSecurityColaRate().movePointRight(2).stripTrailingZeros().toPlainString() + "%";
+                + "; plan Social Security COLA " + assumptions.getSocialSecurityColaRate().movePointRight(2).stripTrailingZeros().toPlainString() + "%"
+                + reductionText;
     }
 }

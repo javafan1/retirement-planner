@@ -51,6 +51,7 @@ public class ProjectionYearDetailsDialog {
                 Modality.APPLICATION_MODAL);
 
         pane = new ProjectionYearDetailsPane(null, null, BigDecimal.ZERO, null);
+        pane.setAssumptionDisclosure(this.request.assumptionDisclosure());
         yearLabel.setStyle("-fx-font-size:18px; -fx-font-weight:bold;");
         HBox navigation = new HBox(12, previousButton, yearLabel, nextButton);
         navigation.setAlignment(Pos.CENTER);

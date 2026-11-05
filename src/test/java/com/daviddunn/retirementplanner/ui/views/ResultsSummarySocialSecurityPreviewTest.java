@@ -221,11 +221,15 @@ class ResultsSummarySocialSecurityPreviewTest {
         var c=controller();
         var p=plan(true,70,"0.025",2026);
         var original=p.getPlanningAssumptions();
+        var oldEconomic=original.getEconomicAssumptions();
+        var updatedEconomic=new EconomicAssumptions(oldEconomic.getExpectedAnnualInvestmentReturn(),
+                oldEconomic.getGeneralInflationRate(),oldEconomic.getHealthcareInflationRate(),
+                oldEconomic.getSocialSecurityColaRate(),new BigDecimal("10.5"),2042);
         var originalTax=new TaxAssumptions(new BigDecimal("0.02"),new BigDecimal("0.03"),
                 new BigDecimal("0.04"),new BigDecimal("0.01"),
                 com.daviddunn.retirementplanner.domain.rules.FilingStatus.MARRIED_FILING_JOINTLY,
                 new BigDecimal("0.25"),new BigDecimal("0.025"),2035);
-        p.setPlanningAssumptions(new PlanningAssumptions(original.getEconomicAssumptions(),originalTax,
+        p.setPlanningAssumptions(new PlanningAssumptions(updatedEconomic,originalTax,
                 original.getWithdrawalAssumptions(),original.getDeathScenarioAssumptions(),
                 original.getProjectionLengthYears(),original.getProjectionStartDate(),original.getStateTaxAssumptions()));
         c.newPlan(p);c.getCurrentProjection();
@@ -248,6 +252,40 @@ class ResultsSummarySocialSecurityPreviewTest {
         assertEquals(new BigDecimal("0.025"),result.get().getTaxAssumptions().getFutureFederalMarginalRateAdjustment());
         assertEquals(2035,result.get().getTaxAssumptions().getFutureFederalMarginalRateEffectiveYear());
         assertEquals(0,new BigDecimal("0.045").compareTo(result.get().getEconomicAssumptions().getExpectedAnnualInvestmentReturn()));
+        assertEquals(new BigDecimal("10.5"),result.get().getEconomicAssumptions().getSocialSecurityBenefitReductionPercent());
+        assertEquals(2042,result.get().getEconomicAssumptions().getSocialSecurityBenefitReductionEffectiveYear());
+    }
+
+    @Test void summaryShowsCommittedReductionDisclosureOnlyWhenNonzeroAndUsesFrozenInputsForDetails() throws Exception {
+        var c = controller();
+        var p = plan(true, 70, "0.025", 2026);
+        c.newPlan(p);
+        c.getCurrentProjection();
+        var zeroView = fx(() -> view(c));
+        var disclosure = (Label) field(zeroView, "socialSecurityReductionDisclosure");
+        assertNotNull(disclosure);
+        assertFalse(disclosure.isVisible());
+
+        var old = p.getPlanningAssumptions();
+        var previous = old.getEconomicAssumptions();
+        p.setPlanningAssumptions(new PlanningAssumptions(new EconomicAssumptions(
+                previous.getExpectedAnnualInvestmentReturn(), previous.getGeneralInflationRate(),
+                previous.getHealthcareInflationRate(), previous.getSocialSecurityColaRate(),
+                new BigDecimal("22"), 2032), old.getTaxAssumptions(), old.getWithdrawalAssumptions(),
+                old.getDeathScenarioAssumptions(), old.getProjectionLengthYears(), old.getProjectionStartDate(),
+                old.getStateTaxAssumptions()));
+        var activeView = fx(() -> view(c));
+        var activeDisclosure = (Label) field(activeView, "socialSecurityReductionDisclosure");
+        assertTrue(activeDisclosure.isVisible());
+        assertEquals("Social Security reduction: 22% beginning 2032", activeDisclosure.getText());
+        assertTrue(activeDisclosure.isWrapText());
+
+        var accepted = c.getAcceptedProjectionSnapshot();
+        var details = new com.daviddunn.retirementplanner.ui.summary.ProjectionYearDetailsRequest(
+                c.peekCurrentProjection().getYears(), c.peekCurrentProjection().getYears().getFirst(),
+                c.getCurrentNonInvestableAssetProjections(),
+                ResultsSummaryView.socialSecurityReductionText(accepted));
+        assertNull(details.assumptionDisclosure(), "Details use the frozen projection inputs, not later committed plan edits.");
     }
 
     @Test void actualSummaryControlsRenderInBothThemesAtSupportedSizes() throws Exception {
@@ -266,6 +304,49 @@ class ResultsSummarySocialSecurityPreviewTest {
                     } finally {stage.hide();}
                 }
             } finally {themes.close();}return null;
+        });
+    }
+
+    @Test void nonzeroReductionSummaryDisclosureRendersInBothThemesAtSupportedSizes() throws Exception {
+        var c = controller();
+        var p = plan(true, 70, "0.025", 2026);
+        var original = p.getPlanningAssumptions();
+        var economic = original.getEconomicAssumptions();
+        p.setPlanningAssumptions(new PlanningAssumptions(new EconomicAssumptions(
+                economic.getExpectedAnnualInvestmentReturn(), economic.getGeneralInflationRate(),
+                economic.getHealthcareInflationRate(), economic.getSocialSecurityColaRate(),
+                new BigDecimal("22"), 2032), original.getTaxAssumptions(), original.getWithdrawalAssumptions(),
+                original.getDeathScenarioAssumptions(), original.getProjectionLengthYears(),
+                original.getProjectionStartDate(), original.getStateTaxAssumptions()));
+        c.newPlan(p);
+        c.getCurrentProjection();
+        fx(() -> {
+            var themes = ApplicationThemeManager.start(ApplicationTheme.LIGHT);
+            var output = Path.of("target/phase19b4/previews");
+            Files.createDirectories(output);
+            try {
+                for (var theme : ApplicationTheme.values()) for (int width : new int[]{1180, 900}) {
+                    themes.apply(theme);
+                    var summary = view(c);
+                    var stage = new Stage();
+                    stage.setScene(new Scene(summary, width, width == 900 ? 650 : 820));
+                    stage.show();
+                    try {
+                        summary.applyCss();
+                        summary.layout();
+                        var disclosure = (Label) field(summary, "socialSecurityReductionDisclosure");
+                        assertTrue(disclosure.isVisible());
+                        assertTrue(disclosure.isWrapText());
+                        saveImage(summary, output.resolve("summary-reduction-" + theme + "-" + width + ".png"));
+                    } finally {
+                        stage.hide();
+                        stage.setScene(null);
+                    }
+                }
+            } finally {
+                themes.close();
+            }
+            return null;
         });
     }
     private static void saveImage(Node node,Path path)throws Exception {

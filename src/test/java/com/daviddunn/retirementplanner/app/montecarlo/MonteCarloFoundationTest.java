@@ -109,6 +109,63 @@ class MonteCarloFoundationTest {
     }
 
     @Test
+    void frozenMonteCarloPlanCarriesReductionAndSeededRunsRemainReproducible() {
+        var baseline = MonteCarloFixtures.household();
+        var reduced = MonteCarloFixtures.household();
+        setReduction(reduced, new BigDecimal("22"), 2032);
+
+        var engine = new ProjectionEngine();
+        var baselineReference = engine.project(baseline);
+        var reducedReference = engine.project(reduced);
+        assertEquals(0, baselineReference.getYearAt(4).getSocialSecurityResult()
+                .householdBenefit().compareTo(reducedReference.getYearAt(4)
+                        .getSocialSecurityResult().householdBenefit()));
+        assertTrue(reducedReference.getYearAt(5).getSocialSecurityResult()
+                .householdBenefit().compareTo(baselineReference.getYearAt(5)
+                        .getSocialSecurityResult().householdBenefit()) < 0);
+
+        var settings = MonteCarloSettings.forPlan(reduced, 3, 417, BigDecimal.ZERO);
+        var analyzer = new MonteCarloAnalyzer();
+        var first = analyzer.analyze(reduced, settings, reducedReference);
+        var repeated = analyzer.analyze(reduced, settings, reducedReference);
+        assertEquals(first, repeated);
+        var baselineResult = analyzer.analyze(baseline,
+                MonteCarloSettings.forPlan(baseline, 3, 417, BigDecimal.ZERO), baselineReference);
+        assertTrue(first.deterministicReference().metrics().orElseThrow().lifetimeHouseholdSocialSecurity()
+                .compareTo(baselineResult.deterministicReference().metrics().orElseThrow()
+                        .lifetimeHouseholdSocialSecurity()) < 0);
+
+        var fingerprints = new MonteCarloFingerprintService();
+        var baselineSettings = MonteCarloSettings.forPlan(baseline, 3, 417, BigDecimal.ZERO);
+        var baselineFingerprint = fingerprints.assess(
+                MonteCarloFingerprintService.standalone(baseline, baselineSettings, null));
+        var reducedFingerprint = fingerprints.assess(
+                MonteCarloFingerprintService.standalone(reduced, settings, null));
+        assertNotEquals(baselineFingerprint.fingerprint(), reducedFingerprint.fingerprint());
+
+        setReduction(reduced, new BigDecimal("17"), 2032);
+        var percentageChanged = fingerprints.assess(MonteCarloFingerprintService.standalone(
+                reduced, MonteCarloSettings.forPlan(reduced, 3, 417, BigDecimal.ZERO), null));
+        assertNotEquals(reducedFingerprint.fingerprint(), percentageChanged.fingerprint());
+        setReduction(reduced, new BigDecimal("22"), 2033);
+        var yearChanged = fingerprints.assess(MonteCarloFingerprintService.standalone(
+                reduced, MonteCarloSettings.forPlan(reduced, 3, 417, BigDecimal.ZERO), null));
+        assertNotEquals(reducedFingerprint.fingerprint(), yearChanged.fingerprint());
+    }
+
+    private static void setReduction(RetirementPlan plan, BigDecimal percent, int year) {
+        var old = plan.getPlanningAssumptions();
+        var economics = old.getEconomicAssumptions();
+        plan.setPlanningAssumptions(new PlanningAssumptions(
+                new EconomicAssumptions(economics.getExpectedAnnualInvestmentReturn(),
+                        economics.getGeneralInflationRate(), economics.getHealthcareInflationRate(),
+                        economics.getSocialSecurityColaRate(), percent, year),
+                old.getTaxAssumptions(), old.getWithdrawalAssumptions(),
+                old.getDeathScenarioAssumptions(), old.getProjectionLengthYears(),
+                old.getProjectionStartDate(), old.getStateTaxAssumptions()));
+    }
+
+    @Test
     void failuresAreRetainedAndNeverInventBalancesOrSuccess() {
         var plan = MonteCarloFixtures.household();
         var settings = MonteCarloSettings.forPlan(plan, 3, 1, BigDecimal.ZERO);

@@ -57,6 +57,11 @@ public final class MonteCarloRunService {
 
     private static String planDetails(RetirementPlan plan) {
         var p = plan.getPlanningAssumptions();
+        var reduction = p.getEconomicAssumptions().getSocialSecurityBenefitReductionPercent();
+        String reductionText = reduction.signum() > 0
+                ? "\nSocial Security benefit reduction: " + reduction.stripTrailingZeros().toPlainString()
+                        + "% beginning " + p.getEconomicAssumptions().getSocialSecurityBenefitReductionEffectiveYear()
+                : "";
         String iowa = p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA
                 ? "\nIowa planning estimate: " + String.join(" ", new com.daviddunn.retirementplanner.domain.tax.state.IowaProductionTaxCalculator()
                         .planningLimitations(p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1))
@@ -66,6 +71,7 @@ public final class MonteCarloRunService {
                 + "\nPlan general inflation: " + percent(p.getGeneralInflationRate())
                 + "\nHealthcare inflation (deterministic): " + percent(p.getHealthcareInflationRate())
                 + "\nConfigured deterministic reference return: " + percent(p.getExpectedAnnualInvestmentReturn())
+                + reductionText
                 + "\nState of residence: " + p.getStateTaxAssumptions().jurisdiction()
                 + "; simplified state estimate; full-year resident" + iowa;
     }

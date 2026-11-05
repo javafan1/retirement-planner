@@ -394,6 +394,13 @@ public class ProjectionPdfExporter {
                                 .getSocialSecurityColaRate()),
                 GRAY);
 
+        var socialSecurityReduction = assumptions.getEconomicAssumptions().getSocialSecurityBenefitReductionPercent();
+        if (socialSecurityReduction.signum() > 0) {
+            writeKeyValue("Social Security benefit reduction",
+                    socialSecurityReduction.stripTrailingZeros().toPlainString() + "% beginning "
+                            + assumptions.getEconomicAssumptions().getSocialSecurityBenefitReductionEffectiveYear(), GRAY);
+        }
+
         DeathScenarioAssumptions death =
                 assumptions
                         .getDeathScenarioAssumptions();

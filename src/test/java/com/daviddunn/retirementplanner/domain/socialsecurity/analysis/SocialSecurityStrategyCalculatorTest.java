@@ -9,6 +9,7 @@ import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
+import com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -16,6 +17,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -24,6 +26,109 @@ class SocialSecurityStrategyCalculatorTest {
 
     private final SocialSecurityStrategyCalculator calculator =
             new SocialSecurityStrategyCalculator();
+
+    @Test
+    void effectiveYearUsesPaymentYearAndPermanentReductionDoesNotCompoundWithCola() {
+        var base = election(AccountOwnership.PRIMARY, LocalDate.of(1963, 6, 4),
+                new BigDecimal("1000"), 2030, LocalDate.of(2030, 6, 4));
+        var request = new SocialSecurityStrategyRequest(
+                LocalDate.of(2030, 1, 1), LocalDate.of(2032, 12, 31),
+                base, zeroSpouseElection(), null, null, null, null,
+                new BigDecimal("0.02"),
+                new SocialSecurityBenefitReductionPolicy(new BigDecimal("22"), 2031));
+        var result = calculator.calculate(request);
+
+        assertMoney(BigDecimal.ZERO, month(result, 2030, 1).primaryOwnBenefit());
+        assertMoney(new BigDecimal("1000.00"), month(result, 2030, 6).primaryOwnBenefit());
+        assertMoney(new BigDecimal("795.60"), month(result, 2031, 1).primaryOwnBenefit());
+        // 2032 scheduled amount is 1040.40 * .78; the 22% is not compounded on 795.60.
+        assertMoney(new BigDecimal("811.51"), month(result, 2032, 1).primaryOwnBenefit());
+        assertMoney(month(result, 2032, 1).primarySelectedBenefit(),
+                month(result, 2032, 1).householdBenefit());
+    }
+
+    @Test
+    void reductionReconcilesSpousalAndSurvivorComponentsAfterSelection() {
+        var primary = election(AccountOwnership.PRIMARY, LocalDate.of(1963, 6, 4),
+                new BigDecimal("1000"), 2030, LocalDate.of(2030, 1, 1));
+        var spouse = election(AccountOwnership.SPOUSE, LocalDate.of(1965, 2, 28),
+                new BigDecimal("5000"), 2030, LocalDate.of(2030, 1, 1));
+        var reduction = new SocialSecurityBenefitReductionPolicy(new BigDecimal("20"), 2031);
+        var bothAlive = calculator.calculate(new SocialSecurityStrategyRequest(
+                LocalDate.of(2030, 1, 1), LocalDate.of(2031, 12, 31), primary, spouse,
+                null, null, null, null, BigDecimal.ZERO, reduction)).monthlyResults();
+        var baselineResult = bothAlive.getFirst();
+        assertTrue(baselineResult.primarySpousalExcessBenefit().signum() > 0);
+        assertEquals(0, baselineResult.householdBenefit().compareTo(
+                baselineResult.primarySelectedBenefit().add(baselineResult.spouseSelectedBenefit())));
+        var reducedCoupleResult = bothAlive.get(12);
+        assertMoney(baselineResult.primaryOwnBenefit().multiply(new BigDecimal("0.80"))
+                        .setScale(2, java.math.RoundingMode.HALF_UP),
+                reducedCoupleResult.primaryOwnBenefit());
+        assertMoney(reducedCoupleResult.primarySelectedBenefit().add(reducedCoupleResult.spouseSelectedBenefit()),
+                reducedCoupleResult.householdBenefit());
+
+        var survivorWorker = election(AccountOwnership.PRIMARY, LocalDate.of(1963, 6, 4),
+                new BigDecimal("5000"), 2030, LocalDate.of(2030, 1, 1));
+        var survivorClaimant = election(AccountOwnership.SPOUSE, LocalDate.of(1965, 2, 28),
+                new BigDecimal("1000"), 2030, LocalDate.of(2030, 1, 1));
+        var survivor = calculator.calculate(new SocialSecurityStrategyRequest(
+                LocalDate.of(2030, 1, 1), LocalDate.of(2031, 12, 31), survivorWorker, survivorClaimant,
+                null, LocalDate.of(2030, 6, 1), LocalDate.of(2030, 5, 15), null,
+                BigDecimal.ZERO, reduction)).monthlyResults();
+        var transition = survivor.stream().filter(value -> value.month().equals(YearMonth.of(2030, 6)))
+                .findFirst().orElseThrow();
+        assertTrue(transition.spouseSurvivorBenefit().signum() > 0);
+        var reducedSurvivor = survivor.stream().filter(value -> value.month().equals(YearMonth.of(2031, 6)))
+                .findFirst().orElseThrow();
+        assertEquals(0, reducedSurvivor.householdBenefit().compareTo(
+                reducedSurvivor.primarySelectedBenefit().add(reducedSurvivor.spouseSelectedBenefit())));
+        assertTrue(reducedSurvivor.spouseSurvivorBenefit().signum() > 0);
+    }
+
+    @Test
+    void reductionCacheKeySeparatesRatesAndYearsButNormalizesScale() {
+        var primary = activePrimaryElection();
+        var spouse = activeSpouseElection();
+        SocialSecurityStrategyRequest request = requestWithPolicy(primary, spouse,
+                new BigDecimal("17.0"), 2040);
+        assertEquals(SocialSecurityStrategyCalculator.scheduleKey(request),
+                SocialSecurityStrategyCalculator.scheduleKey(requestWithPolicy(primary, spouse,
+                        new BigDecimal("17.00"), 2040)));
+        assertNotEquals(SocialSecurityStrategyCalculator.scheduleKey(request),
+                SocialSecurityStrategyCalculator.scheduleKey(requestWithPolicy(primary, spouse,
+                        new BigDecimal("22"), 2040)));
+        assertNotEquals(SocialSecurityStrategyCalculator.scheduleKey(request),
+                SocialSecurityStrategyCalculator.scheduleKey(requestWithPolicy(primary, spouse,
+                        new BigDecimal("17"), 2041)));
+    }
+
+    @Test
+    void ownOnlyMonthlyAndAnnualOverloadsApplyPolicyAndOldOverloadsRemainNoReduction() {
+        var election = election(AccountOwnership.PRIMARY, LocalDate.of(1963, 6, 4),
+                new BigDecimal("1000"), 2030, LocalDate.of(2030, 6, 4));
+        var policy = new SocialSecurityBenefitReductionPolicy(new BigDecimal("10"), 2031);
+        var monthly = calculator.calculateOwnRetirementMonthly(election,
+                YearMonth.of(2030, 1), YearMonth.of(2031, 12), BigDecimal.ZERO, policy);
+        assertMoney(new BigDecimal("1000.00"), monthly.get(YearMonth.of(2030, 12)));
+        assertMoney(new BigDecimal("900.00"), monthly.get(YearMonth.of(2031, 1)));
+        var annual = calculator.calculateOwnRetirement(election, 2030, 2031, BigDecimal.ZERO, null, policy);
+        assertMoney(new BigDecimal("7000.00"), annual.get(2030));
+        assertMoney(new BigDecimal("10800.00"), annual.get(2031));
+        assertMoney(new BigDecimal("7000.00"), calculator
+                .calculateOwnRetirement(election, 2030, 2030, BigDecimal.ZERO).get(2030));
+    }
+
+    private SocialSecurityStrategyRequest requestWithPolicy(
+            SocialSecurityClaimingElection primary,
+            SocialSecurityClaimingElection spouse,
+            BigDecimal percent,
+            int effectiveYear) {
+        return new SocialSecurityStrategyRequest(
+                LocalDate.of(2030, 1, 1), LocalDate.of(2045, 12, 31), primary, spouse,
+                null, null, null, null, BigDecimal.ZERO,
+                new SocialSecurityBenefitReductionPolicy(percent, effectiveYear));
+    }
 
     @Test
     void claimAt62UsesMonthlyEarlyRetirementReduction() {

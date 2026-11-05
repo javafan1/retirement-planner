@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.domain.socialsecurity.analysis;
 
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitCalculator;
 import com.daviddunn.retirementplanner.domain.projection.CompoundGrowthService;
+import com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -162,6 +163,22 @@ public final class SocialSecurityStrategyCalculator {
                     .max(BigDecimal.ZERO)
                     .setScale(2, RoundingMode.HALF_UP);
 
+            // Selection is complete. Reduce each owner's selected payable
+            // benefit once, then reconcile the component breakdown to it.
+            var reduction = request.benefitReductionPolicy();
+            var primaryComponents = reduceSelectedComponents(
+                    primaryOwn, primarySpousalExcess, primarySurvivorExcess,
+                    reduction, month.getYear());
+            primaryOwn = primaryComponents.ownBenefit();
+            primarySpousalExcess = primaryComponents.spousalExcessBenefit();
+            primarySurvivorExcess = primaryComponents.survivorExcessBenefit();
+            var spouseComponents = reduceSelectedComponents(
+                    spouseOwn, spouseSpousalExcess, spouseSurvivorExcess,
+                    reduction, month.getYear());
+            spouseOwn = spouseComponents.ownBenefit();
+            spouseSpousalExcess = spouseComponents.spousalExcessBenefit();
+            spouseSurvivorExcess = spouseComponents.survivorExcessBenefit();
+
             BigDecimal primarySelected = primaryOwn.add(
                     primarySpousalExcess).add(
                     primarySurvivorExcess);
@@ -194,18 +211,53 @@ public final class SocialSecurityStrategyCalculator {
         }
     }
 
+    private static ReducedSelectedComponents reduceSelectedComponents(
+            BigDecimal ownBenefit,
+            BigDecimal spousalExcessBenefit,
+            BigDecimal survivorExcessBenefit,
+            SocialSecurityBenefitReductionPolicy reduction,
+            int paymentYear) {
+        BigDecimal scheduledSelected = ownBenefit.add(spousalExcessBenefit)
+                .add(survivorExcessBenefit);
+        BigDecimal payableSelected = reduction.reduce(scheduledSelected, paymentYear);
+        BigDecimal payableOwn = reduction.reduce(ownBenefit, paymentYear);
+        BigDecimal payableExcess = payableSelected.subtract(payableOwn);
+
+        // Normal spousal and survivor excess are mutually exclusive for a
+        // single owner in a payment month. Put cent-rounding reconciliation
+        // into the active excess component so component and selected totals agree.
+        return new ReducedSelectedComponents(
+                payableOwn,
+                spousalExcessBenefit.signum() > 0 ? payableExcess : spousalExcessBenefit,
+                survivorExcessBenefit.signum() > 0 ? payableExcess : survivorExcessBenefit);
+    }
+
+    private record ReducedSelectedComponents(
+            BigDecimal ownBenefit,
+            BigDecimal spousalExcessBenefit,
+            BigDecimal survivorExcessBenefit) { }
+
     /** Own retirement only, using the same monthly calculation as the paired engine. No survivor strategy. */
     public Map<Integer, BigDecimal> calculateOwnRetirement(
             SocialSecurityClaimingElection election, int firstYear, int lastYear, BigDecimal colaRate) {
-        return calculateOwnRetirement(election, firstYear, lastYear, colaRate, null);
+        return calculateOwnRetirement(election, firstYear, lastYear, colaRate, null,
+                SocialSecurityBenefitReductionPolicy.none());
     }
 
     /** Death month is excluded by the existing authoritative monthly alive convention. */
     public Map<Integer, BigDecimal> calculateOwnRetirement(
             SocialSecurityClaimingElection election, int firstYear, int lastYear, BigDecimal colaRate,
             LocalDate deathDate) {
+        return calculateOwnRetirement(election, firstYear, lastYear, colaRate, deathDate,
+                SocialSecurityBenefitReductionPolicy.none());
+    }
+
+    public Map<Integer, BigDecimal> calculateOwnRetirement(
+            SocialSecurityClaimingElection election, int firstYear, int lastYear, BigDecimal colaRate,
+            LocalDate deathDate, SocialSecurityBenefitReductionPolicy reductionPolicy) {
         Objects.requireNonNull(election);
         Objects.requireNonNull(colaRate);
+        Objects.requireNonNull(reductionPolicy);
         if (firstYear <= 0 || lastYear < firstYear || colaRate.compareTo(BigDecimal.ONE.negate()) <= 0) {
             throw new IllegalArgumentException("Invalid own-retirement calculation range or COLA.");
         }
@@ -215,7 +267,9 @@ public final class SocialSecurityStrategyCalculator {
             BigDecimal total = BigDecimal.ZERO;
             for (int month = 1; month <= 12; month++) {
                 YearMonth paymentMonth = YearMonth.of(year, month);
-                total = total.add(ownBenefit(prepared, paymentMonth, isAlive(paymentMonth, deathDate), colaRate));
+                BigDecimal scheduled = ownBenefit(prepared, paymentMonth,
+                        isAlive(paymentMonth, deathDate), colaRate);
+                total = total.add(reductionPolicy.reduce(scheduled, year));
             }
             annual.put(year, total);
         }
@@ -225,15 +279,24 @@ public final class SocialSecurityStrategyCalculator {
     /** Own-only monthly stream for individual valuation; shares the authoritative benefit formula. */
     public Map<YearMonth, BigDecimal> calculateOwnRetirementMonthly(
             SocialSecurityClaimingElection election, YearMonth first, YearMonth last, BigDecimal colaRate) {
+        return calculateOwnRetirementMonthly(election, first, last, colaRate,
+                SocialSecurityBenefitReductionPolicy.none());
+    }
+
+    public Map<YearMonth, BigDecimal> calculateOwnRetirementMonthly(
+            SocialSecurityClaimingElection election, YearMonth first, YearMonth last, BigDecimal colaRate,
+            SocialSecurityBenefitReductionPolicy reductionPolicy) {
         Objects.requireNonNull(first);
         Objects.requireNonNull(last);
+        Objects.requireNonNull(reductionPolicy);
         if (last.isBefore(first) || Objects.requireNonNull(colaRate).compareTo(BigDecimal.ONE.negate()) <= 0) {
             throw new IllegalArgumentException("Invalid monthly own-benefit horizon or COLA.");
         }
         var prepared = prepare(Objects.requireNonNull(election));
         Map<YearMonth, BigDecimal> result = new LinkedHashMap<>();
         for (var month = first; !month.isAfter(last); month = month.plusMonths(1)) {
-            result.put(month, ownBenefit(prepared, month, true, colaRate));
+            result.put(month, reductionPolicy.reduce(
+                    ownBenefit(prepared, month, true, colaRate), month.getYear()));
         }
         return java.util.Collections.unmodifiableMap(result);
     }
@@ -390,7 +453,8 @@ public final class SocialSecurityStrategyCalculator {
                 request.primaryElection(), request.spouseElection(),
                 survivorEntitlementMonth(request.primarySurvivorClaimDate(), request.spouseDeathDate()),
                 survivorEntitlementMonth(request.spouseSurvivorClaimDate(), request.primaryDeathDate()),
-                request.primaryDeathDate(), request.spouseDeathDate(), request.socialSecurityColaRate());
+                request.primaryDeathDate(), request.spouseDeathDate(), request.socialSecurityColaRate(),
+                request.benefitReductionPolicy());
     }
 
     private static YearMonth survivorEntitlementMonth(LocalDate claim, LocalDate death) {
@@ -405,7 +469,16 @@ public final class SocialSecurityStrategyCalculator {
     public record ScheduleKey(LocalDate start, LocalDate end,
             SocialSecurityClaimingElection primary, SocialSecurityClaimingElection spouse,
             YearMonth primarySurvivorEntitlement, YearMonth spouseSurvivorEntitlement,
-            LocalDate primaryDeath, LocalDate spouseDeath, BigDecimal cola) { }
+            LocalDate primaryDeath, LocalDate spouseDeath, BigDecimal cola,
+            SocialSecurityBenefitReductionPolicy benefitReductionPolicy) {
+        public ScheduleKey(LocalDate start, LocalDate end,
+                SocialSecurityClaimingElection primary, SocialSecurityClaimingElection spouse,
+                YearMonth primarySurvivorEntitlement, YearMonth spouseSurvivorEntitlement,
+                LocalDate primaryDeath, LocalDate spouseDeath, BigDecimal cola) {
+            this(start, end, primary, spouse, primarySurvivorEntitlement, spouseSurvivorEntitlement,
+                    primaryDeath, spouseDeath, cola, SocialSecurityBenefitReductionPolicy.none());
+        }
+    }
 
     private boolean isAlive(
             YearMonth month,

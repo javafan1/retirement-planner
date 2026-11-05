@@ -2,6 +2,7 @@ package com.daviddunn.retirementplanner.domain.socialsecurity.analysis;
 
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityRetirementDateCalculator;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -17,6 +18,20 @@ class SocialSecurityClaimingGridCalculatorTest {
 
     private final SocialSecurityClaimingGridCalculator calculator =
             new SocialSecurityClaimingGridCalculator();
+
+    @Test
+    void derivedClaimingGridStrategiesRetainTheBaseReductionPolicy() {
+        var source = standardStrategy();
+        var policy = new SocialSecurityBenefitReductionPolicy(new BigDecimal("17.00"), 2040);
+        var base = new SocialSecurityStrategyRequest(source.analysisDate(), source.analysisEndDate(),
+                source.primaryElection(), source.spouseElection(), source.primarySurvivorClaimDate(),
+                source.spouseSurvivorClaimDate(), source.primaryDeathDate(), source.spouseDeathDate(),
+                source.socialSecurityColaRate(), policy);
+
+        var derived = SocialSecurityClaimingGridCalculator.deriveStrategy(base,
+                LocalDate.of(2030, 6, 4), LocalDate.of(2032, 2, 28));
+        assertEquals(policy, derived.benefitReductionPolicy());
+    }
 
     @Test
     void oneByOneCellEqualsDirectStrategyCalculationAndValuation() {

@@ -96,6 +96,7 @@ public final class MonteCarloStrategyComparisonRunService {
                         + ", Saved Baseline " + percent(b.getPlanningAssumptions().getGeneralInflationRate()))
                 + "\nHealthcare inflation: Current Plan " + percent(a.getPlanningAssumptions().getHealthcareInflationRate())
                 + ", Saved Baseline " + percent(b.getPlanningAssumptions().getHealthcareInflationRate())
+                + reductionDetails("Current Plan", a) + reductionDetails("Saved Baseline", b)
                 + "\n" + lifetime + "\nSettings are session-only. Plan and baseline elections are unchanged."
                 + "\nState of residence: Current Plan " + a.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
                 + ", Saved Baseline " + b.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
@@ -114,6 +115,14 @@ public final class MonteCarloStrategyComparisonRunService {
 
     private static String percent(java.math.BigDecimal value) {
         return value.movePointRight(2).stripTrailingZeros().toPlainString() + "%";
+    }
+
+    private static String reductionDetails(String label, RetirementPlan plan) {
+        var economic = plan.getPlanningAssumptions().getEconomicAssumptions();
+        var reduction = economic.getSocialSecurityBenefitReductionPercent();
+        return reduction.signum() == 0 ? "" : "\n" + label + " Social Security benefit reduction: "
+                + reduction.stripTrailingZeros().toPlainString() + "% beginning "
+                + economic.getSocialSecurityBenefitReductionEffectiveYear();
     }
 
     private static String survivorLabel(RetirementPlan plan) {

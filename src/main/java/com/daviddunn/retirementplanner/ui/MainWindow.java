@@ -10,6 +10,7 @@ import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
 import com.daviddunn.retirementplanner.domain.roth.RothConversionDestinationService;
 import com.daviddunn.retirementplanner.ui.charts.PortfolioChartView;
 import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
+import com.daviddunn.retirementplanner.persistence.PlanSaveDiagnostics;
 import com.daviddunn.retirementplanner.ui.views.RothConversionView;
 import com.daviddunn.retirementplanner.ui.socialsecurity.SocialSecurityStrategyAnalyzerDialog;
 
@@ -713,7 +714,9 @@ public class MainWindow {
             var receipt = awaitPlanFile(controller.preparePlanSave(controller.getCurrentFile(), false), "Saving retirement plan…");
             durable = true;
             controller.finishPlanSave(receipt);
+            controller.markPlanSaveDiagnosticStage(PlanSaveDiagnostics.Stage.PREFERENCE_WRITE);
             awaitPlanFile(controller.getPlanPreferenceWrite(), "Updating application preferences…");
+            controller.markPlanSaveDiagnosticStage(PlanSaveDiagnostics.Stage.COMPLETE);
 
             updateWindowTitle();
 
@@ -721,6 +724,8 @@ public class MainWindow {
             showPersistenceWarnings();
 
         } catch (Exception ex) {
+
+            PlanSaveDiagnostics.logFailure(controller.getPlanSaveDiagnostics(), ex);
 
             statusLabel.setText(
                     "Save failed.");
@@ -761,7 +766,9 @@ public class MainWindow {
             var receipt = awaitPlanFile(controller.preparePlanSave(file.toPath(), true), "Saving retirement plan as…");
             durable = true;
             controller.finishPlanSave(receipt);
+            controller.markPlanSaveDiagnosticStage(PlanSaveDiagnostics.Stage.PREFERENCE_WRITE);
             awaitPlanFile(controller.getPlanPreferenceWrite(), "Updating application preferences…");
+            controller.markPlanSaveDiagnosticStage(PlanSaveDiagnostics.Stage.COMPLETE);
             controller.getSnapshotCopyCompletion().thenAccept(warnings -> {
                 if (!warnings.isEmpty()) javafx.application.Platform.runLater(() -> {
                     if (stage != null && stage.isShowing()) showPersistenceWarnings();
@@ -774,6 +781,8 @@ public class MainWindow {
             showPersistenceWarnings();
 
         } catch (Exception ex) {
+
+            PlanSaveDiagnostics.logFailure(controller.getPlanSaveDiagnostics(), ex);
 
             statusLabel.setText("Save failed.");
 

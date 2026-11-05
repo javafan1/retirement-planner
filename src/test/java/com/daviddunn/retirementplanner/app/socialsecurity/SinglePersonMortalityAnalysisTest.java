@@ -105,6 +105,31 @@ public class SinglePersonMortalityAnalysisTest {
         assertTrue(reference.subtract(result.current().expectedPresentValue()).abs().compareTo(new BigDecimal("1E-20")) < 0);
     }
 
+    @Test void socialSecurityOnlyMortalityValuesIncludeCalendarYearReduction() {
+        var baselinePlan = plan();
+        var reducedPlan = plan();
+        var old = reducedPlan.getPlanningAssumptions();
+        var economics = old.getEconomicAssumptions();
+        reducedPlan.setPlanningAssumptions(new PlanningAssumptions(
+                new EconomicAssumptions(economics.getExpectedAnnualInvestmentReturn(),
+                        economics.getGeneralInflationRate(), economics.getHealthcareInflationRate(),
+                        economics.getSocialSecurityColaRate(), new BigDecimal("22"), 2032),
+                old.getTaxAssumptions(), old.getWithdrawalAssumptions(),
+                old.getDeathScenarioAssumptions(), old.getProjectionLengthYears(),
+                old.getProjectionStartDate(), old.getStateTaxAssumptions()));
+
+        var baseline = run(baselinePlan, mortality(baselinePlan, "1"), "0.02",
+                SinglePersonMortalityAnalysis.Mode.SOCIAL_SECURITY_ONLY);
+        var reduced = run(reducedPlan, mortality(reducedPlan, "1"), "0.02",
+                SinglePersonMortalityAnalysis.Mode.SOCIAL_SECURITY_ONLY);
+
+        assertEquals(baseline.entries().size(), reduced.entries().size());
+        for (int i = 0; i < baseline.entries().size(); i++) {
+            assertTrue(reduced.entries().get(i).expectedPresentValue().compareTo(
+                    baseline.entries().get(i).expectedPresentValue()) < 0);
+        }
+    }
+
     @Test void weightedEstateEqualsIndependentScenarioProjectionSumAndNineExecutions() {
         var plan = plan();
         var original = mortality(plan, "1");

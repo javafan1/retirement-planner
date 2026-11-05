@@ -103,7 +103,8 @@ public final class SocialSecurityMortalityWeightedStrategyCalculator {
                 reachable(spouseSurvivorClaimDate, spouseDeathDate),
                 primaryDeathDate,
                 spouseDeathDate,
-                base.socialSecurityColaRate());
+                base.socialSecurityColaRate(),
+                base.benefitReductionPolicy());
     }
 
     private static LocalDate reachable(

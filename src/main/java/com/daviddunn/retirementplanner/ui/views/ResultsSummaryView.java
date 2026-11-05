@@ -143,6 +143,7 @@ public class ResultsSummaryView extends BorderPane {
 
     private final TextField projectionLengthField = new TextField();
     private final Label planningHorizonValue = new Label();
+    private final Label socialSecurityReductionDisclosure = new Label();
 
     private final TextField deathYearField =
             new TextField();
@@ -457,7 +458,8 @@ public class ResultsSummaryView extends BorderPane {
                             new ProjectionYearDetailsRequest(
                                     detailsYears,
                                     row.getItem(),
-                                    nonInvestableAssetProjections));
+                                    nonInvestableAssetProjections,
+                                    socialSecurityReductionText(controller.getAcceptedProjectionSnapshot())));
                 }
             });
 
@@ -1438,6 +1440,12 @@ public class ResultsSummaryView extends BorderPane {
                 createSocialSecurityPanel(),
                 createEconomicPanel(),
                 createRothPanel());
+        socialSecurityReductionDisclosure.setId("summary-social-security-reduction-disclosure");
+        socialSecurityReductionDisclosure.setWrapText(true);
+        socialSecurityReductionDisclosure.setMinWidth(0);
+        socialSecurityReductionDisclosure.getStyleClass().add("assumption-note");
+        socialSecurityReductionDisclosure.setManaged(false);
+        socialSecurityReductionDisclosure.setVisible(false);
 
         Label note =
                 new Label(
@@ -1840,7 +1848,7 @@ public class ResultsSummaryView extends BorderPane {
         planningHorizonValue.getStyleClass().add("assumption-value");
         planningHorizonValue.setTooltip(new Tooltip("Assumed second death / end of household projection"));
         VBox horizon = new VBox(8, planningHorizonValue, horizonLabel,
-                new HBox(8, projectionLengthField, new Label("years")));
+                new HBox(8, projectionLengthField, new Label("years")), socialSecurityReductionDisclosure);
         for (Node child : grid.getChildren()) {
             GridPane.setRowIndex(child, GridPane.getRowIndex(child) + 1);
         }
@@ -2603,6 +2611,18 @@ public class ResultsSummaryView extends BorderPane {
         EconomicAssumptions economic =
                 assumptions
                         .getEconomicAssumptions();
+        BigDecimal reduction = economic.getSocialSecurityBenefitReductionPercent();
+        if (reduction.signum() > 0) {
+            socialSecurityReductionDisclosure.setText("Social Security reduction: "
+                    + reduction.stripTrailingZeros().toPlainString() + "% beginning "
+                    + economic.getSocialSecurityBenefitReductionEffectiveYear());
+            socialSecurityReductionDisclosure.setManaged(true);
+            socialSecurityReductionDisclosure.setVisible(true);
+        } else {
+            socialSecurityReductionDisclosure.setText("");
+            socialSecurityReductionDisclosure.setVisible(false);
+            socialSecurityReductionDisclosure.setManaged(false);
+        }
 
         investmentReturnField.setText(
                 percentForField(
@@ -2650,6 +2670,16 @@ public class ResultsSummaryView extends BorderPane {
         }
 
         updateDeathScenarioControls();
+    }
+
+    static String socialSecurityReductionText(
+            com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot snapshot) {
+        if (snapshot == null) return null;
+        var economic = snapshot.restoreInputs().getPlanningAssumptions().getEconomicAssumptions();
+        var reduction = economic.getSocialSecurityBenefitReductionPercent();
+        return reduction.signum() == 0 ? null : "Social Security benefit reduction: "
+                + reduction.stripTrailingZeros().toPlainString() + "% beginning "
+                + economic.getSocialSecurityBenefitReductionEffectiveYear();
     }
 
 
@@ -2851,7 +2881,9 @@ public class ResultsSummaryView extends BorderPane {
                             existingEconomic
                                     .getHealthcareInflationRate(),
                             existingEconomic
-                                    .getSocialSecurityColaRate());
+                                    .getSocialSecurityColaRate(),
+                            existingEconomic.getSocialSecurityBenefitReductionPercent(),
+                            existingEconomic.getSocialSecurityBenefitReductionEffectiveYear());
 
             PlanningAssumptions updated =
                     new PlanningAssumptions(

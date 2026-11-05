@@ -17,6 +17,7 @@ public class JsonRetirementPlanRepository
     private final java.util.concurrent.ConcurrentMap<Path, java.util.Optional<com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations>> durableConfigurations = new java.util.concurrent.ConcurrentHashMap<>();
     private final java.util.concurrent.ConcurrentMap<String, java.util.UUID> latestParameters = new java.util.concurrent.ConcurrentHashMap<>();
     private java.util.List<String> warnings = java.util.List.of();
+    private static final ThreadLocal<PlanSaveDiagnostics> ACTIVE_SAVE_DIAGNOSTICS = new ThreadLocal<>();
 
     public JsonRetirementPlanRepository() {
         this(new AtomicFileWriter(), new ObjectMapper());
@@ -68,7 +69,8 @@ public class JsonRetirementPlanRepository
     }
 
     public void saveWithIdentity(RetirementPlan plan, Path file, java.util.UUID identity, Runnable acceptanceFence) throws IOException {
-
+        PlanSaveDiagnostics diagnostics = ACTIVE_SAVE_DIAGNOSTICS.get();
+        stage(diagnostics, PlanSaveDiagnostics.Stage.DESTINATION_CHECK);
         synchronized (AtomicFileWriter.SAVE_LOCK) {
             file = file.toAbsolutePath().normalize();
             AtomicFileWriter.regularOrMissing(file);
@@ -84,12 +86,18 @@ public class JsonRetirementPlanRepository
                 if (originalForBackup(file).isPresent()) {
                     throw new IOException("Application backups are recovery sources. Use Save As to a different filename.");
                 }
+                stage(diagnostics, PlanSaveDiagnostics.Stage.PLAN_VALIDATION);
                 plan.validateHouseholdReferences();
+                stage(diagnostics, PlanSaveDiagnostics.Stage.PROJECTION_COMPONENT_PREPARATION);
                 var projectionObjects = new ProjectionSnapshotComponents().prepare(plan,
                         plan.getProjectionComponentSource() == null ? file : plan.getProjectionComponentSource(), file, identity);
+                stage(diagnostics, PlanSaveDiagnostics.Stage.JSON_SERIALIZATION);
                 byte[] original = mapper.writeValueAsBytes(plan);
-                if (projectionObjects.manifest() != null) original = PlanConfigurationTransaction.replace(original,
-                        "projectionState", mapper.writeValueAsBytes(projectionObjects.manifest()));
+                if (projectionObjects.manifest() != null) {
+                    stage(diagnostics, PlanSaveDiagnostics.Stage.PROJECTION_MANIFEST_SERIALIZATION);
+                    original = PlanConfigurationTransaction.replace(original,
+                            "projectionState", mapper.writeValueAsBytes(projectionObjects.manifest()));
+                }
                 byte[] captured = original;
                 if (!identity.toString().equals(plan.getPlanId())) {
                     // Preserve original numeric tokens; a tree round trip could change monetary scale.
@@ -123,10 +131,12 @@ public class JsonRetirementPlanRepository
                     }
                     captured = output.toByteArray();
                 }
+                stage(diagnostics, PlanSaveDiagnostics.Stage.JSON_ROUND_TRIP_VERIFICATION);
                 var committedParameters = readBytes(captured).getAnalyzerConfigurations();
                 warnings = writer.write(file, captured, this::verify, true, path -> {
                     checkState(path, expectedState); acceptanceFence.run();
-                });
+                }, diagnostics);
+                stage(diagnostics, PlanSaveDiagnostics.Stage.PLAN_FILE_COMMITTED);
                 plan.assignPlanId(identity);
                 if (projectionObjects.manifest() != null) {
                     plan.setProjectionState(projectionObjects.manifest());
@@ -140,6 +150,21 @@ public class JsonRetirementPlanRepository
                 durableConfigurations.put(file, java.util.Optional.ofNullable(committedParameters));
             }
         }
+    }
+
+    public void saveWithIdentity(RetirementPlan plan, Path file, java.util.UUID identity, Runnable acceptanceFence,
+            PlanSaveDiagnostics diagnostics) throws IOException {
+        PlanSaveDiagnostics previous = ACTIVE_SAVE_DIAGNOSTICS.get();
+        ACTIVE_SAVE_DIAGNOSTICS.set(diagnostics);
+        try { saveWithIdentity(plan, file, identity, acceptanceFence); }
+        finally {
+            if (previous == null) ACTIVE_SAVE_DIAGNOSTICS.remove();
+            else ACTIVE_SAVE_DIAGNOSTICS.set(previous);
+        }
+    }
+
+    private static void stage(PlanSaveDiagnostics diagnostics, PlanSaveDiagnostics.Stage stage) {
+        if (diagnostics != null) diagnostics.stage(stage);
     }
 
     private void verify(Path path) throws IOException {

@@ -87,6 +87,25 @@ class SocialSecurityAnalyzerInputPresentationTest {
         assertEquals("None configured", rows.get("Expenses").value());
         assertEquals("None configured", rows.get("Pension assumptions").value());
         assertEquals("Disabled", rows.get("Roth conversion strategy").value());
+        assertFalse(rows.containsKey("Social Security benefit reduction"), "Zero reduction keeps the existing summary uncluttered.");
+    }
+
+    @Test
+    void nonzeroReductionDisclosureUsesConfiguredValueAndEffectiveYear() {
+        var plan = LongevityWeightedAnalysisRequestFactoryTest.plan();
+        var current = plan.getPlanningAssumptions();
+        var economic = current.getEconomicAssumptions();
+        plan.setPlanningAssumptions(new com.daviddunn.retirementplanner.domain.model.PlanningAssumptions(
+                new com.daviddunn.retirementplanner.domain.model.EconomicAssumptions(
+                        economic.getExpectedAnnualInvestmentReturn(), economic.getGeneralInflationRate(),
+                        economic.getHealthcareInflationRate(), economic.getSocialSecurityColaRate(),
+                        new BigDecimal("17.25"), 2035), current.getTaxAssumptions(), current.getWithdrawalAssumptions(),
+                current.getDeathScenarioAssumptions(), current.getProjectionLengthYears(), current.getProjectionStartDate(),
+                current.getStateTaxAssumptions()));
+        var row = SocialSecurityAnalyzerInputSummary.from(plan, values()).rows().stream()
+                .filter(value -> value.input().equals("Social Security benefit reduction")).findFirst().orElseThrow();
+        assertEquals("17.25% beginning 2035", row.value());
+        assertEquals("Economic Assumptions", row.source());
     }
 
     @Test

@@ -88,7 +88,8 @@ final class IndividualAnalyzerReportAdapter {
         var assumptions = type.equals("Social Security Only")
                 ? List.of(new Section("Result-Time Social Security Inputs", context.assumptions().stream()
                     .flatMap(section -> section.lines().stream())
-                    .filter(line -> line.startsWith("Primary:") || line.startsWith("Primary Social Security:")).toList()))
+                    .filter(line -> line.startsWith("Primary:") || line.startsWith("Primary Social Security:")
+                            || line.startsWith("Social Security benefit reduction:")).toList()))
                 : context.assumptions();
         return new IntegratedAnalyzerReport(type, context.household(), context.started(), Instant.now(), lines, summary,
                 new Individual(metric, ages), assumptions, tables, results);

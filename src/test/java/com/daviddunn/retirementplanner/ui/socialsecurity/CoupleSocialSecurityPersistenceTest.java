@@ -102,6 +102,186 @@ class CoupleSocialSecurityPersistenceTest {
             assertEquals(2, copy.request().primaryMortality().getFirst().probability().scale());
         } finally { stop(source.getAnalysisResults()); }
     }
+
+    @Test void legacySnapshotWithoutBenefitReductionPolicyReproducesSaveDecodeFailure() throws Exception {
+        var codec = new AnalysisSnapshotCodec();
+        var snapshotContext = new SnapshotContext("Synthetic couple", "Primary", "Spouse", COMPLETED,
+                List.of(), List.of(), List.of(), Map.of());
+        UUID planId = UUID.randomUUID();
+        var snapshot = new AnalysisSnapshot(1, 1, planId, KIND, AnalysisKind.Shape.COUPLE,
+                UUID.randomUUID(), COMPLETED, "synthetic", Map.of("algorithm", "v1"),
+                Map.of("analyzer", "synthetic"), "a".repeat(64), "b".repeat(64), codec.digest(payload, snapshotContext),
+                payload, snapshotContext, null);
+        var treeMapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .enable(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+        treeMapper.setNodeFactory(com.fasterxml.jackson.databind.node.JsonNodeFactory.withExactBigDecimals(true));
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) treeMapper.readTree(codec.raw(snapshot));
+        var baseRequest = (com.fasterxml.jackson.databind.node.ObjectNode) root.path("payload").path("request").path("base");
+        assertTrue(baseRequest.has("benefitReductionPolicy"), "Fixture must contain the Phase 19 request property.");
+        baseRequest.remove("benefitReductionPolicy");
+        var strictMapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .disable(com.fasterxml.jackson.databind.MapperFeature.ALLOW_COERCION_OF_SCALARS);
+        var reproduced = assertThrows(com.fasterxml.jackson.databind.exc.MismatchedInputException.class,
+                () -> strictMapper.readValue(treeMapper.writeValueAsString(baseRequest), SocialSecurityStrategyRequest.class));
+        assertEquals(com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy.class,
+                reproduced.getTargetType());
+        assertTrue(reproduced.getMessage().contains("benefitReductionPolicy"));
+        var legacyContent = treeMapper.createObjectNode();
+        legacyContent.set("payload", root.path("payload"));
+        legacyContent.set("context", root.path("context"));
+        String legacyDigest = AnalysisSnapshotCodec.sha256(treeMapper.writeValueAsBytes(legacyContent));
+        root.put("payloadDigest", legacyDigest);
+        String legacyJson = treeMapper.writeValueAsString(root);
+        byte[] legacyBytes = AnalysisSnapshotCodecTest.gzip(legacyJson);
+        var decoded = codec.decode(legacyBytes);
+        var restoredPayload = (CoupleSocialSecuritySnapshot) decoded.payload();
+        assertEquals(com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy.none(),
+                restoredPayload.request().base().benefitReductionPolicy());
+        assertEquals(legacyDigest, decoded.payloadDigest());
+
+        var cloned = decoded.clonedTo(UUID.randomUUID());
+        var afterSaveAsEncoding = codec.decode(codec.encode(cloned));
+        assertEquals(cloned, afterSaveAsEncoding);
+        assertEquals(restoredPayload, afterSaveAsEncoding.payload());
+
+        var tampered = root.deepCopy();
+        var tamperedBase = (com.fasterxml.jackson.databind.node.ObjectNode)
+                tampered.path("payload").path("request").path("base");
+        var changedPolicy = treeMapper.createObjectNode();
+        changedPolicy.put("reductionPercent", new BigDecimal("22"));
+        changedPolicy.put("effectiveYear", 2032);
+        tamperedBase.set("benefitReductionPolicy", changedPolicy);
+        assertThrows(java.io.IOException.class,
+                () -> codec.decode(AnalysisSnapshotCodecTest.gzip(treeMapper.writeValueAsString(tampered))),
+                "Legacy digest fallback must not authorize a changed reduction policy.");
+
+        UUID projectionId = UUID.randomUUID();
+        Path planFile = dir.resolve("synthetic-legacy-plan.json");
+        Files.writeString(planFile, "{}");
+        Path componentDirectory = dir.resolve(".retirement-planner-projections").resolve(planId.toString());
+        Files.createDirectories(componentDirectory);
+        Files.writeString(componentDirectory.resolve(".binding"),
+                com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot.digest(
+                        planFile.toAbsolutePath().normalize().toString()));
+        Files.write(componentDirectory.resolve("analysis-" + decoded.runId() + ".json.gz"), legacyBytes);
+        var association = new com.daviddunn.retirementplanner.app.projection.AnalyzerAssociation(1, planId,
+                projectionId, "c".repeat(64), KIND, decoded.runId(), decoded.inputFingerprint(), decoded.contextFingerprint(),
+                legacyDigest, AnalysisSnapshotCodec.sha256(legacyBytes), decoded.completedAt());
+        var components = new ProjectionSnapshotComponents();
+        assertDoesNotThrow(() -> new ProjectionSnapshotComponents().verifyAnalyzer(planFile, association, null, null));
+        assertEquals(decoded, components.readAnalyzer(planFile, association));
+        assertEquals(decoded, new ProjectionSnapshotComponents().resolveAnalyzer(association, null, null, planFile));
+    }
+
+    @Test void currentNonzeroReductionSnapshotRoundTripsWithoutLegacyNormalization() throws Exception {
+        var oldRequest = payload.request().restore();
+        var oldGrid = oldRequest.retirementGridRequest();
+        var oldBase = oldGrid.baseStrategy();
+        var reducedBase = new SocialSecurityStrategyRequest(oldBase.analysisDate(), oldBase.analysisEndDate(),
+                oldBase.primaryElection(), oldBase.spouseElection(), oldBase.primarySurvivorClaimDate(),
+                oldBase.spouseSurvivorClaimDate(), oldBase.primaryDeathDate(), oldBase.spouseDeathDate(),
+                oldBase.socialSecurityColaRate(), new com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy(
+                        new BigDecimal("22"), 2032));
+        var reducedRequest = new SocialSecuritySurvivorClaimingOptimizationRequest(
+                new SocialSecurityMortalityWeightedClaimingGridRequest(reducedBase, oldGrid.primaryClaimAges(),
+                        oldGrid.spouseClaimAges(), oldGrid.primaryMortality(), oldGrid.spouseMortality(),
+                        oldGrid.mortalityBaseDate(), oldGrid.presentValueBaseDate(), oldGrid.realDiscountRate()),
+                oldRequest.settings());
+        var reducedResult = new SocialSecuritySurvivorClaimingOptimizationCalculator().calculate(reducedRequest);
+        var reducedPayload = CoupleSocialSecuritySnapshot.from(reducedResult, payload.frozen());
+        var codec = new AnalysisSnapshotCodec();
+        var context = new SnapshotContext("Synthetic couple", "Primary", "Spouse", COMPLETED,
+                List.of(), List.of(), List.of(), Map.of());
+        UUID planId = UUID.randomUUID();
+        var snapshot = new AnalysisSnapshot(1, 1, planId, KIND, AnalysisKind.Shape.COUPLE,
+                UUID.randomUUID(), COMPLETED, "synthetic", Map.of("algorithm", "v1"),
+                Map.of("analyzer", "synthetic"), "a".repeat(64), "b".repeat(64),
+                codec.digest(reducedPayload, context), reducedPayload, context, null);
+
+        var restored = codec.decode(codec.encode(snapshot));
+        var restoredPayload = (CoupleSocialSecuritySnapshot) restored.payload();
+        assertEquals(new com.daviddunn.retirementplanner.domain.socialsecurity.SocialSecurityBenefitReductionPolicy(
+                new BigDecimal("22"), 2032), restoredPayload.request().base().benefitReductionPolicy());
+        assertEquals(reducedPayload, restoredPayload);
+    }
+
+    @Test void applicationSaveAndSaveAsPreserveLegacyAssociatedAnalyzerSnapshot() throws Exception {
+        var store = new AnalysisResultStore(new JsonAnalysisSnapshotRepository(dir.resolve("save-results")));
+        var source = controller(store, "legacy-analyzer-save");
+        Path original = dir.resolve("legacy-analyzer-plan.json");
+        Path copy = dir.resolve("legacy-analyzer-plan-copy.json");
+        source.newPlan(LongevityWeightedAnalysisRequestFactoryTest.plan());
+        source.getCurrentProjection();
+        var initialSave = source.preparePlanSave(original, true).toCompletableFuture().get(30, TimeUnit.SECONDS);
+        source.finishPlanSave(initialSave);
+
+        UUID owner = UUID.fromString(source.getCurrentPlan().getPlanId());
+        var roles = source.getCurrentPlan().getProjectionState();
+        var projection = source.getCurrentPlan().getProjectionComponents().get(roles.current().id());
+        assertNotNull(projection);
+        var artifact = legacyArtifact(owner);
+        Path componentDirectory = dir.resolve(".retirement-planner-projections").resolve(owner.toString());
+        Path analyzerFile = componentDirectory.resolve("analysis-" + artifact.snapshot().runId() + ".json.gz");
+        Files.write(analyzerFile, artifact.bytes());
+        var association = new com.daviddunn.retirementplanner.app.projection.AnalyzerAssociation(1, owner,
+                roles.current().id(), projection.inputDigest(), KIND, artifact.snapshot().runId(),
+                artifact.snapshot().inputFingerprint(), artifact.snapshot().contextFingerprint(),
+                artifact.snapshot().payloadDigest(), AnalysisSnapshotCodec.sha256(artifact.bytes()), COMPLETED);
+        source.getCurrentPlan().setProjectionState(new com.daviddunn.retirementplanner.app.projection.ProjectionRoleManifest(
+                2, roles.owner(), roles.current(), roles.baseline(), List.of(association), roles.pinnedProjections()));
+        source.markModified();
+
+        var saved = source.preparePlanSave(original, false).toCompletableFuture().get(30, TimeUnit.SECONDS);
+        source.finishPlanSave(saved);
+        var afterSave = new JsonRetirementPlanRepository().load(original);
+        assertEquals(List.of(association), afterSave.getProjectionState().associations());
+        assertEquals(artifact.snapshot().payload(), new ProjectionSnapshotComponents()
+                .readAnalyzer(original, association).payload());
+
+        var savedAs = source.preparePlanSave(copy, true).toCompletableFuture().get(30, TimeUnit.SECONDS);
+        source.finishPlanSave(savedAs);
+        var afterSaveAs = new JsonRetirementPlanRepository().load(copy);
+        var copiedAssociation = afterSaveAs.getProjectionState().associations().getFirst();
+        assertEquals(association.runId(), copiedAssociation.runId());
+        assertEquals(association.payloadDigest(), copiedAssociation.payloadDigest());
+        assertEquals(artifact.snapshot().payload(), new ProjectionSnapshotComponents()
+                .readAnalyzer(copy, copiedAssociation).payload());
+    }
+
+    private LegacyArtifact legacyArtifact(UUID planId) throws Exception {
+        var codec = new AnalysisSnapshotCodec();
+        var snapshotContext = new SnapshotContext("Synthetic couple", "Primary", "Spouse", COMPLETED,
+                List.of(), List.of(), List.of(), Map.of());
+        UUID runId = UUID.randomUUID();
+        var snapshot = new AnalysisSnapshot(1, 1, planId, KIND, AnalysisKind.Shape.COUPLE,
+                runId, COMPLETED, "synthetic", Map.of("algorithm", "v1"), Map.of("analyzer", "synthetic"),
+                "a".repeat(64), "b".repeat(64), codec.digest(payload, snapshotContext), payload, snapshotContext, null);
+        var treeMapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .enable(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+        treeMapper.setNodeFactory(com.fasterxml.jackson.databind.node.JsonNodeFactory.withExactBigDecimals(true));
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) treeMapper.readTree(codec.raw(snapshot));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("payload").path("request").path("base"))
+                .remove("benefitReductionPolicy");
+        var content = treeMapper.createObjectNode();
+        content.set("payload", root.path("payload"));
+        content.set("context", root.path("context"));
+        String legacyDigest = AnalysisSnapshotCodec.sha256(treeMapper.writeValueAsBytes(content));
+        root.put("payloadDigest", legacyDigest);
+        var legacySnapshot = new AnalysisSnapshot(snapshot.schemaVersion(), snapshot.fingerprintVersion(), snapshot.planId(),
+                snapshot.kind(), snapshot.shape(), snapshot.runId(), snapshot.completedAt(), snapshot.applicationBuild(),
+                snapshot.algorithms(), snapshot.references(), snapshot.inputFingerprint(), snapshot.contextFingerprint(),
+                legacyDigest, snapshot.payload(), snapshot.context(), snapshot.originPlanId());
+        return new LegacyArtifact(legacySnapshot, AnalysisSnapshotCodecTest.gzip(treeMapper.writeValueAsString(root)));
+    }
+
+    private record LegacyArtifact(AnalysisSnapshot snapshot, byte[] bytes) { }
     @Test void restartRestoresWithoutJobAndCurrencyReturnsToCurrent() throws Exception {
         var store = new AnalysisResultStore(new JsonAnalysisSnapshotRepository(dir.resolve("results")));
         var source = controller(store, "settings"); source.newPlan(LongevityWeightedAnalysisRequestFactoryTest.plan()); source.saveAs(dir.resolve("plan.json"));
