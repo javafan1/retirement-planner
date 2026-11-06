@@ -129,7 +129,15 @@ public final class MonteCarloFingerprintService {
             }
             var canonical = new AnalysisFingerprintService();
             return new AnalysisFingerprintService.Assessment(canonical.canonicalDigest(node),
-                    canonical.canonicalDigest(context), null);
+                    canonical.canonicalDigest(context), null,
+                    AnalysisVersions.usesOrdinaryPensionSelection(inputs.kind())
+                            && (com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.potentiallyAffected(
+                                    MonteCarloPlanDocument.read(inputs.request().planA()),
+                                    inputs.request().start().getYear(), inputs.request().endingYear())
+                            || inputs.request().planB() != null
+                            && com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.potentiallyAffected(
+                                    MonteCarloPlanDocument.read(inputs.request().planB()),
+                                    inputs.request().start().getYear(), inputs.request().endingYear())));
         } catch (Exception invalid) {
             return new AnalysisFingerprintService.Assessment(null, null, "Inputs need attention.");
         }

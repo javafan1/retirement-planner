@@ -81,6 +81,17 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
         catch (Exception failure) { throw new IllegalArgumentException("Invalid projection inputs.", failure); }
     }
     public boolean matches(RetirementPlan plan) { return inputDigest.equals(digest(freeze(plan))); }
+    /** Separate from exact configured-input identity, which still permits historical swaps. */
+    public boolean calculationSemanticsCurrent() {
+        if (provenance.startsWith(PensionSelectionSemantics.PROVENANCE)) return true;
+        if (provenance.startsWith(PensionSelectionSemantics.KEY + "=")) return false;
+        try {
+            var original = restoreInputs();
+            return !PensionSelectionSemantics.potentiallyAffected(original.getHousehold(), original.getPlanningAssumptions());
+        } catch (RuntimeException unavailable) {
+            return false;
+        }
+    }
     public boolean matchesDeterministicInputs(RetirementPlan plan) {
         return sameDeterministicInputs(inputsDocument, freeze(plan));
     }

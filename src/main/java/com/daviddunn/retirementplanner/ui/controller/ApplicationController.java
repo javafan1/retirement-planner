@@ -72,7 +72,12 @@ public class ApplicationController {
 
     public java.util.concurrent.CompletionStage<Void> getProjectionRestoration() { return projectionRestoration; }
     public boolean isRestoredProjectionMode() { return restoredProjectionMode; }
-    public String getProjectionSnapshotNotice() { return projectionSnapshotNotice; }
+    public String getProjectionSnapshotNotice() {
+        var accepted = getAcceptedProjectionSnapshot();
+        return accepted != null && !accepted.calculationSemanticsCurrent()
+                ? "Historical/outdated pension-tax calculation semantics. Original results are preserved; run a new projection for corrected pension selection. " + projectionSnapshotNotice
+                : projectionSnapshotNotice;
+    }
     public CompleteProjectionSnapshot getAcceptedProjectionSnapshot() {
         var state = currentPlan == null ? null : currentPlan.getProjectionState();
         return state == null || state.current() == null ? null : currentPlan.getProjectionComponents().get(state.current().id());
@@ -93,7 +98,8 @@ public class ApplicationController {
     public synchronized AnalyzerAdmission prepareAnalyzerAssociation(com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind kind, String requestFingerprint) {
         var ticket = java.util.UUID.randomUUID(); analyzerAdmissions.put(kind, ticket);
         var projection = getAcceptedProjectionSnapshot();
-        if (projection == null || !currentProjectionInputsMatch() || (kind.shape() == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.Shape.COUPLE) != currentPlan.getHousehold().hasSpouse()) return null;
+        if (projection == null || !currentProjectionInputsMatch() || !projection.calculationSemanticsCurrent()
+                || (kind.shape() == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.Shape.COUPLE) != currentPlan.getHousehold().hasSpouse()) return null;
         return new AnalyzerAdmission(getAnalysisSessionId(), projection.id(), projection.inputDigest(), kind,
                 projectionEpoch.get(), sourcePlanRevision, ticket, requestFingerprint);
     }
@@ -110,6 +116,7 @@ public class ApplicationController {
                 || !admission.planId().equals(getAnalysisSessionId()) || admission.projectionGeneration() != projectionEpoch.get()
                 || admission.sourceRevision() != sourcePlanRevision || !admission.ticket().equals(analyzerAdmissions.get(admission.kind()))
                 || !currentProjectionInputsMatch() || !admission.projectionId().equals(getAcceptedProjectionSnapshot().id())
+                || !getAcceptedProjectionSnapshot().calculationSemanticsCurrent()
                 || !admission.projectionInputDigest().equals(getAcceptedProjectionSnapshot().inputDigest())) return false;
         var state = currentPlan.getProjectionState();
         var refs = new java.util.ArrayList<>(state.associations());
@@ -980,7 +987,9 @@ public class ApplicationController {
                 var nonInvestable = nonInvestableAssetProjectionService.project(executionPlan.getNonInvestableAssets(), projection.getStartYear(), projection.getEndYear());
                 var retained = RetainedProjectionSnapshot.capture(projection);
                 complete = new CompleteProjectionSnapshot(1, java.util.UUID.randomUUID(), ownerIdentity, ownerIdentity, java.time.Instant.now(),
-                        inputDocument, CompleteProjectionSnapshot.digest(inputDocument), "Accepted normal projection; retained schema " + retained.schemaVersion() + "; original build version not recorded",
+                        inputDocument, CompleteProjectionSnapshot.digest(inputDocument),
+                        com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.PROVENANCE
+                                + "Accepted normal projection; retained schema " + retained.schemaVersion() + "; original build version not recorded",
                         retained, nonInvestable.stream().map(CompleteProjectionSnapshot.NonInvestableYear::capture).toList(),
                         CompleteProjectionSnapshot.Summary.capture(completedSummary), BreakEvenPlanSummary.from(executionPlan));
                 completedChart = complete.chart(); // Validate/detach before publishing any accepted state.
@@ -1209,7 +1218,7 @@ public class ApplicationController {
         var context = currentDetailsContext;
         String status = context == null ? "Current projection inputs: Not recorded. Live plan values are not substituted."
                 : (getAcceptedProjectionSnapshot() != null ? currentProjectionDeterministicallyApplicable() : context.sourceRevision() == sourcePlanRevision) ? "Current projection — frozen effective inputs"
-                : "Potentially outdated projection — plan revision changed. Only frozen result inputs are compared.";
+                : "Potentially outdated projection — inputs or financial calculation semantics differ. Original frozen results are preserved.";
         return new com.daviddunn.retirementplanner.app.baseline.BaselineDetailsSession(baseline.getDescription(), baseline.getSavedAt(),
                 context == null ? null : context.runId(), context == null ? null : context.planIdentity(), context == null ? null : context.completedAt(),
                 displayed.isEmpty() ? "Not recorded" : displayed.getStartYear() + "–" + displayed.getEndYear(), status,
@@ -1226,7 +1235,7 @@ public class ApplicationController {
         }
 
         var accepted = getAcceptedProjectionSnapshot();
-        if (accepted == null || currentProjection == null || !accepted.matches(currentPlan))
+        if (accepted == null || currentProjection == null || !accepted.matches(currentPlan) || !accepted.calculationSemanticsCurrent())
             throw new IllegalStateException("Run and accept a projection matching the current inputs before capturing a baseline. No calculation was started.");
         ProjectionBaseline baseline = new ProjectionBaseline(accepted.restoreInputs(), java.time.LocalDateTime.now(), description, accepted.id());
 
@@ -1291,7 +1300,8 @@ public class ApplicationController {
     /** Financial applicability is separate from exact configured-document swap eligibility. */
     public boolean currentProjectionDeterministicallyApplicable() {
         var snapshot = getAcceptedProjectionSnapshot();
-        return snapshot != null && currentProjection != null && snapshot.matchesDeterministicInputs(currentPlan);
+        return snapshot != null && currentProjection != null && snapshot.matchesDeterministicInputs(currentPlan)
+                && snapshot.calculationSemanticsCurrent();
     }
 
     public RetirementPlan newPlan() {

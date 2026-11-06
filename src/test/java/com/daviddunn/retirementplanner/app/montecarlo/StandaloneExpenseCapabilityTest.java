@@ -72,7 +72,13 @@ class StandaloneExpenseCapabilityTest {
         var run = new MonteCarloRunService().run(plan, MonteCarloSettings.forPlan(plan, 1, 417, BigDecimal.ZERO), null,
                 AnalysisProgressListener.none(), AnalysisCancellationToken.none());
         var payload = MonteCarloSnapshotPresentationMapper.capture(run, plan, START, START.plusSeconds(1));
-        var saved = envelope(payload); var codec = new AnalysisSnapshotCodec();
+        var completed = envelope(payload);
+        // Explicit historical map: fresh completions now carry the B0 pension semantic.
+        var saved = new AnalysisSnapshot(completed.schemaVersion(), completed.fingerprintVersion(), completed.planId(), completed.kind(),
+                completed.shape(), completed.runId(), completed.completedAt(), completed.applicationBuild(),
+                AnalysisVersions.algorithms(completed.kind(), payload), completed.references(), completed.inputFingerprint(),
+                completed.contextFingerprint(), completed.payloadDigest(), completed.payload(), completed.context(), completed.originPlanId());
+        var codec = new AnalysisSnapshotCodec();
         byte[] original = codec.raw(saved);
         assertFalse(new String(original, java.nio.charset.StandardCharsets.UTF_8).contains("expenseExecution"));
         assertEquals(1, saved.fingerprintVersion());

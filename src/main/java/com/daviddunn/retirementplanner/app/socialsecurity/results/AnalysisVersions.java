@@ -6,6 +6,21 @@ import java.util.*;
 
 public final class AnalysisVersions {
     private AnalysisVersions() { }
+    public static boolean usesOrdinaryPensionSelection(AnalysisKind kind) {
+        return kind == AnalysisKind.COUPLE_QUICK || kind == AnalysisKind.COUPLE_EXHAUSTIVE
+                || kind.isMonteCarlo() && kind.name().endsWith("FIXED");
+    }
+    /** Only fresh calculation completions use this map; never apply it to a restored artifact. */
+    public static Map<String, String> calculatedAlgorithms(AnalysisKind kind, AnalysisPayload payload) {
+        var result = new TreeMap<>(algorithms(kind, payload));
+        if (usesOrdinaryPensionSelection(kind)) result.put(
+                com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.KEY,
+                com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.CORRECTED);
+        return Map.copyOf(result);
+    }
+    public static boolean supportedMonteCarloAlgorithms(AnalysisKind kind, AnalysisPayload payload, Map<String, String> versions) {
+        return versions.equals(algorithms(kind, payload)) || versions.equals(calculatedAlgorithms(kind, payload));
+    }
     /** Payload-specific capabilities leave every legacy kind's version map unchanged. */
     public static Map<String, String> algorithms(AnalysisKind kind, AnalysisPayload payload) {
         var result = new TreeMap<>(algorithms(kind));

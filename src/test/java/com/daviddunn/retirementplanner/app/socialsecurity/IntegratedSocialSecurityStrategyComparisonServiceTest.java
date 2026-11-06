@@ -225,9 +225,16 @@ class IntegratedSocialSecurityStrategyComparisonServiceTest {
         assertTrue(failure.getMessage().contains("advanced path is unavailable"));
     }
 
-    @Test
-    void retirementAndExactSurvivorDifferencesBothFlowThroughComparison() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void retirementAndExactSurvivorDifferencesBothFlowThroughComparison(boolean survivorPension) {
         RetirementPlan plan = plan();
+        if (survivorPension) {
+            var person = plan.getHousehold().getPrimaryPerson();
+            var original = (Pension) person.getIncomeSources().stream().filter(Pension.class::isInstance).findFirst().orElseThrow();
+            person.replaceIncomeSource(original, new Pension(original.getName(), original.getOwnership(), original.getStartDate(),
+                    original.getEndDate(), original.getMonthlyBenefit(), original.getAnnualColaRate(), new BigDecimal("3000")));
+        }
         SocialSecurityHouseholdClaimingStrategy survivorEarly =
                 strategy(plan, 67, 62, 60);
         SocialSecurityHouseholdClaimingStrategy survivorLate =
@@ -248,7 +255,20 @@ class IntegratedSocialSecurityStrategyComparisonServiceTest {
                 survivor.lifetimeHouseholdSocialSecurity());
         assertNotEquals(early.lifetimeHouseholdSocialSecurity(),
                 retirement.lifetimeHouseholdSocialSecurity());
-        assertNotEquals(early.totalTaxes(), survivor.totalTaxes());
+        if (survivorPension) assertNotEquals(early.totalTaxes(), survivor.totalTaxes());
+        else for (var entry : result.entries().subList(0, 2)) {
+            var projection = entry.integratedResult().orElseThrow().projection();
+            for (var year : projection.getYears()) if (year.getCalendarYear() >= 2028) {
+                assertMoney(BigDecimal.ZERO, year.getAdjustedGrossIncome());
+                assertMoney(BigDecimal.ZERO, year.getTaxableSocialSecurity());
+                assertMoney(BigDecimal.ZERO, year.getTotalIncomeTax());
+                assertTrue(year.getIncomeSources().stream().noneMatch(s -> s.kind()
+                        == com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.PENSION));
+            }
+            assertMoney(projection.getYears().stream().filter(y -> y.getCalendarYear() < 2028)
+                    .map(com.daviddunn.retirementplanner.domain.projection.ProjectionYear::getTotalIncomeTax)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add), entry.integratedResult().orElseThrow().metrics().totalTaxes());
+        }
         assertNotEquals(early.lifetimePortfolioWithdrawals(),
                 survivor.lifetimePortfolioWithdrawals());
         assertTrue(early.lifetimeMedicarePremiums().signum() > 0);

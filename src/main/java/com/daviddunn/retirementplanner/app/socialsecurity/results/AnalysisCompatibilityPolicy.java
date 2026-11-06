@@ -16,6 +16,12 @@ public final class AnalysisCompatibilityPolicy {
                 || saved.fingerprintVersion() != (pairedExpenses ? 4 : enabledExpenses ? 3 : AnalysisFingerprintService.VERSION))
             return unavailable("Unsupported snapshot format.");
         for (var version : saved.algorithms().entrySet()) {
+            if (version.getKey().equals(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.KEY)) {
+                if (!AnalysisVersions.usesOrdinaryPensionSelection(saved.kind())
+                        || !version.getValue().equals(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.CORRECTED))
+                    return unavailable("Unsupported pension-selection algorithm semantics.");
+                continue;
+            }
             if (pairedExpenses && version.getKey().equals("paired-recurring-expenses")) {
                 if (!version.getValue().equals(com.daviddunn.retirementplanner.app.montecarlo.PairedExpenseExecution.ALGORITHM))
                     return unavailable("Unsupported paired stochastic expense model.");
@@ -33,10 +39,20 @@ public final class AnalysisCompatibilityPolicy {
         }
         if (!inputs.valid() || inputs.contextFingerprint() == null)
             return new Assessment(State.INPUTS_NEED_ATTENTION, inputs.problem() == null ? "Input context must be assessed." : inputs.problem());
-        if (!saved.algorithms().equals(algorithms) || !saved.references().equals(references)
+        var originalAlgorithms = new TreeMap<>(saved.algorithms());
+        var expectedAlgorithms = new TreeMap<>(algorithms);
+        originalAlgorithms.remove(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.KEY);
+        expectedAlgorithms.remove(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.KEY);
+        if (!originalAlgorithms.equals(expectedAlgorithms) || !saved.references().equals(references)
                 || !saved.inputFingerprint().equals(inputs.fingerprint())
                 || !saved.contextFingerprint().equals(inputs.contextFingerprint())) {
             return new Assessment(State.OUTDATED, "These results were generated using previous plan or analysis assumptions and may not reflect the current retirement plan.");
+        }
+        if (AnalysisVersions.usesOrdinaryPensionSelection(saved.kind())
+                && !saved.algorithms().containsKey(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.KEY)
+                && !Boolean.FALSE.equals(inputs.legacyPensionAffected())) {
+            return new Assessment(State.OUTDATED,
+                    "Historical pension-tax calculation semantics: corrected death-selected pension income is not established. Original results remain available.");
         }
         return new Assessment(State.CURRENT, "Saved results match current effective inputs.");
     }

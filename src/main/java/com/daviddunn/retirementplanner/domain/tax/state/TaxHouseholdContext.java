@@ -39,6 +39,16 @@ public record TaxHouseholdContext(
 
     public static TaxHouseholdContext capture(
             Household household, LocalDate date, DeathScenarioAssumptions deaths) {
+        var view = deaths == null ? null : EffectiveHouseholdDeathView.resolve(household, deaths, Optional.empty());
+        Optional<PensionIncomeResult> pensions = deaths != null && deaths.getDeathScenario() != DeathScenario.BOTH_SURVIVE
+                ? Optional.of(new HouseholdPensionIncomeCalculator().calculateWithSources(household, date, view))
+                : Optional.empty();
+        return capture(household, date, deaths, pensions);
+    }
+
+    /** The projection already selected these immutable pension facts; do not select them a second time. */
+    public static TaxHouseholdContext capture(
+            Household household, LocalDate date, DeathScenarioAssumptions deaths, Optional<PensionIncomeResult> pensions) {
         Objects.requireNonNull(household);
         var births = new EnumMap<AccountOwnership, LocalDate>(AccountOwnership.class);
         household.peopleByOwner().forEach((owner, person) -> {
@@ -50,9 +60,6 @@ public record TaxHouseholdContext(
         var view = deaths == null ? null : EffectiveHouseholdDeathView.resolve(household, deaths, Optional.empty());
         Set<AccountOwnership> active = view == null ? owners : owners.stream()
                 .filter(owner -> view.isAlive(owner, date.getYear())).collect(Collectors.toUnmodifiableSet());
-        Optional<PensionIncomeResult> pensions = deaths != null && deaths.getDeathScenario() != DeathScenario.BOTH_SURVIVE
-                ? Optional.of(new HouseholdPensionIncomeCalculator().calculateWithSources(household, date, view))
-                : Optional.empty();
         return new TaxHouseholdContext(date, births, owners, active, pensions);
     }
 

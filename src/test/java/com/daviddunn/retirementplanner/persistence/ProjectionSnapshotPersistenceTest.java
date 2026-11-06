@@ -27,6 +27,63 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.app.baseline.BaselineDetailsTest.set;
 
 class ProjectionSnapshotPersistenceTest {
+    @Test void legacyPensionResultsRemainReadableSavableAndSwappableButNeverClaimCorrectedApplicability() throws Exception {
+        var c = controller();
+        var plan = c.getCurrentPlan();
+        var a = plan.getPlanningAssumptions();
+        plan.setPlanningAssumptions(new PlanningAssumptions(a.getEconomicAssumptions(), a.getTaxAssumptions(),
+                a.getWithdrawalAssumptions(), new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2027, 67),
+                a.getProjectionLengthYears(), a.getProjectionStartDate(), a.getStateTaxAssumptions()));
+        plan.getHousehold().getPrimaryPerson().addIncomeSource(new com.daviddunn.retirementplanner.domain.income.Pension(
+                "Synthetic survivor", AccountOwnership.PRIMARY, java.time.LocalDate.of(2026, 1, 1), null,
+                BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("2500")));
+        c.getCurrentProjection();
+        c.saveCurrentAsBaseline("Legacy input context");
+        var fresh = c.getAcceptedProjectionSnapshot();
+        assertTrue(fresh.provenance().startsWith(PensionSelectionSemantics.PROVENANCE));
+        // Synthetic legacy provenance: numerical evidence is retained exactly, not reinterpreted.
+        var legacy = new CompleteProjectionSnapshot(fresh.version(), fresh.id(), fresh.owner(), fresh.sourcePlanId(), fresh.acceptedAt(),
+                fresh.inputsDocument(), fresh.inputDigest(), "Accepted normal projection; original build version not recorded",
+                fresh.annual(), fresh.nonInvestable(), fresh.summary(), fresh.people());
+        plan.installProjectionComponents(Map.of(legacy.id(), legacy));
+        var file = directory.resolve("legacy-pension.json");
+        c.saveAs(file);
+        var copy = controller();
+        set(copy, "projectionEngine", throwing());
+        copy.open(file);
+        copy.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        var originalAnnual = copy.getAcceptedProjectionSnapshot().annual();
+        assertEquals(legacy.annual(), originalAnnual);
+        assertTrue(copy.currentProjectionInputsMatch(), "Input identity remains distinct from algorithm applicability");
+        assertFalse(copy.currentProjectionDeterministicallyApplicable());
+        assertTrue(copy.getProjectionSnapshotNotice().contains("Historical/outdated pension-tax"));
+        assertNull(copy.prepareAnalyzerAssociation(AnalysisKind.COUPLE_EXHAUSTIVE, "a".repeat(64)));
+        assertThrows(IllegalStateException.class, () -> copy.saveCurrentAsBaseline("Must not relabel old semantics"));
+        copy.save();
+        copy.saveAs(directory.resolve("legacy-pension-copy.json"));
+        assertEquals(legacy.id(), copy.getAcceptedProjectionSnapshot().id());
+        assertEquals(legacy.inputDigest(), copy.getAcceptedProjectionSnapshot().inputDigest());
+        assertEquals(originalAnnual, copy.getAcceptedProjectionSnapshot().annual());
+        // An explicit new calculation can coexist with the immutable old baseline.
+        set(copy, "projectionEngine", new ProjectionEngine());
+        copy.invalidateProjection();
+        copy.getCurrentProjection();
+        assertTrue(copy.currentProjectionDeterministicallyApplicable());
+        var correctedId = copy.getAcceptedProjectionSnapshot().id();
+        assertNotEquals(legacy.id(), correctedId);
+        copy.save();
+        set(copy, "projectionEngine", throwing());
+        var prepared = copy.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertTrue(copy.commitProjectionSwap(prepared));
+        assertEquals(legacy.id(), copy.getAcceptedProjectionSnapshot().id());
+        assertFalse(copy.currentProjectionDeterministicallyApplicable());
+        assertEquals(originalAnnual, copy.getAcceptedProjectionSnapshot().annual());
+        copy.save();
+        prepared = copy.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertTrue(copy.commitProjectionSwap(prepared));
+        assertEquals(correctedId, copy.getAcceptedProjectionSnapshot().id());
+        assertTrue(copy.currentProjectionDeterministicallyApplicable());
+    }
     @TempDir Path directory;
     final List<ApplicationController> controllers = new ArrayList<>();
     ApplicationController controller() throws Exception { return controller(new JsonRetirementPlanRepository()); }

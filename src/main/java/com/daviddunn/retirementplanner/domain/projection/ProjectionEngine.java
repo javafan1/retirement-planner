@@ -483,10 +483,8 @@ public class ProjectionEngine {
         Set<AccountOwnership> eligibleOwners = household.peopleByOwner().keySet().stream()
                 .filter(owner -> !lifetimeRun || deathView.isAlive(owner, calendarYear))
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        Optional<PensionIncomeResult> pensionResult = lifetimeRun
-                ? Optional.of(householdPensionIncomeCalculator
-                        .calculateWithSources(household, projectionDate, deathView))
-                : Optional.empty();
+        Optional<PensionIncomeResult> pensionResult = Optional.of(householdPensionIncomeCalculator
+                .calculateWithSources(household, projectionDate, deathView));
         Optional<BigDecimal> authoritativePensionIncome = pensionResult.map(PensionIncomeResult::total);
 
         BigDecimal guaranteedIncome =
@@ -633,9 +631,9 @@ public class ProjectionEngine {
                         .signum() > 0;
 
         TaxHouseholdContext taxContext = TaxHouseholdContext.capture(
-                household, projectionDate, assumptions.getDeathScenarioAssumptions());
+                household, projectionDate, assumptions.getDeathScenarioAssumptions(), pensionResult);
         if (lifetimeRun) {
-            taxContext = taxContext.withActiveOwners(eligibleOwners).withPensionIncome(pensionResult);
+            taxContext = taxContext.withActiveOwners(eligibleOwners);
         }
         List<IncomeSourceAttribution> preConversionSources = new java.util.ArrayList<>();
         if (openingRmdCalculation != null) {

@@ -155,7 +155,7 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
         var context = new SnapshotContext(binding.kind().shape().name(), payload.display().primaryName(),
                 payload.display().spouseName(), payload.startedAt(), List.of(), List.of(), List.of(), Map.of());
         return new AcceptedAnalysisCompletion(binding.planId(), binding.file(), binding.kind(), UUID.randomUUID(),
-                payload.completedAt(), inputs.fingerprint(), inputs.contextFingerprint(), AnalysisVersions.algorithms(binding.kind(), payload),
+                payload.completedAt(), inputs.fingerprint(), inputs.contextFingerprint(), AnalysisVersions.calculatedAlgorithms(binding.kind(), payload),
                 AnalysisVersions.references(binding.kind()), payload, context);
     }
 

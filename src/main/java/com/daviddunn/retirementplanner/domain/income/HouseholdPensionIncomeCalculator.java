@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Objects;
 
-/** Annual pension cash received under the run-only household lifetime convention. */
+/** Authoritative annual pension cash and tax sources under the effective household death state. */
 public final class HouseholdPensionIncomeCalculator {
     public BigDecimal calculate(Household household, LocalDate date, EffectiveHouseholdDeathView deathView) {
         return calculateWithSources(household, date, deathView).total();

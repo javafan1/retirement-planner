@@ -32,14 +32,19 @@ public final class AnalysisFingerprintService {
             if (!strategy.restore().hasSpouse() || rank < 1) throw new IllegalArgumentException("Invalid ranked couple candidate.");
         }
     }
-    public record Assessment(String fingerprint, String contextFingerprint, String problem) {
+    public record Assessment(String fingerprint, String contextFingerprint, String problem,
+            Boolean legacyPensionAffected) {
+        public Assessment(String fingerprint, String contextFingerprint, String problem) {
+            this(fingerprint, contextFingerprint, problem, null);
+        }
         public boolean valid() { return problem == null; }
     }
 
     /** Callers with invalid pending editor text must supply its problem, never a last-valid fallback. */
     public Assessment assess(AnalysisKind kind, RetirementPlan plan, Inputs inputs, String pendingProblem) {
         if (pendingProblem != null) return new Assessment(null, null, "Inputs need attention: " + pendingProblem);
-        try { return new Assessment(fingerprint(kind, plan, inputs), effectiveContextFingerprint(kind, plan), null); }
+        try { return new Assessment(fingerprint(kind, plan, inputs), effectiveContextFingerprint(kind, plan), null,
+                com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.potentiallyAffected(plan)); }
         catch (RuntimeException invalid) { return new Assessment(null, null, "Inputs need attention."); }
     }
     public String fingerprint(AnalysisKind kind, RetirementPlan plan, Inputs next) {

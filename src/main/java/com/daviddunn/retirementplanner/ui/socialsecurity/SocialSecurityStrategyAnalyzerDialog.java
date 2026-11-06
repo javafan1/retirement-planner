@@ -1039,7 +1039,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                             var report = QuickReportSession.accepted(preparedReport, model, java.time.Instant.now());
                             completedQuick.set(new AcceptedAnalysisCompletion(capturedId, capturedFile, AnalysisKind.COUPLE_QUICK,
                                     preparedReport.runId(), report.completed(), inputFingerprint, contextFingerprint,
-                                    AnalysisVersions.algorithms(AnalysisKind.COUPLE_QUICK), AnalysisVersions.references(AnalysisKind.COUPLE_QUICK),
+                                    AnalysisVersions.calculatedAlgorithms(AnalysisKind.COUPLE_QUICK, null), AnalysisVersions.references(AnalysisKind.COUPLE_QUICK),
                                     QuickSnapshotAdapter.capture(model, report), QuickSnapshotAdapter.context(report)));
                         }
                         return model;
@@ -1223,7 +1223,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                                     association == null ? java.util.UUID.randomUUID() : association.ticket(), completed,
                                     fingerprints.fingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan(), AnalysisFingerprintService.Inputs.none()),
                                     fingerprints.effectiveContextFingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan()),
-                                    AnalysisVersions.algorithms(AnalysisKind.COUPLE_EXHAUSTIVE), AnalysisVersions.references(AnalysisKind.COUPLE_EXHAUSTIVE),
+                                    AnalysisVersions.calculatedAlgorithms(AnalysisKind.COUPLE_EXHAUSTIVE, null), AnalysisVersions.references(AnalysisKind.COUPLE_EXHAUSTIVE),
                                     payload, context);
                         }
                         return new ExhaustiveRun(model, payload, completion);

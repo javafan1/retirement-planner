@@ -22,7 +22,7 @@ public record AnalysisSnapshot(int schemaVersion, int fingerprintVersion, UUID p
         int expectedFingerprint = payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
                 ? mc.fingerprintVersion() : 1;
         if (schemaVersion != SCHEMA || fingerprintVersion != expectedFingerprint || shape != kind.shape()
-                || enabledExpenses && (!kind.isMonteCarlo() || !algorithms.equals(AnalysisVersions.algorithms(kind, payload)))) {
+                || enabledExpenses && (!kind.isMonteCarlo() || !AnalysisVersions.supportedMonteCarloAlgorithms(kind, payload, algorithms))) {
             throw new IllegalArgumentException("Unsupported snapshot version or household shape.");
         }
         for (String digest : List.of(inputFingerprint, contextFingerprint, payloadDigest)) {

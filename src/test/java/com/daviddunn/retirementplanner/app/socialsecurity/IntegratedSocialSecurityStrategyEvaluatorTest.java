@@ -177,11 +177,18 @@ class IntegratedSocialSecurityStrategyEvaluatorTest {
         assertEquals(BigDecimal.ZERO, metrics.afterTaxEstate());
     }
 
-    @Test
-    void exactSpouseSurvivorOverrideChangesIntegratedResultsAndIsIsolated()
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void exactSpouseSurvivorOverrideChangesIntegratedResultsAndIsIsolated(boolean survivorPension)
             throws Exception {
         RetirementPlan plan = plan(new DeathScenarioAssumptions(
                 DeathScenario.PRIMARY_DIES, 2028, 62));
+        if (survivorPension) {
+            var person = plan.getHousehold().getPrimaryPerson();
+            var original = (Pension) person.getIncomeSources().stream().filter(Pension.class::isInstance).findFirst().orElseThrow();
+            person.replaceIncomeSource(original, new Pension(original.getName(), original.getOwnership(), original.getStartDate(),
+                    original.getEndDate(), original.getMonthlyBenefit(), original.getAnnualColaRate(), new BigDecimal("3000")));
+        }
         String before = json(plan);
         SocialSecurityHouseholdClaimingStrategy early = strategy(plan, 67, 62, 60, 60);
         SocialSecurityHouseholdClaimingStrategy later = strategy(plan, 67, 62, 60, 67);
@@ -208,7 +215,20 @@ class IntegratedSocialSecurityStrategyEvaluatorTest {
                         .spouseSurvivorCandidate().signum() == 0));
         assertNotEquals(firstEarly.metrics().lifetimeHouseholdSocialSecurity(),
                 late.metrics().lifetimeHouseholdSocialSecurity());
-        assertNotEquals(firstEarly.metrics().totalTaxes(), late.metrics().totalTaxes());
+        if (survivorPension) assertNotEquals(firstEarly.metrics().totalTaxes(), late.metrics().totalTaxes());
+        else for (var result : java.util.List.of(firstEarly, late)) {
+            // No survivor pension, brokerage funding and SS below the taxable threshold:
+            // the former tax difference came from phantom owner pension income.
+            for (var year : result.projection().getYears()) if (year.getCalendarYear() >= 2028) {
+                assertMoney(BigDecimal.ZERO, year.getAdjustedGrossIncome());
+                assertMoney(BigDecimal.ZERO, year.getTaxableSocialSecurity());
+                assertMoney(BigDecimal.ZERO, year.getTotalIncomeTax());
+                assertTrue(year.getIncomeSources().stream().noneMatch(s -> s.kind()
+                        == com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.PENSION));
+            }
+            assertMoney(result.projection().getYears().stream().filter(y -> y.getCalendarYear() < 2028)
+                    .map(ProjectionYear::getTotalIncomeTax).reduce(BigDecimal.ZERO, BigDecimal::add), result.metrics().totalTaxes());
+        }
         assertNotEquals(firstEarly.metrics().lifetimePortfolioWithdrawals(),
                 late.metrics().lifetimePortfolioWithdrawals());
         assertEquals(firstEarly.metrics(), secondEarly.metrics());
