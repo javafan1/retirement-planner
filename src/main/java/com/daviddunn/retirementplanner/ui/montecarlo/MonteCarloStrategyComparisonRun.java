@@ -10,5 +10,9 @@ public record MonteCarloStrategyComparisonRun(
         Objects.requireNonNull(result);
         Objects.requireNonNull(mode);
         Objects.requireNonNull(details);
+        if (result.expenseExecution() != null) {
+            for (String line : result.expenseExecution().disclosure(result.request()))
+                if (!details.contains(line)) details += "\n" + line;
+        }
     }
 }

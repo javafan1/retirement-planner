@@ -20,14 +20,14 @@ public final class MonteCarloRunService {
                                      AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
         long started = System.nanoTime();
         cancellation.throwIfCancellationRequested();
-        com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireSupported(frozenPlan);
+        com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireStandaloneSupported(frozenPlan);
         var result = new MonteCarloAnalyzer().analyzeMortality(frozenPlan, request, progress, cancellation);
         cancellation.throwIfCancellationRequested();
         var people = BreakEvenPlanSummary.from(frozenPlan.getHousehold());
         return new MonteCarloRun(new MonteCarloRun.Mortality(result),
                 MonteCarloFanModel.from(result, people), people,
                 result.firstReportingYear(), result.lastReportingYear().orElse(result.firstReportingYear() - 1),
-                false, System.nanoTime() - started).withPlanDetails(planDetails(frozenPlan));
+                false, System.nanoTime() - started).withPlanDetails(planDetails(frozenPlan) + expenseDetails(frozenPlan, result.expenseExecution()));
     }
 
     public MonteCarloRun run(RetirementPlan frozenPlan, MonteCarloSettings settings, Projection cachedReference,
@@ -35,7 +35,7 @@ public final class MonteCarloRunService {
         long started = System.nanoTime();
         cancellation.throwIfCancellationRequested();
         ProjectionEngine engine = new ProjectionEngine();
-        com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireSupported(frozenPlan);
+        com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireStandaloneSupported(frozenPlan);
         ProjectionExecutionResult reference = cachedReference == null
                 ? engine.projectWithOutcome(frozenPlan)
                 : new ProjectionExecutionResult.Completed(cachedReference.getYears());
@@ -52,7 +52,11 @@ public final class MonteCarloRunService {
         cancellation.throwIfCancellationRequested();
         return new MonteCarloRun(result, MonteCarloFanModel.from(result, context), people, first, last,
                 reference instanceof ProjectionExecutionResult.InsufficientFunds, System.nanoTime() - started)
-                .withPlanDetails(planDetails(frozenPlan));
+                .withPlanDetails(planDetails(frozenPlan) + expenseDetails(frozenPlan, result.expenseExecution()));
+    }
+
+    private static String expenseDetails(RetirementPlan original, com.daviddunn.retirementplanner.app.montecarlo.ExpenseExecution capability) {
+        return capability == null ? "" : "\n" + String.join("\n", capability.disclosure(original));
     }
 
     private static String planDetails(RetirementPlan plan) {

@@ -30,8 +30,6 @@ public final class MonteCarloStrategyComparisonRunService {
         var a = copier.copy(current);
         var b = copier.copy(new RetirementPlan(snapshot.getHousehold(), snapshot.getAccountPortfolio(),
                 snapshot.getPlanningAssumptions(), snapshot.getRothConversionRequest(), snapshot.getNonInvestableAssets()));
-        ExpenseVolatilityAdmission.requireSupported(a);
-        ExpenseVolatilityAdmission.requireSupported(b);
         if (!ProjectionReadiness.isReady(a) || !ProjectionReadiness.isReady(b)) {
             throw new IllegalArgumentException("Both strategies require birth dates and a projection start date.");
         }
@@ -149,6 +147,8 @@ public final class MonteCarloStrategyComparisonRunService {
     public MonteCarloStrategyComparisonRun run(Prepared prepared, AnalysisProgressListener progress,
             AnalysisCancellationToken cancellation) {
         long start = System.nanoTime();
+        cancellation.throwIfCancellationRequested();
+        ExpenseVolatilityAdmission.requireComparisonSupported(prepared.request());
         var result = new MonteCarloStrategyComparisonAnalyzer().analyzeComparison(prepared.request(), progress, cancellation);
         cancellation.throwIfCancellationRequested();
         return new MonteCarloStrategyComparisonRun(result, prepared.mode(), prepared.details(), System.nanoTime() - start);

@@ -61,7 +61,7 @@ public final class JsonAnalysisSnapshotRepository implements AnalysisSnapshotRep
                     var readability = new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisCompatibilityPolicy().assess(previous,
                             new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisFingerprintService.Assessment(
                                     previous.inputFingerprint(), previous.contextFingerprint(), null),
-                            com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisVersions.algorithms(s.kind()), previous.references());
+                            com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisVersions.algorithms(previous.kind(), previous.payload()), previous.references());
                     if (readability.state() == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisCompatibilityPolicy.State.INCOMPATIBLE_OR_UNAVAILABLE)
                         throw new IOException("Historical results have unsupported financial meaning and were preserved. Explicit recovery is required before replacement.");
                 }

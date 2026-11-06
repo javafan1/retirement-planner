@@ -119,7 +119,13 @@ public final class MonteCarloAnalyzer {
         cancellation.throwIfCancellationRequested();
         Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
-        if (expenses == null) ExpenseVolatilityAdmission.requireSupported(plan);
+        ExpenseExecution expenseExecution = null;
+        if (expenses == null && ExpenseExecution.configured(plan)) {
+            if (suppliedWorlds != null || !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
+                throw new UnsupportedOperationException("Stochastic expense execution requires generated standalone worlds; caller-supplied worlds are not supported.");
+            expenseExecution = ExpenseExecution.capture(plan);
+            expenses = InternalExpenseRun.configured(plan);
+        } else if (expenses == null) ExpenseVolatilityAdmission.requireSupported(plan);
         if (expenses != null) {
             expenses.validate(plan);
             if (expenses.enabled()) InternalExpenseRun.requireGeneratedWorlds(suppliedWorlds);
@@ -191,7 +197,7 @@ public final class MonteCarloAnalyzer {
             }
         }
         cancellation.throwIfCancellationRequested();
-        var result = new MonteCarloMortalityAnalysisResult(request, returnModel, mortalityModel, outcomes);
+        var result = new MonteCarloMortalityAnalysisResult(request, returnModel, mortalityModel, outcomes, null, expenseExecution);
         cancellation.throwIfCancellationRequested();
         return result;
     }
@@ -312,7 +318,13 @@ public final class MonteCarloAnalyzer {
         cancellation.throwIfCancellationRequested();
         Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
-        if (expenses == null) ExpenseVolatilityAdmission.requireSupported(plan);
+        ExpenseExecution expenseExecution = null;
+        if (expenses == null && ExpenseExecution.configured(plan)) {
+            if (!MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
+                throw new UnsupportedOperationException("Stochastic expense execution requires generated standalone paths; caller-supplied paths are not supported.");
+            expenseExecution = ExpenseExecution.capture(plan);
+            expenses = InternalExpenseRun.configured(plan);
+        } else if (expenses == null) ExpenseVolatilityAdmission.requireSupported(plan);
         if (expenses != null) {
             expenses.validate(plan);
             if (expenses.enabled() && !returnModel.equals(MonteCarloScenarioGenerator.MODEL_VERSION)) {
@@ -385,7 +397,7 @@ public final class MonteCarloAnalyzer {
         var result = new MonteCarloAnalysisResult(
                 settings, returnModel, outcomes, annual,
                 MonteCarloPercentiles.of(assets), MonteCarloPercentiles.of(worth),
-                MonteCarloPercentiles.of(estate), MonteCarloPercentiles.of(taxes), deterministic);
+                MonteCarloPercentiles.of(estate), MonteCarloPercentiles.of(taxes), deterministic, expenseExecution);
         cancellation.throwIfCancellationRequested();
         return result;
     }

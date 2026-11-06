@@ -5,7 +5,7 @@ import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 
 import java.util.Objects;
 
-/** A complete privately frozen financial input, with no stochastic inputs. */
+/** A complete privately frozen financial input; no generated scenario paths are retained. */
 public final class MonteCarloStrategyCandidate {
     private final String label;
     private final RetirementPlan frozenPlan;
@@ -29,5 +29,10 @@ public final class MonteCarloStrategyCandidate {
     /** One isolated working copy per run, never one per world. The frozen source is not exposed. */
     RetirementPlan copyForRun() {
         return new RetirementPlanScenarioCopyService().copy(frozenPlan);
+    }
+
+    /** Pure validation on private frozen inputs; no mutable plan escapes and no execution is admitted. */
+    void validateExpenseConfiguration() {
+        ExpenseVolatilityAdmission.requireStandaloneSupported(frozenPlan);
     }
 }

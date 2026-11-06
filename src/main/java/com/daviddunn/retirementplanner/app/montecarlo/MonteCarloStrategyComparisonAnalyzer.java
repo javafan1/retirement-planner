@@ -27,7 +27,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         this.engine = Objects.requireNonNull(engine);
     }
 
-    /** No supported historical/export representation until Phase 14B3. */
+    /** Internal override oracles remain separate from supported configured-result provenance. */
     InternalExpenseResults.Comparison analyzeInternalExpenses(MonteCarloStrategyComparisonRequest request,
             InternalExpenseRun expensesA, InternalExpenseRun expensesB,
             AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
@@ -66,6 +66,15 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         Objects.requireNonNull(cancellation).throwIfCancellationRequested();
         var a = request.strategyA().copyForRun();
         var b = request.strategyB().copyForRun();
+        PairedExpenseExecution expenseExecution = null;
+        if (expensesA == null && expensesB == null && (ExpenseExecution.configured(a) || ExpenseExecution.configured(b))) {
+            if (supplied != null)
+                throw new UnsupportedOperationException("Stochastic expense comparison requires generated worlds; caller-supplied worlds are not supported.");
+            ExpenseVolatilityAdmission.requireComparisonSupported(a, b);
+            expenseExecution = PairedExpenseExecution.capture(MonteCarloPlanDocument.capture(a), MonteCarloPlanDocument.capture(b));
+            if (expenseExecution.current() != null) expensesA = InternalExpenseRun.configured(a);
+            if (expenseExecution.baseline() != null) expensesB = InternalExpenseRun.configured(b);
+        }
         if (expensesA == null) ExpenseVolatilityAdmission.requireSupported(a);
         if (expensesB == null) ExpenseVolatilityAdmission.requireSupported(b);
         if (expensesA != null) expensesA.validate(a);
@@ -104,9 +113,11 @@ public final class MonteCarloStrategyComparisonAnalyzer {
             }
         }
         cancellation.throwIfCancellationRequested();
+        if (expenseExecution != null)
+            expenseExecution.validate(MonteCarloPlanDocument.capture(a), MonteCarloPlanDocument.capture(b));
         return new MonteCarloStrategyComparisonResult(request, supplied == null
                 ? MonteCarloStrategyComparisonResult.WorldSource.GENERATED
-                : MonteCarloStrategyComparisonResult.WorldSource.CALLER_SUPPLIED, pairs);
+                : MonteCarloStrategyComparisonResult.WorldSource.CALLER_SUPPLIED, pairs, null, expenseExecution);
     }
 
     private MonteCarloStrategyOutcome evaluateSide(RetirementPlan plan, MonteCarloComparisonWorld world,

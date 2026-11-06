@@ -222,8 +222,8 @@ class MonteCarloViewTest {
                     }
                     field(view, "#mc-volatility").setText("15");
                     assertTrue(view.session().stale());
-                    assertTrue(((Label) view.lookup("#mc-status")).getText().contains("Assessing"));
-                    assertFalse(((Label) view.lookup("#mc-status")).getText().contains("Outdated"),
+                    assertTrue(((Label) view.lookup("#mc-saved-status")).getText().contains("Assessing"));
+                    assertFalse(((Label) view.lookup("#mc-saved-status")).getText().contains("Outdated"),
                             "An input edit must be assessed before a mismatch can be reported.");
                     controller.markModified();
                     assertTrue(view.session().stale());

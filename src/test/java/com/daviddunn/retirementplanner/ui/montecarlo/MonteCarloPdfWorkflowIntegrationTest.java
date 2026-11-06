@@ -54,6 +54,37 @@ class MonteCarloPdfWorkflowIntegrationTest {
         MonteCarloViewTest.fx(() -> { stage.close(); return null; });
     }
 
+    @Test void enabledStandaloneViewAndSaveKeepOriginalExpenseDisclosures() throws Exception {
+        var plan = MonteCarloUiFixtures.plan("1200000", 3);
+        StandaloneExpenseHistoryTest.volatility(plan, ".25");
+        var run = new MonteCarloRunService().run(plan,
+                com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSettings.forPlan(plan, 2, 417, new java.math.BigDecimal(".12")),
+                null, com.daviddunn.retirementplanner.domain.analysis.AnalysisProgressListener.none(),
+                com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken.none());
+        var report = MonteCarloViewTest.fx(() -> MonteCarloPdfReportAdapter.from(run));
+        assertTrue(String.join("\n", report.context()).contains("expense 1 = 25%"));
+        verifyChoice(report, PdfExportChoice.VIEW);
+        verifyChoice(report, PdfExportChoice.SAVE);
+    }
+
+    @Test void enabledComparisonViewAndSaveKeepBothCandidateDisclosures() throws Exception {
+        var plan = MonteCarloComparisonFixtures.plan();
+        StandaloneExpenseHistoryTest.volatility(plan, ".25");
+        var b = new com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService().copy(plan);
+        b.setBaseline(null); StandaloneExpenseHistoryTest.volatility(b, ".17");
+        plan.setBaseline(com.daviddunn.retirementplanner.domain.baseline.ProjectionBaselineFactory.create(b, "Independent original"));
+        var prepared = MonteCarloStrategyComparisonRunService.capture(plan,
+                com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSettings.forPlan(plan, 2, 417, new java.math.BigDecimal(".12")),
+                MonteCarloMode.FIXED_LIFESPAN, "1", "1", "67", "67");
+        var run = new MonteCarloStrategyComparisonRunService().run(prepared,
+                com.daviddunn.retirementplanner.domain.analysis.AnalysisProgressListener.none(),
+                com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken.none());
+        var report = MonteCarloViewTest.fx(() -> MonteCarloPdfReportAdapter.from(run));
+        assertTrue(PairedExpenseHistoryTest.assumptionText(report).contains("expense 1 = 25%"));
+        assertTrue(PairedExpenseHistoryTest.assumptionText(report).contains("expense 1 = 17%"));
+        verifyChoice(report, PdfExportChoice.VIEW); verifyChoice(report, PdfExportChoice.SAVE);
+    }
+
     @Test void duplicateActivationIsRejectedAndStaleSelectionCannotChangeCapturedPdf() throws Exception {
         var run = MonteCarloUiFixtures.run("1300000");
         MonteCarloPdfReport report = MonteCarloViewTest.fx(() -> MonteCarloPdfReportAdapter.from(run));
@@ -146,6 +177,11 @@ class MonteCarloPdfWorkflowIntegrationTest {
                 assertTrue(generatedText.contains("Strategy B"));
             }
             assertFalse(Files.exists(store.directory()));
+        }
+        if (PairedExpenseHistoryTest.assumptionText(report).contains("paired execution version")) {
+            String text = MonteCarloPdfExportTest.text(choice == PdfExportChoice.VIEW ? opened.get() : saved).replaceAll("\\s+", " ");
+            assertTrue(text.contains("expense 1 = 25%")); assertTrue(text.contains("expense 1 = 17%"));
+            assertTrue(text.contains("intentionally unmatched"));
         }
         MonteCarloViewTest.fx(() -> { stage.close(); return null; });
     }

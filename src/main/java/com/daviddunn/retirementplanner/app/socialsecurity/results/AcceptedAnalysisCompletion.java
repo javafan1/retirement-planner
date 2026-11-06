@@ -38,7 +38,9 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
     }
     /** Immutable in-memory metadata; this operation makes no claim of durable storage. */
     public AnalysisSnapshot presentationSnapshot(AnalysisSnapshotCodec codec) {
-        return new AnalysisSnapshot(1, 1, planId, kind, kind.shape(), runId, completedAt,
+        int fingerprintVersion = payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                ? mc.fingerprintVersion() : 1;
+        return new AnalysisSnapshot(1, fingerprintVersion, planId, kind, kind.shape(), runId, completedAt,
                 "1.0-SNAPSHOT", algorithms, references.isEmpty() ? AnalysisVersions.references(kind) : references, inputFingerprint, contextFingerprint,
                 codec.digest(payload, context), payload, context, null);
     }

@@ -48,7 +48,12 @@ public final class MonteCarloSnapshotPresentationMapper {
                 Optional.ofNullable(y.deterministic()), Optional.ofNullable(y.population()).map(MonteCarloSnapshotPresentationMapper::population))).toList(),
                 snapshot.settings().trials(), context, snapshot.mode() == Mode.FIXED ? MonteCarloMode.FIXED_LIFESPAN : MonteCarloMode.LONGEVITY_ADJUSTED,
                 d.primaryName(), d.spouseName());
-        return new MonteCarloRun(result, fan, d.people(), d.firstYear(), d.lastYear(), d.referenceIncomplete(), d.elapsedNanos(), d.details());
+        String details = d.details();
+        if (snapshot.expenseExecution() != null) {
+            for (String line : snapshot.expenseExecution().disclosure(snapshot.request().planA()))
+                if (!details.contains(line)) details += "\n" + line;
+        }
+        return new MonteCarloRun(result, fan, d.people(), d.firstYear(), d.lastYear(), d.referenceIncomplete(), d.elapsedNanos(), details);
     }
     public static MonteCarloStrategyComparisonRun restoreComparison(MonteCarloSnapshot snapshot) {
         return new MonteCarloStrategyComparisonRun(MonteCarloSnapshotMapping.restoreComparison(snapshot),

@@ -7,6 +7,8 @@
 .mc-section { -fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: -fx-text-base-color; }
 .mc-muted { -fx-text-fill: -fx-text-base-color; }
 .mc-status { -fx-text-fill: -fx-text-base-color; -fx-font-weight: bold; }
+.mc-run-feedback { -fx-padding: 8 12; -fx-background-color: -fx-background; -fx-border-color: -fx-box-border transparent transparent transparent; }
+.app-theme .mc-run-feedback .mc-validation { -fx-text-fill: -app-error; }
 .mc-validation { -fx-text-fill: #a12b32; }
 .mc-probability { -fx-font-size: 36px; -fx-font-weight: bold; -fx-text-fill: -fx-text-base-color; }
 .mc-run { -fx-background-color: #235dc4; -fx-text-fill: white; -fx-background-radius: 5; -fx-padding: 7 15; }

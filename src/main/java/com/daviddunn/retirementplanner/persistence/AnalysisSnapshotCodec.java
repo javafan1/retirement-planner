@@ -288,6 +288,9 @@ public final class AnalysisSnapshotCodec {
         fields.addAll(Set.of("exhaustiveRepresentation", "tables", "document", "$ref"));
         var types = new ArrayList<Class<?>>();
         types.add(com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot.class);
+        types.add(com.daviddunn.retirementplanner.app.montecarlo.ExpenseExecution.class);
+        types.add(com.daviddunn.retirementplanner.app.montecarlo.PairedExpenseExecution.class);
+        types.addAll(List.of(com.daviddunn.retirementplanner.app.montecarlo.ExpenseExecution.class.getDeclaredClasses()));
         types.addAll(List.of(com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot.class.getDeclaredClasses()));
         types.addAll(List.of(WeightedSnapshots.class.getDeclaredClasses()));
         types.addAll(List.of(CoupleSocialSecuritySnapshot.class.getDeclaredClasses()));
@@ -338,6 +341,12 @@ public final class AnalysisSnapshotCodec {
         if (s.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
                 && (!s.completedAt().equals(mc.completedAt()) || !s.context().startedAt().equals(mc.startedAt())))
             throw new IOException("Monte Carlo timestamps do not match the envelope.");
+        if (s.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc && mc.hasExpenseExecution()) {
+            var expected = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().storedFingerprint(mc);
+            if (!expected.valid() || !expected.fingerprint().equals(s.inputFingerprint())
+                    || !expected.contextFingerprint().equals(s.contextFingerprint()))
+                throw new IOException("Stochastic expense request fingerprint cannot be verified.");
+        }
         if (digest(s.payload(), s.context()).equals(s.payloadDigest())) return;
         if (s.kind() == AnalysisKind.COUPLE_SOCIAL_SECURITY
                 && usesLegacySocialSecurityRequestShape(s)

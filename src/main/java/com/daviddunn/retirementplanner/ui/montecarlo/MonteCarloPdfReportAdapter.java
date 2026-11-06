@@ -25,6 +25,7 @@ public final class MonteCarloPdfReportAdapter {
         boolean mortality = run.mode() == MonteCarloMode.LONGEVITY_ADJUSTED;
         var sections = new ArrayList<Section>();
         var context = new ArrayList<>(settings(run.settings()));
+        context.add("Household: " + (couple ? "Couple" : "Single person"));
         context.addAll(Arrays.asList(run.planDetails().split("\n")));
         List<Optional<MonteCarloPercentiles>> metrics;
         Optional<FundingFailureStatistics> failures;
@@ -103,6 +104,7 @@ public final class MonteCarloPdfReportAdapter {
         var r = run.result(); var s = r.summary(); var p = s.pairedStates();
         var sections = new ArrayList<Section>();
         var context = new ArrayList<>(settings(r.request().assumptions().settings()));
+        context.add("Household: " + (r.request().assumptions().hasSpouse() ? "Couple" : "Single person"));
         context.add("Strategy A — " + r.request().strategyA().label() + " | Strategy B — " + r.request().strategyB().label());
         Arrays.stream(run.details().split("\n")).filter(line -> line.startsWith("Categories:") || line.startsWith("Longevity factors:")
                 || line.startsWith("Healthcare inflation:") || line.startsWith("Common fixed horizon:"))

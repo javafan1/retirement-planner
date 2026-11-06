@@ -10,22 +10,49 @@ import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 
-/** Explicit v1 storage graph. No JavaFX objects, optional serializers, random generators or engines. */
+/** Explicit versioned storage graph. No JavaFX objects, optional serializers, random generators or engines. */
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = MonteCarloSnapshotDeserializer.class)
 public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Settings settings,
         Request request, Provenance provenance, Fixed fixed, Mortality mortality, Paired paired,
-        Display display, Instant startedAt, Instant completedAt) implements AnalysisPayload {
+        Display display, Instant startedAt, Instant completedAt,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        ExpenseExecution expenseExecution,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        PairedExpenseExecution pairedExpenseExecution) implements AnalysisPayload {
     public static final int VERSION = 1;
+    public static final int EXPENSE_VERSION = 2;
+    public static final int PAIRED_EXPENSE_VERSION = 3;
     public static final int MAX_TRIALS = 100_000;
     public static final int MAX_YEARS = 1_000;
     public static final long MAX_ANNUAL_OBSERVATIONS = 1_500_000;
     public static final String AGGREGATION = "TYPE7-v1/complete-terminals/living-funded-prefixes/paired-both-completed/A-minus-B";
     public enum Mode { FIXED, LONGEVITY, PAIRED_FIXED, PAIRED_LONGEVITY }
 
+    public MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Settings settings, Request request,
+            Provenance provenance, Fixed fixed, Mortality mortality, Paired paired, Display display,
+            Instant startedAt, Instant completedAt) {
+        this(version, mode, hasSpouse, settings, request, provenance, fixed, mortality, paired, display,
+                startedAt, completedAt, null, null);
+    }
+
+    public MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Settings settings, Request request,
+            Provenance provenance, Fixed fixed, Mortality mortality, Paired paired, Display display,
+            Instant startedAt, Instant completedAt, ExpenseExecution expenseExecution) {
+        this(version, mode, hasSpouse, settings, request, provenance, fixed, mortality, paired, display,
+                startedAt, completedAt, expenseExecution, null);
+    }
+
     public MonteCarloSnapshot {
         Objects.requireNonNull(mode); Objects.requireNonNull(settings); Objects.requireNonNull(request);
         Objects.requireNonNull(provenance); Objects.requireNonNull(display);
         Objects.requireNonNull(startedAt); Objects.requireNonNull(completedAt);
-        if (version != VERSION || completedAt.isBefore(startedAt)) throw invalid("Unsupported version or timestamps.");
+        if ((version != VERSION && version != EXPENSE_VERSION && version != PAIRED_EXPENSE_VERSION) || completedAt.isBefore(startedAt))
+            throw invalid("Unsupported version or timestamps.");
+        if ((version == EXPENSE_VERSION) != (expenseExecution != null)
+                || (version == PAIRED_EXPENSE_VERSION) != (pairedExpenseExecution != null)
+                || version == EXPENSE_VERSION && (mode != Mode.FIXED && mode != Mode.LONGEVITY)
+                || version == PAIRED_EXPENSE_VERSION && (mode != Mode.PAIRED_FIXED && mode != Mode.PAIRED_LONGEVITY))
+            throw invalid("Unsupported expense capability/result combination.");
         if ((fixed == null ? 0 : 1) + (mortality == null ? 0 : 1) + (paired == null ? 0 : 1) != 1
                 || (mode == Mode.FIXED) != (fixed != null) || (mode == Mode.LONGEVITY) != (mortality != null))
             throw invalid("Result family mismatch.");
@@ -40,6 +67,20 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
     @Override public void validate(AnalysisKind kind) {
         if (kind != kind()) throw invalid("Analysis kind mismatch.");
         request.validate(hasSpouse, mode, settings);
+        if (pairedExpenseExecution != null) pairedExpenseExecution.validate(request.planA(), request.planB());
+        if (expenseExecution != null) {
+            expenseExecution.validate(request.planA());
+        }
+        if (hasExpenseExecution()) {
+            if (provenance.source() != MonteCarloStrategyComparisonResult.WorldSource.GENERATED
+                    || !MonteCarloScenarioGenerator.MODEL_VERSION.equals(provenance.returns())
+                    || !MonteCarloInflationGenerator.MODEL_VERSION.equals(provenance.inflation())
+                    || !"RPMC-SHA256-v1/legacy-market-v1".equals(provenance.streams())
+                    || (mode == Mode.LONGEVITY || mode == Mode.PAIRED_LONGEVITY)
+                        && !(hasSpouse ? "HOUSEHOLD_MORTALITY_V1" : "PRIMARY_MORTALITY_V1").equals(provenance.mortality())
+                    || provenance.suppliedWorldFingerprint() != null)
+                throw invalid("Enabled expenses require supported generated worlds.");
+        }
         if ((mortality != null || mode == Mode.PAIRED_LONGEVITY) != (provenance.mortality() != null))
             throw invalid("Mortality provenance does not match the result family.");
         int n = settings.trials();
@@ -96,6 +137,17 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
                 || display.people() != null && display.people().hasSpouse() != hasSpouse)
             throw invalid("Display household mismatch.");
         MonteCarloSnapshotNumbers.validate(this);
+    }
+
+    public int fingerprintVersion() { return pairedExpenseExecution != null ? 4 : expenseExecution != null ? 3 : 1; }
+
+    public boolean hasExpenseExecution() { return expenseExecution != null || pairedExpenseExecution != null; }
+
+    /** A legacy artifact is never reinterpreted as proof of enabled execution. */
+    public void requireInterpretable() {
+        if (!hasExpenseExecution() && (ExpenseExecution.configured(MonteCarloPlanDocument.read(request.planA()))
+                || request.planB() != null && ExpenseExecution.configured(MonteCarloPlanDocument.read(request.planB()))))
+            throw invalid("Historical expense configuration has no supported execution provenance; the artifact was preserved.");
     }
 
     public record Settings(int trials, long seed, BigDecimal expectedReturn, BigDecimal volatility,

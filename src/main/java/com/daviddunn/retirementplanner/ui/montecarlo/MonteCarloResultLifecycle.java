@@ -84,7 +84,7 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
             var saved = found.orElseThrow();
             var compatibility = new AnalysisCompatibilityPolicy().assess(saved,
                     new AnalysisFingerprintService.Assessment(saved.inputFingerprint(), saved.contextFingerprint(), null),
-                    AnalysisVersions.algorithms(captured.kind()), AnalysisVersions.references(captured.kind()));
+                    AnalysisVersions.algorithms(captured.kind(), saved.payload()), AnalysisVersions.references(captured.kind()));
             if (compatibility.state() == AnalysisCompatibilityPolicy.State.INCOMPATIBLE_OR_UNAVAILABLE)
                 throw new IllegalArgumentException("Unsupported saved financial meaning.");
             return new Loaded<>(saved, reconstruct.apply((MonteCarloSnapshot) saved.payload()));
@@ -150,12 +150,12 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
 
     /** Capture is worker-only and independent of later edits to the controller or view. */
     public static AcceptedAnalysisCompletion completion(Binding binding, MonteCarloSnapshot payload) {
-        var inputs = new MonteCarloFingerprintService().storedV1(payload);
+        var inputs = new MonteCarloFingerprintService().storedFingerprint(payload);
         if (!inputs.valid()) throw new IllegalArgumentException("Cannot fingerprint accepted Monte Carlo inputs.");
         var context = new SnapshotContext(binding.kind().shape().name(), payload.display().primaryName(),
                 payload.display().spouseName(), payload.startedAt(), List.of(), List.of(), List.of(), Map.of());
         return new AcceptedAnalysisCompletion(binding.planId(), binding.file(), binding.kind(), UUID.randomUUID(),
-                payload.completedAt(), inputs.fingerprint(), inputs.contextFingerprint(), AnalysisVersions.algorithms(binding.kind()),
+                payload.completedAt(), inputs.fingerprint(), inputs.contextFingerprint(), AnalysisVersions.algorithms(binding.kind(), payload),
                 AnalysisVersions.references(binding.kind()), payload, context);
     }
 

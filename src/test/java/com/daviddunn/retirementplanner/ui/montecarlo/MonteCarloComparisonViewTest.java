@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloViewTest.*;
 
 class MonteCarloComparisonViewTest {
+    @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory;
     @BeforeAll static void init() throws Exception { startFx(); }
     static void key(MonteCarloDifferenceChart chart, KeyCode code) {
         chart.fireEvent(new KeyEvent(KeyEvent.KEY_PRESSED, "", "", code, false, false, false, false));
@@ -93,7 +94,12 @@ class MonteCarloComparisonViewTest {
 
     @Test void completedViewFreezesMetadataSelectionDoesNotRerunAndEditsMarkStale() throws Exception {
         var jobs = new ArrayDeque<Runnable>(); var calls = new AtomicInteger();
-        var plan = MonteCarloComparisonFixtures.plan(); var controller = new Controller(plan);
+        var plan = MonteCarloComparisonFixtures.plan();
+        var controller = new ApplicationController(new com.daviddunn.retirementplanner.persistence.JsonRetirementPlanRepository(),
+                new com.daviddunn.retirementplanner.persistence.JsonApplicationSettingsRepository(directory.resolve("settings.json")),
+                new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultStore(
+                        new com.daviddunn.retirementplanner.persistence.JsonAnalysisSnapshotRepository(directory.resolve("results"))));
+        controller.newPlan(plan); controller.saveAs(directory.resolve("synthetic.json"));
         var view = fx(() -> {
             var v = new MonteCarloStrategyComparisonView(controller, jobs::add, (p, u, c) -> {
                 calls.incrementAndGet(); return new MonteCarloStrategyComparisonRunService().run(p, u, c);
@@ -104,6 +110,7 @@ class MonteCarloComparisonViewTest {
             return v;
         });
         jobs.remove().run(); waitForFx();
+        MonteCarloParameterPersistenceTest.await((Label) view.lookup("#mcc-saved-status"), "Current Results");
         fx(() -> {
             try {
                 assertEquals(MonteCarloStrategyComparisonSession.State.COMPLETED, view.session().state());
@@ -127,9 +134,9 @@ class MonteCarloComparisonViewTest {
                 plan.getHousehold().getPrimaryPerson().setBirthDate(java.time.LocalDate.of(1961, 1, 1)); controller.markModified();
                 assertTrue(view.session().stale()); assertSame(result, view.session().result());
                 ((TextField) view.lookup("#mcc-seed")).setText("999");
-                assertTrue(((Label) view.lookup("#mcc-status")).getText().contains("Assessing"));
-                assertFalse(((Label) view.lookup("#mcc-status")).getText().contains("Outdated"),
-                        "An edited request awaits fingerprint assessment; revision invalidation is not proof of mismatch.");
+                assertTrue(((Label) view.lookup("#mcc-saved-status")).getText().contains("Inputs Need Attention"));
+                assertFalse(((Label) view.lookup("#mcc-saved-status")).getText().contains("Outdated"),
+                        "Mismatched birth dates make the pending request invalid, not proof of a financial fingerprint mismatch.");
                 assertEquals(frozen, ((Label) ((TitledPane) view.lookup("#mcc-details")).getContent()).getText());
                 for (var node : view.lookupAll(".label")) {
                     String text = ((Label) node).getText().toLowerCase(Locale.ROOT);
@@ -138,6 +145,7 @@ class MonteCarloComparisonViewTest {
             } finally { view.close(); }
             return null;
         });
+        MonteCarloParameterPersistenceTest.stop(controller);
     }
 
     @Test void cancelAndCloseCannotPublishPendingWork() throws Exception {

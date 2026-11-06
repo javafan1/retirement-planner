@@ -10,7 +10,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Phase 14B2 internal execution inputs only. No public/menu, snapshot, PDF or supplied-world API.
+ * Internal scenario execution adapter; supported public runs carry a separate ExpenseExecution capability.
+ * This object is never persisted or exposed as a supplied-world API.
  * Frozen exact expense definitions authorize bindings; B1 canonical keys only pair random draws.
  */
 final class InternalExpenseRun {
@@ -36,6 +37,13 @@ final class InternalExpenseRun {
         return new InternalExpenseRun(plan, volatilities);
     }
 
+    /** Narrow adapter for supported generated standalone requests, using the exact isolated plan. */
+    static InternalExpenseRun configured(RetirementPlan plan) {
+        ExpenseVolatilityAdmission.requireStandaloneSupported(plan);
+        return capture(plan, plan.getHousehold().getExpenses().stream()
+                .map(e -> e.getEffectiveAnnualExpenseVolatility()).toList());
+    }
+
     void validate(RetirementPlan plan) {
         if (!definitions.equals(plan.getHousehold().getExpenses().stream().map(FinancialDefinition::capture).toList())) {
             throw new IllegalArgumentException("Run-only volatility inputs differ from the frozen financial expense list.");
@@ -55,7 +63,7 @@ final class InternalExpenseRun {
 
     static void requireGeneratedWorlds(Object supplied) {
         if (supplied != null) {
-            throw new UnsupportedOperationException("Enabled expense supplied-world execution is unavailable until Phase 14B3 provenance support.");
+            throw new UnsupportedOperationException("Enabled expense execution requires generated worlds; caller-supplied worlds are not supported.");
         }
     }
 }

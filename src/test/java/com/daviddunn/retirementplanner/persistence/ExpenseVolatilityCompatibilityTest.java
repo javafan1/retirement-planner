@@ -93,15 +93,18 @@ public class ExpenseVolatilityCompatibilityTest {
         assertFalse(CompleteProjectionSnapshot.sameDeterministicInputs(original, after.replace("\"growthCategory\":\"GENERAL\"", "\"growthCategory\":\"NONE\"")));
     }
 
-    @Test void publicMonteCarloAndReferencePreparationRejectEnabledConfiguration() {
+    @Test void supportedStandalonePreservesConfiguredVolatilityWhileSuppliedPathsRemainRejected() {
         var plan = MonteCarloFixtures.household(); volatility(plan, "0.20");
         var settings = new MonteCarloSettings(1, 123L, new BigDecimal("0.045"), new BigDecimal("0.1"));
-        var failure = assertThrows(IllegalArgumentException.class, () -> new MonteCarloAnalyzer().analyze(plan, settings));
-        assertTrue(failure.getMessage().contains("not yet available"));
-        assertThrows(IllegalArgumentException.class, () -> new MonteCarloAnalyzer().analyze(plan, settings, null,
+        var result = new MonteCarloAnalyzer().analyze(plan, settings);
+        assertNotNull(result.expenseExecution());
+        assertEquals(1, result.outcomes().size());
+        assertThrows(UnsupportedOperationException.class, () -> new MonteCarloAnalyzer().analyze(plan, settings, null,
                 index -> { throw new AssertionError("Supplied world must not execute"); }));
-        assertThrows(IllegalArgumentException.class, () -> new com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloRunService().run(plan, settings, null,
+        var run = new com.daviddunn.retirementplanner.ui.montecarlo.MonteCarloRunService().run(plan, settings, null,
                 com.daviddunn.retirementplanner.domain.analysis.AnalysisProgressListener.none(),
-                com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken.none()));
+                com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken.none());
+        assertEquals(result.expenseExecution(), run.result().expenseExecution());
+        assertEquals(new BigDecimal("0.20"), plan.getHousehold().getExpenses().getFirst().getAnnualExpenseVolatility());
     }
 }

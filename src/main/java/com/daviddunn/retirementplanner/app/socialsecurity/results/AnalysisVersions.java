@@ -6,6 +6,17 @@ import java.util.*;
 
 public final class AnalysisVersions {
     private AnalysisVersions() { }
+    /** Payload-specific capabilities leave every legacy kind's version map unchanged. */
+    public static Map<String, String> algorithms(AnalysisKind kind, AnalysisPayload payload) {
+        var result = new TreeMap<>(algorithms(kind));
+        if (payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                && mc.expenseExecution() != null)
+            result.put("recurring-expenses", com.daviddunn.retirementplanner.app.montecarlo.ExpenseExecution.ALGORITHM);
+        if (payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                && mc.pairedExpenseExecution() != null)
+            result.put("paired-recurring-expenses", com.daviddunn.retirementplanner.app.montecarlo.PairedExpenseExecution.ALGORITHM);
+        return Map.copyOf(result);
+    }
     public static Map<String, String> algorithms(AnalysisKind kind) {
         var versions = new TreeMap<String, String>();
         versions.put("monthly-social-security", "v1");

@@ -8,9 +8,24 @@ public final class AnalysisCompatibilityPolicy {
     public Assessment assess(AnalysisSnapshot saved, AnalysisFingerprintService.Assessment inputs,
             Map<String, String> algorithms, Map<String, String> references) {
         if (saved == null) return new Assessment(State.NO_SAVED_RESULTS, "No saved results.");
-        if (saved.schemaVersion() != AnalysisSnapshot.SCHEMA || saved.fingerprintVersion() != AnalysisFingerprintService.VERSION)
+        boolean enabledExpenses = saved.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                && mc.expenseExecution() != null;
+        boolean pairedExpenses = saved.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                && mc.pairedExpenseExecution() != null;
+        if (saved.schemaVersion() != AnalysisSnapshot.SCHEMA
+                || saved.fingerprintVersion() != (pairedExpenses ? 4 : enabledExpenses ? 3 : AnalysisFingerprintService.VERSION))
             return unavailable("Unsupported snapshot format.");
         for (var version : saved.algorithms().entrySet()) {
+            if (pairedExpenses && version.getKey().equals("paired-recurring-expenses")) {
+                if (!version.getValue().equals(com.daviddunn.retirementplanner.app.montecarlo.PairedExpenseExecution.ALGORITHM))
+                    return unavailable("Unsupported paired stochastic expense model.");
+                continue;
+            }
+            if (enabledExpenses && version.getKey().equals("recurring-expenses")) {
+                if (!version.getValue().equals(com.daviddunn.retirementplanner.app.montecarlo.ExpenseExecution.ALGORITHM))
+                    return unavailable("Unsupported stochastic expense model.");
+                continue;
+            }
             String readable = version.getKey().equals("analysis-kind") ? saved.kind().name() + "-v1" : "v1";
             if (!(Set.of("analysis-kind", "monthly-social-security", "projection", "weighted", "algorithm").contains(version.getKey())
                     || saved.kind().isMonteCarlo() && Set.of("monte-carlo", "random-streams", "statistics").contains(version.getKey()))

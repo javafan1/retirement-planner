@@ -78,7 +78,13 @@ class AnalyzerIntroductionMenuTest {
                     assertTrue(intro.lookup("#suppress-analyzer-introduction")!=null);menu.fire();
                     assertEquals(1,Window.getWindows().stream().filter(w->w instanceof Stage s&&s.getOwner()==stage[0]).count());
                     AnalyzerIntroductionUiTest.continued(intro);var result=AnalyzerIntroductionUiTest.pane(stage[0]);
-                    var content=((ScrollPane)result.getContent()).getContent();
+                    var layout = assertInstanceOf(javafx.scene.layout.BorderPane.class, result.getContent());
+                    var scroll = assertInstanceOf(ScrollPane.class, layout.getCenter());
+                    String prefix = name.startsWith("Monte Carlo Retirement") ? "mc" : "mcc";
+                    assertEquals(prefix + "-content-scroll", scroll.getId());
+                    assertNotNull(layout.getBottom());
+                    assertEquals(prefix + "-run-feedback", layout.getBottom().getId(), "Current run feedback must remain outside scrolling content");
+                    var content=scroll.getContent();
                     assertEquals(name.startsWith("Monte Carlo Retirement")?MonteCarloAnalysisView.class:MonteCarloStrategyComparisonView.class,content.getClass());
                     menu.fire();assertEquals(1,Window.getWindows().stream().filter(w->w instanceof Stage s&&s.getOwner()==stage[0]).count());
                     ((Button)result.lookupButton(ButtonType.CLOSE)).fire();

@@ -30,6 +30,9 @@ class ExpenseVolatilityUiTest {
                         assertEquals("12.3456789000", volatility.getText());
                         assertNotNull(volatility.getTooltip());
                         assertTrue(volatility.getTooltip().getText().contains("not a maximum"));
+                        assertTrue(volatility.getTooltip().getText().contains("expected escalated annual amount"));
+                        assertTrue(volatility.getTooltip().getText().contains("unbounded positive tail"));
+                        assertFalse(volatility.getTooltip().getText().contains("Set annual expense volatility to 0%"));
                         dialog.getDialogPane().applyCss(); dialog.getDialogPane().layout();
                         save(dialog.getDialogPane(), theme + (guided ? "-guided" : "-standard"));
                         ((Button) dialog.getDialogPane().lookupButton(ButtonType.OK)).fire();

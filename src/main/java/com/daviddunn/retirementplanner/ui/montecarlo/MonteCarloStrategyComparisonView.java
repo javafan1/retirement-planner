@@ -56,6 +56,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     private final Label status = label("Ready to compare.", "mc-status", "mcc-status");
     private final Label validation = label("", "mc-validation", "mcc-validation");
     private final ProgressBar progress = new ProgressBar();
+    private final VBox runFeedback = new VBox(4);
     private final VBox results = new VBox(2);
     private final Label identity = label("", "mc-section", "mcc-identity");
     private final Label fundingA = label("", "mcc-funding", "mcc-funding-a");
@@ -130,8 +131,16 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
                 input("Baseline survivor SS age", survivorB, "survivor-b", "Whole-year survivor-benefit claiming age, at least 60, for either surviving person in Saved Baseline longevity simulations. Separate from retirement claiming age; initialized from its plan election; the last-successful analyzer value is saved separately."));
         run.setId("mcc-run"); run.getStyleClass().add("mc-run");
         cancel.setId("mcc-cancel"); progress.setId("mcc-progress"); progress.setPrefWidth(160);
-        var actions = new FlowPane(12, 4, run, cancel, pdf.button(), progress, status, context);
+        var actions = new FlowPane(12, 4, run, cancel, pdf.button(), context);
         actions.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        runFeedback.setId("mcc-run-feedback");
+        runFeedback.getStyleClass().add("mc-run-feedback");
+        runFeedback.setMinWidth(0); runFeedback.setMinHeight(Region.USE_PREF_SIZE);
+        runFeedback.getStylesheets().add(getClass().getResource("/css/monte-carlo.css").toExternalForm());
+        runFeedback.getChildren().addAll(label("Current comparison run", "mc-section", null), progress, status, validation);
+        status.accessibleTextProperty().bind(status.textProperty());
+        status.setAccessibleHelp("Current strategy comparison run status. Saved-result freshness is shown separately.");
+        validation.accessibleTextProperty().bind(validation.textProperty());
         table.setId("mcc-metrics");
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setFixedCellSize(26); table.setMinHeight(130); table.setPrefHeight(130); table.setMaxHeight(130);
@@ -171,7 +180,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         optionalInputs.managedProperty().bind(optionalInputs.visibleProperty());
         getChildren().addAll(label("Monte Carlo Strategy Comparison", "mc-title", null),
                 label(PAIRED, "mc-muted", null), controls, optionalInputs,
-                validation, actions, savedStatus, retrySave, associated, results, details);
+                actions, runFeedback, savedStatus, retrySave, associated, results, details);
         parameters = new MonteCarloParameterControls(controller, true, mode, count, inflation,
                 List.of(expected, volatility, seed, inflationMean, inflationVolatility, inflationFloor,
                         primary, spouse, survivorA, survivorB), () -> { }, this::edited);
@@ -242,7 +251,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     private void startPersisted(MonteCarloStrategyComparisonRunService.Prepared captured) {
         syncPersistence();
         var binding = persistence.binding();
-        var parameterRun = parameters.begin(MonteCarloParameterMapping.capture(captured), new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().assess(com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService.comparison(captured.request()), com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService.Contract.EXACT_V1).fingerprint());
+        var parameterRun = parameters.begin(MonteCarloParameterMapping.capture(captured), new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().forAcceptance(com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService.comparison(captured.request())).fingerprint());
         var started = java.time.Instant.now();
         var completion = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion>();
         persistence.beginReplacement();
@@ -266,9 +275,11 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
                     .settings("Stochastic".equals(inflation.getValue()), inflationMean.getText(), inflationVolatility.getText(), inflationFloor.getText());
             var captured = MonteCarloStrategyComparisonRunService.capture(controller.getCurrentPlan(), settings, mode.getValue(),
                     primary.getText(), spouse.getText(), survivorA.getText(), survivorB.getText());
+            com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireComparisonSupported(captured.request());
             validation.setText("");
             startPersisted(captured);
-        } catch (RuntimeException exception) { validation.setText(exception.getMessage()); refresh(); }
+        } catch (RuntimeException exception) { validation.setText(messageOrFallback(exception,
+                "The comparison could not start. Check the current inputs and try again.")); refresh(); }
     }
 
     private void refresh() {
@@ -298,11 +309,14 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
             case RUNNING -> update == null ? "Preparing paired comparison…" : String.format("Comparing strategies — simulation %,d of %,d", update.completedWork(), update.totalWork());
             case CANCELLING -> "Cancelling comparison…";
             case CANCELLED -> "Comparison cancelled. No partial result was published.";
-            case FAILED -> "Comparison failed. " + session.failure().getMessage();
-            case COMPLETED -> "Comparison complete.";
+            case FAILED -> "Comparison failed. " + messageOrFallback(session.failure(), "An unexpected error prevented completion. You can try again.");
+            case COMPLETED -> session.stale() ? "Previous comparison retained. Ready to compare current inputs."
+                    : persistence.retryAvailable() ? "Comparison complete. Result save failed; the completed result remains available. Use Retry Save."
+                    : "Comparison complete.";
             case CLOSED -> "";
         };
-        status.setText((session.stale() && !persistence.current() ? persistence.freshness().warning() + " " : "") + message);
+        if (!validation.getText().isBlank()) message = "Run not started. Review the input message below.";
+        status.setText(message);
         show(results, session.result() != null);
         if (session.result() != null && session.result() != displayed) {
             displayed = session.result(); render(displayed);
@@ -356,6 +370,14 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         label.setMinHeight(Region.USE_PREF_SIZE); return label;
     }
     private static void show(Node node, boolean value) { node.setVisible(value); node.setManaged(value); }
+    VBox detachRunFeedback() {
+        getChildren().remove(runFeedback);
+        return runFeedback;
+    }
+    private static String messageOrFallback(Throwable failure, String fallback) {
+        return failure == null || failure.getMessage() == null || failure.getMessage().isBlank()
+                ? fallback : failure.getMessage();
+    }
     public MonteCarloStrategyComparisonSession session() { return session; }
     public boolean canExportPdf() {
         return session != null && !session.busy() && session.state() != MonteCarloStrategyComparisonSession.State.CLOSED

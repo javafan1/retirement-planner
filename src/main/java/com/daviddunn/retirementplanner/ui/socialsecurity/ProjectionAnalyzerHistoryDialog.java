@@ -115,7 +115,7 @@ public final class ProjectionAnalyzerHistoryDialog extends Dialog<Void> {
         source.loadAssociatedAnalyzer(ref).thenCompose(saved -> source.getAnalysisResults().background(() -> {
             var assessment = new AnalysisCompatibilityPolicy().assess(saved,
                     new AnalysisFingerprintService.Assessment(saved.inputFingerprint(), saved.contextFingerprint(), null),
-                    AnalysisVersions.algorithms(saved.kind()), AnalysisVersions.references(saved.kind()));
+                    AnalysisVersions.algorithms(saved.kind(), saved.payload()), AnalysisVersions.references(saved.kind()));
             if (assessment.state() != AnalysisCompatibilityPolicy.State.CURRENT)
                 throw new IllegalArgumentException("Saved analyzer algorithm/reference context is incompatible.");
             return prepare(saved, durability);

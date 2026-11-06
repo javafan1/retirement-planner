@@ -27,7 +27,33 @@ public record MonteCarloAnalysisResult(
         Optional<MonteCarloPercentiles> endingNetWorth,
         Optional<MonteCarloPercentiles> endingAfterTaxEstate,
         Optional<MonteCarloPercentiles> lifetimeTaxes,
-        Reference deterministicReference) {
+        Reference deterministicReference,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        ExpenseExecution expenseExecution) {
+
+    public MonteCarloAnalysisResult(MonteCarloSettings settings, String returnModel, List<RunOutcome> outcomes,
+            Map<Integer, Optional<MonteCarloPercentiles>> annualInvestableAssets,
+            Optional<MonteCarloPercentiles> endingInvestableAssets, Optional<MonteCarloPercentiles> endingNetWorth,
+            Optional<MonteCarloPercentiles> endingAfterTaxEstate, Optional<MonteCarloPercentiles> lifetimeTaxes,
+            Reference deterministicReference) {
+        this(settings, returnModel, outcomes, annualInvestableAssets, endingInvestableAssets, endingNetWorth,
+                endingAfterTaxEstate, lifetimeTaxes, deterministicReference, null);
+    }
+
+    MonteCarloAnalysisResult withExpenseExecution(ExpenseExecution capability) {
+        return new MonteCarloAnalysisResult(settings, returnModel, outcomes, annualInvestableAssets,
+                endingInvestableAssets, endingNetWorth, endingAfterTaxEstate, lifetimeTaxes, deterministicReference, capability);
+    }
+
+    /** Keep the original complete zero-volatility evidence text (and its existing golden hashes). */
+    @Override public String toString() {
+        return "MonteCarloAnalysisResult[settings=" + settings + ", returnModel=" + returnModel
+                + ", outcomes=" + outcomes + ", annualInvestableAssets=" + annualInvestableAssets
+                + ", endingInvestableAssets=" + endingInvestableAssets + ", endingNetWorth=" + endingNetWorth
+                + ", endingAfterTaxEstate=" + endingAfterTaxEstate + ", lifetimeTaxes=" + lifetimeTaxes
+                + ", deterministicReference=" + deterministicReference
+                + (expenseExecution == null ? "" : ", expenseExecution=" + expenseExecution) + "]";
+    }
 
     public MonteCarloAnalysisResult {
         Objects.requireNonNull(settings);
@@ -37,6 +63,8 @@ public record MonteCarloAnalysisResult(
         Objects.requireNonNull(endingAfterTaxEstate);
         Objects.requireNonNull(lifetimeTaxes);
         Objects.requireNonNull(deterministicReference);
+        if (expenseExecution != null && !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
+            throw new IllegalArgumentException("Enabled expense results require generated worlds.");
         outcomes = List.copyOf(outcomes);
         if (outcomes.size() != settings.simulationCount()) {
             throw new IllegalArgumentException("Every requested simulation needs an outcome.");

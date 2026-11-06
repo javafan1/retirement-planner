@@ -36,6 +36,7 @@ public final class MonteCarloMortalityAnalysisResult {
     private final String mortalityModel;
     private final List<WorldOutcome> outcomes;
     private final MonteCarloMortalityAccumulator.Aggregates aggregates;
+    private final ExpenseExecution expenseExecution;
 
     public MonteCarloMortalityAnalysisResult(
             MonteCarloMortalityRequest request,
@@ -48,6 +49,15 @@ public final class MonteCarloMortalityAnalysisResult {
     /** Codec-only pure reconstruction; normal execution still uses the original reducer. */
     MonteCarloMortalityAnalysisResult(MonteCarloMortalityRequest request, String returnModel,
             String mortalityModel, List<WorldOutcome> outcomes, MonteCarloMortalityAccumulator.Aggregates frozen) {
+        this(request, returnModel, mortalityModel, outcomes, frozen, null);
+    }
+
+    MonteCarloMortalityAnalysisResult(MonteCarloMortalityRequest request, String returnModel,
+            String mortalityModel, List<WorldOutcome> outcomes, MonteCarloMortalityAccumulator.Aggregates frozen,
+            ExpenseExecution expenseExecution) {
+        this.expenseExecution = expenseExecution;
+        if (expenseExecution != null && !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
+            throw new IllegalArgumentException("Enabled expense results require generated worlds.");
         this.request = Objects.requireNonNull(request);
         this.returnModel = Objects.requireNonNull(returnModel);
         this.mortalityModel = Objects.requireNonNull(mortalityModel);
@@ -82,6 +92,8 @@ public final class MonteCarloMortalityAnalysisResult {
     public MonteCarloMortalityRequest request() {
         return request;
     }
+
+    public ExpenseExecution expenseExecution() { return expenseExecution; }
 
     public String returnModel() {
         return returnModel;
@@ -168,19 +180,22 @@ public final class MonteCarloMortalityAnalysisResult {
                 && request.equals(that.request)
                 && returnModel.equals(that.returnModel)
                 && mortalityModel.equals(that.mortalityModel)
+                && Objects.equals(expenseExecution, that.expenseExecution)
                 && outcomes.equals(that.outcomes)
                 && aggregates.equals(that.aggregates);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(request, returnModel, mortalityModel, outcomes, aggregates);
+        int legacy = Objects.hash(request, returnModel, mortalityModel, outcomes, aggregates);
+        return expenseExecution == null ? legacy : Objects.hash(legacy, expenseExecution);
     }
 
     @Override
     public String toString() {
         return "MonteCarloMortalityAnalysisResult[request=" + request + ", returnModel=" + returnModel
-                + ", mortalityModel=" + mortalityModel + ", outcomes=" + outcomes + ", aggregates=" + aggregates + "]";
+                + ", mortalityModel=" + mortalityModel + ", outcomes=" + outcomes + ", aggregates=" + aggregates
+                + (expenseExecution == null ? "" : ", expenseExecution=" + expenseExecution) + "]";
     }
 
     /** No terminal metric (including lifetime taxes) exists for a funding-failed world. */

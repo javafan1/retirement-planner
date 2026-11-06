@@ -242,11 +242,11 @@ public class ExpenseDialog extends Dialog<Expense> {
         InputHelp.install(growthCategoryComboBox, "General Inflation and Healthcare Inflation each use the corresponding existing plan assumption once. No Inflation keeps the entered recurring amount fixed in nominal dollars; existing active-year, opening-year proration and survivor adjustments still apply. One-time purchases retain General Inflation and hide this selector.");
         InputHelp.install(effectiveDatePicker, "First active date for recurring spending; blank means no start restriction. For a one-time expense, a purchase date is required. Recurring expenses are included by calendar-year overlap, with opening-year proration from the projection start.");
         InputHelp.install(endDatePicker, "Optional last active date for a recurring expense; blank means no scheduled end. A calendar year is included when the expense overlaps it. One-time expenses instead use their purchase date.");
-        InputHelp.install(volatilityField, "Controls how much this recurring expense may vary from year to year during Monte Carlo simulations. "
-                + "For example, 20% volatility introduces annual spending variation around the expected expense. "
-                + "It does not change deterministic projections or the expense's selected inflation setting. "
-                + "This is an annual relative standard deviation, not a maximum increase or decrease. "
-                + "Stochastic expense execution is not yet available; nonzero settings currently block Monte Carlo runs.");
+        InputHelp.install(volatilityField, "Annual relative standard deviation around this recurring expense's expected escalated annual amount. "
+                + "For example, 20% is not a maximum increase or decrease; actual variation can exceed it. "
+                + "Supported generated Monte Carlo analyses and strategy comparisons use independent annual lognormal expense levels with an unbounded positive tail. "
+                + "This is separate from investment returns and inflation, and shocks do not compound. "
+                + "One-time expenses and ordinary deterministic projections are unaffected.");
         annualAmountField.textProperty().addListener((observable, before, after) -> updateVolatilityAvailability());
         InputHelp.linkGridLabels(grid);
         getDialogPane().setContent(grid);

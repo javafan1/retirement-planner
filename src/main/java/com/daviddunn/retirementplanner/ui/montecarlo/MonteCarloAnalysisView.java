@@ -21,8 +21,6 @@ import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Controls collect inputs and render frozen results; financial work belongs to the worker service.
@@ -75,6 +73,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     private final Label transactions = label("Actual Roth/RMD periods appear after analysis.", "mc-muted");
     private final Label status = label("Ready to analyze the current plan.", "mc-status");
     private final Label validation = label("", "mc-validation");
+    private final VBox runFeedback = new VBox(4);
     private final ProgressBar progress = new ProgressBar(0);
     private final Label funding = label("", "mc-probability");
     private final Label fundingDetail = label("", "mc-muted");
@@ -82,6 +81,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     private final Label referenceNotice = label("", "mc-muted");
     private final Label notice = label(MonteCarloPresentation.CONDITIONAL_NOTICE, "mc-muted");
     private final Label frozenInputs = label("", "mc-muted");
+    private final Label expenseAssumptions = label("Stochastic recurring-expense volatility active — independent annual lognormal levels. "
+            + "Original percentages and model/protocol are in Analysis Details.", "mc-muted");
     private final MonteCarloFanChart chart = new MonteCarloFanChart();
     private final TableView<MonteCarloPresentation.Outcome> table = new TableView<>();
     private final TableView<MonteCarloMortalityPresentation.TerminalRow> mortalityTable = new TableView<>();
@@ -94,7 +95,10 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     private Label fixedDetails;
     private final VBox results = new VBox(5);
     private MonteCarloRun displayed;
-    private Throwable logged;
+    private MonteCarloSession.State diagnosticState = MonteCarloSession.State.IDLE;
+    private boolean validationPassed;
+    private boolean workerSubmitted;
+    private boolean closed;
 
     public MonteCarloAnalysisView(ApplicationController controller) {
         this(controller, Executors.newSingleThreadExecutor(runnable -> {
@@ -114,7 +118,12 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         this.worker = worker;
         this.work = work;
         this.mortalityWork = mortalityWork;
-        this.session = new MonteCarloSession(worker, Platform::runLater);
+        this.session = new MonteCarloSession(command -> {
+            worker.execute(command);
+            workerSubmitted = true;
+            diagnostic(MonteCarloRunDiagnostics.Event.WORKER_SUBMITTED, diagnosticState,
+                    MonteCarloRunDiagnostics.Category.NONE, null, false);
+        }, Platform::runLater);
         persistence = new MonteCarloResultLifecycle<>(controller.getAnalysisResults(), Platform::runLater,
                 MonteCarloSnapshotPresentationMapper::restoreRun, restored -> session.restore(restored, true),
                 session::clearResult, this::refreshPersistence, session::busy);
@@ -192,6 +201,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         terminalDates.setId("mc-terminal-dates");
         chartNotice.setId("mc-chart-notice");
         validation.setId("mc-validation");
+        expenseAssumptions.setId("mc-expense-assumptions");
         table.setId("mc-outcomes");
         run.getStyleClass().add("mc-run");
         expected.setText(controller.getCurrentPlan().getPlanningAssumptions()
@@ -205,8 +215,16 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                 longevityInputs,
                 new VBox(3, new Label(" "), new HBox(8, run, cancel, pdf.button())));
         progress.setPrefWidth(230);
-        var progressRow = new HBox(12, progress, status);
-        HBox.setHgrow(status, Priority.ALWAYS);
+        progress.setMaxWidth(Double.MAX_VALUE);
+        status.accessibleTextProperty().bind(status.textProperty());
+        status.setAccessibleHelp("Current Monte Carlo run status. Saved-result freshness is shown with the previous result.");
+        validation.accessibleTextProperty().bind(validation.textProperty());
+        runFeedback.setId("mc-run-feedback");
+        runFeedback.getStyleClass().add("mc-run-feedback");
+        runFeedback.setMinWidth(0);
+        runFeedback.setMinHeight(Region.USE_PREF_SIZE);
+        runFeedback.getStylesheets().add(getClass().getResource("/css/monte-carlo.css").toExternalForm());
+        runFeedback.getChildren().addAll(label("Current run", "mc-section"), progress, status, validation);
         var probability = new HBox(20, funding, new VBox(3, fundingDetail, failures));
         probability.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         var legend = new FlowPane(18, 2,
@@ -240,7 +258,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         table.getColumns().forEach(column -> column.setSortable(false));
         configureMortalityTable();
         results.getChildren().addAll(fundingTitle, probability,
-                frozenInputs, label("INVESTABLE ASSETS", "mc-section"), legend, chart, selectedYear,
+                frozenInputs, expenseAssumptions, label("INVESTABLE ASSETS", "mc-section"), legend, chart, selectedYear,
                 chartNotice, referenceNotice, new FlowPane(18, 2, outcomesTitle, terminalDates), table, mortalityTable, notice);
         fixedDetails = label(
                 "Annual returns use independent lognormal gross returns matched to the selected arithmetic expected return and volatility.\n"
@@ -267,7 +285,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         heading.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         getChildren().addAll(heading,
                 label("Tests the current retirement plan across simulated investment-return paths.", "mc-muted"),
-                planTitle, summary, transactions, inputs, mortalityContext, validation, progressRow, savedStatus, retrySave, associated, results, details);
+                planTitle, summary, transactions, inputs, mortalityContext, runFeedback, savedStatus, retrySave, associated, results, details);
         parameters = new MonteCarloParameterControls(controller, false, mode, simulations, inflationMode,
                 java.util.Arrays.asList(expected, volatility, seed, inflationMean, inflationVolatility, inflationFloor,
                         primaryAdjustment, spouseAdjustment, survivorAge, null), this::shareLongevitySettings, this::inputsChanged);
@@ -310,6 +328,14 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         detach = () -> { detachSource.run(); detachBinding.run(); };
         syncPersistence();
         refresh();
+        diagnostic(MonteCarloRunDiagnostics.Event.VIEW_READY, session.state(),
+                MonteCarloRunDiagnostics.Category.NONE, null, true);
+    }
+
+    /** The production dialog keeps the same feedback nodes outside its results scroller. */
+    VBox detachRunFeedback() {
+        getChildren().remove(runFeedback);
+        return runFeedback;
     }
 
     private void inputsChanged() {
@@ -359,7 +385,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             MonteCarloSession.Work task) {
         syncPersistence();
         var binding = persistence.binding();
-        var parameterRun = parameters.begin(inputs, new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().assess(currencyInputs().get(), com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService.Contract.EXACT_V1).fingerprint());
+        var parameterRun = parameters.begin(inputs, new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().forAcceptance(currencyInputs().get()).fingerprint());
         var started = java.time.Instant.now();
         var completion = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion>();
         persistence.beginReplacement();
@@ -377,9 +403,17 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     }
 
     private void start() {
+        if (!session.busy()) {
+            validationPassed = false;
+            workerSubmitted = false;
+        }
+        diagnostic(MonteCarloRunDiagnostics.Event.CLICK_ENTERED, session.state(),
+                MonteCarloRunDiagnostics.Category.NONE, null, false);
         if (session.busy()) {
             return;
         }
+        validation.setText("");
+        var category = MonteCarloRunDiagnostics.Category.VALIDATION;
         try {
             var settings = new MonteCarloInputs(simulations.getValue(), expected.getText(), volatility.getText(), seed.getText())
                     .settings("Stochastic".equals(inflationMode.getValue()), inflationMean.getText(),
@@ -388,8 +422,10 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                 throw new IllegalArgumentException("Set birth dates for the people present and a projection start date before running analysis.");
             }
             // Capture on FX before the worker starts; later source edits cannot alter this request.
+            category = MonteCarloRunDiagnostics.Category.PREPARATION;
             var snapshot = new RetirementPlanScenarioCopyService().copy(controller.getCurrentPlan());
             if (mode.getValue() == MonteCarloMode.LONGEVITY_ADJUSTED) {
+                category = MonteCarloRunDiagnostics.Category.VALIDATION;
                 MonteCarloMortalityRequest request;
                 if (snapshot.getHousehold().hasSpouse()) {
                     int age = MonteCarloMortalityPresentation.survivorClaimingAge(survivorAge.getText());
@@ -399,11 +435,13 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                     request = MonteCarloMortalityRequest.individual(snapshot, settings,
                             MonteCarloMortalityPresentation.adjustment(primaryAdjustment.getText(), "Primary"));
                 }
-                validation.setText("");
+                if (!admit(snapshot)) return;
+                category = MonteCarloRunDiagnostics.Category.PREPARATION;
                 startPersisted(snapshot, MonteCarloParameterMapping.capture(settings, request, null),
                         (updates, cancellation) -> mortalityWork.run(snapshot, request, updates, cancellation));
                 return;
             }
+            if (!admit(snapshot)) return;
             Projection cached = controller.peekCurrentProjection();
             Projection reference = null;
             if (cached != null) {
@@ -415,10 +453,32 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             startPersisted(snapshot, MonteCarloParameterMapping.capture(settings, null, null),
                     (updates, cancellation) -> work.run(snapshot, settings, frozenReference, updates, cancellation));
         } catch (RuntimeException exception) {
-            validation.setText(exception.getMessage());
-            validation.setManaged(true);
-            validation.setVisible(true);
+            validation.setText(messageOrFallback(exception,
+                    "The analysis could not start. Review the inputs and try again."));
+            refresh();
+            diagnostic(MonteCarloRunDiagnostics.Event.PREFLIGHT_FAILED, session.state(), category, exception, true);
         }
+    }
+
+    private boolean admit(RetirementPlan snapshot) {
+        validationPassed = true;
+        diagnostic(MonteCarloRunDiagnostics.Event.VALIDATION_PASSED, session.state(),
+                MonteCarloRunDiagnostics.Category.NONE, null, false);
+        try {
+            com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireStandaloneSupported(snapshot);
+            return true;
+        } catch (IllegalArgumentException unsupported) {
+            validation.setText("Stochastic expense inputs need attention. " + messageOrFallback(unsupported,
+                    "The configured inputs exceed the supported execution limits."));
+            refresh();
+            diagnostic(MonteCarloRunDiagnostics.Event.ADMISSION_REJECTED, session.state(),
+                    MonteCarloRunDiagnostics.Category.UNSUPPORTED_CONFIGURATION, unsupported, true);
+            return false;
+        }
+    }
+
+    private static String messageOrFallback(Throwable failure, String fallback) {
+        return failure.getMessage() == null || failure.getMessage().isBlank() ? fallback : failure.getMessage();
     }
 
     private void refresh() {
@@ -456,18 +516,25 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                     update.completedWork(), update.totalWork(), update.wholePercent());
             case CANCELLING -> "Cancelling after the current simulation…";
             case CANCELLED -> "Analysis cancelled. No partial result was published.";
-            case FAILED -> "Analysis failed. " + session.failure().getMessage();
-            case COMPLETED -> "Analysis complete.";
+            case FAILED -> "Analysis failed. " + messageOrFallback(session.failure(),
+                    "An unexpected error prevented completion. You can try again.");
+            case COMPLETED -> session.stale() ? "Previous result retained. Ready to analyze current inputs."
+                    : persistence.retryAvailable() ? "Analysis complete. Result save failed; the completed result remains available. Use Retry Save."
+                    : "Analysis complete.";
             case CLOSED -> "";
         };
-        if (session.stale() && !persistence.current()) {
-            text = persistence.freshness().warning() + " " + text;
-        }
+        if (!validation.getText().isBlank()) text = "Run not started. Review the input message below.";
+        boolean statusUpdated = !text.equals(status.getText());
         status.setText(text);
-        if (session.failure() != null && logged != session.failure()) {
-            logged = session.failure();
-            Logger.getLogger(getClass().getName()).log(Level.WARNING, "Monte Carlo analysis failed", logged);
+        if (session.state() == MonteCarloSession.State.FAILED && diagnosticState != session.state()) {
+            diagnostic(MonteCarloRunDiagnostics.Event.SESSION_CHANGED, diagnosticState,
+                    workerSubmitted ? MonteCarloRunDiagnostics.Category.WORKER : MonteCarloRunDiagnostics.Category.EXECUTOR,
+                    session.failure(), statusUpdated);
+        } else if (diagnosticState != session.state()) {
+            diagnostic(MonteCarloRunDiagnostics.Event.SESSION_CHANGED, diagnosticState,
+                    MonteCarloRunDiagnostics.Category.NONE, null, statusUpdated);
         }
+        diagnosticState = session.state();
         boolean hasResult = session.result() != null;
         results.setVisible(hasResult);
         results.setManaged(hasResult);
@@ -475,6 +542,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         validation.setManaged(!validation.getText().isBlank());
         if (hasResult) {
             var completed = session.result();
+            show(expenseAssumptions, completed.mode() == MonteCarloMode.FIXED_LIFESPAN
+                    ? completed.result().expenseExecution() != null : completed.mortalityResult().expenseExecution() != null);
             planTitle.setText(session.stale() && !persistence.current()
                     ? persistence.freshness().pending() ? "ANALYZED PLAN · ASSESSING" : "ANALYZED PLAN · NOT CURRENT"
                     : "ANALYZED PLAN");
@@ -511,10 +580,43 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         }
     }
 
+    private void diagnostic(MonteCarloRunDiagnostics.Event event, MonteCarloSession.State before,
+            MonteCarloRunDiagnostics.Category category, Throwable failure, boolean statusUpdated) {
+        var state = new MonteCarloRunDiagnostics.State(mode.getValue(), before, session.state(),
+                !run.isDisabled(), validationPassed, workerSubmitted, statusUpdated, statusVisible());
+        MonteCarloRunDiagnostics.record(event, state, category, failure);
+        if (statusUpdated && !closed) {
+            Platform.runLater(() -> {
+                if (closed || getScene() == null) return;
+                getScene().getRoot().applyCss();
+                getScene().getRoot().layout();
+                MonteCarloRunDiagnostics.record(MonteCarloRunDiagnostics.Event.FEEDBACK_LAYOUT,
+                        new MonteCarloRunDiagnostics.State(state.mode(), state.before(), session.state(),
+                                !run.isDisabled(), validationPassed, workerSubmitted, true, statusVisible()), category, null);
+            });
+        }
+    }
+
+    private boolean statusVisible() {
+        var scene = status.getScene();
+        if (scene == null || scene.getWindow() == null || !scene.getWindow().isShowing()) return false;
+        var bounds = status.localToScene(status.getBoundsInLocal());
+        if (bounds.getMinY() < 0 || bounds.getMaxY() > scene.getHeight()
+                || bounds.getMinX() < 0 || bounds.getMaxX() > scene.getWidth()) return false;
+        for (javafx.scene.Node ancestor = status; ancestor != null; ancestor = ancestor.getParent()) {
+            if (!ancestor.isVisible()) return false;
+            if (ancestor instanceof ScrollPane scroll) {
+                var viewport = scroll.lookup(".viewport");
+                if (viewport != null && !viewport.localToScene(viewport.getBoundsInLocal()).contains(bounds)) return false;
+            }
+        }
+        return true;
+    }
+
     private void renderFixed(MonteCarloRun completed) {
         var result = completed.result();
-        details.setContent(label(fixedDetails.getText() + "\n"
-                + MonteCarloPresentation.inflationDetails(completed.settings()), "mc-muted"));
+        details.setContent(withExpenseDetails(label(fixedDetails.getText() + "\n"
+                + MonteCarloPresentation.inflationDetails(completed.settings()), "mc-muted"), completed));
         funding.setText(MonteCarloPresentation.fundingPercent(result));
         fundingDetail.setText(MonteCarloPresentation.fundingDetail(result));
         failures.setText(MonteCarloPresentation.failureDetail(result));
@@ -651,7 +753,17 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             content.getChildren().add(new VBox(2, label(section.title(), "mc-section"), label(section.text(), "mc-muted")));
         }
         content.getChildren().add(label(MonteCarloPresentation.inflationDetails(completed.settings()), "mc-muted"));
-        details.setContent(content);
+        details.setContent(withExpenseDetails(content, completed));
+    }
+
+    private javafx.scene.Node withExpenseDetails(javafx.scene.Node existing, MonteCarloRun completed) {
+        boolean enabled = completed.mode() == MonteCarloMode.FIXED_LIFESPAN
+                ? completed.result().expenseExecution() != null : completed.mortalityResult().expenseExecution() != null;
+        if (!enabled) return existing;
+        // Worker capture/restoration supplies original-context text; never read live expense settings here.
+        var original = label(completed.planDetails(), "mc-muted");
+        original.setId("mc-expense-details");
+        return new VBox(6, existing, label("Original plan and stochastic expense assumptions", "mc-section"), original);
     }
 
     private static void show(javafx.scene.Node node, boolean visible) {
@@ -718,9 +830,13 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     @Override
     public void close() {
+        var before = session.state();
+        closed = true;
         parameters.close();
         persistence.close();
         session.close();
+        diagnostic(MonteCarloRunDiagnostics.Event.VIEW_CLOSED, before,
+                MonteCarloRunDiagnostics.Category.NONE, null, false);
         detach.run();
         if (worker instanceof ExecutorService service) {
             service.shutdown();

@@ -17,7 +17,12 @@ public record AnalysisSnapshot(int schemaVersion, int fingerprintVersion, UUID p
         Objects.requireNonNull(payload); Objects.requireNonNull(context);
         if (kind == AnalysisKind.COUPLE_WEIGHTED && context.baseline() == null)
             throw new IllegalArgumentException("Frozen weighted baseline provenance is required, including unavailable baseline inputs.");
-        if (schemaVersion != SCHEMA || fingerprintVersion != 1 || shape != kind.shape()) {
+        boolean enabledExpenses = payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                && mc.hasExpenseExecution();
+        int expectedFingerprint = payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                ? mc.fingerprintVersion() : 1;
+        if (schemaVersion != SCHEMA || fingerprintVersion != expectedFingerprint || shape != kind.shape()
+                || enabledExpenses && (!kind.isMonteCarlo() || !algorithms.equals(AnalysisVersions.algorithms(kind, payload)))) {
             throw new IllegalArgumentException("Unsupported snapshot version or household shape.");
         }
         for (String digest : List.of(inputFingerprint, contextFingerprint, payloadDigest)) {
