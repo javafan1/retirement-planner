@@ -37,6 +37,7 @@ public final class MonteCarloMortalityAnalysisResult {
     private final List<WorldOutcome> outcomes;
     private final MonteCarloMortalityAccumulator.Aggregates aggregates;
     private final ExpenseExecution expenseExecution;
+    private final com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution;
 
     public MonteCarloMortalityAnalysisResult(
             MonteCarloMortalityRequest request,
@@ -55,8 +56,16 @@ public final class MonteCarloMortalityAnalysisResult {
     MonteCarloMortalityAnalysisResult(MonteCarloMortalityRequest request, String returnModel,
             String mortalityModel, List<WorldOutcome> outcomes, MonteCarloMortalityAccumulator.Aggregates frozen,
             ExpenseExecution expenseExecution) {
+        this(request, returnModel, mortalityModel, outcomes, frozen, expenseExecution, null);
+    }
+
+    MonteCarloMortalityAnalysisResult(MonteCarloMortalityRequest request, String returnModel,
+            String mortalityModel, List<WorldOutcome> outcomes, MonteCarloMortalityAccumulator.Aggregates frozen,
+            ExpenseExecution expenseExecution,
+            com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution) {
         this.expenseExecution = expenseExecution;
-        if (expenseExecution != null && !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
+        this.benefitExecution = benefitExecution;
+        if ((expenseExecution != null || benefitExecution != null) && !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
             throw new IllegalArgumentException("Enabled expense results require generated worlds.");
         this.request = Objects.requireNonNull(request);
         this.returnModel = Objects.requireNonNull(returnModel);
@@ -94,6 +103,7 @@ public final class MonteCarloMortalityAnalysisResult {
     }
 
     public ExpenseExecution expenseExecution() { return expenseExecution; }
+    public com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution() { return benefitExecution; }
 
     public String returnModel() {
         return returnModel;
@@ -181,6 +191,7 @@ public final class MonteCarloMortalityAnalysisResult {
                 && returnModel.equals(that.returnModel)
                 && mortalityModel.equals(that.mortalityModel)
                 && Objects.equals(expenseExecution, that.expenseExecution)
+                && Objects.equals(benefitExecution, that.benefitExecution)
                 && outcomes.equals(that.outcomes)
                 && aggregates.equals(that.aggregates);
     }
@@ -188,14 +199,16 @@ public final class MonteCarloMortalityAnalysisResult {
     @Override
     public int hashCode() {
         int legacy = Objects.hash(request, returnModel, mortalityModel, outcomes, aggregates);
-        return expenseExecution == null ? legacy : Objects.hash(legacy, expenseExecution);
+        int expense = expenseExecution == null ? legacy : Objects.hash(legacy, expenseExecution);
+        return benefitExecution == null ? expense : Objects.hash(expense, benefitExecution);
     }
 
     @Override
     public String toString() {
         return "MonteCarloMortalityAnalysisResult[request=" + request + ", returnModel=" + returnModel
                 + ", mortalityModel=" + mortalityModel + ", outcomes=" + outcomes + ", aggregates=" + aggregates
-                + (expenseExecution == null ? "" : ", expenseExecution=" + expenseExecution) + "]";
+                + (expenseExecution == null ? "" : ", expenseExecution=" + expenseExecution)
+                + (benefitExecution == null ? "" : ", benefitExecution=" + benefitExecution) + "]";
     }
 
     /** No terminal metric (including lifetime taxes) exists for a funding-failed world. */

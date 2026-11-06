@@ -19,6 +19,7 @@ public final class TaxIncome {
     private final BigDecimal taxDeferredWithdrawals;
     private final BigDecimal rothConversion;
     private final BigDecimal taxableInterestIncome;
+    private final BigDecimal conditionalOrdinaryIncome;
 
     public TaxIncome(
             BigDecimal pensionIncome,
@@ -36,6 +37,13 @@ public final class TaxIncome {
             BigDecimal rothConversion,
             BigDecimal taxableInterestIncome,
             List<IncomeSourceAttribution> incomeSources) {
+        this(pensionIncome, socialSecurityIncome, taxDeferredWithdrawals, rothConversion, taxableInterestIncome, incomeSources, BigDecimal.ZERO);
+    }
+
+    private TaxIncome(BigDecimal pensionIncome, BigDecimal socialSecurityIncome, BigDecimal taxDeferredWithdrawals,
+            BigDecimal rothConversion, BigDecimal taxableInterestIncome, List<IncomeSourceAttribution> incomeSources,
+            BigDecimal conditionalOrdinaryIncome) {
+        this.conditionalOrdinaryIncome = requireNonNegative(conditionalOrdinaryIncome, "Conditional ordinary income");
         this.incomeSources = List.copyOf(Objects.requireNonNull(incomeSources));
 
         this.pensionIncome =
@@ -70,7 +78,15 @@ public final class TaxIncome {
 
     public TaxIncome withIncomeSources(List<IncomeSourceAttribution> sources) {
         return new TaxIncome(pensionIncome, socialSecurityIncome, taxDeferredWithdrawals,
-                rothConversion, taxableInterestIncome, sources);
+                rothConversion, taxableInterestIncome, sources, conditionalOrdinaryIncome);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public BigDecimal getConditionalOrdinaryIncome() { return conditionalOrdinaryIncome; }
+
+    TaxIncome withConditionalOrdinaryIncome(BigDecimal amount) {
+        return new TaxIncome(pensionIncome, socialSecurityIncome, taxDeferredWithdrawals,
+                rothConversion, taxableInterestIncome, incomeSources, amount);
     }
 
     public BigDecimal getSocialSecurityIncome() {
@@ -91,10 +107,11 @@ public final class TaxIncome {
 
     public BigDecimal getOrdinaryIncomeBeforeSocialSecurity() {
 
-        return pensionIncome
+        BigDecimal ordinary = pensionIncome
                 .add(taxDeferredWithdrawals)
                 .add(rothConversion)
                 .add(taxableInterestIncome);
+        return conditionalOrdinaryIncome.signum() == 0 ? ordinary : ordinary.add(conditionalOrdinaryIncome);
     }
 
     public BigDecimal getMichiganRetirementIncome() {

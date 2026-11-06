@@ -19,6 +19,8 @@ public final class AnalysisVersions {
         return Map.copyOf(result);
     }
     public static boolean supportedMonteCarloAlgorithms(AnalysisKind kind, AnalysisPayload payload, Map<String, String> versions) {
+        if (payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc && mc.benefitExecution() != null)
+            return versions.equals(calculatedAlgorithms(kind, payload));
         return versions.equals(algorithms(kind, payload)) || versions.equals(calculatedAlgorithms(kind, payload));
     }
     /** Payload-specific capabilities leave every legacy kind's version map unchanged. */
@@ -30,6 +32,8 @@ public final class AnalysisVersions {
         if (payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
                 && mc.pairedExpenseExecution() != null)
             result.put("paired-recurring-expenses", com.daviddunn.retirementplanner.app.montecarlo.PairedExpenseExecution.ALGORITHM);
+        if (payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc && mc.benefitExecution() != null)
+            result.put(ConditionalBenefitAnalysisExecution.KEY, ConditionalBenefitAnalysisExecution.ALGORITHM);
         return Map.copyOf(result);
     }
     public static Map<String, String> algorithms(AnalysisKind kind) {

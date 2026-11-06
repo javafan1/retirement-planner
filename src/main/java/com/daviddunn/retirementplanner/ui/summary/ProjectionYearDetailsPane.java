@@ -463,6 +463,28 @@ public class ProjectionYearDetailsPane
                                 value.getSocialSecurityResult()
                                         .householdBenefit()));
 
+        var kinds = java.util.List.of(com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.CONDITIONAL_RECURRING,
+                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.CONDITIONAL_LUMP_SUM);
+        if (year.getIncomeSources().stream().anyMatch(s -> s.conditionalBenefit().isPresent())
+                || baselineYear != null && baselineYear.getIncomeSources().stream().anyMatch(s -> s.conditionalBenefit().isPresent())) {
+            row = addSubsectionHeader(grid,row,"Conditional Benefits Received");
+            for (var kind : kinds) {
+                java.util.function.Function<ProjectionYear,BigDecimal> total = value -> value.getIncomeSources().stream()
+                        .filter(s -> s.kind() == kind).map(com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution::grossAmount)
+                        .reduce(BigDecimal.ZERO,BigDecimal::add);
+                row = addMoneyComparisonRow(grid,row,kind == kinds.getFirst() ? "Conditional Monthly Income" : "Conditional Lump-Sum Receipts",
+                        total.apply(year),getBaselineValue(total));
+            }
+            for (var source : year.getIncomeSources()) if (source.conditionalBenefit().isPresent()) {
+                var receipt = source.conditionalBenefit().orElseThrow();
+                var detail = new Label("Received: " + receipt.label() + " / " + receipt.recipient() + " / "
+                        + (receipt.months() == 0 ? "Lump sum " + receipt.eventDate() : receipt.months() + " monthly payments")
+                        + " / fully taxable");
+                detail.setWrapText(true); detail.setMinWidth(0); detail.setMaxWidth(850); detail.setAccessibleText(detail.getText());
+                grid.add(detail,0,row++,5,1);
+            }
+        }
+
         return row;
     }
 

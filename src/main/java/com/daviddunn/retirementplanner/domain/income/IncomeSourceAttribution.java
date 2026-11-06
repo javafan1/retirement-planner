@@ -31,7 +31,14 @@ public record IncomeSourceAttribution(
         BigDecimal grossAmount,
         Optional<BigDecimal> modeledTaxableAmount,
         OptionalInt taxYear,
-        Optional<PensionFacts> pension) {
+        Optional<PensionFacts> pension,
+        @com.fasterxml.jackson.annotation.JsonIgnore Optional<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt> conditionalBenefit) {
+
+    public IncomeSourceAttribution(Kind kind, Purpose purpose, Optional<AccountOwnership> owner,
+            Optional<AccountReference> account, Optional<AccountReference> destination, String description,
+            BigDecimal grossAmount, Optional<BigDecimal> modeledTaxableAmount, OptionalInt taxYear, Optional<PensionFacts> pension) {
+        this(kind, purpose, owner, account, destination, description, grossAmount, modeledTaxableAmount, taxYear, pension, Optional.empty());
+    }
 
     public enum Kind {
         ORDINARY_WITHDRAWAL,
@@ -44,7 +51,9 @@ public record IncomeSourceAttribution(
         INTEREST,
         DIVIDEND,
         CAPITAL_GAIN,
-        OTHER
+        OTHER,
+        CONDITIONAL_RECURRING,
+        CONDITIONAL_LUMP_SUM
     }
 
     public enum Purpose {
@@ -71,6 +80,19 @@ public record IncomeSourceAttribution(
         });
         Objects.requireNonNull(taxYear);
         Objects.requireNonNull(pension);
+        Objects.requireNonNull(conditionalBenefit);
+        boolean conditionalKind = kind == Kind.CONDITIONAL_RECURRING || kind == Kind.CONDITIONAL_LUMP_SUM;
+        if (conditionalKind != conditionalBenefit.isPresent())
+            throw new IllegalArgumentException("Conditional income requires its exact receipt facts.");
+        conditionalBenefit.ifPresent(receipt -> {
+            boolean recurring = receipt.pattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING;
+            if (recurring != (kind == Kind.CONDITIONAL_RECURRING) || purpose != Purpose.INCOME || account.isPresent()
+                    || destination.isPresent() || pension.isPresent() || !description.equals(receipt.label())
+                    || owner.orElse(null) != com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitEvaluator.owner(receipt.recipient())
+                    || !grossAmount.equals(receipt.gross()) || !modeledTaxableAmount.equals(Optional.of(receipt.taxable()))
+                    || taxYear.isEmpty() || taxYear.getAsInt() != receipt.year())
+                throw new IllegalArgumentException("Inconsistent conditional income attribution.");
+        });
         account.ifPresent(reference -> {
             if (owner.orElse(null) != reference.owner()) {
                 throw new IllegalArgumentException("Source account owner must match income owner.");
@@ -93,7 +115,15 @@ public record IncomeSourceAttribution(
 
     public IncomeSourceAttribution inYear(int year) {
         return new IncomeSourceAttribution(kind, purpose, owner, account, destination,
-                description, grossAmount, modeledTaxableAmount, OptionalInt.of(year), pension);
+                description, grossAmount, modeledTaxableAmount, OptionalInt.of(year), pension, conditionalBenefit);
+    }
+
+    public static IncomeSourceAttribution conditional(com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt receipt) {
+        return new IncomeSourceAttribution(receipt.pattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING
+                ? Kind.CONDITIONAL_RECURRING : Kind.CONDITIONAL_LUMP_SUM, Purpose.INCOME,
+                Optional.of(com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitEvaluator.owner(receipt.recipient())),
+                Optional.empty(), Optional.empty(), receipt.label(), receipt.gross(), Optional.of(receipt.taxable()),
+                OptionalInt.of(receipt.year()), Optional.empty(), Optional.of(receipt));
     }
 
     public static IncomeSourceAttribution withdrawal(

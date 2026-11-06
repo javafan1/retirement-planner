@@ -199,19 +199,65 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
                     Optional.ofNullable(start), Optional.ofNullable(end), participant);
         }
     }
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = IncomeReader.class)
     public record Income(IncomeSourceAttribution.Kind kind, IncomeSourceAttribution.Purpose purpose, AccountOwnership owner,
             Reference account, Reference destination, String description, BigDecimal gross, BigDecimal taxable,
-            Integer taxYear, PensionFacts pension) {
+            Integer taxYear, PensionFacts pension,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt conditionalBenefit) {
+        public Income(IncomeSourceAttribution.Kind kind, IncomeSourceAttribution.Purpose purpose, AccountOwnership owner,
+                Reference account, Reference destination, String description, BigDecimal gross, BigDecimal taxable, Integer taxYear, PensionFacts pension) {
+            this(kind,purpose,owner,account,destination,description,gross,taxable,taxYear,pension,null);
+        }
+        public Income {
+            boolean conditionalKind = kind == IncomeSourceAttribution.Kind.CONDITIONAL_RECURRING || kind == IncomeSourceAttribution.Kind.CONDITIONAL_LUMP_SUM;
+            if (conditionalKind != (conditionalBenefit != null)) throw new IllegalArgumentException("Missing or misplaced retained conditional receipt.");
+            if (conditionalBenefit != null) {
+                var expected = IncomeSourceAttribution.conditional(conditionalBenefit);
+                if (kind != expected.kind() || purpose != expected.purpose() || owner != expected.owner().orElseThrow()
+                        || account != null || destination != null || pension != null || !description.equals(expected.description())
+                        || !gross.equals(expected.grossAmount()) || !taxable.equals(expected.modeledTaxableAmount().orElseThrow())
+                        || taxYear == null || taxYear != conditionalBenefit.year())
+                    throw new IllegalArgumentException("Inconsistent retained conditional receipt.");
+            }
+        }
         static Income capture(IncomeSourceAttribution i, CaptureRegistry registry) {
             return new Income(i.kind(), i.purpose(), i.owner().orElse(null), registry.reference(i.account().orElse(null)),
                     registry.reference(i.destination().orElse(null)), i.description(), i.grossAmount(), i.modeledTaxableAmount().orElse(null),
-                    i.taxYear().isPresent() ? i.taxYear().getAsInt() : null, PensionFacts.capture(i.pension().orElse(null)));
+                    i.taxYear().isPresent() ? i.taxYear().getAsInt() : null, PensionFacts.capture(i.pension().orElse(null)), i.conditionalBenefit().orElse(null));
         }
         IncomeSourceAttribution restore(List<Account> identities) {
             return new IncomeSourceAttribution(kind, purpose, Optional.ofNullable(owner),
                     Optional.ofNullable(account).map(r -> r.restore(identities)), Optional.ofNullable(destination).map(r -> r.restore(identities)),
                     description, gross, Optional.ofNullable(taxable), taxYear == null ? OptionalInt.empty() : OptionalInt.of(taxYear),
-                    Optional.ofNullable(pension).map(PensionFacts::restore));
+                    Optional.ofNullable(pension).map(PensionFacts::restore), Optional.ofNullable(conditionalBenefit));
+        }
+    }
+
+    /** Only the new, known optional receipt is defaulted. All original creator properties stay required. */
+    public static final class IncomeReader extends com.fasterxml.jackson.databind.JsonDeserializer<Income> {
+        private static final com.fasterxml.jackson.databind.ObjectReader TREE = new com.fasterxml.jackson.databind.ObjectMapper()
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY)
+                .setNodeFactory(com.fasterxml.jackson.databind.node.JsonNodeFactory.withExactBigDecimals(true)).reader();
+        @Override public Income deserialize(com.fasterxml.jackson.core.JsonParser parser, com.fasterxml.jackson.databind.DeserializationContext context)
+                throws java.io.IOException {
+            com.fasterxml.jackson.databind.JsonNode node = TREE.readTree(parser);
+            var required = Set.of("kind","purpose","owner","account","destination","description","gross","taxable","taxYear","pension");
+            if (!node.isObject()) throw com.fasterxml.jackson.databind.JsonMappingException.from(parser,"Retained income object required.");
+            var seen = new HashSet<String>();
+            node.fieldNames().forEachRemaining(seen::add);
+            if (!seen.containsAll(required) || seen.stream().anyMatch(key -> !required.contains(key) && !key.equals("conditionalBenefit")))
+                throw com.fasterxml.jackson.databind.JsonMappingException.from(parser,"Missing or unknown retained income field.");
+            return new Income(value(context,node,"kind",IncomeSourceAttribution.Kind.class), value(context,node,"purpose",IncomeSourceAttribution.Purpose.class),
+                    value(context,node,"owner",AccountOwnership.class),value(context,node,"account",Reference.class),value(context,node,"destination",Reference.class),
+                    value(context,node,"description",String.class),value(context,node,"gross",BigDecimal.class),value(context,node,"taxable",BigDecimal.class),
+                    value(context,node,"taxYear",Integer.class),value(context,node,"pension",PensionFacts.class),
+                    value(context,node,"conditionalBenefit",com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt.class));
+        }
+        private static <T> T value(com.fasterxml.jackson.databind.DeserializationContext context, com.fasterxml.jackson.databind.JsonNode node,
+                String name, Class<T> type) throws java.io.IOException {
+            return !node.hasNonNull(name) ? null : context.readTreeAsValue(node.get(name),type);
         }
     }
     public record Decision(Income source, MichiganRetirementEligibility.Qualification qualification, BigDecimal eligibleAmount, String reason) {

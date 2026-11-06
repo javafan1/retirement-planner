@@ -38,6 +38,7 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
                 || annual.accounts().size() > 1000 || nonInvestable.size() != annual.years().size())
             throw new IllegalArgumentException("Incomplete or oversized projection context.");
         if (!digest(inputsDocument).equals(inputDigest)) throw new IllegalArgumentException("Projection input digest mismatch.");
+        ConditionalBenefitExecutionSemantics.validate(inputsDocument,annual,provenance);
         for (int i = 0; i < annual.years().size(); i++) {
             if (nonInvestable.get(i).year() != annual.years().get(i).year()
                     || (i > 0 && annual.years().get(i).year() != annual.years().get(i - 1).year() + 1))
@@ -47,7 +48,7 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
 
     public static String freeze(RetirementPlan plan) {
         return freeze(new RetirementPlanSnapshot(plan.getHousehold(), plan.getAccountPortfolio(),
-                plan.getPlanningAssumptions(), plan.getRothConversionRequest(), plan.getNonInvestableAssets()));
+                plan.getPlanningAssumptions(), plan.getRothConversionRequest(), plan.getNonInvestableAssets(), plan.getConditionalBenefits()));
     }
     public static String freeze(RetirementPlanSnapshot snapshot) {
         try {
@@ -83,6 +84,11 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
     public boolean matches(RetirementPlan plan) { return inputDigest.equals(digest(freeze(plan))); }
     /** Separate from exact configured-input identity, which still permits historical swaps. */
     public boolean calculationSemanticsCurrent() {
+        // A pension-selection stamp cannot attest to an unimplemented benefit capability.
+        // Decode property names rather than searching raw JSON (which may escape them).
+        try { if (!restoreInputs().getConditionalBenefits().isEmpty())
+            return ConditionalBenefitExecutionSemantics.current(inputsDocument,annual,provenance); }
+        catch (RuntimeException unavailable) { return false; }
         if (provenance.startsWith(PensionSelectionSemantics.PROVENANCE)) return true;
         if (provenance.startsWith(PensionSelectionSemantics.KEY + "=")) return false;
         try {

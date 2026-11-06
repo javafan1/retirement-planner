@@ -10,6 +10,7 @@ public final class MonteCarloStrategyComparisonResult {
     private final List<MonteCarloPairedOutcome> outcomes;
     private final MonteCarloStrategyComparisonSummary summary;
     private final PairedExpenseExecution expenseExecution;
+    private final com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution;
 
     public enum WorldSource { GENERATED, CALLER_SUPPLIED }
 
@@ -27,10 +28,18 @@ public final class MonteCarloStrategyComparisonResult {
     MonteCarloStrategyComparisonResult(MonteCarloStrategyComparisonRequest request,
             WorldSource worldSource, List<MonteCarloPairedOutcome> outcomes, MonteCarloStrategyComparisonSummary frozen,
             PairedExpenseExecution expenseExecution) {
+        this(request, worldSource, outcomes, frozen, expenseExecution, null);
+    }
+
+    MonteCarloStrategyComparisonResult(MonteCarloStrategyComparisonRequest request,
+            WorldSource worldSource, List<MonteCarloPairedOutcome> outcomes, MonteCarloStrategyComparisonSummary frozen,
+            PairedExpenseExecution expenseExecution,
+            com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution) {
         this.request = Objects.requireNonNull(request);
         this.worldSource = Objects.requireNonNull(worldSource);
         this.expenseExecution = expenseExecution;
-        if (expenseExecution != null && worldSource != WorldSource.GENERATED)
+        this.benefitExecution = benefitExecution;
+        if ((expenseExecution != null || benefitExecution != null) && worldSource != WorldSource.GENERATED)
             throw new IllegalArgumentException("Enabled paired expenses require generated worlds.");
         this.outcomes = List.copyOf(outcomes);
         outcomes = this.outcomes;
@@ -50,26 +59,30 @@ public final class MonteCarloStrategyComparisonResult {
     public List<MonteCarloPairedOutcome> outcomes() { return outcomes; }
     public MonteCarloStrategyComparisonSummary summary() { return summary; }
     public PairedExpenseExecution expenseExecution() { return expenseExecution; }
+    public com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution() { return benefitExecution; }
 
     @Override
     public boolean equals(Object other) {
         return this == other || other instanceof MonteCarloStrategyComparisonResult that
                 && request.equals(that.request) && worldSource == that.worldSource
                 && Objects.equals(expenseExecution, that.expenseExecution)
+                && Objects.equals(benefitExecution, that.benefitExecution)
                 && outcomes.equals(that.outcomes) && summary.equals(that.summary);
     }
 
     @Override
     public int hashCode() {
         int legacy = Objects.hash(request, worldSource, outcomes, summary);
-        return expenseExecution == null ? legacy : Objects.hash(legacy, expenseExecution);
+        int expense = expenseExecution == null ? legacy : Objects.hash(legacy, expenseExecution);
+        return benefitExecution == null ? expense : Objects.hash(expense, benefitExecution);
     }
 
     @Override
     public String toString() {
         return "MonteCarloStrategyComparisonResult[request=" + request + ", worldSource=" + worldSource
                 + ", outcomes=" + outcomes + ", summary=" + summary
-                + (expenseExecution == null ? "" : ", expenseExecution=" + expenseExecution) + "]";
+                + (expenseExecution == null ? "" : ", expenseExecution=" + expenseExecution)
+                + (benefitExecution == null ? "" : ", benefitExecution=" + benefitExecution) + "]";
     }
 
     public int requestedPairedCount() {

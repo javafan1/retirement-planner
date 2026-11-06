@@ -73,6 +73,15 @@ public class ApplicationController {
     public java.util.concurrent.CompletionStage<Void> getProjectionRestoration() { return projectionRestoration; }
     public boolean isRestoredProjectionMode() { return restoredProjectionMode; }
     public String getProjectionSnapshotNotice() {
+        if (currentPlan != null && !currentPlan.getConditionalBenefits().isEmpty()) {
+            try { com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(currentPlan); }
+            catch (com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.UnsupportedExecutionException unsupported) {
+                return unsupported.getMessage();
+            }
+            var original = getAcceptedProjectionSnapshot();
+            return original != null && original.matches(currentPlan) && original.calculationSemanticsCurrent() ? projectionSnapshotNotice
+                    : "Run a new deterministic projection to include the configured conditional benefits. Prior results retain their original frozen assumptions. " + projectionSnapshotNotice;
+        }
         var accepted = getAcceptedProjectionSnapshot();
         return accepted != null && !accepted.calculationSemanticsCurrent()
                 ? "Historical/outdated pension-tax calculation semantics. Original results are preserved; run a new projection for corrected pension selection. " + projectionSnapshotNotice
@@ -105,6 +114,13 @@ public class ApplicationController {
     }
     /** Called only at an eligible result acceptance, never passive restoration. Save commits the immutable pin. */
     public synchronized boolean associateAnalyzer(AnalyzerAdmission admission, com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion completion) {
+        completion.validateCapabilities();
+        if (currentPlan != null && !currentPlan.getConditionalBenefits().isEmpty()
+                && completion.kind() != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.COUPLE_SOCIAL_SECURITY
+                && completion.kind() != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
+                && completion.benefitExecution() == null
+                && !(completion.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                        && mc.benefitExecution() != null)) return false;
         if (admission == null) {
             if (completion.planId().equals(getAnalysisSessionId())) associationNotices.put(completion.kind(), new AssociationNotice(completion.planId(),
                     "Last-success result has no unchanged accepted projection admission. Existing historical pins are retained independently."));
@@ -271,7 +287,7 @@ public class ApplicationController {
             }
             var inputs = originalBaseline.restoreInputs();
             var target = new RetirementPlan(inputs.getHousehold(), inputs.getAccountPortfolio(), inputs.getPlanningAssumptions(),
-                    inputs.getRothConversionRequest(), inputs.getNonInvestableAssets(), owner.getPlanId());
+                    inputs.getRothConversionRequest(), inputs.getNonInvestableAssets(), owner.getPlanId(), inputs.getConditionalBenefits());
             target.setBaseline(new ProjectionBaseline(originalCurrent.restoreInputs(),
                     java.time.LocalDateTime.ofInstant(originalCurrent.acceptedAt(), java.time.ZoneId.systemDefault()),
                     "Original accepted projection " + originalCurrent.id(), originalCurrent.id()));
@@ -355,7 +371,7 @@ public class ApplicationController {
                     diagnostics.stage(PlanSaveDiagnostics.Stage.PLAN_COPY_RECONSTRUCTION);
                     var roots = CompleteProjectionSnapshot.restoreInputs(inputs);
                     var copy = new RetirementPlan(roots.getHousehold(), roots.getAccountPortfolio(), roots.getPlanningAssumptions(),
-                            roots.getRothConversionRequest(), roots.getNonInvestableAssets(), identity);
+                            roots.getRothConversionRequest(), roots.getNonInvestableAssets(), identity, roots.getConditionalBenefits());
                     if (baseline != null) copy.setBaseline(new ProjectionBaseline(CompleteProjectionSnapshot.restoreInputs(baselineInputs),
                             baseline.getSavedAt(), baseline.getDescription(), baseline.getProjectionSnapshotId()));
                     if (configurations != null) copy.setAnalyzerConfigurations(configurations);
@@ -546,7 +562,7 @@ public class ApplicationController {
         return analysisResults.background(() -> {
             var roots = CompleteProjectionSnapshot.restoreInputs(inputs);
             var copy = new RetirementPlan(roots.getHousehold(), roots.getAccountPortfolio(), roots.getPlanningAssumptions(),
-                    roots.getRothConversionRequest(), roots.getNonInvestableAssets(), identity);
+                    roots.getRothConversionRequest(), roots.getNonInvestableAssets(), identity, roots.getConditionalBenefits());
             if (baseline != null) copy.setBaseline(new ProjectionBaseline(CompleteProjectionSnapshot.restoreInputs(baselineInputs),
                     baseline.getSavedAt(), baseline.getDescription(), baseline.getProjectionSnapshotId()));
             if (configurations != null) copy.setAnalyzerConfigurations(configurations);
@@ -971,6 +987,7 @@ public class ApplicationController {
             var frozen = CompleteProjectionSnapshot.restoreInputs(inputDocument);
             var executionPlan = new RetirementPlan(frozen.getHousehold(), frozen.getAccountPortfolio(),
                     frozen.getPlanningAssumptions(), frozen.getRothConversionRequest(), frozen.getNonInvestableAssets());
+            executionPlan.setConditionalBenefits(frozen.getConditionalBenefits());
             java.util.UUID ownerIdentity = getAnalysisSessionId();
             // Preserve the established normal-result account identities. The synchronous engine
             // receives the same live graph as before; detached metadata and the post-run guards
@@ -988,8 +1005,9 @@ public class ApplicationController {
                 var retained = RetainedProjectionSnapshot.capture(projection);
                 complete = new CompleteProjectionSnapshot(1, java.util.UUID.randomUUID(), ownerIdentity, ownerIdentity, java.time.Instant.now(),
                         inputDocument, CompleteProjectionSnapshot.digest(inputDocument),
-                        com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.PROVENANCE
-                                + "Accepted normal projection; retained schema " + retained.schemaVersion() + "; original build version not recorded",
+                        com.daviddunn.retirementplanner.app.projection.ConditionalBenefitExecutionSemantics.completed(executionPlan,inputDocument,retained,
+                                com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.PROVENANCE
+                                + "Accepted normal projection; retained schema " + retained.schemaVersion() + "; original build version not recorded"),
                         retained, nonInvestable.stream().map(CompleteProjectionSnapshot.NonInvestableYear::capture).toList(),
                         CompleteProjectionSnapshot.Summary.capture(completedSummary), BreakEvenPlanSummary.from(executionPlan));
                 completedChart = complete.chart(); // Validate/detach before publishing any accepted state.

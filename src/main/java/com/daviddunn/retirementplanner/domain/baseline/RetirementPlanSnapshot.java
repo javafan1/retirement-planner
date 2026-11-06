@@ -13,6 +13,10 @@ import java.util.List;
 import java.util.Objects;
 
 public class RetirementPlanSnapshot {
+    private final List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> conditionalBenefits;
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
+    public List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> getConditionalBenefits() { return conditionalBenefits; }
 
     private final Household household;
 
@@ -43,7 +47,8 @@ public class RetirementPlanSnapshot {
 
             @JsonProperty("nonInvestableAssets")
             List<NonInvestableAsset>
-                    nonInvestableAssets) {
+                    nonInvestableAssets,
+            @JsonProperty("conditionalBenefits") List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> conditionalBenefits) {
 
         this.household =
                 Objects.requireNonNull(
@@ -64,10 +69,17 @@ public class RetirementPlanSnapshot {
                 List.copyOf(
                         Objects.requireNonNull(
                                 nonInvestableAssets));
+        this.conditionalBenefits = com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefits.validatedCopy(conditionalBenefits, household);
         validateHouseholdReferences();
     }
 
+    public RetirementPlanSnapshot(Household household, AccountPortfolio portfolio, PlanningAssumptions assumptions,
+            RothConversionRequest roth, List<NonInvestableAsset> assets) {
+        this(household, portfolio, assumptions, roth, assets, List.of());
+    }
+
     public void validateHouseholdReferences() {
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefits.validatedCopy(conditionalBenefits, household);
         household.validatePersonReferences();
         accountPortfolio.getAccounts().forEach(account ->
                 household.validateOwnership(account.getOwnership(), "baseline account " + account.getName()));
@@ -116,7 +128,7 @@ public class RetirementPlanSnapshot {
                 plan.getAccountPortfolio(),
                 plan.getPlanningAssumptions(),
                 plan.getRothConversionRequest(),
-                plan.getNonInvestableAssets());
+                plan.getNonInvestableAssets(), plan.getConditionalBenefits());
         // Preserve the existing JSON shape while isolating mutable household/accounts.
         // Copy only the snapshot, never the plan's previous baseline recursively.
         var mapper = new com.fasterxml.jackson.databind.ObjectMapper()

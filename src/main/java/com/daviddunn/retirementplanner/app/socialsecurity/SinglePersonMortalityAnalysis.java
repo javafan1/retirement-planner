@@ -56,6 +56,7 @@ public final class SinglePersonMortalityAnalysis {
         Objects.requireNonNull(valuationDate);
         EstatePresentValueCalculator.validateRate(realDiscountRate);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
+        if (mode == Mode.INTEGRATED) com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
         if (plan.getHousehold().hasSpouse()) throw new IllegalArgumentException("This request requires a single-person household.");
         IntegratedSocialSecurityStrategyEvaluator.requireAdvancedPlan(plan);
         var person = plan.getHousehold().getPrimaryPerson();
@@ -134,6 +135,7 @@ public final class SinglePersonMortalityAnalysis {
                                 HouseholdLifetimeScenario.primaryOnly(Optional.of(Year.from(death))))
                                 .withExactEndingYear(death.getYear() - 1);
                         var projection = engine.project(isolated, context);
+                        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(isolated, context, projection.getYears());
                         projections++;
                         snapshot = snapshots.calculate(isolated, projection, death);
                     }

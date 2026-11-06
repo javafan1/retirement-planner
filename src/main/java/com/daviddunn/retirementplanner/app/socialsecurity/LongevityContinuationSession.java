@@ -36,6 +36,7 @@ final class LongevityContinuationSession {
 
     LongevityContinuationSession(RetirementPlan plan, LongevityWeightedIntegratedStrategyRequest request,
             int positive, Consumer<LongevityContinuationWork> observer, ProjectionEngine engine) {
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireOptimizationSupported(plan);
         this.engine = engine;
         this.plan = plan;
         this.request = request;

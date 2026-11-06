@@ -172,6 +172,7 @@ public class ProjectionPdfExporter {
             finishPage();
             startPage();
             writeKeyAssumptions(plan);
+            writeConditionalBenefits(plan,projection);
             finishPage();
             addPageNumbers();
             document.save(
@@ -182,6 +183,38 @@ public class ProjectionPdfExporter {
             document.close();
         }
     }
+
+    /** Original supplied frozen inputs plus completed receipts only; no evaluator or projection. */
+    private void writeConditionalBenefits(RetirementPlan plan, Projection projection) throws IOException {
+        if (plan.getConditionalBenefits().isEmpty()) return;
+        ensureSpace(55);
+        writeSectionHeading("CONDITIONAL BENEFITS",BLUE);
+        writeKeyValue("Planning scope", "Fully taxable non-pension receipts; household retained non-qualified cash. Future triggers are not current income.",GRAY);
+        for (var definition : plan.getConditionalBenefits()) {
+            String trigger = definition.trigger().type().toString() + (definition.trigger().date() == null
+                    ? " / " + definition.trigger().person() + (definition.trigger().age() == null ? "" : " age " + definition.trigger().age())
+                    : " / " + definition.trigger().date());
+            String timing = (definition.notBefore() == null ? "" : "; not before " + definition.notBefore())
+                    + (definition.endDate() == null ? "" : "; end " + definition.endDate())
+                    + (definition.coverageStart() == null && definition.coverageEnd() == null ? "" : "; covered trigger "
+                    + (definition.coverageStart() == null ? "any start" : definition.coverageStart()) + " to "
+                    + (definition.coverageEnd() == null ? "no end" : definition.coverageEnd()));
+            writeKeyValue(definition.label(),conditionalMoney(definition.grossAmount())
+                    + (definition.paymentPattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING ? " per month" : " one-time lump sum")
+                    + "; recipient " + definition.recipient() + "; trigger " + trigger
+                    + (definition.paymentPattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING
+                    ? "; annual escalation " + String.format(java.util.Locale.US,"%.2f%%",definition.annualEscalationRate().movePointRight(2)) + " from first eligible payment year" : "") + timing,GRAY);
+        }
+        boolean any = false;
+        for (var year : projection.getYears()) for (var source : year.getIncomeSources()) if (source.conditionalBenefit().isPresent()) {
+            var receipt = source.conditionalBenefit().orElseThrow(); any = true;
+            writeKeyValue(year.getCalendarYear() + " / " + receipt.label(),
+                    (receipt.months() == 0 ? "Lump sum; event " + receipt.eventDate() : "Monthly income; " + receipt.months() + " payments; " + receipt.paymentStart() + " through " + receipt.paymentEnd())
+                    + "; recipient " + receipt.recipient() + "; gross " + conditionalMoney(receipt.gross()) + "; taxable " + conditionalMoney(receipt.taxable()),GRAY);
+        }
+        if (!any) writeKeyValue("Completed projection receipts","No conditional receipt facts are recorded in the original annual data. Definitions alone do not establish execution.",GRAY);
+    }
+    private static String conditionalMoney(BigDecimal amount) { return String.format(java.util.Locale.US,"$%,.2f",amount); }
 
 
     private void startPage()

@@ -33,7 +33,10 @@ public final class AnalysisFingerprintService {
         }
     }
     public record Assessment(String fingerprint, String contextFingerprint, String problem,
-            Boolean legacyPensionAffected) {
+            Boolean legacyPensionAffected, Boolean conditionalBenefitsConfigured) {
+        public Assessment(String fingerprint, String contextFingerprint, String problem, Boolean legacyPensionAffected) {
+            this(fingerprint, contextFingerprint, problem, legacyPensionAffected, null);
+        }
         public Assessment(String fingerprint, String contextFingerprint, String problem) {
             this(fingerprint, contextFingerprint, problem, null);
         }
@@ -44,7 +47,8 @@ public final class AnalysisFingerprintService {
     public Assessment assess(AnalysisKind kind, RetirementPlan plan, Inputs inputs, String pendingProblem) {
         if (pendingProblem != null) return new Assessment(null, null, "Inputs need attention: " + pendingProblem);
         try { return new Assessment(fingerprint(kind, plan, inputs), effectiveContextFingerprint(kind, plan), null,
-                com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.potentiallyAffected(plan)); }
+                com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.potentiallyAffected(plan),
+                !plan.getConditionalBenefits().isEmpty()); }
         catch (RuntimeException invalid) { return new Assessment(null, null, "Inputs need attention."); }
     }
     public String fingerprint(AnalysisKind kind, RetirementPlan plan, Inputs next) {
@@ -78,9 +82,11 @@ public final class AnalysisFingerprintService {
             if (!kind.isMonteCarlo()) {
                 com.daviddunn.retirementplanner.app.projection.DeterministicExpenseInputs.removeVolatility(f);
             }
-            var allowed = Set.of("planId", "household", "accountPortfolio", "planningAssumptions", "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations", "projectionState");
+            var allowed = Set.of("planId", "household", "accountPortfolio", "planningAssumptions", "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations", "projectionState", "conditionalBenefits");
             f.fieldNames().forEachRemaining(name -> { if (!allowed.contains(name)) throw new IllegalArgumentException("Unclassified plan field: " + name); });
             f.remove(List.of("planId", "baseline", "analyzerConfigurations", "projectionState"));
+            if (!plan.getConditionalBenefits().isEmpty()) plan.validateHouseholdReferences();
+            com.daviddunn.retirementplanner.app.projection.ConditionalBenefitFinancialInputs.normalize(f);
             removeDisplayNames(f);
             if (kind == AnalysisKind.COUPLE_WEIGHTED || kind == AnalysisKind.INDIVIDUAL_WEIGHTED) {
                 var assumptions = (ObjectNode) f.get("planningAssumptions");

@@ -10,7 +10,8 @@ import java.util.*;
 /** Effective frozen inputs only. No simulation, mortality distribution or projection is evaluated. */
 public final class MonteCarloFingerprintService {
     /** Legacy V1, read-only numeric V2, enabled standalone V3 and enabled ordered comparison V4. */
-    public enum Contract { EXACT_V1, TEMPORARY_NUMERIC_V2, EXPENSE_MODEL_V3, PAIRED_EXPENSE_V4 }
+    public enum Contract { EXACT_V1, TEMPORARY_NUMERIC_V2, EXPENSE_MODEL_V3, PAIRED_EXPENSE_V4,
+        BENEFITS_STANDALONE_V5, PAIRED_BENEFITS_V6 }
     public record Inputs(AnalysisKind kind, MonteCarloSnapshot.Settings settings, MonteCarloSnapshot.Request request,
             String suppliedWorldFingerprint) {
         public Inputs(AnalysisKind kind, MonteCarloSnapshot.Settings settings, MonteCarloSnapshot.Request request) {
@@ -59,6 +60,10 @@ public final class MonteCarloFingerprintService {
 
     public Contract acceptanceContract(Inputs inputs) {
         if (inputs == null || inputs.request() == null) return Contract.EXACT_V1;
+        boolean benefits = !MonteCarloPlanDocument.read(inputs.request().planA()).getConditionalBenefits().isEmpty()
+                || inputs.request().planB() != null
+                    && !MonteCarloPlanDocument.read(inputs.request().planB()).getConditionalBenefits().isEmpty();
+        if (benefits) return inputs.request().planB() == null ? Contract.BENEFITS_STANDALONE_V5 : Contract.PAIRED_BENEFITS_V6;
         boolean positiveA = ExpenseExecution.configured(MonteCarloPlanDocument.read(inputs.request().planA()));
         if (inputs.request().planB() != null)
             return positiveA || ExpenseExecution.configured(MonteCarloPlanDocument.read(inputs.request().planB()))
@@ -84,12 +89,24 @@ public final class MonteCarloFingerprintService {
             node.set("settings", json.valueToTree(inputs.settings()));
             boolean sampled = inputs.request().mortality() != null;
             boolean paired = inputs.request().planB() != null;
+            boolean benefits = contract == Contract.BENEFITS_STANDALONE_V5 || contract == Contract.PAIRED_BENEFITS_V6;
+            if (benefits) {
+                if (paired != (contract == Contract.PAIRED_BENEFITS_V6) || inputs.suppliedWorldFingerprint() != null)
+                    throw new IllegalArgumentException("Conditional-benefit fingerprint requires generated matching-family inputs.");
+                var capability = ConditionalBenefitAnalysisExecution.capture(inputs.kind(), inputs.request().planA(), inputs.request().planB());
+                node.put("version", paired ? 6 : 5);
+                var model = node.putObject("conditionalBenefitsExecution");
+                model.put("model", capability.model());
+                model.put("protocol", capability.scenarioProtocol());
+            }
             node.set("A", plan(inputs.request().planA(), sampled, false, paired, context.putObject("A")));
             if (paired) node.set("B", plan(inputs.request().planB(), sampled, true, true, context.putObject("B")));
             node.set("mortality", json.valueToTree(inputs.request().mortality()));
             node.set("end", json.valueToTree(inputs.request().endingYear()));
             node.set("suppliedWorldFingerprint", json.valueToTree(inputs.suppliedWorldFingerprint()));
-            if (contract == Contract.EXPENSE_MODEL_V3) {
+            boolean positiveA = benefits && ExpenseExecution.configured(MonteCarloPlanDocument.read(inputs.request().planA()));
+            boolean positiveB = benefits && paired && ExpenseExecution.configured(MonteCarloPlanDocument.read(inputs.request().planB()));
+            if (contract == Contract.EXPENSE_MODEL_V3 || benefits && !paired && positiveA) {
                 if (paired || inputs.suppliedWorldFingerprint() != null)
                     throw new IllegalArgumentException("Enabled expense fingerprint requires generated standalone inputs.");
                 var capability = (ObjectNode) json.valueToTree(ExpenseExecution.fromDocument(inputs.request().planA()));
@@ -98,7 +115,7 @@ public final class MonteCarloFingerprintService {
                 capability.remove("planDigest");
                 node.set("expenseExecution", capability);
             }
-            if (contract == Contract.PAIRED_EXPENSE_V4) {
+            if (contract == Contract.PAIRED_EXPENSE_V4 || benefits && paired && (positiveA || positiveB)) {
                 if (!paired || inputs.suppliedWorldFingerprint() != null)
                     throw new IllegalArgumentException("Paired expense fingerprint requires generated comparison inputs.");
                 var capability = (ObjectNode) json.valueToTree(PairedExpenseExecution.capture(
@@ -106,6 +123,15 @@ public final class MonteCarloFingerprintService {
                 for (String side : List.of("current", "baseline"))
                     if (capability.get(side) instanceof ObjectNode enabled) enabled.remove("planDigest");
                 node.set("pairedExpenseExecution", capability);
+                var worlds = node.putObject("worlds");
+                worlds.put("source", "GENERATED");
+                worlds.put("returns", MonteCarloScenarioGenerator.MODEL_VERSION);
+                worlds.put("inflation", MonteCarloInflationGenerator.MODEL_VERSION);
+                worlds.put("streams", "RPMC-SHA256-v1/legacy-market-v1");
+                if (sampled) worlds.put("mortality", inputs.kind().shape() == AnalysisKind.Shape.COUPLE
+                        ? "HOUSEHOLD_MORTALITY_V1" : "PRIMARY_MORTALITY_V1");
+            }
+            if (benefits) {
                 var worlds = node.putObject("worlds");
                 worlds.put("source", "GENERATED");
                 worlds.put("returns", MonteCarloScenarioGenerator.MODEL_VERSION);
@@ -145,7 +171,8 @@ public final class MonteCarloFingerprintService {
 
     public AnalysisFingerprintService.Assessment assess(MonteCarloSnapshot snapshot) {
         return assess(new Inputs(snapshot.kind(), snapshot.settings(), snapshot.request(), snapshot.provenance().suppliedWorldFingerprint()),
-                snapshot.pairedExpenseExecution() != null ? Contract.PAIRED_EXPENSE_V4
+                snapshot.benefitExecution() != null ? snapshot.paired() != null ? Contract.PAIRED_BENEFITS_V6 : Contract.BENEFITS_STANDALONE_V5
+                        : snapshot.pairedExpenseExecution() != null ? Contract.PAIRED_EXPENSE_V4
                         : snapshot.expenseExecution() == null ? Contract.TEMPORARY_NUMERIC_V2 : Contract.EXPENSE_MODEL_V3);
     }
 
@@ -154,6 +181,7 @@ public final class MonteCarloFingerprintService {
     }
 
     public AnalysisFingerprintService.Assessment storedFingerprint(MonteCarloSnapshot snapshot) {
+        if (snapshot.benefitExecution() != null) return assess(snapshot);
         return !snapshot.hasExpenseExecution() ? storedV1(snapshot)
                 : assess(new Inputs(snapshot.kind(), snapshot.settings(), snapshot.request(), snapshot.provenance().suppliedWorldFingerprint()),
                         snapshot.pairedExpenseExecution() != null ? Contract.PAIRED_EXPENSE_V4 : Contract.EXPENSE_MODEL_V3);
@@ -189,9 +217,11 @@ public final class MonteCarloFingerprintService {
     private JsonNode plan(String document, boolean sampled, boolean alternative, boolean paired, ObjectNode context) throws java.io.IOException {
         var node = (ObjectNode) json.readTree(document);
         var allowed = Set.of("planId", "household", "accountPortfolio", "planningAssumptions",
-                "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations", "projectionState");
+                "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations", "projectionState", "conditionalBenefits");
         node.fieldNames().forEachRemaining(k -> { if (!allowed.contains(k)) throw new IllegalArgumentException("Unclassified plan field."); });
         node.remove(List.of("planId", "baseline", "analyzerConfigurations", "projectionState"));
+        if (node.hasNonNull("conditionalBenefits") && !node.get("conditionalBenefits").isEmpty()) MonteCarloPlanDocument.read(document);
+        com.daviddunn.retirementplanner.app.projection.ConditionalBenefitFinancialInputs.normalize(node);
         removeNames(node);
         var assumptions = (ObjectNode) node.get("planningAssumptions");
         if (sampled || alternative) move(assumptions, "projectionLengthYears", context);

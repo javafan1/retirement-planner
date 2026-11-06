@@ -35,6 +35,8 @@ public class BaselineProjectionService {
                         snapshot.getPlanningAssumptions(),
                         snapshot.getRothConversionRequest(),
                         snapshot.getNonInvestableAssets());
+        baselinePlan.setConditionalBenefits(snapshot.getConditionalBenefits());
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(baselinePlan);
 
         return projectionEngine.project(
                 baselinePlan);

@@ -66,6 +66,18 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         Objects.requireNonNull(cancellation).throwIfCancellationRequested();
         var a = request.strategyA().copyForRun();
         var b = request.strategyB().copyForRun();
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(a);
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(b);
+        com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution = null;
+        if (!a.getConditionalBenefits().isEmpty() || !b.getConditionalBenefits().isEmpty()) {
+            if (supplied != null || expensesA != null || expensesB != null)
+                throw new UnsupportedOperationException("Conditional-benefit comparison requires supported generated worlds; supplied paths or expense overrides are not supported.");
+            var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.valueOf(
+                    (a.getHousehold().hasSpouse() ? "COUPLE" : "INDIVIDUAL") + "_MONTE_CARLO_PAIRED_"
+                            + (request.assumptions() instanceof MonteCarloStrategyComparisonRequest.Longevity ? "LONGEVITY" : "FIXED"));
+            benefitExecution = com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution.capture(
+                    kind, MonteCarloPlanDocument.capture(a), MonteCarloPlanDocument.capture(b));
+        }
         PairedExpenseExecution expenseExecution = null;
         if (expensesA == null && expensesB == null && (ExpenseExecution.configured(a) || ExpenseExecution.configured(b))) {
             if (supplied != null)
@@ -117,7 +129,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
             expenseExecution.validate(MonteCarloPlanDocument.capture(a), MonteCarloPlanDocument.capture(b));
         return new MonteCarloStrategyComparisonResult(request, supplied == null
                 ? MonteCarloStrategyComparisonResult.WorldSource.GENERATED
-                : MonteCarloStrategyComparisonResult.WorldSource.CALLER_SUPPLIED, pairs, null, expenseExecution);
+                : MonteCarloStrategyComparisonResult.WorldSource.CALLER_SUPPLIED, pairs, null, expenseExecution, benefitExecution);
     }
 
     private MonteCarloStrategyOutcome evaluateSide(RetirementPlan plan, MonteCarloComparisonWorld world,
@@ -159,6 +171,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         if (expenses != null) context = expenses.apply(plan, context, assumptions.settings().seed(),
                 world.scenarioIndex(), assumptions.start().getYear(), last);
         var execution = engine.projectWithOutcome(plan, context, world.economicPath());
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(plan, context, execution.completedYears());
         var annual = new TreeMap<Integer, BigDecimal>();
         int expected = assumptions.start().getYear();
         for (var year : execution.completedYears()) {

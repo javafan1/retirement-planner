@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 /** Frozen configured inputs using the existing allowlisted plan schema, never Java object serialization. */
-final class MonteCarloPlanDocument {
+public final class MonteCarloPlanDocument {
     private static final ObjectMapper JSON = new ObjectMapper(JsonFactory.builder()
             .streamReadConstraints(StreamReadConstraints.builder().maxNumberLength(4096).maxNestingDepth(80).maxStringLength(256000).build())
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
@@ -24,7 +24,7 @@ final class MonteCarloPlanDocument {
         JSON.registerModule(scalars);
     }
     private MonteCarloPlanDocument() { }
-    static String capture(RetirementPlan plan) {
+    public static String capture(RetirementPlan plan) {
         try {
             byte[] bytes = JSON.writeValueAsBytes(plan);
             if (plan.getProjectionState() != null) bytes = com.daviddunn.retirementplanner.persistence.PlanConfigurationTransaction.replace(bytes, "projectionState", null);
@@ -33,7 +33,7 @@ final class MonteCarloPlanDocument {
         }
         catch (Exception e) { throw new IllegalArgumentException("Cannot freeze Monte Carlo plan inputs.", e); }
     }
-    static RetirementPlan read(String json) {
+    public static RetirementPlan read(String json) {
         if (json == null || json.length() > 256000) throw new IllegalArgumentException("Frozen plan exceeds its bounded context limit.");
         try { return JSON.readValue(json, RetirementPlan.class); }
         catch (Exception e) { throw new IllegalArgumentException("Invalid frozen Monte Carlo plan inputs.", e); }

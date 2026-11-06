@@ -1470,6 +1470,12 @@ public class MainWindow {
 
         resultsView.load(null, List.of());
         resultsSummaryView.setYearlyDetailsAvailable(false);
+        if (exception instanceof com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.UnsupportedExecutionException) {
+            String message = exception.getMessage();
+            projectionFundingNotice.setText(message);
+            statusLabel.setText(message);
+            return;
+        }
 
         var unavailableMessage = ProjectionFailureMessages.stateTaxUnavailableMessage(exception);
         if (unavailableMessage.isPresent()) {

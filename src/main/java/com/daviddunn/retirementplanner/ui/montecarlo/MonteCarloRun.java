@@ -35,6 +35,11 @@ public record MonteCarloRun(
     public MonteCarloRun {
         java.util.Objects.requireNonNull(analysis);
         java.util.Objects.requireNonNull(planDetails);
+        var capability = analysis instanceof Fixed f ? f.value().benefitExecution() : ((Mortality) analysis).value().benefitExecution();
+        if (capability != null) {
+            for (String line : capability.disclosure())
+                if (!planDetails.contains(line)) planDetails += "\n" + line;
+        }
     }
 
     public MonteCarloRun(Result analysis, MonteCarloFanModel fan, BreakEvenPlanSummary people,

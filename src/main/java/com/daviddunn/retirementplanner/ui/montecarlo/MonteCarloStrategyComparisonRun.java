@@ -14,5 +14,9 @@ public record MonteCarloStrategyComparisonRun(
             for (String line : result.expenseExecution().disclosure(result.request()))
                 if (!details.contains(line)) details += "\n" + line;
         }
+        if (result.benefitExecution() != null) {
+            for (String line : result.benefitExecution().disclosure())
+                if (!details.contains(line)) details += "\n" + line;
+        }
     }
 }

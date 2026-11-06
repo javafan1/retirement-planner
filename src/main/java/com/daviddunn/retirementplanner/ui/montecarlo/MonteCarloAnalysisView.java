@@ -759,11 +759,14 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     private javafx.scene.Node withExpenseDetails(javafx.scene.Node existing, MonteCarloRun completed) {
         boolean enabled = completed.mode() == MonteCarloMode.FIXED_LIFESPAN
                 ? completed.result().expenseExecution() != null : completed.mortalityResult().expenseExecution() != null;
-        if (!enabled) return existing;
+        boolean benefits = completed.mode() == MonteCarloMode.FIXED_LIFESPAN
+                ? completed.result().benefitExecution() != null : completed.mortalityResult().benefitExecution() != null;
+        if (!enabled && !benefits) return existing;
         // Worker capture/restoration supplies original-context text; never read live expense settings here.
         var original = label(completed.planDetails(), "mc-muted");
-        original.setId("mc-expense-details");
-        return new VBox(6, existing, label("Original plan and stochastic expense assumptions", "mc-section"), original);
+        original.setId(enabled ? "mc-expense-details" : "mc-benefit-details");
+        return new VBox(6, existing, label(benefits ? "Original plan, conditional benefit and stochastic assumptions"
+                : "Original plan and stochastic expense assumptions", "mc-section"), original);
     }
 
     private static void show(javafx.scene.Node node, boolean visible) {

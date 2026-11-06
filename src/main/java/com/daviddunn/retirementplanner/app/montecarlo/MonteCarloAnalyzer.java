@@ -119,6 +119,9 @@ public final class MonteCarloAnalyzer {
         cancellation.throwIfCancellationRequested();
         Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
+        var benefitExecution = benefitCapability(plan, "LONGEVITY", suppliedWorlds != null || expenses != null
+                || !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel));
         ExpenseExecution expenseExecution = null;
         if (expenses == null && ExpenseExecution.configured(plan)) {
             if (suppliedWorlds != null || !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
@@ -171,6 +174,7 @@ public final class MonteCarloAnalyzer {
                     }
                     if (expenses != null) context = expenses.apply(plan, context, settings.seed(), index, start.getYear(), last);
                     var execution = engine.projectWithOutcome(plan, context, world.economicPath());
+                    com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(plan, context, execution.completedYears());
                     if (execution instanceof ProjectionExecutionResult.InsufficientFunds failed) {
                         outcomes.add(new MonteCarloMortalityAnalysisResult.WorldOutcome(index, lifetime,
                                 annual(failed.completedYears()), Optional.empty(), Optional.of(failed.fundingFailure())));
@@ -197,7 +201,7 @@ public final class MonteCarloAnalyzer {
             }
         }
         cancellation.throwIfCancellationRequested();
-        var result = new MonteCarloMortalityAnalysisResult(request, returnModel, mortalityModel, outcomes, null, expenseExecution);
+        var result = new MonteCarloMortalityAnalysisResult(request, returnModel, mortalityModel, outcomes, null, expenseExecution, benefitExecution);
         cancellation.throwIfCancellationRequested();
         return result;
     }
@@ -318,6 +322,9 @@ public final class MonteCarloAnalyzer {
         cancellation.throwIfCancellationRequested();
         Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
+        var benefitExecution = benefitCapability(plan, "FIXED", expenses != null
+                || !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel));
         ExpenseExecution expenseExecution = null;
         if (expenses == null && ExpenseExecution.configured(plan)) {
             if (!MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
@@ -360,6 +367,7 @@ public final class MonteCarloAnalyzer {
                 if (expenses != null) context = expenses.apply(plan, context, settings.seed(), index, first, last);
                 var execution = engine.projectWithOutcome(
                         plan, context, economicPath);
+                com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(plan, context, execution.completedYears());
                 if (execution instanceof ProjectionExecutionResult.InsufficientFunds failed) {
                     addAnnualSamples(samples, failed.completedYears());
                     outcomes.add(new RunOutcome(
@@ -397,9 +405,18 @@ public final class MonteCarloAnalyzer {
         var result = new MonteCarloAnalysisResult(
                 settings, returnModel, outcomes, annual,
                 MonteCarloPercentiles.of(assets), MonteCarloPercentiles.of(worth),
-                MonteCarloPercentiles.of(estate), MonteCarloPercentiles.of(taxes), deterministic, expenseExecution);
+                MonteCarloPercentiles.of(estate), MonteCarloPercentiles.of(taxes), deterministic, expenseExecution, benefitExecution);
         cancellation.throwIfCancellationRequested();
         return result;
+    }
+
+    private static com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitCapability(
+            RetirementPlan plan, String mode, boolean supplied) {
+        if (plan.getConditionalBenefits().isEmpty()) return null;
+        if (supplied) throw new UnsupportedOperationException("Conditional benefits require supported generated Monte Carlo worlds; supplied paths or expense overrides are not supported.");
+        var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.valueOf(
+                (plan.getHousehold().hasSpouse() ? "COUPLE" : "INDIVIDUAL") + "_MONTE_CARLO_" + mode);
+        return com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution.capture(kind, plan);
     }
 
     private static void report(AnalysisProgressListener progress, int completed, int total) {
@@ -417,6 +434,8 @@ public final class MonteCarloAnalyzer {
             var execution = reference == null
                     ? engine.projectWithOutcome(plan)
                     : reference;
+            com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(
+                    plan, ProjectionEvaluationContext.empty(), execution.completedYears());
             if (execution instanceof ProjectionExecutionResult.Completed completed) {
                 var projection = completed.projection();
                 validateYears(projection, first, last);

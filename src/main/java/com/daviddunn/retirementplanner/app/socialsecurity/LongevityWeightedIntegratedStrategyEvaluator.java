@@ -24,6 +24,7 @@ public final class LongevityWeightedIntegratedStrategyEvaluator {
         Objects.requireNonNull(workObserver, "Work observer is required.");
         request.cancellationToken().throwIfCancellationRequested();
         var baseline = copyService.copy(request.sourcePlan());
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(baseline);
         IntegratedSocialSecurityStrategyEvaluator.requireAdvancedPlan(baseline);
         IntegratedSocialSecurityStrategyEvaluator.validateStrategy(baseline, request.strategy());
         var prepared = request.longevityScenarios();
@@ -74,6 +75,7 @@ public final class LongevityWeightedIntegratedStrategyEvaluator {
                     workObserver.accept(LongevityWeightedEvaluationWork.PROJECTION_STARTED);
                     projectionRuns++;
                     var projection = engine.project(isolated, context);
+                    com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(isolated, context, projection.getYears());
                     workObserver.accept(LongevityWeightedEvaluationWork.PROJECTION_COMPLETED);
                     snapshot = estateCalculator.calculate(isolated, projection, death);
                 }

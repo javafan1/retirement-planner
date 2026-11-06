@@ -109,7 +109,8 @@ final class SinglePersonMortalityView extends VBox {
                     + "\nExpected nominal " + (mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED ? "After-Tax Estate " : "own Social Security ")
                     + money(b.expectedNominal()) + (b.expectedInvestableAssets() == null ? "" : " - Expected Investable Assets " + money(b.expectedInvestableAssets()))
                     + b.minimumNominalEstate().map(v -> "\nScenario estate range " + money(v) + " to " + money(b.maximumNominalEstate().orElseThrow())).orElse("")
-                    + "\n" + completed.mortality().scenarios().size() + " individual death scenarios; no spouse or survivor state.");
+                    + "\n" + completed.mortality().scenarios().size() + " individual death scenarios; no spouse or survivor state."
+                    + (integrated() && reportContext != null ? FrozenConditionalBenefitDetails.text(reportContext.assumptions()) : ""));
         });
         run.setOnAction(e -> start());
         cancel.setOnAction(e -> jobs.cancel());

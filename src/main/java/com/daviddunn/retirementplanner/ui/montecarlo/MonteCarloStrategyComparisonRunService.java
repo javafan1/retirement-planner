@@ -28,8 +28,10 @@ public final class MonteCarloStrategyComparisonRunService {
         var snapshot = baseline.getSnapshot();
         var copier = new RetirementPlanScenarioCopyService();
         var a = copier.copy(current);
-        var b = copier.copy(new RetirementPlan(snapshot.getHousehold(), snapshot.getAccountPortfolio(),
-                snapshot.getPlanningAssumptions(), snapshot.getRothConversionRequest(), snapshot.getNonInvestableAssets()));
+        var baselinePlan = new RetirementPlan(snapshot.getHousehold(), snapshot.getAccountPortfolio(),
+                snapshot.getPlanningAssumptions(), snapshot.getRothConversionRequest(), snapshot.getNonInvestableAssets());
+        baselinePlan.setConditionalBenefits(snapshot.getConditionalBenefits());
+        var b = copier.copy(baselinePlan);
         if (!ProjectionReadiness.isReady(a) || !ProjectionReadiness.isReady(b)) {
             throw new IllegalArgumentException("Both strategies require birth dates and a projection start date.");
         }

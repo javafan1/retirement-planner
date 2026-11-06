@@ -240,7 +240,7 @@ final class SinglePersonIntegratedView extends VBox {
                                     source.canPersistAnalysisResults() ? source.getCurrentFile() : null, kind, admission == null ? UUID.randomUUID() : admission.ticket(), java.time.Instant.now(), capturedFingerprint,
                                     new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisFingerprintService().effectiveContextFingerprint(kind, frozen),
                                     com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisVersions.algorithms(kind), Map.of(),
-                                    capturedPayload.get(), context);
+                                    capturedPayload.get(), context).withConditionalBenefits(frozen);
                             persistence.accept(completion.associatedWith(parameterRun != null && parameterRun.edit() == parameters.editEpoch() ? admission : null));
                         }
                         if (parameterRun != null && com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result)) parameters.accept(parameterRun);
@@ -279,7 +279,8 @@ final class SinglePersonIntegratedView extends VBox {
     private void select(IntegratedSocialSecurityCompleteStrategySearchEntry entry) {
         if (entry == null) details.clear();
         else details.setText(entry.metrics().map(SinglePersonIntegratedView::metrics)
-                .orElseGet(() -> entry.failure().map(f -> f.message()).orElse("Unavailable")));
+                .orElseGet(() -> entry.failure().map(f -> f.message()).orElse("Unavailable"))
+                + (reportContext == null ? "" : FrozenConditionalBenefitDetails.text(reportContext.assumptions())));
         refreshControls();
     }
 

@@ -78,6 +78,9 @@ record SocialSecurityAnalyzerInputSummary(List<Row> rows) {
         rows.add(new Row("Expenses", compact(expenses.stream().map(expense -> expense.getDescription()
                 + ": " + money(expense.getAnnualAmount()) + " configured annual amount, " + human(expense.getExpenseType())
                 + ", " + human(expense.getGrowthCategory()) + ", " + range(expense.getStartDate(), expense.getEndDate())).toList()), "Retirement Plan"));
+        if (!plan.getConditionalBenefits().isEmpty())
+            for (String line : com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.lines(plan, "Original plan"))
+                rows.add(new Row("Conditional benefit assumptions (integrated only)", line, "Retirement Plan"));
         var roth = plan.getRothConversionRequest();
         rows.add(new Row("Roth conversion strategy", roth == null || !roth.isEnabled() ? "Disabled"
                 : human(roth.getStrategy()) + "; from " + roth.getStartYear() + "; " + human(roth.getFrequency())

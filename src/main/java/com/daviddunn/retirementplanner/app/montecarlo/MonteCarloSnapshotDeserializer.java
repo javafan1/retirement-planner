@@ -26,6 +26,7 @@ public final class MonteCarloSnapshotDeserializer extends JsonDeserializer<Monte
         Fixed fixed = null; Mortality mortality = null; Paired paired = null; Display display = null;
         Instant started = null; Instant completed = null; ExpenseExecution expenseExecution = null;
         PairedExpenseExecution pairedExpenseExecution = null;
+        com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution = null;
         var seen = new HashSet<String>();
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             if (!parser.hasToken(JsonToken.FIELD_NAME))
@@ -47,12 +48,14 @@ public final class MonteCarloSnapshotDeserializer extends JsonDeserializer<Monte
                 case "completedAt" -> completed = context.readValue(parser, Instant.class);
                 case "expenseExecution" -> expenseExecution = context.readValue(parser, ExpenseExecution.class);
                 case "pairedExpenseExecution" -> pairedExpenseExecution = context.readValue(parser, PairedExpenseExecution.class);
+                case "benefitExecution" -> benefitExecution = context.readValue(parser,
+                        com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution.class);
                 default -> context.handleUnknownProperty(parser, this, MonteCarloSnapshot.class, name);
             }
         }
         if (context.isEnabled(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES) && !seen.containsAll(ORIGINAL))
             context.reportInputMismatch(MonteCarloSnapshot.class, "Missing original snapshot creator property.");
         return new MonteCarloSnapshot(version, mode, spouse, settings, request, provenance, fixed, mortality, paired,
-                display, started, completed, expenseExecution, pairedExpenseExecution);
+                display, started, completed, expenseExecution, pairedExpenseExecution, benefitExecution);
     }
 }

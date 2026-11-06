@@ -59,6 +59,14 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
         long started = System.nanoTime();
         request.cancellationToken().throwIfCancellationRequested();
         var plan = request.newPlanCopy();
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
+        // Benefit eligibility is scenario-specific. Preserve the independent reference path until
+        // carrier/prefix/equivalence proofs explicitly include conditional receipt state.
+        if (!plan.getConditionalBenefits().isEmpty()) {
+            optimize = false;
+            continuations = false;
+            parallel = false;
+        }
         var proof = optimize ? Optional.of(continuations
                 ? new LongevityWeightedPrefixEquivalencePlanner().plan(request)
                 : new LongevityWeightedStrategyEquivalencePlanner().plan(request))

@@ -58,6 +58,8 @@ record IndividualReportContext(String household, String primary, Instant started
                 + "; " + roth.getFrequency() + "; stop " + roth.getStopRule()));
         lines.add("RMDs use eligible owned accounts and prior December 31 projected balances, including configured opening RMD data.");
         lines.add("Medicare/IRMAA uses the existing modeled same-year AGI and applicable filing status for the actual eligible person.");
+        if (!plan.getConditionalBenefits().isEmpty())
+            lines.addAll(com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.lines(plan, "Original plan"));
         return new IndividualReportContext(plan.getHousehold().getHouseholdName(), person.getFullName(), Instant.now(),
                 List.of(new Section("Result-Time Plan Assumptions", lines)));
     }

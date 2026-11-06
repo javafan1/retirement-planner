@@ -35,6 +35,7 @@ public final class LongevityWeightedPrefixEquivalencePlanner {
         var token = request.cancellationToken();
         token.throwIfCancellationRequested();
         var source = request.newPlanCopy();
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireOptimizationSupported(source);
         var provider = new SocialSecurityProjectionIncomeProvider();
         var mapper = new HouseholdLifetimeScenarioMapper();
         int first = source.getPlanningAssumptions().getProjectionStartDate().getYear();

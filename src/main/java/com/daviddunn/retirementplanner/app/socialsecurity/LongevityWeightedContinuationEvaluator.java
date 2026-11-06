@@ -24,6 +24,21 @@ public final class LongevityWeightedContinuationEvaluator {
         Objects.requireNonNull(workObserver, "Work observer is required.");
         request.cancellationToken().throwIfCancellationRequested();
         var baseline = copyService.copy(request.sourcePlan());
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(baseline);
+        if (!baseline.getConditionalBenefits().isEmpty()) {
+            long positive = request.longevityScenarios().scenarios().stream().filter(s -> s.jointProbability().signum() > 0).count();
+            long[] counts = new long[4];
+            return new LongevityWeightedIntegratedStrategyEvaluator().evaluate(request, event -> {
+                switch (event) {
+                    case SCENARIO_STARTED -> counts[0]++;
+                    case SCENARIO_COMPLETED -> counts[1]++;
+                    case PROJECTION_STARTED -> counts[2]++;
+                    case PROJECTION_COMPLETED -> counts[3]++;
+                }
+                workObserver.accept(new LongevityContinuationWork(positive, 0, 0, 0, 0, counts[2], counts[2], counts[3],
+                        counts[0], counts[1], 0, 0));
+            });
+        }
         IntegratedSocialSecurityStrategyEvaluator.requireAdvancedPlan(baseline);
         IntegratedSocialSecurityStrategyEvaluator.validateStrategy(baseline, request.strategy());
         var prepared = request.longevityScenarios();

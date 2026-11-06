@@ -29,6 +29,8 @@ final class LongevityWeightedAnalysisRequestFactory {
         final long assumptionsRevision;
         final CurrentStrategyBaseline baseline;
 
+        RetirementPlan originalPlanCopy() { return new RetirementPlanScenarioCopyService().copy(plan); }
+
         Snapshot(RetirementPlan source, AnalyzerLongevityAssumptions longevity,
                 LocalDate valuationDate, BigDecimal discountRate, long planRevision, long assumptionsRevision,
                 CurrentStrategyBaseline baseline) {

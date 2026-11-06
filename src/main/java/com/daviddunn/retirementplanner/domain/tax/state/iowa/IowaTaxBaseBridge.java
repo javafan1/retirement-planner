@@ -125,7 +125,7 @@ public final class IowaTaxBaseBridge {
                 }
                 case ORDINARY_RETIREMENT_WITHDRAWAL, RMD, OPENING_RMD, ROTH_CONVERSION ->
                         assessRetirement(request, source, rules, reasons, explanations);
-                case OTHER -> refuse(reasons, explanations, StateTaxUnavailableReason.UNSUPPORTED_TRANSACTION_TYPE,
+                case OTHER, CONDITIONAL_RECURRING, CONDITIONAL_LUMP_SUM -> refuse(reasons, explanations, StateTaxUnavailableReason.UNSUPPORTED_TRANSACTION_TYPE,
                         "Unclassified income or special adjustments are outside the Iowa model.");
             }
         }

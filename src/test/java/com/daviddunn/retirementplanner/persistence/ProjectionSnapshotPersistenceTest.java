@@ -27,6 +27,212 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.app.baseline.BaselineDetailsTest.set;
 
 class ProjectionSnapshotPersistenceTest {
+    private com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition enabledBenefit(String amount) {
+        var f = com.daviddunn.retirementplanner.domain.benefit.BenefitFixtures.monthly();
+        f = com.daviddunn.retirementplanner.domain.benefit.BenefitFixtures.change(f,"grossAmount",new BigDecimal(amount));
+        return com.daviddunn.retirementplanner.domain.benefit.BenefitFixtures.change(f,"trigger",
+                new com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.Trigger(
+                        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.TriggerType.FIXED_DATE,
+                        java.time.LocalDate.of(2026,1,1),null,null));
+    }
+
+    @Test void enabledDeterministicCapabilitiesSurviveSaveAsRestartAndBothSwapDirections() throws Exception {
+        var c = controller(); var first = enabledBenefit("2500");
+        c.getCurrentPlan().setConditionalBenefits(List.of(first)); c.markModified(); c.invalidateProjection(); c.getCurrentProjection();
+        var baseline = c.getAcceptedProjectionSnapshot();
+        assertTrue(baseline.provenance().startsWith(ConditionalBenefitExecutionSemantics.KEY));
+        assertTrue(baseline.calculationSemanticsCurrent()); assertTrue(c.currentProjectionDeterministicallyApplicable());
+        for (var kind : AnalysisKind.values()) if (kind.shape()==AnalysisKind.Shape.COUPLE) {
+            assertNotNull(c.prepareAnalyzerAssociation(kind,"a".repeat(64)),"Verified B3 family may capture admission: "+kind);
+        }
+        c.saveCurrentAsBaseline("Original conditional stream");
+        var second = enabledBenefit("4000");
+        c.getCurrentPlan().setConditionalBenefits(List.of(second)); c.markModified(); c.invalidateProjection(); c.getCurrentProjection();
+        var current = c.getAcceptedProjectionSnapshot(); assertNotEquals(baseline.inputDigest(),current.inputDigest());
+        c.saveAs(directory.resolve("enabled-benefits.json")); c.save();
+        c.saveAs(directory.resolve("enabled-benefits-copy.json"));
+        var copy = controller(); set(copy,"projectionEngine",throwing()); copy.open(c.getCurrentFile());
+        copy.getProjectionRestoration().toCompletableFuture().get(15,TimeUnit.SECONDS);
+        assertEquals(current.id(),copy.getAcceptedProjectionSnapshot().id()); assertTrue(copy.currentProjectionDeterministicallyApplicable());
+        assertEquals(current.annual(),copy.getAcceptedProjectionSnapshot().annual());
+        assertEquals(second,copy.getCurrentPlan().getConditionalBenefits().getFirst());
+        var swap = copy.prepareProjectionSwap().toCompletableFuture().get(15,TimeUnit.SECONDS); assertTrue(copy.commitProjectionSwap(swap));
+        assertEquals(first,copy.getCurrentPlan().getConditionalBenefits().getFirst());
+        assertEquals(baseline.annual(),copy.getAcceptedProjectionSnapshot().annual()); assertTrue(copy.currentProjectionDeterministicallyApplicable());
+        copy.save(); swap = copy.prepareProjectionSwap().toCompletableFuture().get(15,TimeUnit.SECONDS); assertTrue(copy.commitProjectionSwap(swap));
+        assertEquals(second,copy.getCurrentPlan().getConditionalBenefits().getFirst()); assertEquals(current.inputDigest(),copy.getAcceptedProjectionSnapshot().inputDigest());
+        assertTrue(copy.currentProjectionDeterministicallyApplicable()); copy.save();
+    }
+
+    @Test void explicitCapabilitiesAreBoundToOriginalInputsAndAnnualEvidenceAndCannotMasqueradeAsLegacy() throws Exception {
+        var c = controller(); c.getCurrentPlan().setConditionalBenefits(List.of(enabledBenefit("2500"))); c.invalidateProjection(); c.getCurrentProjection();
+        var original = c.getAcceptedProjectionSnapshot();
+        for (var provenance : List.of(original.provenance().replace("deterministic-annual-v1","unknown-model"),
+                PensionSelectionSemantics.PROVENANCE,original.provenance().replace("binding=","binding=f"))) {
+            assertThrows(IllegalArgumentException.class,()->new CompleteProjectionSnapshot(original.version(),original.id(),original.owner(),original.sourcePlanId(),original.acceptedAt(),
+                    original.inputsDocument(),original.inputDigest(),provenance,original.annual(),original.nonInvestable(),original.summary(),original.people()));
+        }
+        c.getCurrentPlan().setConditionalBenefits(List.of(enabledBenefit("4000")));
+        var altered = CompleteProjectionSnapshot.freeze(c.getCurrentPlan());
+        assertThrows(IllegalArgumentException.class,()->new CompleteProjectionSnapshot(original.version(),original.id(),original.owner(),original.sourcePlanId(),original.acceptedAt(),
+                altered,CompleteProjectionSnapshot.digest(altered),original.provenance(),original.annual(),original.nonInvestable(),original.summary(),original.people()));
+        assertEquals("2500",original.restoreInputs().getConditionalBenefits().getFirst().grossAmount().toPlainString());
+    }
+
+    @Test void anEngineThatIgnoresApplicablePaymentsCannotReplacePreviousAcceptedHistory() throws Exception {
+        var c = controller(); var prior = c.getCurrentProjection(); var original = c.getAcceptedProjectionSnapshot();
+        c.getCurrentPlan().setConditionalBenefits(List.of(enabledBenefit("2500"))); c.markModified(); c.invalidateProjection();
+        set(c,"projectionEngine",new ProjectionEngine() {
+            @Override public ProjectionExecutionResult projectWithOutcome(RetirementPlan plan) { return new ProjectionExecutionResult.Completed(prior.getYears()); }
+        });
+        var failure = assertThrows(IllegalArgumentException.class,c::getCurrentProjection);
+        assertTrue(failure.getMessage().contains("every applicable conditional benefit"));
+        assertEquals(original.id(),c.getAcceptedProjectionSnapshot().id()); assertEquals(original.annual(),c.getAcceptedProjectionSnapshot().annual());
+        c.saveAs(directory.resolve("failed-completion-preserved.json"));
+        assertEquals(original.annual(),c.getAcceptedProjectionSnapshot().annual());
+    }
+
+    @Test void retainedIncomeKnownOptionalExtensionPreservesExactLegacyDecimalsAndStrictOriginalFields() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES);
+        var legacy = new RetainedProjectionSnapshot.Income(com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.INTEREST,
+                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Purpose.INCOME,null,null,null,"Exact legacy amount",
+                new BigDecimal("123456789.123456789012300"),new BigDecimal("123456789.123456789012300"),2026,null);
+        var wire = mapper.writeValueAsBytes(legacy); assertFalse(new String(wire,java.nio.charset.StandardCharsets.UTF_8).contains("conditionalBenefit"));
+        assertEquals(legacy,mapper.readValue(wire,RetainedProjectionSnapshot.Income.class));
+        var node = (com.fasterxml.jackson.databind.node.ObjectNode)mapper.readTree(wire); node.remove("kind");
+        assertThrows(Exception.class,()->mapper.treeToValue(node,RetainedProjectionSnapshot.Income.class));
+        node.put("kind","INTEREST"); node.put("unexpected",true);
+        assertThrows(Exception.class,()->mapper.treeToValue(node,RetainedProjectionSnapshot.Income.class));
+    }
+
+    @Test void benefitBearingPlanSaveAsSaveAndRestartNeverExecuteOrLoseStoredDefinitions() throws Exception {
+        var c = controller();
+        var benefit = com.daviddunn.retirementplanner.domain.benefit.BenefitFixtures.monthly();
+        c.getCurrentPlan().setConditionalBenefits(List.of(benefit));
+        c.markModified();
+        set(c, "projectionEngine", throwing());
+        var first = directory.resolve("stored-benefits.json");
+        c.saveAs(first); c.save();
+        var owner = c.getCurrentPlan().getPlanId();
+        var second = directory.resolve("stored-benefits-copy.json");
+        c.saveAs(second);
+        assertNotEquals(owner, c.getCurrentPlan().getPlanId());
+        assertEquals(List.of(benefit), new JsonRetirementPlanRepository().load(first).getConditionalBenefits());
+        assertEquals(List.of(benefit), new JsonRetirementPlanRepository().load(second).getConditionalBenefits());
+        var copy = controller(); set(copy, "projectionEngine", throwing()); copy.open(second);
+        copy.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(List.of(benefit), copy.getCurrentPlan().getConditionalBenefits());
+        assertTrue(copy.getProjectionSnapshotNotice().contains("deterministic projection"));
+        copy.save();
+        assertEquals(List.of(benefit), new JsonRetirementPlanRepository().load(second).getConditionalBenefits());
+        set(copy, "projectionEngine", new ProjectionEngine()); copy.invalidateProjection();
+        assertNotNull(copy.getCurrentProjection());
+        assertTrue(copy.getAcceptedProjectionSnapshot().calculationSemanticsCurrent());
+        assertEquals(List.of(benefit),copy.getAcceptedProjectionSnapshot().restoreInputs().getConditionalBenefits());
+    }
+
+    @Test void benefitEditsPreserveOriginalHistoricalProjectionAndBaselineWithoutRecalculation() throws Exception {
+        var c = controller(); c.getCurrentProjection(); c.saveCurrentAsBaseline("Before benefits");
+        var original = c.getAcceptedProjectionSnapshot();
+        var token = c.prepareAnalyzerAssociation(AnalysisKind.COUPLE_WEIGHTED, "a".repeat(64));
+        var completion = new AcceptedAnalysisCompletion(c.getAnalysisSessionId(), c.getCurrentFile(), token.kind(), token.ticket(),
+                java.time.Instant.now(), "a".repeat(64), "b".repeat(64), AnalysisVersions.algorithms(token.kind()),
+                AnalysisVersions.references(token.kind()), com.daviddunn.retirementplanner.ui.socialsecurity.SnapshotFixtures.couple(),
+                com.daviddunn.retirementplanner.ui.socialsecurity.SnapshotFixtures.context());
+        assertTrue(c.associateAnalyzer(token, completion));
+        c.saveAs(directory.resolve("original-history.json"));
+        // Pending associations have placeholder digests until their first durable save.
+        var originalAssociation = c.getAnalyzerAssociations(original.id()).getFirst();
+        c.getCurrentPlan().setConditionalBenefits(List.of(com.daviddunn.retirementplanner.domain.benefit.BenefitFixtures.monthly()));
+        c.markModified();
+        assertFalse(c.currentProjectionInputsMatch());
+        assertFalse(c.currentProjectionDeterministicallyApplicable());
+        assertFalse(c.projectionSwapUnavailableReason().isEmpty());
+        assertNull(c.prepareAnalyzerAssociation(AnalysisKind.COUPLE_EXHAUSTIVE, "a".repeat(64)));
+        set(c, "projectionEngine", throwing());
+        c.save(); c.saveAs(directory.resolve("edited-history.json"));
+        var copy = controller(); set(copy, "projectionEngine", throwing()); copy.open(c.getCurrentFile());
+        copy.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        var retained = copy.getAcceptedProjectionSnapshot();
+        assertEquals(original.id(), retained.id());
+        assertEquals(original.inputsDocument(), retained.inputsDocument());
+        assertEquals(original.inputDigest(), retained.inputDigest());
+        assertEquals(original.annual(), retained.annual());
+        var restoredAssociation = copy.getAnalyzerAssociations(retained.id()).getFirst();
+        assertEquals(originalAssociation.runId(), restoredAssociation.runId());
+        assertEquals(originalAssociation.projectionId(), restoredAssociation.projectionId());
+        assertEquals(originalAssociation.payloadDigest(), restoredAssociation.payloadDigest());
+        assertEquals(originalAssociation.inputFingerprint(), restoredAssociation.inputFingerprint());
+        var restoredAnalysis = copy.loadAssociatedAnalyzer(restoredAssociation).toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(completion.payload(), restoredAnalysis.payload());
+        assertEquals(completion.context(), restoredAnalysis.context());
+        assertEquals(completion.algorithms(), restoredAnalysis.algorithms());
+        assertTrue(retained.restoreInputs().getConditionalBenefits().isEmpty());
+        assertTrue(copy.getCurrentPlan().getBaseline().getSnapshot().getConditionalBenefits().isEmpty());
+        assertEquals(1, copy.getCurrentPlan().getConditionalBenefits().size());
+        assertFalse(copy.currentProjectionDeterministicallyApplicable());
+        copy.save();
+        assertEquals(original.annual(), copy.getAcceptedProjectionSnapshot().annual());
+        var frozen = CompleteProjectionSnapshot.freeze(copy.getCurrentPlan());
+        var unsupported = new CompleteProjectionSnapshot(retained.version(), UUID.randomUUID(), retained.owner(),
+                retained.sourcePlanId(), retained.acceptedAt(), frozen, CompleteProjectionSnapshot.digest(frozen),
+                PensionSelectionSemantics.PROVENANCE, retained.annual(), retained.nonInvestable(), retained.summary(), retained.people());
+        assertFalse(unsupported.calculationSemanticsCurrent(), "Pension provenance cannot certify conditional-benefit execution");
+    }
+
+    @Test void syntheticNonexecutableSnapshotInputsSurviveBothSwapDirectionsWithoutBecomingCurrentCalculations() throws Exception {
+        var c = controller(); c.getCurrentProjection();
+        var original = c.getAcceptedProjectionSnapshot();
+        var candidate = new com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService().copy(c.getCurrentPlan());
+        var benefit = com.daviddunn.retirementplanner.domain.benefit.BenefitFixtures.monthly();
+        candidate.setConditionalBenefits(List.of(benefit));
+        var frozen = CompleteProjectionSnapshot.freeze(candidate);
+        // Synthetic copy fixture, explicitly not evidence of a computed conditional-benefit result.
+        var unsupported = new CompleteProjectionSnapshot(1, UUID.randomUUID(), original.owner(), original.sourcePlanId(), original.acceptedAt(),
+                frozen, CompleteProjectionSnapshot.digest(frozen), "Nonexecutable domain-copy fixture", original.annual(),
+                original.nonInvestable(), original.summary(), original.people());
+        var plan = c.getCurrentPlan();
+        plan.setBaseline(new ProjectionBaseline(unsupported.restoreInputs(), java.time.LocalDateTime.now(), "Domain-copy fixture", unsupported.id()));
+        plan.installProjectionComponents(Map.of(original.id(), original, unsupported.id(), unsupported));
+        plan.setProjectionState(new ProjectionRoleManifest(1, original.owner(),
+                new ProjectionRoleManifest.Reference(original.id(), "0".repeat(64)),
+                new ProjectionRoleManifest.Reference(unsupported.id(), "0".repeat(64))));
+        set(c, "projectionEngine", throwing()); c.saveAs(directory.resolve("copy-fixture.json"));
+        var prepared = c.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertTrue(c.commitProjectionSwap(prepared));
+        assertEquals(List.of(benefit), c.getCurrentPlan().getConditionalBenefits());
+        assertEquals(unsupported.inputDigest(), c.getAcceptedProjectionSnapshot().inputDigest());
+        assertFalse(c.currentProjectionDeterministicallyApplicable());
+        c.save();
+        assertEquals(List.of(benefit), new JsonRetirementPlanRepository().load(c.getCurrentFile()).getConditionalBenefits());
+        prepared = c.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertTrue(c.commitProjectionSwap(prepared));
+        assertTrue(c.getCurrentPlan().getConditionalBenefits().isEmpty());
+        assertEquals(List.of(benefit), c.getCurrentPlan().getBaseline().getSnapshot().getConditionalBenefits());
+        assertEquals(original.id(), c.getAcceptedProjectionSnapshot().id());
+        assertEquals(original.annual(), c.getAcceptedProjectionSnapshot().annual());
+    }
+
+    @Test void unsupportedExecutionUsesExistingAccessibleStatusWithoutALoadBlockingModal() throws Exception {
+        com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport.startFx();
+        var c = controller();
+        c.getCurrentPlan().setConditionalBenefits(List.of(com.daviddunn.retirementplanner.domain.benefit.BenefitFixtures.monthly()));
+        com.daviddunn.retirementplanner.ui.wizard.NewPlanWizardTestSupport.fx(() -> {
+            var window = new com.daviddunn.retirementplanner.ui.MainWindow(c,
+                    com.daviddunn.retirementplanner.application.branding.ApplicationBranding.defaults(), null, null);
+            var scene = window.createScene();
+            var handler = window.getClass().getDeclaredMethod("handleProjectionFailure", Exception.class);
+            handler.setAccessible(true);
+            handler.invoke(window, new com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.UnsupportedExecutionException());
+            var notice = (Label) scene.lookup("#projection-funding-notice");
+            assertTrue(notice.isVisible()); assertTrue(notice.isManaged());
+            assertTrue(notice.isWrapText()); assertTrue(notice.isFocusTraversable());
+            assertEquals(com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.MESSAGE, notice.getText());
+            assertEquals(notice.getText(), notice.getAccessibleText());
+        });
+    }
+
     @Test void legacyPensionResultsRemainReadableSavableAndSwappableButNeverClaimCorrectedApplicability() throws Exception {
         var c = controller();
         var plan = c.getCurrentPlan();

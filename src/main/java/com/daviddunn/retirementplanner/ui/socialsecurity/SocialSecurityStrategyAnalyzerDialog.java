@@ -297,6 +297,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         historicalWeightedComparison = comparisons;
                         historicalWeightedRanks = ranks;
                         weightedView.render(model, baseline);
+                        weightedView.originalBenefitAssumptions(report.assumptions());
                         weightedView.comparisons(comparisons);
                         weightedView.deterministicReference(null);
                         weightedView.historicalRanks(historicalWeightedRanks);
@@ -1040,7 +1041,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                             completedQuick.set(new AcceptedAnalysisCompletion(capturedId, capturedFile, AnalysisKind.COUPLE_QUICK,
                                     preparedReport.runId(), report.completed(), inputFingerprint, contextFingerprint,
                                     AnalysisVersions.calculatedAlgorithms(AnalysisKind.COUPLE_QUICK, null), AnalysisVersions.references(AnalysisKind.COUPLE_QUICK),
-                                    QuickSnapshotAdapter.capture(model, report), QuickSnapshotAdapter.context(report)));
+                                    QuickSnapshotAdapter.capture(model, report), QuickSnapshotAdapter.context(report)).withConditionalBenefits(input.plan()));
                         }
                         return model;
                     }, model -> {
@@ -1110,6 +1111,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         historicalWeightedComparison = null;
                         historicalWeightedRanks = null;
                         weightedView.render(weightedPresentation, snapshot.baseline);
+                        weightedView.originalBenefitAssumptions(reportContext.assumptions());
                         displayResult(AnalysisKind.COUPLE_WEIGHTED, result, navigationTicket);
                         weightedView.resultTabs.setVisible(true);
                         weightedView.resultTabs.setManaged(true);
@@ -1148,6 +1150,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                                         association == null ? java.util.UUID.randomUUID() : association.ticket(), java.time.Instant.now(), inputFingerprint, contextFingerprint,
                                         AnalysisVersions.algorithms(AnalysisKind.COUPLE_WEIGHTED), java.util.Map.of(),
                                         new WeightedSnapshots.Payload(WeightedSnapshots.Couple.from(result), null), context)
+                                        .withConditionalBenefits(snapshot.originalPlanCopy())
                                         .associatedWith(associationFor(AnalysisKind.COUPLE_WEIGHTED, parameterRun, association)));
                             } catch (RuntimeException saving) {
                                 weightedView.status.setText("Analysis completed, but result saving could not start. Previous saved results were retained.");
@@ -1224,7 +1227,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                                     fingerprints.fingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan(), AnalysisFingerprintService.Inputs.none()),
                                     fingerprints.effectiveContextFingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan()),
                                     AnalysisVersions.calculatedAlgorithms(AnalysisKind.COUPLE_EXHAUSTIVE, null), AnalysisVersions.references(AnalysisKind.COUPLE_EXHAUSTIVE),
-                                    payload, context);
+                                    payload, context).withConditionalBenefits(request.plan());
                         }
                         return new ExhaustiveRun(model, payload, completion);
                     }, run -> {
@@ -1446,7 +1449,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 + metricLine("Household Social Security", current.lifetimeHouseholdSocialSecurity(), candidate.lifetimeHouseholdSocialSecurity(), delta.lifetimeHouseholdSocialSecurity())
                 + "\nPrimary Social Security: " + money(candidate.lifetimePrimarySocialSecurity())
                 + "\nSpouse Social Security: " + money(candidate.lifetimeSpouseSocialSecurity())
-                + "\nProjection detail retained: " + entry.retainedDetail().isPresent();
+                + "\nProjection detail retained: " + entry.retainedDetail().isPresent()
+                + (deterministicReportContext == null ? "" : FrozenConditionalBenefitDetails.text(deterministicReportContext.assumptions()));
     }
 
     private static String formatDuration(Duration duration) {
@@ -1567,7 +1571,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         candidate.lifetimeHouseholdSocialSecurity(),
                         delta.lifetimeHouseholdSocialSecurity())
                 + "\nPrimary Social Security: " + money(candidate.lifetimePrimarySocialSecurity())
-                + "\nSpouse Social Security: " + money(candidate.lifetimeSpouseSocialSecurity());
+                + "\nSpouse Social Security: " + money(candidate.lifetimeSpouseSocialSecurity())
+                + (quickReport == null ? "" : FrozenConditionalBenefitDetails.text(quickReport.prepared().financial().assumptions()));
     }
 
     private void configureStrategyTable() {

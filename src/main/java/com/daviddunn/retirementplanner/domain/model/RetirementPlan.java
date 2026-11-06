@@ -13,6 +13,16 @@ import java.util.List;
 import java.util.Objects;
 
 public class RetirementPlan {
+    private List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> conditionalBenefits = List.of();
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
+    public List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> getConditionalBenefits() {
+        return conditionalBenefits;
+    }
+
+    public void setConditionalBenefits(List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> definitions) {
+        conditionalBenefits = com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefits.validatedCopy(definitions, household);
+    }
 
     private static final java.util.regex.Pattern PLAN_ID_PATTERN = java.util.regex.Pattern.compile(
             "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
@@ -114,7 +124,8 @@ public class RetirementPlan {
 
             @JsonProperty("nonInvestableAssets")
             List<NonInvestableAsset> nonInvestableAssets,
-            @JsonProperty("planId") String planId) {
+            @JsonProperty("planId") String planId,
+            @JsonProperty("conditionalBenefits") List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> conditionalBenefits) {
 
         this.planId = planId == null ? null : validatedPlanId(planId).toString();
 
@@ -138,7 +149,13 @@ public class RetirementPlan {
             this.nonInvestableAssets.addAll(
                     nonInvestableAssets);
         }
+        setConditionalBenefits(conditionalBenefits);
         validateHouseholdReferences();
+    }
+
+    public RetirementPlan(Household household, AccountPortfolio portfolio, PlanningAssumptions assumptions,
+            RothConversionRequest roth, List<NonInvestableAsset> assets, String planId) {
+        this(household, portfolio, assumptions, roth, assets, planId, List.of());
     }
 
     public RetirementPlan(Household household, AccountPortfolio portfolio,
@@ -149,6 +166,7 @@ public class RetirementPlan {
 
     /** Recheck at persistence/admission boundaries because account and income lists are mutable. */
     public void validateHouseholdReferences() {
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefits.validatedCopy(conditionalBenefits, household);
         household.validatePersonReferences();
         accountPortfolio.getAccounts().forEach(account ->
                 household.validateOwnership(account.getOwnership(), "account " + account.getName()));
@@ -205,6 +223,8 @@ public class RetirementPlan {
         if (household.hasSpouse()) {
             Person existing = household.getSpouse();
             List<String> dependencies = new ArrayList<>();
+            conditionalBenefits.stream().filter(com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition::referencesSpouse)
+                    .forEach(benefit -> dependencies.add("conditional benefit " + benefit.label()));
             existing.getAccounts().forEach(account -> dependencies.add("account " + account.getName()));
             existing.getIncomeSources().forEach(income -> dependencies.add("income " + income.getName()));
             household.getPrimaryPerson().getAccounts().stream()

@@ -45,6 +45,7 @@ public final class AnalysisResultStore {
         }, new ThreadPoolExecutor.AbortPolicy());
     }
     public synchronized Status accept(AcceptedAnalysisCompletion completion) {
+        completion.validateCapabilities();
         if (!accepting) throw new IllegalStateException("Result storage is draining; retry after exit is cancelled.");
         var slot = new Slot(completion.planId(), completion.kind());
         if (!latest.containsKey(slot) && latest.size() >= 64) {

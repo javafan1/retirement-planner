@@ -72,18 +72,27 @@ public final class AnalysisSnapshotCodec {
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties("benefitReductionPolicy")
     private abstract static class LegacySocialSecurityStrategyRequest { }
 
-    public record Content(AnalysisPayload payload, SnapshotContext context) { }
+    public record Content(AnalysisPayload payload, SnapshotContext context,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            ConditionalBenefitAnalysisExecution benefitExecution) { }
     public String digest(AnalysisPayload payload, SnapshotContext context) {
         return digest(payload, context, mapper);
     }
+    public String digest(AnalysisPayload payload, SnapshotContext context, ConditionalBenefitAnalysisExecution benefits) {
+        if (benefits == null) return digest(payload, context);
+        return digestContent(new Content(payload, context, benefits), mapper);
+    }
 
     private String digest(AnalysisPayload payload, SnapshotContext context, ObjectMapper writer) {
+        return digestContent(new Content(payload, context, null), writer);
+    }
+    private String digestContent(Content content, ObjectMapper writer) {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
             try (var output = new DigestOutputStream(OutputStream.nullOutputStream(), digest)) {
-                writer.writeValue(payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot
-                        || payload instanceof QuickComparisonSnapshot || payload instanceof IndividualDeterministicSnapshot ? limited(output) : output,
-                        new Content(payload, context));
+                writer.writeValue(content.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot
+                        || content.payload() instanceof QuickComparisonSnapshot || content.payload() instanceof IndividualDeterministicSnapshot ? limited(output) : output,
+                        content);
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (IOException | NoSuchAlgorithmException e) { throw new IllegalArgumentException("Invalid snapshot content.", e); }
@@ -341,13 +350,14 @@ public final class AnalysisSnapshotCodec {
         if (s.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
                 && (!s.completedAt().equals(mc.completedAt()) || !s.context().startedAt().equals(mc.startedAt())))
             throw new IOException("Monte Carlo timestamps do not match the envelope.");
-        if (s.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc && mc.hasExpenseExecution()) {
+        if (s.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                && (mc.hasExpenseExecution() || mc.benefitExecution() != null)) {
             var expected = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().storedFingerprint(mc);
             if (!expected.valid() || !expected.fingerprint().equals(s.inputFingerprint())
                     || !expected.contextFingerprint().equals(s.contextFingerprint()))
                 throw new IOException("Stochastic expense request fingerprint cannot be verified.");
         }
-        if (digest(s.payload(), s.context()).equals(s.payloadDigest())) return;
+        if (digest(s.payload(), s.context(), s.benefitExecution()).equals(s.payloadDigest())) return;
         if (s.kind() == AnalysisKind.COUPLE_SOCIAL_SECURITY
                 && usesLegacySocialSecurityRequestShape(s)
                 && digest(s.payload(), s.context(), legacySocialSecurityMapper).equals(s.payloadDigest())) return;

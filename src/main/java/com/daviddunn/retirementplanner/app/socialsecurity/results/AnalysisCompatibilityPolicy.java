@@ -13,9 +13,17 @@ public final class AnalysisCompatibilityPolicy {
         boolean pairedExpenses = saved.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
                 && mc.pairedExpenseExecution() != null;
         if (saved.schemaVersion() != AnalysisSnapshot.SCHEMA
-                || saved.fingerprintVersion() != (pairedExpenses ? 4 : enabledExpenses ? 3 : AnalysisFingerprintService.VERSION))
+                || saved.fingerprintVersion() != (saved.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
+                    ? mc.fingerprintVersion() : AnalysisFingerprintService.VERSION))
             return unavailable("Unsupported snapshot format.");
         for (var version : saved.algorithms().entrySet()) {
+            if (version.getKey().equals(ConditionalBenefitAnalysisExecution.KEY)) {
+                boolean capability = saved.benefitExecution() != null
+                        || saved.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc && mc.benefitExecution() != null;
+                if (!capability || !version.getValue().equals(ConditionalBenefitAnalysisExecution.ALGORITHM))
+                    return unavailable("Unsupported conditional-benefit analyzer capability.");
+                continue;
+            }
             if (version.getKey().equals(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.KEY)) {
                 if (!AnalysisVersions.usesOrdinaryPensionSelection(saved.kind())
                         || !version.getValue().equals(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.CORRECTED))
@@ -43,11 +51,17 @@ public final class AnalysisCompatibilityPolicy {
         var expectedAlgorithms = new TreeMap<>(algorithms);
         originalAlgorithms.remove(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.KEY);
         expectedAlgorithms.remove(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.KEY);
+        originalAlgorithms.remove(ConditionalBenefitAnalysisExecution.KEY);
+        expectedAlgorithms.remove(ConditionalBenefitAnalysisExecution.KEY);
         if (!originalAlgorithms.equals(expectedAlgorithms) || !saved.references().equals(references)
                 || !saved.inputFingerprint().equals(inputs.fingerprint())
                 || !saved.contextFingerprint().equals(inputs.contextFingerprint())) {
             return new Assessment(State.OUTDATED, "These results were generated using previous plan or analysis assumptions and may not reflect the current retirement plan.");
         }
+        if (!saved.kind().isMonteCarlo() && saved.kind() != AnalysisKind.COUPLE_SOCIAL_SECURITY
+                && saved.kind() != AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
+                && Boolean.TRUE.equals(inputs.conditionalBenefitsConfigured()) && saved.benefitExecution() == null)
+            return new Assessment(State.OUTDATED, "Historical result does not establish conditional-benefit analyzer execution. Original results remain available.");
         if (AnalysisVersions.usesOrdinaryPensionSelection(saved.kind())
                 && !saved.algorithms().containsKey(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.KEY)
                 && !Boolean.FALSE.equals(inputs.legacyPensionAffected())) {

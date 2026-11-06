@@ -19,6 +19,7 @@ public final class LongevityWeightedStrategyEquivalencePlanner {
         Objects.requireNonNull(request);
         long started = System.nanoTime();
         var source = request.newPlanCopy();
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireOptimizationSupported(source);
         var token = request.cancellationToken();
         List<List<Integer>> partitions = new ArrayList<>();
         List<Integer> valid = new ArrayList<>();

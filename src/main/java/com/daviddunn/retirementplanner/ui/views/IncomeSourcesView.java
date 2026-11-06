@@ -14,6 +14,7 @@ import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
@@ -27,6 +28,7 @@ public class IncomeSourcesView extends BorderPane {
     private final Button removeButton;
 
     private RetirementPlan currentPlan;
+    private final ConditionalBenefitsPane conditionalBenefits = new ConditionalBenefitsPane();
 
     /*
      * MainWindow can register a callback here.
@@ -96,8 +98,16 @@ public class IncomeSourcesView extends BorderPane {
                 editButton,
                 removeButton);
 
-        setCenter(table);
-        setBottom(buttonBar);
+        // Income list operations keep their established immediate modal-commit lifecycle.
+        table.setPrefHeight(230);
+        table.setMinHeight(160);
+        VBox body = new VBox(8, table, buttonBar, conditionalBenefits);
+        ScrollPane scroll = new ScrollPane(body);
+        scroll.setId("income-sources-scroll");
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        setCenter(scroll);
+        conditionalBenefits.setOnChanged(this::notifyPlanChanged);
     }
 
     private IncomeSource getSelectedIncomeSource() {
@@ -537,6 +547,7 @@ public class IncomeSourcesView extends BorderPane {
         currentPlan = plan;
 
         refreshTable();
+        conditionalBenefits.load(plan);
     }
 
     public void save(

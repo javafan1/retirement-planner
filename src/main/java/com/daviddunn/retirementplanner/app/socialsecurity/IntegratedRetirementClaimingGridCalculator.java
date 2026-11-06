@@ -48,6 +48,7 @@ public final class IntegratedRetirementClaimingGridCalculator {
             IntegratedRetirementClaimingGridRequest request) {
         Objects.requireNonNull(request, "Integrated retirement grid request is required.");
         RetirementPlan plan = request.plan();
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
         IntegratedSocialSecurityStrategyResult baseline =
                 evaluator.evaluateCurrentStrategy(plan);
         Person primary = plan.getHousehold().getPrimaryPerson();

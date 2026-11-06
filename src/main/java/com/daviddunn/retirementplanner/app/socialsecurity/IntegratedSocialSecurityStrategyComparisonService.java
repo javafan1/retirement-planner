@@ -94,6 +94,7 @@ public final class IntegratedSocialSecurityStrategyComparisonService {
             AnalysisCancellationToken cancellation) {
         Objects.requireNonNull(cancellation).throwIfCancellationRequested();
         Objects.requireNonNull(plan, "Retirement plan is required.");
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
         Objects.requireNonNull(progressListener, "Progress listener is required.");
 
         progressListener.onProgress(new AnalysisProgress(

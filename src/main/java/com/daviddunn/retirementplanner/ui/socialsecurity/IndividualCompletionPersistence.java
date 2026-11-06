@@ -50,6 +50,7 @@ final class IndividualCompletionPersistence {
                 var completion = new AcceptedAnalysisCompletion(identity, file, kind, admission == null ? UUID.randomUUID() : admission.ticket(), Instant.now(),
                         fingerprint, contextFingerprint, AnalysisVersions.algorithms(kind), Map.of(),
                         new WeightedSnapshots.Payload(null, WeightedSnapshots.Individual.from(result)), context);
+                if (view.integrated()) completion = completion.withConditionalBenefits(input.plan());
                 view.persistence.accept(completion.associatedWith(view.parameters == null || edit == view.parameters.editEpoch() ? admission : null));
             };
         };

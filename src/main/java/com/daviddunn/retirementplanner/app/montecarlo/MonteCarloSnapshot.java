@@ -18,15 +18,26 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         ExpenseExecution expenseExecution,
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-        PairedExpenseExecution pairedExpenseExecution) implements AnalysisPayload {
+        PairedExpenseExecution pairedExpenseExecution,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        ConditionalBenefitAnalysisExecution benefitExecution) implements AnalysisPayload {
     public static final int VERSION = 1;
     public static final int EXPENSE_VERSION = 2;
     public static final int PAIRED_EXPENSE_VERSION = 3;
+    public static final int BENEFIT_VERSION = 4;
+    public static final int PAIRED_BENEFIT_VERSION = 5;
     public static final int MAX_TRIALS = 100_000;
     public static final int MAX_YEARS = 1_000;
     public static final long MAX_ANNUAL_OBSERVATIONS = 1_500_000;
     public static final String AGGREGATION = "TYPE7-v1/complete-terminals/living-funded-prefixes/paired-both-completed/A-minus-B";
     public enum Mode { FIXED, LONGEVITY, PAIRED_FIXED, PAIRED_LONGEVITY }
+
+    public MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Settings settings, Request request,
+            Provenance provenance, Fixed fixed, Mortality mortality, Paired paired, Display display,
+            Instant startedAt, Instant completedAt, ExpenseExecution expenses, PairedExpenseExecution pairedExpenses) {
+        this(version, mode, hasSpouse, settings, request, provenance, fixed, mortality, paired, display,
+                startedAt, completedAt, expenses, pairedExpenses, null);
+    }
 
     public MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Settings settings, Request request,
             Provenance provenance, Fixed fixed, Mortality mortality, Paired paired, Display display,
@@ -46,12 +57,14 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
         Objects.requireNonNull(mode); Objects.requireNonNull(settings); Objects.requireNonNull(request);
         Objects.requireNonNull(provenance); Objects.requireNonNull(display);
         Objects.requireNonNull(startedAt); Objects.requireNonNull(completedAt);
-        if ((version != VERSION && version != EXPENSE_VERSION && version != PAIRED_EXPENSE_VERSION) || completedAt.isBefore(startedAt))
+        if ((version < VERSION || version > PAIRED_BENEFIT_VERSION) || completedAt.isBefore(startedAt))
             throw invalid("Unsupported version or timestamps.");
-        if ((version == EXPENSE_VERSION) != (expenseExecution != null)
-                || (version == PAIRED_EXPENSE_VERSION) != (pairedExpenseExecution != null)
-                || version == EXPENSE_VERSION && (mode != Mode.FIXED && mode != Mode.LONGEVITY)
-                || version == PAIRED_EXPENSE_VERSION && (mode != Mode.PAIRED_FIXED && mode != Mode.PAIRED_LONGEVITY))
+        boolean comparison = mode == Mode.PAIRED_FIXED || mode == Mode.PAIRED_LONGEVITY;
+        if (version <= PAIRED_EXPENSE_VERSION && ((version == EXPENSE_VERSION) != (expenseExecution != null)
+                    || (version == PAIRED_EXPENSE_VERSION) != (pairedExpenseExecution != null) || benefitExecution != null)
+                || version == BENEFIT_VERSION && (comparison || benefitExecution == null || pairedExpenseExecution != null)
+                || version == PAIRED_BENEFIT_VERSION && (!comparison || benefitExecution == null || expenseExecution != null)
+                || expenseExecution != null && comparison || pairedExpenseExecution != null && !comparison)
             throw invalid("Unsupported expense capability/result combination.");
         if ((fixed == null ? 0 : 1) + (mortality == null ? 0 : 1) + (paired == null ? 0 : 1) != 1
                 || (mode == Mode.FIXED) != (fixed != null) || (mode == Mode.LONGEVITY) != (mortality != null))
@@ -67,11 +80,12 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
     @Override public void validate(AnalysisKind kind) {
         if (kind != kind()) throw invalid("Analysis kind mismatch.");
         request.validate(hasSpouse, mode, settings);
+        requireImplementedPlanInputs();
         if (pairedExpenseExecution != null) pairedExpenseExecution.validate(request.planA(), request.planB());
         if (expenseExecution != null) {
             expenseExecution.validate(request.planA());
         }
-        if (hasExpenseExecution()) {
+        if (hasExpenseExecution() || benefitExecution != null) {
             if (provenance.source() != MonteCarloStrategyComparisonResult.WorldSource.GENERATED
                     || !MonteCarloScenarioGenerator.MODEL_VERSION.equals(provenance.returns())
                     || !MonteCarloInflationGenerator.MODEL_VERSION.equals(provenance.inflation())
@@ -79,7 +93,7 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
                     || (mode == Mode.LONGEVITY || mode == Mode.PAIRED_LONGEVITY)
                         && !(hasSpouse ? "HOUSEHOLD_MORTALITY_V1" : "PRIMARY_MORTALITY_V1").equals(provenance.mortality())
                     || provenance.suppliedWorldFingerprint() != null)
-                throw invalid("Enabled expenses require supported generated worlds.");
+                throw invalid("Enabled financial capabilities require supported generated worlds.");
         }
         if ((mortality != null || mode == Mode.PAIRED_LONGEVITY) != (provenance.mortality() != null))
             throw invalid("Mortality provenance does not match the result family.");
@@ -139,15 +153,33 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
         MonteCarloSnapshotNumbers.validate(this);
     }
 
-    public int fingerprintVersion() { return pairedExpenseExecution != null ? 4 : expenseExecution != null ? 3 : 1; }
+    public int fingerprintVersion() { return benefitExecution != null ? paired != null ? 6 : 5
+            : pairedExpenseExecution != null ? 4 : expenseExecution != null ? 3 : 1; }
 
     public boolean hasExpenseExecution() { return expenseExecution != null || pairedExpenseExecution != null; }
 
     /** A legacy artifact is never reinterpreted as proof of enabled execution. */
     public void requireInterpretable() {
+        requireImplementedPlanInputs();
+        if (benefitExecution == null && (!MonteCarloPlanDocument.read(request.planA()).getConditionalBenefits().isEmpty()
+                || request.planB() != null && !MonteCarloPlanDocument.read(request.planB()).getConditionalBenefits().isEmpty()))
+            throw invalid("Historical conditional benefits have no authenticated analyzer execution capability; original artifact preserved.");
         if (!hasExpenseExecution() && (ExpenseExecution.configured(MonteCarloPlanDocument.read(request.planA()))
                 || request.planB() != null && ExpenseExecution.configured(MonteCarloPlanDocument.read(request.planB()))))
             throw invalid("Historical expense configuration has no supported execution provenance; the artifact was preserved.");
+    }
+
+    private void requireImplementedPlanInputs() {
+        if (benefitExecution != null) {
+            benefitExecution.validate(kind(), request.planA(), request.planB());
+            for (var candidate : benefitExecution.candidates())
+                com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(
+                        MonteCarloPlanDocument.read(candidate.originalInputs()));
+            boolean positiveA = ExpenseExecution.configured(MonteCarloPlanDocument.read(request.planA()));
+            boolean positiveB = request.planB() != null && ExpenseExecution.configured(MonteCarloPlanDocument.read(request.planB()));
+            if ((paired == null ? expenseExecution != null : pairedExpenseExecution != null) != (positiveA || positiveB))
+                throw invalid("Conditional-benefit result has incomplete stochastic expense provenance.");
+        }
     }
 
     public record Settings(int trials, long seed, BigDecimal expectedReturn, BigDecimal volatility,

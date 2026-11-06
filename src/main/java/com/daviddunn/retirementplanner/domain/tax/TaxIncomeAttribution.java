@@ -16,6 +16,9 @@ final class TaxIncomeAttribution {
     }
 
     static TaxIncome attach(TaxIncome income, List<IncomeSourceAttribution> supplied, int year) {
+        var conditional = supplied.stream().filter(source -> source.conditionalBenefit().isPresent())
+                .map(source -> source.modeledTaxableAmount().orElseThrow()).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (conditional.signum() > 0) income = income.withConditionalOrdinaryIncome(conditional);
         requireWithinTotal(supplied, Kind.PENSION, income.getPensionIncome());
         requireWithinTotal(supplied, Kind.ROTH_CONVERSION, income.getRothConversion());
         requireWithinTotal(supplied, Kind.SOCIAL_SECURITY, income.getSocialSecurityIncome());

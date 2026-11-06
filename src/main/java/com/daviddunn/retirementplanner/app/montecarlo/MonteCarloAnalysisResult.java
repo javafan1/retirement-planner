@@ -29,7 +29,18 @@ public record MonteCarloAnalysisResult(
         Optional<MonteCarloPercentiles> lifetimeTaxes,
         Reference deterministicReference,
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-        ExpenseExecution expenseExecution) {
+        ExpenseExecution expenseExecution,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution) {
+
+    public MonteCarloAnalysisResult(MonteCarloSettings settings, String returnModel, List<RunOutcome> outcomes,
+            Map<Integer, Optional<MonteCarloPercentiles>> annualInvestableAssets,
+            Optional<MonteCarloPercentiles> endingInvestableAssets, Optional<MonteCarloPercentiles> endingNetWorth,
+            Optional<MonteCarloPercentiles> endingAfterTaxEstate, Optional<MonteCarloPercentiles> lifetimeTaxes,
+            Reference deterministicReference, ExpenseExecution expenseExecution) {
+        this(settings, returnModel, outcomes, annualInvestableAssets, endingInvestableAssets, endingNetWorth,
+                endingAfterTaxEstate, lifetimeTaxes, deterministicReference, expenseExecution, null);
+    }
 
     public MonteCarloAnalysisResult(MonteCarloSettings settings, String returnModel, List<RunOutcome> outcomes,
             Map<Integer, Optional<MonteCarloPercentiles>> annualInvestableAssets,
@@ -42,7 +53,14 @@ public record MonteCarloAnalysisResult(
 
     MonteCarloAnalysisResult withExpenseExecution(ExpenseExecution capability) {
         return new MonteCarloAnalysisResult(settings, returnModel, outcomes, annualInvestableAssets,
-                endingInvestableAssets, endingNetWorth, endingAfterTaxEstate, lifetimeTaxes, deterministicReference, capability);
+                endingInvestableAssets, endingNetWorth, endingAfterTaxEstate, lifetimeTaxes, deterministicReference, capability, benefitExecution);
+    }
+
+    MonteCarloAnalysisResult withBenefitExecution(
+            com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution capability) {
+        return new MonteCarloAnalysisResult(settings, returnModel, outcomes, annualInvestableAssets,
+                endingInvestableAssets, endingNetWorth, endingAfterTaxEstate, lifetimeTaxes, deterministicReference,
+                expenseExecution, capability);
     }
 
     /** Keep the original complete zero-volatility evidence text (and its existing golden hashes). */
@@ -52,7 +70,8 @@ public record MonteCarloAnalysisResult(
                 + ", endingInvestableAssets=" + endingInvestableAssets + ", endingNetWorth=" + endingNetWorth
                 + ", endingAfterTaxEstate=" + endingAfterTaxEstate + ", lifetimeTaxes=" + lifetimeTaxes
                 + ", deterministicReference=" + deterministicReference
-                + (expenseExecution == null ? "" : ", expenseExecution=" + expenseExecution) + "]";
+                + (expenseExecution == null ? "" : ", expenseExecution=" + expenseExecution)
+                + (benefitExecution == null ? "" : ", benefitExecution=" + benefitExecution) + "]";
     }
 
     public MonteCarloAnalysisResult {
@@ -63,7 +82,7 @@ public record MonteCarloAnalysisResult(
         Objects.requireNonNull(endingAfterTaxEstate);
         Objects.requireNonNull(lifetimeTaxes);
         Objects.requireNonNull(deterministicReference);
-        if (expenseExecution != null && !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
+        if ((expenseExecution != null || benefitExecution != null) && !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
             throw new IllegalArgumentException("Enabled expense results require generated worlds.");
         outcomes = List.copyOf(outcomes);
         if (outcomes.size() != settings.simulationCount()) {

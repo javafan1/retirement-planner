@@ -48,6 +48,7 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
             SocialSecurityHouseholdClaimingStrategy strategy, java.util.Optional<java.time.Year> primaryDeathYear) {
         Objects.requireNonNull(sourcePlan, "Retirement plan is required.");
         Objects.requireNonNull(strategy, "Social Security strategy is required.");
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(sourcePlan);
         requireAdvancedPlan(sourcePlan);
         validateStrategy(sourcePlan, strategy);
 
@@ -65,6 +66,7 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
     public IntegratedSocialSecurityStrategyResult evaluateCurrentStrategy(RetirementPlan sourcePlan,
             java.util.Optional<java.time.Year> primaryDeathYear) {
         Objects.requireNonNull(sourcePlan, "Retirement plan is required.");
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(sourcePlan);
         requireAdvancedPlan(sourcePlan);
         SocialSecurityHouseholdClaimingStrategy current = extractCurrentStrategy(sourcePlan);
         RetirementPlan scenario = copyService.copy(sourcePlan);
@@ -116,6 +118,7 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
                 .supportsAdvancedPath(scenario);
         Projection projection = new ProjectionEngine().project(
                 scenario, evaluationContext);
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(scenario, evaluationContext, projection.getYears());
         ProjectionMetrics metrics = metricsCalculator.calculate(scenario, projection);
         return new IntegratedSocialSecurityStrategyResult(
                 strategy, projection, metrics, advanced, warnings);

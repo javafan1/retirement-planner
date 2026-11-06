@@ -46,6 +46,7 @@ public final class EstateAtSecondDeathCalculator {
     }
 
     public void validateCoverageStart(RetirementPlan plan, LocalDate secondDeathDate) {
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
         Objects.requireNonNull(secondDeathDate, "Second death date is required.");
         if (secondDeathDate.getDayOfYear() != 1) {
             throw new IllegalArgumentException("Modeled second death must be January 1.");

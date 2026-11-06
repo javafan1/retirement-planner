@@ -45,6 +45,7 @@ public class ProjectionEngine {
 
     /** Shared admission checks, including runs ending at opening without annual execution. */
     public static void validateSinglePersonProjection(RetirementPlan plan, ProjectionEvaluationContext context) {
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(plan);
         if (plan.getHousehold().hasSpouse()) return;
         if (context.survivorClaimingAge().isPresent()
                 || context.socialSecurityStrategy().map(strategy -> strategy.hasSpouse()).orElse(false)
@@ -297,6 +298,10 @@ public class ProjectionEngine {
                 null;
 
         boolean lifetimeRun = evaluationContext.householdLifetimeScenario().isPresent();
+        var benefitDefinitions = plan.getConditionalBenefits();
+        var benefitPrimaryBirth = plan.getHousehold().getPrimaryPerson().getBirthDate();
+        var benefitSpouseBirth = plan.getHousehold().spouse().map(Person::getBirthDate);
+        var benefitOpening = plan.getPlanningAssumptions().getProjectionStartDate();
         boolean householdRmdHasOccurred = false;
         BigDecimal generalExpenseMultiplier = BigDecimal.ONE;
         for (int yearOffset = 0;
@@ -312,6 +317,10 @@ public class ProjectionEngine {
             }
 
             ProjectionYearCalculation calculation;
+            var conditionalBenefits = benefitDefinitions.isEmpty()
+                    ? com.daviddunn.retirementplanner.domain.benefit.AnnualBenefitEvaluation.EMPTY
+                    : new com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitEvaluator().evaluate(benefitDefinitions,
+                            new com.daviddunn.retirementplanner.domain.benefit.BenefitEvaluationContext(benefitPrimaryBirth,benefitSpouseBirth,deathView,benefitOpening,calendarYear));
             try {
                 calculation = calculateProjectionYear(
                             plan,
@@ -328,7 +337,7 @@ public class ProjectionEngine {
                             householdRmdHasOccurred,
                             economicPath.investmentReturnForYear(calendarYear),
                             evaluationContext.inflationPath().isPresent() ? generalExpenseMultiplier : null,
-                            evaluationContext.expensePath().orElse(null));
+                            evaluationContext.expensePath().orElse(null), conditionalBenefits);
             } catch (RuntimeException exception) {
                 if (!structured || !(exception.getCause() instanceof FundingConstraint constraint)) {
                     throw exception;
@@ -398,7 +407,8 @@ public class ProjectionEngine {
             boolean householdRmdHasOccurred,
             BigDecimal annualInvestmentReturn,
             BigDecimal generalExpenseMultiplier,
-            ProjectionExpensePath expensePath) {
+            ProjectionExpensePath expensePath,
+            com.daviddunn.retirementplanner.domain.benefit.AnnualBenefitEvaluation conditionalBenefits) {
 
         return calculateProjectionYear(
                 plan,
@@ -414,6 +424,7 @@ public class ProjectionEngine {
                 annualInvestmentReturn,
                 generalExpenseMultiplier,
                 expensePath,
+                conditionalBenefits,
                 null);
     }
 
@@ -431,6 +442,7 @@ public class ProjectionEngine {
             BigDecimal annualInvestmentReturn,
             BigDecimal generalExpenseMultiplier,
             ProjectionExpensePath expensePath,
+            com.daviddunn.retirementplanner.domain.benefit.AnnualBenefitEvaluation conditionalBenefits,
             MedicarePremiumCalculation authoritativeMedicarePremium) {
 
         BigDecimal beginningAssets =
@@ -494,6 +506,9 @@ public class ProjectionEngine {
                         assumptions,
                         socialSecurityResult,
                         deathView, authoritativePensionIncome);
+
+        var conditionalSources = conditionalBenefits.receipts().stream().map(IncomeSourceAttribution::conditional).toList();
+        if (!conditionalBenefits.receipts().isEmpty()) guaranteedIncome = guaranteedIncome.add(conditionalBenefits.gross());
 
         BigDecimal annualExpenses =
                 calculateProjectedExpenses(
@@ -640,6 +655,7 @@ public class ProjectionEngine {
             preConversionSources.addAll(openingRmdCalculation.getIncomeSources());
         }
         pensionResult.ifPresent(result -> preConversionSources.addAll(result.sources()));
+        preConversionSources.addAll(conditionalSources);
 
         BigDecimal rothConversion =
                 BigDecimal.ZERO;
@@ -758,6 +774,7 @@ public class ProjectionEngine {
             supplementalIncomeSources.addAll(openingRmdCalculation.getIncomeSources());
         }
         pensionResult.ifPresent(result -> supplementalIncomeSources.addAll(result.sources()));
+        supplementalIncomeSources.addAll(conditionalSources);
 
         TaxFundingResult taxFundingResult =
                 taxFundingCalculator.calculate(
@@ -833,6 +850,7 @@ public class ProjectionEngine {
                     annualInvestmentReturn,
                     generalExpenseMultiplier,
                     expensePath,
+                    conditionalBenefits,
                     medicarePremiumCalculation);
         }
 

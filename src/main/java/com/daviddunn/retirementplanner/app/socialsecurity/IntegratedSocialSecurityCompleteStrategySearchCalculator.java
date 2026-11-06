@@ -51,6 +51,7 @@ public final class IntegratedSocialSecurityCompleteStrategySearchCalculator {
         Objects.requireNonNull(progressListener, "Progress listener is required.");
         Objects.requireNonNull(cancellationToken, "Cancellation token is required.");
         RetirementPlan plan = request.plan();
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
         cancellationToken.throwIfCancellationRequested();
         progressListener.onProgress(new AnalysisProgress(
                 AnalysisPhase.CURRENT_PLAN_BASELINE, 0, 1));

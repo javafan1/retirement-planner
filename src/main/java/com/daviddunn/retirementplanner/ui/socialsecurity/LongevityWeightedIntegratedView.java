@@ -44,6 +44,10 @@ final class LongevityWeightedIntegratedView extends VBox {
     private IntegratedSocialSecurityCompleteStrategySearchResult deterministicReference;
     private java.util.function.Function<SocialSecurityHouseholdClaimingStrategy, OptionalInt> historicalRanks;
 
+    void originalBenefitAssumptions(java.util.List<com.daviddunn.retirementplanner.app.export.IntegratedAnalyzerReport.Section> sections) {
+        methodology.setText(methodology.getText() + FrozenConditionalBenefitDetails.text(sections));
+    }
+
     LongevityWeightedIntegratedView() {
         super(6);
         Label limitation = label(LIMITATION);

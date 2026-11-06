@@ -18,6 +18,7 @@ import java.util.List;
 public final class MonteCarloRunService {
     public MonteCarloRun runMortality(RetirementPlan frozenPlan, MonteCarloMortalityRequest request,
                                      AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(frozenPlan);
         long started = System.nanoTime();
         cancellation.throwIfCancellationRequested();
         com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireStandaloneSupported(frozenPlan);
@@ -32,6 +33,7 @@ public final class MonteCarloRunService {
 
     public MonteCarloRun run(RetirementPlan frozenPlan, MonteCarloSettings settings, Projection cachedReference,
                              AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(frozenPlan);
         long started = System.nanoTime();
         cancellation.throwIfCancellationRequested();
         ProjectionEngine engine = new ProjectionEngine();

@@ -35,7 +35,7 @@ public record ProjectionInputs(Fields root) {
     public ProjectionInputs { Objects.requireNonNull(root); }
     public static ProjectionInputs capture(RetirementPlan plan) {
         return capture(new RetirementPlanSnapshot(plan.getHousehold(), plan.getAccountPortfolio(),
-                plan.getPlanningAssumptions(), plan.getRothConversionRequest(), plan.getNonInvestableAssets()));
+                plan.getPlanningAssumptions(), plan.getRothConversionRequest(), plan.getNonInvestableAssets(), plan.getConditionalBenefits()));
     }
     public static ProjectionInputs capture(RetirementPlanSnapshot snapshot) {
         return new ProjectionInputs((Fields) freeze(JSON.valueToTree(snapshot)));
