@@ -26,6 +26,8 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
     public static final int PAIRED_EXPENSE_VERSION = 3;
     public static final int BENEFIT_VERSION = 4;
     public static final int PAIRED_BENEFIT_VERSION = 5;
+    public static final int LIFE_PRINCIPAL_VERSION = 6;
+    public static final int PAIRED_LIFE_PRINCIPAL_VERSION = 7;
     public static final int MAX_TRIALS = 100_000;
     public static final int MAX_YEARS = 1_000;
     public static final long MAX_ANNUAL_OBSERVATIONS = 1_500_000;
@@ -57,13 +59,13 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
         Objects.requireNonNull(mode); Objects.requireNonNull(settings); Objects.requireNonNull(request);
         Objects.requireNonNull(provenance); Objects.requireNonNull(display);
         Objects.requireNonNull(startedAt); Objects.requireNonNull(completedAt);
-        if ((version < VERSION || version > PAIRED_BENEFIT_VERSION) || completedAt.isBefore(startedAt))
+        if ((version < VERSION || version > PAIRED_LIFE_PRINCIPAL_VERSION) || completedAt.isBefore(startedAt))
             throw invalid("Unsupported version or timestamps.");
         boolean comparison = mode == Mode.PAIRED_FIXED || mode == Mode.PAIRED_LONGEVITY;
         if (version <= PAIRED_EXPENSE_VERSION && ((version == EXPENSE_VERSION) != (expenseExecution != null)
                     || (version == PAIRED_EXPENSE_VERSION) != (pairedExpenseExecution != null) || benefitExecution != null)
-                || version == BENEFIT_VERSION && (comparison || benefitExecution == null || pairedExpenseExecution != null)
-                || version == PAIRED_BENEFIT_VERSION && (!comparison || benefitExecution == null || expenseExecution != null)
+                || version >= BENEFIT_VERSION && (benefitExecution == null
+                    || version != benefitPayloadVersion(benefitExecution, comparison))
                 || expenseExecution != null && comparison || pairedExpenseExecution != null && !comparison)
             throw invalid("Unsupported expense capability/result combination.");
         if ((fixed == null ? 0 : 1) + (mortality == null ? 0 : 1) + (paired == null ? 0 : 1) != 1
@@ -153,7 +155,13 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
         MonteCarloSnapshotNumbers.validate(this);
     }
 
-    public int fingerprintVersion() { return benefitExecution != null ? paired != null ? 6 : 5
+    public static int benefitPayloadVersion(ConditionalBenefitAnalysisExecution capability, boolean paired) {
+        return capability.excludesLifePrincipal() ? paired ? PAIRED_LIFE_PRINCIPAL_VERSION : LIFE_PRINCIPAL_VERSION
+                : paired ? PAIRED_BENEFIT_VERSION : BENEFIT_VERSION;
+    }
+
+    public int fingerprintVersion() { return benefitExecution != null ? benefitExecution.excludesLifePrincipal()
+            ? paired != null ? 8 : 7 : paired != null ? 6 : 5
             : pairedExpenseExecution != null ? 4 : expenseExecution != null ? 3 : 1; }
 
     public boolean hasExpenseExecution() { return expenseExecution != null || pairedExpenseExecution != null; }

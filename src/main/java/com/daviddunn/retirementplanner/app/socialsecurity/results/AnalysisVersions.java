@@ -33,7 +33,7 @@ public final class AnalysisVersions {
                 && mc.pairedExpenseExecution() != null)
             result.put("paired-recurring-expenses", com.daviddunn.retirementplanner.app.montecarlo.PairedExpenseExecution.ALGORITHM);
         if (payload instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc && mc.benefitExecution() != null)
-            result.put(ConditionalBenefitAnalysisExecution.KEY, ConditionalBenefitAnalysisExecution.ALGORITHM);
+            result.put(ConditionalBenefitAnalysisExecution.KEY, mc.benefitExecution().algorithm());
         return Map.copyOf(result);
     }
     public static Map<String, String> algorithms(AnalysisKind kind) {

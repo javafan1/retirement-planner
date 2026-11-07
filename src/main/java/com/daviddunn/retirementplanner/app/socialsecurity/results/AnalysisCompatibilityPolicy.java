@@ -18,9 +18,9 @@ public final class AnalysisCompatibilityPolicy {
             return unavailable("Unsupported snapshot format.");
         for (var version : saved.algorithms().entrySet()) {
             if (version.getKey().equals(ConditionalBenefitAnalysisExecution.KEY)) {
-                boolean capability = saved.benefitExecution() != null
-                        || saved.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc && mc.benefitExecution() != null;
-                if (!capability || !version.getValue().equals(ConditionalBenefitAnalysisExecution.ALGORITHM))
+                var capability = saved.benefitExecution() != null ? saved.benefitExecution()
+                        : saved.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc ? mc.benefitExecution() : null;
+                if (capability == null || !version.getValue().equals(capability.algorithm()))
                     return unavailable("Unsupported conditional-benefit analyzer capability.");
                 continue;
             }

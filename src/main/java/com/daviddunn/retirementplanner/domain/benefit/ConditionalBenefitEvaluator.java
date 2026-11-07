@@ -50,7 +50,8 @@ public final class ConditionalBenefitEvaluator {
             amount = amount.setScale(2, RoundingMode.HALF_UP);
             receipts.add(new ConditionalBenefitReceipt(definition.id(), definition.label(), definition.category(), definition.trigger(),
                     definition.recipient(), definition.paymentPattern(), event, eligible, first, last, months, context.year(), amount,
-                    amount, BigDecimal.ZERO, definition.taxCharacter(), definition.destination()));
+                    definition.excludesLifePrincipal() ? BigDecimal.ZERO : amount,
+                    definition.excludesLifePrincipal() ? amount : BigDecimal.ZERO, definition.taxCharacter(), definition.destination()));
         }
         return new AnnualBenefitEvaluation(receipts);
     }

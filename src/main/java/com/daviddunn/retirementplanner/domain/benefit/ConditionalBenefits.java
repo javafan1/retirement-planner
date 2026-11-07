@@ -8,6 +8,10 @@ public final class ConditionalBenefits {
     public static final int MAX_DEFINITIONS = 100;
     private ConditionalBenefits() { }
 
+    public static boolean hasExcludedPrincipal(List<ConditionalBenefitDefinition> values) {
+        return values.stream().anyMatch(ConditionalBenefitDefinition::excludesLifePrincipal);
+    }
+
     public static List<ConditionalBenefitDefinition> validatedCopy(List<ConditionalBenefitDefinition> values, Household household) {
         if (values == null || values.isEmpty()) return List.of();
         if (values.size() > MAX_DEFINITIONS) throw new IllegalArgumentException("Too many conditional benefit definitions.");

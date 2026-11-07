@@ -8,5 +8,5 @@ public record AnnualBenefitEvaluation(List<ConditionalBenefitReceipt> receipts) 
     public AnnualBenefitEvaluation { receipts = List.copyOf(receipts); }
     public BigDecimal gross() { return receipts.stream().map(ConditionalBenefitReceipt::gross).reduce(BigDecimal.ZERO, BigDecimal::add); }
     public BigDecimal taxable() { return receipts.stream().map(ConditionalBenefitReceipt::taxable).reduce(BigDecimal.ZERO, BigDecimal::add); }
-    public BigDecimal excluded() { return BigDecimal.ZERO; }
+    public BigDecimal excluded() { return receipts.stream().map(ConditionalBenefitReceipt::excluded).reduce(BigDecimal.ZERO, BigDecimal::add); }
 }

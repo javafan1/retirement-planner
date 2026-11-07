@@ -19,7 +19,7 @@ public final class ConditionalBenefitDefinitionDeserializer extends JsonDeserial
         try {
             JsonNode node = TREE.readTree(parser);
             object(node, Set.of("id", "label", "category", "trigger", "recipient", "paymentPattern", "grossAmount",
-                    "notBefore", "endDate", "coverageStart", "coverageEnd", "annualEscalationRate", "escalationOrigin", "taxCharacter", "destination"));
+                    "notBefore", "endDate", "coverageStart", "coverageEnd", "annualEscalationRate", "escalationOrigin", "taxCharacter", "destination", "lifeInsuranceQualification"));
             String identity = text(node, "id");
             UUID id = UUID.fromString(identity);
             if (!id.toString().equals(identity)) throw new IllegalArgumentException("Canonical benefit ID required.");
@@ -38,7 +38,8 @@ public final class ConditionalBenefitDefinitionDeserializer extends JsonDeserial
                     PaymentPattern.valueOf(text(node, "paymentPattern")), number(node, "grossAmount"), date(node, "notBefore"),
                     date(node, "endDate"), date(node, "coverageStart"), date(node, "coverageEnd"), number(node, "annualEscalationRate"),
                     EscalationOrigin.valueOf(text(node, "escalationOrigin")), TaxCharacter.valueOf(text(node, "taxCharacter")),
-                    ReceiptDestination.valueOf(text(node, "destination")));
+                    ReceiptDestination.valueOf(text(node, "destination")), optional(node, "lifeInsuranceQualification") ? null
+                            : LifeInsuranceQualification.valueOf(text(node, "lifeInsuranceQualification")));
         } catch (RuntimeException invalid) {
             throw JsonMappingException.from(parser, "Invalid conditional benefit definition.", invalid);
         }

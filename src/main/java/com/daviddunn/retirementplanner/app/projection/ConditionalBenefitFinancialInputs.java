@@ -33,7 +33,9 @@ public final class ConditionalBenefitFinancialInputs {
             // Identical independent contracts remain repeated entries, even though identity and labels are excluded.
             definitions.sort(Comparator.comparing(JsonNode::toString));
             var group = plan.putObject("conditionalBenefits");
-            group.put("inputContract", "CONDITIONAL_BENEFIT_INPUTS_V1");
+            group.put("inputContract", definitions.stream().anyMatch(d ->
+                    d.path("taxCharacter").asText().equals("QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED"))
+                    ? "CONDITIONAL_BENEFIT_LIFE_PRINCIPAL_INPUTS_V2" : "CONDITIONAL_BENEFIT_INPUTS_V1");
             var ordered = group.putArray("definitions");
             definitions.forEach(ordered::add);
         } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {

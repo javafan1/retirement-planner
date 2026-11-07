@@ -21,7 +21,19 @@ public record ConditionalBenefitDefinition(
         @JsonFormat(shape = JsonFormat.Shape.STRING) LocalDate coverageStart,
         @JsonFormat(shape = JsonFormat.Shape.STRING) LocalDate coverageEnd,
         BigDecimal annualEscalationRate, EscalationOrigin escalationOrigin,
-        TaxCharacter taxCharacter, ReceiptDestination destination) {
+        TaxCharacter taxCharacter, ReceiptDestination destination,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        LifeInsuranceQualification lifeInsuranceQualification) {
+
+    /** Legacy taxable definitions retain their exact original wire shape and constructor. */
+    public ConditionalBenefitDefinition(UUID id, String label, Category category, Trigger trigger,
+            PersonReference recipient, PaymentPattern paymentPattern, BigDecimal grossAmount,
+            LocalDate notBefore, LocalDate endDate, LocalDate coverageStart, LocalDate coverageEnd,
+            BigDecimal annualEscalationRate, EscalationOrigin escalationOrigin, TaxCharacter taxCharacter,
+            ReceiptDestination destination) {
+        this(id, label, category, trigger, recipient, paymentPattern, grossAmount, notBefore, endDate,
+                coverageStart, coverageEnd, annualEscalationRate, escalationOrigin, taxCharacter, destination, null);
+    }
 
     public static final int MAX_LABEL_LENGTH = 128;
     public static final BigDecimal MAX_AMOUNT = new BigDecimal("1000000000000");
@@ -30,7 +42,15 @@ public record ConditionalBenefitDefinition(
     public enum PaymentPattern { MONTHLY_RECURRING, ONE_TIME_LUMP_SUM }
     public enum TriggerType { FIXED_DATE, AGE, DEATH }
     public enum EscalationOrigin { FIRST_ELIGIBLE_PAYMENT_YEAR }
-    public enum TaxCharacter { FULLY_TAXABLE_ORDINARY_NON_PENSION }
+    public enum TaxCharacter { FULLY_TAXABLE_ORDINARY_NON_PENSION,
+        QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED }
+    /**
+     * User affirms ordinary personal death-benefit principal only, with no settlement interest,
+     * known transfer-for-value limitation, reportable policy sale, employer-owned contract or
+     * unresolved special ownership/assignment/business exception. This is a planning assertion,
+     * never a legal determination by the application.
+     */
+    public enum LifeInsuranceQualification { PERSONAL_LIFE_PRINCIPAL_ONLY_V1 }
     public enum ReceiptDestination { HOUSEHOLD_RETAINED_NON_QUALIFIED_CASH }
 
     public record Trigger(TriggerType type,
@@ -93,6 +113,14 @@ public record ConditionalBenefitDefinition(
         Objects.requireNonNull(escalationOrigin, "Escalation origin is required.");
         Objects.requireNonNull(taxCharacter, "Tax character is required.");
         Objects.requireNonNull(destination, "Receipt destination is required.");
+        if (taxCharacter == TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED) {
+            if (category != Category.DEATH_BENEFIT || paymentPattern != PaymentPattern.ONE_TIME_LUMP_SUM
+                    || trigger.type() != TriggerType.DEATH || trigger.person() == recipient
+                    || lifeInsuranceQualification != LifeInsuranceQualification.PERSONAL_LIFE_PRINCIPAL_ONLY_V1)
+                throw new IllegalArgumentException("Excluded life principal requires a qualified personal death benefit, one lump sum, and a different living recipient.");
+        } else if (lifeInsuranceQualification != null) {
+            throw new IllegalArgumentException("Life insurance qualification applies only to excluded death principal.");
+        }
         validateDate(notBefore); validateDate(endDate); validateDate(coverageStart); validateDate(coverageEnd);
         if (category == Category.DEATH_BENEFIT && trigger.type() != TriggerType.DEATH)
             throw new IllegalArgumentException("Death benefit requires a death trigger.");
@@ -125,6 +153,10 @@ public record ConditionalBenefitDefinition(
 
     public boolean referencesSpouse() {
         return recipient == PersonReference.SPOUSE || trigger.person() == PersonReference.SPOUSE;
+    }
+
+    public boolean excludesLifePrincipal() {
+        return taxCharacter == TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED;
     }
 
     private static void validatePerson(Household household, PersonReference person) {

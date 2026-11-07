@@ -180,7 +180,7 @@ public final class ConditionalBenefitsPane extends VBox {
         return left.equals(new ConditionalBenefitDefinition(right.id(), right.label(), right.category(), right.trigger(),
                 right.recipient(), right.paymentPattern(), left.grossAmount(), right.notBefore(), right.endDate(),
                 right.coverageStart(), right.coverageEnd(), left.annualEscalationRate(), right.escalationOrigin(),
-                right.taxCharacter(), right.destination()));
+                right.taxCharacter(), right.destination(), right.lifeInsuranceQualification()));
     }
 
     private void confirmRemove() {

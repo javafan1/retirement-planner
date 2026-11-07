@@ -50,6 +50,11 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
     private final TextField escalation = new TextField("0");
     private final DatePicker coverageStart = datePicker();
     private final DatePicker coverageEnd = datePicker();
+    private final ComboBox<TaxCharacter> tax = new ComboBox<>();
+    private final CheckBox qualification = new CheckBox();
+    private final Label taxHelp = text(TAX_HELP);
+    private TaxCharacter draftTax = TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION;
+    private boolean updatingTax;
     private final Label status = text("");
     private final Label insurance = text(INSURANCE_HELP);
     private final Label deathTriggerHelp = text("Death Benefit payments require the selected person's death, modeled on January 1 of the selected death year.");
@@ -78,7 +83,7 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
         form.getChildren().add(heading("General"));
         field("Benefit Name", name, "name", true, "A display name, up to 128 characters without control characters. Renaming does not change the financial definition.");
         choices(category, List.of(Category.values()), ConditionalBenefitPresentation::category);
-        field("Benefit Category", category, "category", true, "Death Benefit requires a person's death. Both categories use the same fully taxable treatment shown below.");
+        field("Benefit Category", category, "category", true, "Death Benefit requires a person's death. Only qualifying personal death-principal lump sums can use the restricted excluded tax treatment.");
         choices(pattern, List.of(PaymentPattern.values()), value -> value == PaymentPattern.MONTHLY_RECURRING
                 ? "Recurring Monthly Payment" : "One-Time Lump Sum");
         field("Payment Type", pattern, "pattern", true, "Choose a monthly gross amount or the entire one-time gross receipt.");
@@ -108,8 +113,14 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
         field("Coverage End Date", coverageEnd, "coverage-end", false, "Optional inclusive last date on which the triggering event qualifies; it does not terminate an already-active recurring stream. Modeled deaths occur January 1, which the coverage must allow.");
         form.getChildren().add(text("Leave optional dates blank for no additional limit. One-time payments occur only once in the eligible trigger year; events before the projection opening are not replayed."));
         form.getChildren().add(heading("Financial Treatment"));
-        form.getChildren().addAll(text("Tax Treatment: " + TAX), text(TAX_HELP),
-                text("Payment Destination: " + DESTINATION), text(DESTINATION_HELP), insurance);
+        choices(tax, List.of(TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION), ConditionalBenefitPresentation::tax);
+        field("Tax Treatment", tax, "tax-character", true, "Fully taxable by default. Excluded principal requires a qualifying personal death-benefit lump sum to the other living modeled person.");
+        form.getChildren().add(taxHelp);
+        qualification.setText(com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.LIFE_QUALIFICATION);
+        qualification.setWrapText(true);
+        field("Confirm qualifying personal death principal", qualification, "life-qualification", true,
+                "Required planning assertion for excluded principal. Unknown or special tax situations are unsupported; do not include settlement interest.");
+        form.getChildren().addAll(text("Payment Destination: " + DESTINATION), text(DESTINATION_HELP), insurance);
         Label stateWarning = text("");
         stateWarning.setId("cb-state-warning");
         stateWarning.getStyleClass().add("analysis-stale");
@@ -143,6 +154,8 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
         trigger.setValue(existing == null ? TriggerType.FIXED_DATE : existing.trigger().type());
         previousIncomeTrigger = trigger.getValue();
         if (existing != null) {
+            draftTax = existing.taxCharacter();
+            qualification.setSelected(existing.excludesLifePrincipal() && !duplicate);
             name.setText(existing.label());
             amount.setText(existing.grossAmount().toPlainString());
             triggerDate.setValue(existing.trigger().date());
@@ -166,6 +179,11 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
         });
         pattern.valueProperty().addListener((o, old, value) -> updateFields());
         trigger.valueProperty().addListener((o, old, value) -> updateFields());
+        recipient.valueProperty().addListener((o, old, value) -> updateFields());
+        triggerPerson.valueProperty().addListener((o, old, value) -> updateFields());
+        tax.valueProperty().addListener((o, old, value) -> {
+            if (!updatingTax && value != null) { draftTax = value; updateFields(); }
+        });
         updateFields();
         getDialogPane().lookupButton(SAVE).addEventFilter(ActionEvent.ACTION, event -> {
             if (!validateDraft()) event.consume();
@@ -199,7 +217,20 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
         fields.get(escalation).show(monthly);
         monthlyHelp.setVisible(monthly);
         monthlyHelp.setManaged(monthly);
-        insurance.setVisible(death && !monthly);
+        boolean eligiblePrincipal = death && !monthly && category.getValue() == Category.DEATH_BENEFIT
+                && plan.getHousehold().hasSpouse() && recipient.getValue() != null && triggerPerson.getValue() != null
+                && recipient.getValue() != triggerPerson.getValue();
+        var treatments = eligiblePrincipal ? List.of(TaxCharacter.values())
+                : List.of(TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION);
+        updatingTax = true;
+        try {
+            if (!tax.getItems().equals(treatments)) tax.getItems().setAll(treatments);
+            tax.setValue(eligiblePrincipal ? draftTax : TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION);
+        } finally { updatingTax = false; }
+        boolean excluded = tax.getValue() == TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED;
+        fields.get(qualification).show(excluded);
+        taxHelp.setText(excluded ? com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.LIFE_PRINCIPAL_SCOPE : TAX_HELP);
+        insurance.setVisible(death && !monthly && !excluded);
         insurance.setManaged(insurance.isVisible());
         trigger.setDisable(category.getValue() == Category.DEATH_BENEFIT);
         deathTriggerHelp.setVisible(trigger.isDisabled());
@@ -256,12 +287,17 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
             var selectedRecipient = requiredChoice(recipient);
             if (selectedTrigger == TriggerType.DEATH && selectedRecipient == event.person())
                 throw invalid(recipient, "Select a different living recipient from the person whose death triggers payment.");
+            var treatment = requiredChoice(tax);
+            boolean excluded = treatment == TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED;
+            if (excluded && !qualification.isSelected())
+                throw invalid(qualification, "Confirm the restricted personal-policy principal qualification, or keep the payment fully taxable.");
             var definition = new ConditionalBenefitDefinition(identity, label, selectedCategory, event, selectedRecipient,
                     selectedPattern, decimal(amount), monthly ? date(notBefore, false) : null,
                     monthly ? date(end, false) : null, date(coverageStart, false), date(coverageEnd, false),
                     monthly ? decimal(escalation).movePointLeft(2) : BigDecimal.ZERO,
-                    EscalationOrigin.FIRST_ELIGIBLE_PAYMENT_YEAR, TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION,
-                    ReceiptDestination.HOUSEHOLD_RETAINED_NON_QUALIFIED_CASH);
+                    EscalationOrigin.FIRST_ELIGIBLE_PAYMENT_YEAR, treatment,
+                    ReceiptDestination.HOUSEHOLD_RETAINED_NON_QUALIFIED_CASH,
+                    excluded ? LifeInsuranceQualification.PERSONAL_LIFE_PRINCIPAL_ONLY_V1 : null);
             definition.validateFor(plan.getHousehold());
             accepted = definition;
             return true;

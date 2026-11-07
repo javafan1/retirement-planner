@@ -37,7 +37,7 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
         if (kind.isMonteCarlo()) throw new IllegalArgumentException("Monte Carlo benefits require their payload capability.");
         var capability = ConditionalBenefitAnalysisExecution.capture(kind, frozenPlan);
         var versions = new TreeMap<>(AnalysisVersions.calculatedAlgorithms(kind, payload));
-        versions.put(ConditionalBenefitAnalysisExecution.KEY, ConditionalBenefitAnalysisExecution.ALGORITHM);
+        versions.put(ConditionalBenefitAnalysisExecution.KEY, capability.algorithm());
         return new AcceptedAnalysisCompletion(planId, planFile, kind, runId, completedAt, inputFingerprint,
                 contextFingerprint, versions, references, payload, context, association, capability);
     }

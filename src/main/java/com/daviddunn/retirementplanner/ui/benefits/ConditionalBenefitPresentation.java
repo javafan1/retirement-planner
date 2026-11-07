@@ -19,7 +19,12 @@ public final class ConditionalBenefitPresentation {
     public static final String DESTINATION = "Household Retained Nonqualified Cash";
     public static final String TAX_HELP = "This payment is currently modeled as fully taxable ordinary income, not as a pension or Social Security benefit.";
     public static final String DESTINATION_HELP = "Once received, the payment can help fund household expenses and taxes. Any remaining after-tax amount is retained in projected household nonqualified assets.";
-    public static final String INSURANCE_HELP = "Actual qualifying life insurance death proceeds are generally subject to different income-tax rules. Aledrix does not yet model tax-excluded insurance proceeds through this feature.";
+    public static final String INSURANCE_HELP = "This payment remains fully taxable unless you explicitly select qualifying personal life insurance death principal and confirm its restricted qualification. Do not include settlement interest in excluded principal.";
+
+    public static String tax(TaxCharacter character) {
+        return character == TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION ? TAX
+                : "Qualifying Life Insurance Death Proceeds — Federally Excluded";
+    }
 
     private ConditionalBenefitPresentation() { }
 
@@ -81,12 +86,16 @@ public final class ConditionalBenefitPresentation {
             lines.add("Paid once in its eligible trigger year; pre-projection events are not replayed.");
         }
         lines.add("Coverage qualifies the trigger event; it does not terminate an already-active recurring stream.");
-        lines.add("Tax treatment: " + TAX);
+        lines.add("Tax treatment: " + tax(benefit.taxCharacter()));
+        if (benefit.excludesLifePrincipal()) {
+            lines.add(com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.LIFE_PRINCIPAL_SCOPE);
+            lines.add("Original qualification: " + com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.LIFE_QUALIFICATION);
+        }
         lines.add("Destination: " + DESTINATION);
         lines.add(DESTINATION_HELP);
         if (benefit.trigger().type() == TriggerType.DEATH) {
             lines.add("Modeled death occurs January 1 of the selected death year; a living recipient is required.");
-            if (benefit.paymentPattern() == PaymentPattern.ONE_TIME_LUMP_SUM) lines.add(INSURANCE_HELP);
+            if (benefit.paymentPattern() == PaymentPattern.ONE_TIME_LUMP_SUM && !benefit.excludesLifePrincipal()) lines.add(INSURANCE_HELP);
         }
         lines.add("Configured future benefits are not existing account balances or guaranteed current income.");
         return List.copyOf(lines);

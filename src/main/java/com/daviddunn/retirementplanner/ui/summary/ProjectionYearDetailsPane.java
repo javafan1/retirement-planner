@@ -479,7 +479,10 @@ public class ProjectionYearDetailsPane
                 var receipt = source.conditionalBenefit().orElseThrow();
                 var detail = new Label("Received: " + receipt.label() + " / " + receipt.recipient() + " / "
                         + (receipt.months() == 0 ? "Lump sum " + receipt.eventDate() : receipt.months() + " monthly payments")
-                        + " / fully taxable");
+                        + (receipt.taxCharacter() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED
+                        ? " / federally excluded life principal: " + receipt.excluded().toPlainString()
+                            + "; taxable: " + receipt.taxable().toPlainString() + "; future earnings may be taxable"
+                        : " / fully taxable"));
                 detail.setWrapText(true); detail.setMinWidth(0); detail.setMaxWidth(850); detail.setAccessibleText(detail.getText());
                 grid.add(detail,0,row++,5,1);
             }

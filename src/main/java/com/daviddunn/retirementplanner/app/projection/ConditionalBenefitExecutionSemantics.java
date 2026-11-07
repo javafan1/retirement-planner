@@ -13,6 +13,7 @@ import java.util.*;
 public final class ConditionalBenefitExecutionSemantics {
     public static final String KEY = "conditional-benefits=";
     public static final String MODEL = "deterministic-annual-v1";
+    public static final String LIFE_PRINCIPAL_MODEL = "deterministic-life-principal-v2";
     private static final ObjectMapper JSON = new ObjectMapper().registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
     private ConditionalBenefitExecutionSemantics() { }
@@ -67,6 +68,7 @@ public final class ConditionalBenefitExecutionSemantics {
                 throw new IllegalArgumentException("Conditional result lacks reconciled cash/tax state evidence.");
             var seen = new HashSet<java.util.UUID>();
             java.math.BigDecimal gross = java.math.BigDecimal.ZERO;
+            java.math.BigDecimal taxable = java.math.BigDecimal.ZERO;
             for (var source : year.sources()) {
                 var receipt = source.conditionalBenefit();
                 if (receipt == null) continue;
@@ -81,8 +83,9 @@ public final class ConditionalBenefitExecutionSemantics {
                 if (previousEvent != null && !previousEvent.equals(receipt.eventDate()))
                     throw new IllegalArgumentException("Conditional trigger event changed across annual evidence.");
                 gross = gross.add(receipt.gross());
+                taxable = taxable.add(receipt.taxable());
             }
-            if (gross.compareTo(year.income()) > 0 || gross.compareTo(year.agi()) > 0)
+            if (gross.compareTo(year.income()) > 0 || taxable.compareTo(year.agi()) > 0)
                 throw new IllegalArgumentException("Conditional receipts exceed completed cash or taxable income.");
         }
     }
@@ -94,7 +97,9 @@ public final class ConditionalBenefitExecutionSemantics {
     private static String prefix(String inputs, RetainedProjectionSnapshot annual) {
         try {
             var binding = AnalysisSnapshotCodec.sha256(JSON.writeValueAsBytes(List.of(CompleteProjectionSnapshot.digest(inputs),annual)));
-            return KEY + MODEL + "; binding=" + binding + "; ";
+            var original = CompleteProjectionSnapshot.restoreInputs(inputs);
+            String model = ConditionalBenefits.hasExcludedPrincipal(original.getConditionalBenefits()) ? LIFE_PRINCIPAL_MODEL : MODEL;
+            return KEY + model + "; binding=" + binding + "; ";
         } catch (java.io.IOException invalid) { throw new IllegalArgumentException("Cannot bind deterministic benefit evidence.",invalid); }
     }
 }

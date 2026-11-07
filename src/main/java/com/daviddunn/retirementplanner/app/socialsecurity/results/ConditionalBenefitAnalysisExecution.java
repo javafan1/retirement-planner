@@ -17,6 +17,9 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
     public static final String MODEL = "ANALYZER_ANNUAL_CONDITIONAL_BENEFITS_V1";
     public static final String KEY = "conditional-benefits";
     public static final String ALGORITHM = "analyzer-annual-v1";
+    public static final int LIFE_PRINCIPAL_VERSION = 2;
+    public static final String LIFE_PRINCIPAL_MODEL = "ANALYZER_CONDITIONAL_LIFE_PRINCIPAL_V2";
+    public static final String LIFE_PRINCIPAL_ALGORITHM = "analyzer-life-principal-v2";
     private static final ObjectMapper JSON = new ObjectMapper().registerModule(new JavaTimeModule());
 
     public enum Role { ANALYZED_PLAN, CURRENT, BASELINE }
@@ -46,7 +49,9 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
 
     public ConditionalBenefitAnalysisExecution {
         Objects.requireNonNull(family);
-        if (version != VERSION || !MODEL.equals(model) || !protocol(family).equals(scenarioProtocol))
+        if (!(version == VERSION && MODEL.equals(model)
+                || version == LIFE_PRINCIPAL_VERSION && LIFE_PRINCIPAL_MODEL.equals(model))
+                || !protocol(family).equals(scenarioProtocol))
             throw new IllegalArgumentException("Unsupported conditional-benefit analyzer capability.");
         candidates = List.copyOf(candidates);
         boolean paired = family.name().contains("PAIRED");
@@ -55,6 +60,11 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
                 || paired && candidates.get(1).role() != Role.BASELINE
                 || candidates.stream().noneMatch(Candidate::enabled))
             throw new IllegalArgumentException("Conditional-benefit candidate roles or enabled state are invalid.");
+        // Enforce the one/two-candidate bound before decoding their original documents again.
+        boolean principal = candidates.stream().anyMatch(c -> ConditionalBenefits.hasExcludedPrincipal(
+                MonteCarloPlanDocument.read(c.originalInputs()).getConditionalBenefits()));
+        if (principal != (version == LIFE_PRINCIPAL_VERSION))
+            throw new IllegalArgumentException("Conditional tax character does not match its execution capability.");
         for (var candidate : candidates) {
             var plan = MonteCarloPlanDocument.read(candidate.originalInputs());
             if (plan.getHousehold().hasSpouse() != (family.shape() == AnalysisKind.Shape.COUPLE))
@@ -67,10 +77,16 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
     }
 
     public static ConditionalBenefitAnalysisExecution capture(AnalysisKind kind, String current, String baseline) {
-        return new ConditionalBenefitAnalysisExecution(VERSION, MODEL, kind, protocol(kind), baseline == null
+        boolean principal = ConditionalBenefits.hasExcludedPrincipal(MonteCarloPlanDocument.read(current).getConditionalBenefits())
+                || baseline != null && ConditionalBenefits.hasExcludedPrincipal(MonteCarloPlanDocument.read(baseline).getConditionalBenefits());
+        return new ConditionalBenefitAnalysisExecution(principal ? LIFE_PRINCIPAL_VERSION : VERSION,
+                principal ? LIFE_PRINCIPAL_MODEL : MODEL, kind, protocol(kind), baseline == null
                 ? List.of(Candidate.capture(Role.ANALYZED_PLAN, current))
                 : List.of(Candidate.capture(Role.CURRENT, current), Candidate.capture(Role.BASELINE, baseline)));
     }
+
+    public boolean excludesLifePrincipal() { return version == LIFE_PRINCIPAL_VERSION; }
+    public String algorithm() { return excludesLifePrincipal() ? LIFE_PRINCIPAL_ALGORITHM : ALGORITHM; }
 
     public void validate(AnalysisKind kind, String current, String baseline) {
         if (!equals(capture(kind, current, baseline)))
@@ -89,7 +105,7 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
     /** Original assumptions only. This does not evaluate benefits or infer which events occurred. */
     public List<String> disclosure() {
         var lines = new ArrayList<String>();
-        lines.add("Conditional benefit execution: " + MODEL + "; " + scenarioProtocol + ".");
+        lines.add("Conditional benefit execution: " + model + "; " + scenarioProtocol + ".");
         for (var candidate : candidates) {
             String side = candidate.role() == Role.ANALYZED_PLAN ? "Analyzed plan"
                     : candidate.role() == Role.CURRENT ? "Current" : "Baseline";

@@ -28,7 +28,7 @@ public final class ConditionalBenefitAnalyzerValidation {
         }
         if (kind != capability.family()) throw new IllegalArgumentException("Conditional analyzer family mismatch.");
         var expected = new TreeMap<>(AnalysisVersions.calculatedAlgorithms(kind, payload));
-        expected.put(ConditionalBenefitAnalysisExecution.KEY, ConditionalBenefitAnalysisExecution.ALGORITHM);
+        expected.put(ConditionalBenefitAnalysisExecution.KEY, capability.algorithm());
         if (!expected.equals(algorithms)) throw new IllegalArgumentException("Unsupported conditional analyzer algorithm combination.");
         var plan = MonteCarloPlanDocument.read(capability.candidates().getFirst().originalInputs());
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);

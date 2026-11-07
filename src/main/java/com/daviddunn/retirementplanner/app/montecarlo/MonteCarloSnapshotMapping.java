@@ -24,7 +24,7 @@ public final class MonteCarloSnapshotMapping {
                 new Distribution(result.endingInvestableAssets().orElse(null), result.endingNetWorth().orElse(null),
                         result.endingAfterTaxEstate().orElse(null), result.lifetimeTaxes().orElse(null)),
                 History.capture(ref.annualInvestableAssets(), first, null), ref.metrics().orElse(null), Failure.capture(ref.fundingFailure().orElse(null)));
-        return checked(new MonteCarloSnapshot(result.benefitExecution() != null ? BENEFIT_VERSION : result.expenseExecution() == null ? VERSION : EXPENSE_VERSION,
+        return checked(new MonteCarloSnapshot(result.benefitExecution() != null ? benefitPayloadVersion(result.benefitExecution(), false) : result.expenseExecution() == null ? VERSION : EXPENSE_VERSION,
                 Mode.FIXED, frozenPlan.getHousehold().hasSpouse(), Settings.capture(result.settings()),
                 request, provenance(result.returnModel(), null, result.returnModel().equals("CALLER_SUPPLIED_PATHS")
                 ? MonteCarloStrategyComparisonResult.WorldSource.CALLER_SUPPLIED : MonteCarloStrategyComparisonResult.WorldSource.GENERATED,
@@ -50,7 +50,7 @@ public final class MonteCarloSnapshotMapping {
         int first = request.start().getYear();
         var outcomes = result.outcomes().stream().map(t -> new MortalityTrial(t.scenarioIndex(), Life.capture(t.lifetime()),
                 new Outcome(History.capture(t.annualInvestableAssets(), first, null), t.terminal().orElse(null), Failure.capture(t.fundingFailure().orElse(null))))).toList();
-        return checked(new MonteCarloSnapshot(result.benefitExecution() != null ? BENEFIT_VERSION : result.expenseExecution() == null ? VERSION : EXPENSE_VERSION,
+        return checked(new MonteCarloSnapshot(result.benefitExecution() != null ? benefitPayloadVersion(result.benefitExecution(), false) : result.expenseExecution() == null ? VERSION : EXPENSE_VERSION,
                 Mode.LONGEVITY, result.request().hasSpouse(), Settings.capture(result.request().settings()),
                 request, provenance(result.returnModel(), result.mortalityModel(), result.returnModel().equals("CALLER_SUPPLIED_WORLDS")
                 ? MonteCarloStrategyComparisonResult.WorldSource.CALLER_SUPPLIED : MonteCarloStrategyComparisonResult.WorldSource.GENERATED,
@@ -85,7 +85,7 @@ public final class MonteCarloSnapshotMapping {
                 Metric.capture(s.terminalInvestableAssetsDifference()), Metric.capture(s.terminalNetWorthDifference()),
                 Metric.capture(s.terminalAfterTaxEstateDifference()), Metric.capture(s.lifetimeTaxesDifference()), map(s.annualResults(), PairYear::capture));
         boolean supplied = result.worldSource() == MonteCarloStrategyComparisonResult.WorldSource.CALLER_SUPPLIED;
-        return checked(new MonteCarloSnapshot(result.benefitExecution() != null ? PAIRED_BENEFIT_VERSION : result.expenseExecution() == null ? VERSION : PAIRED_EXPENSE_VERSION,
+        return checked(new MonteCarloSnapshot(result.benefitExecution() != null ? benefitPayloadVersion(result.benefitExecution(), true) : result.expenseExecution() == null ? VERSION : PAIRED_EXPENSE_VERSION,
                 sampled ? Mode.PAIRED_LONGEVITY : Mode.PAIRED_FIXED, r.assumptions().hasSpouse(),
                 Settings.capture(r.assumptions().settings()), request, provenance(supplied ? "CALLER_SUPPLIED_WORLDS" : MonteCarloScenarioGenerator.MODEL_VERSION,
                 sampled ? (supplied ? "CALLER_SUPPLIED_WORLDS" : r.assumptions().hasSpouse() ? "HOUSEHOLD_MORTALITY_V1" : "PRIMARY_MORTALITY_V1") : null,

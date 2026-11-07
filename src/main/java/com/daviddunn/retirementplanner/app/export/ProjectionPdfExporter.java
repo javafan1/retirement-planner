@@ -189,7 +189,14 @@ public class ProjectionPdfExporter {
         if (plan.getConditionalBenefits().isEmpty()) return;
         ensureSpace(55);
         writeSectionHeading("CONDITIONAL BENEFITS",BLUE);
-        writeKeyValue("Planning scope", "Fully taxable non-pension receipts; household retained non-qualified cash. Future triggers are not current income.",GRAY);
+        boolean lifePrincipal = com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefits.hasExcludedPrincipal(plan.getConditionalBenefits());
+        writeKeyValue("Planning scope", lifePrincipal
+                ? "Original tax characters apply independently; household retained non-qualified cash. Future triggers are not current income."
+                : "Fully taxable non-pension receipts; household retained non-qualified cash. Future triggers are not current income.",GRAY);
+        if (lifePrincipal) {
+            writeKeyValue("Excluded principal", com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.LIFE_PRINCIPAL_SCOPE,GRAY);
+            writeKeyValue("Original qualification assertion", com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.LIFE_QUALIFICATION,GRAY);
+        }
         for (var definition : plan.getConditionalBenefits()) {
             String trigger = definition.trigger().type().toString() + (definition.trigger().date() == null
                     ? " / " + definition.trigger().person() + (definition.trigger().age() == null ? "" : " age " + definition.trigger().age())
@@ -203,14 +210,16 @@ public class ProjectionPdfExporter {
                     + (definition.paymentPattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING ? " per month" : " one-time lump sum")
                     + "; recipient " + definition.recipient() + "; trigger " + trigger
                     + (definition.paymentPattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING
-                    ? "; annual escalation " + String.format(java.util.Locale.US,"%.2f%%",definition.annualEscalationRate().movePointRight(2)) + " from first eligible payment year" : "") + timing,GRAY);
+                    ? "; annual escalation " + String.format(java.util.Locale.US,"%.2f%%",definition.annualEscalationRate().movePointRight(2)) + " from first eligible payment year" : "") + timing
+                    + (lifePrincipal ? "; tax character " + definition.taxCharacter() : ""),GRAY);
         }
         boolean any = false;
         for (var year : projection.getYears()) for (var source : year.getIncomeSources()) if (source.conditionalBenefit().isPresent()) {
             var receipt = source.conditionalBenefit().orElseThrow(); any = true;
             writeKeyValue(year.getCalendarYear() + " / " + receipt.label(),
                     (receipt.months() == 0 ? "Lump sum; event " + receipt.eventDate() : "Monthly income; " + receipt.months() + " payments; " + receipt.paymentStart() + " through " + receipt.paymentEnd())
-                    + "; recipient " + receipt.recipient() + "; gross " + conditionalMoney(receipt.gross()) + "; taxable " + conditionalMoney(receipt.taxable()),GRAY);
+                    + "; recipient " + receipt.recipient() + "; gross " + conditionalMoney(receipt.gross()) + "; taxable " + conditionalMoney(receipt.taxable())
+                    + (lifePrincipal ? "; excluded principal " + conditionalMoney(receipt.excluded()) : ""),GRAY);
         }
         if (!any) writeKeyValue("Completed projection receipts","No conditional receipt facts are recorded in the original annual data. Definitions alone do not establish execution.",GRAY);
     }
