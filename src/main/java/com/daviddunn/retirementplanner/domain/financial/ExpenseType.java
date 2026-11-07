@@ -4,5 +4,7 @@ public enum ExpenseType {
 
     RECURRING,
 
-    ONE_TIME
+    ONE_TIME,
+
+    CONTRACTUAL_INSURANCE_PREMIUM
 }

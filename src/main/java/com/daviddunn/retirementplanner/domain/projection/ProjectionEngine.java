@@ -1162,6 +1162,12 @@ public class ProjectionEngine {
         for (int expenseIndex = 0; expenseIndex < expenses.size(); expenseIndex++) {
             Expense expense = expenses.get(expenseIndex);
 
+            if (expense.isContractualInsurancePremium()) {
+                totalExpenses = totalExpenses.add(com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.annual(
+                        expense, assumptions.getProjectionStartDate(), projectionDate.getYear(), deathView));
+                continue;
+            }
+
             if (!expense.isActiveDuringYear(
                     projectionDate.getYear(),
                     assumptions.getProjectionStartDate())) {

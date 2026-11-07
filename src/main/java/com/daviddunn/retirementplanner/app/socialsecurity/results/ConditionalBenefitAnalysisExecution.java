@@ -10,7 +10,8 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-/** Bounded original-input evidence. No scenario paths, random draws or live domain references. */
+/** Bounded original-input evidence. V3 composes conditional receipts with insured-contingent expenses.
+ * No scenario paths, random draws or live domain references. V1/V2 retain their benefit-only meaning. */
 public record ConditionalBenefitAnalysisExecution(int version, String model, AnalysisKind family,
         String scenarioProtocol, List<Candidate> candidates) {
     public static final int VERSION = 1;
@@ -20,6 +21,9 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
     public static final int LIFE_PRINCIPAL_VERSION = 2;
     public static final String LIFE_PRINCIPAL_MODEL = "ANALYZER_CONDITIONAL_LIFE_PRINCIPAL_V2";
     public static final String LIFE_PRINCIPAL_ALGORITHM = "analyzer-life-principal-v2";
+    public static final int PREMIUM_VERSION = 3;
+    public static final String PREMIUM_MODEL = "ANALYZER_CONTRACTUAL_PREMIUMS_V3";
+    public static final String PREMIUM_ALGORITHM = "analyzer-contractual-premiums-v3";
     private static final ObjectMapper JSON = new ObjectMapper().registerModule(new JavaTimeModule());
 
     public enum Role { ANALYZED_PLAN, CURRENT, BASELINE }
@@ -31,7 +35,7 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
             var plan = MonteCarloPlanDocument.read(originalInputs);
             if (!digest(originalInputs).equals(inputDigest)
                     || !definitionsDigest(plan).equals(definitionDigest)
-                    || enabled != !plan.getConditionalBenefits().isEmpty())
+                    || enabled != com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan))
                 throw new IllegalArgumentException("Conditional-benefit candidate input binding is invalid.");
             plan.validateHouseholdReferences();
         }
@@ -39,7 +43,7 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
         static Candidate capture(Role role, String inputs) {
             var plan = MonteCarloPlanDocument.read(inputs);
             return new Candidate(role, inputs, digest(inputs), definitionsDigest(plan),
-                    !plan.getConditionalBenefits().isEmpty());
+                    com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan));
         }
         @Override public String toString() {
             return "Candidate[role=" + role + ", enabled=" + enabled + ", inputDigest=" + inputDigest
@@ -50,7 +54,8 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
     public ConditionalBenefitAnalysisExecution {
         Objects.requireNonNull(family);
         if (!(version == VERSION && MODEL.equals(model)
-                || version == LIFE_PRINCIPAL_VERSION && LIFE_PRINCIPAL_MODEL.equals(model))
+                || version == LIFE_PRINCIPAL_VERSION && LIFE_PRINCIPAL_MODEL.equals(model)
+                || version == PREMIUM_VERSION && PREMIUM_MODEL.equals(model))
                 || !protocol(family).equals(scenarioProtocol))
             throw new IllegalArgumentException("Unsupported conditional-benefit analyzer capability.");
         candidates = List.copyOf(candidates);
@@ -63,7 +68,9 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
         // Enforce the one/two-candidate bound before decoding their original documents again.
         boolean principal = candidates.stream().anyMatch(c -> ConditionalBenefits.hasExcludedPrincipal(
                 MonteCarloPlanDocument.read(c.originalInputs()).getConditionalBenefits()));
-        if (principal != (version == LIFE_PRINCIPAL_VERSION))
+        boolean premiums = candidates.stream().anyMatch(c -> com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(
+                MonteCarloPlanDocument.read(c.originalInputs())));
+        if (premiums != (version == PREMIUM_VERSION) || !premiums && principal != (version == LIFE_PRINCIPAL_VERSION))
             throw new IllegalArgumentException("Conditional tax character does not match its execution capability.");
         for (var candidate : candidates) {
             var plan = MonteCarloPlanDocument.read(candidate.originalInputs());
@@ -79,14 +86,18 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
     public static ConditionalBenefitAnalysisExecution capture(AnalysisKind kind, String current, String baseline) {
         boolean principal = ConditionalBenefits.hasExcludedPrincipal(MonteCarloPlanDocument.read(current).getConditionalBenefits())
                 || baseline != null && ConditionalBenefits.hasExcludedPrincipal(MonteCarloPlanDocument.read(baseline).getConditionalBenefits());
-        return new ConditionalBenefitAnalysisExecution(principal ? LIFE_PRINCIPAL_VERSION : VERSION,
-                principal ? LIFE_PRINCIPAL_MODEL : MODEL, kind, protocol(kind), baseline == null
+        boolean premiums = com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(current))
+                || baseline != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(baseline));
+        return new ConditionalBenefitAnalysisExecution(premiums ? PREMIUM_VERSION : principal ? LIFE_PRINCIPAL_VERSION : VERSION,
+                premiums ? PREMIUM_MODEL : principal ? LIFE_PRINCIPAL_MODEL : MODEL, kind, protocol(kind), baseline == null
                 ? List.of(Candidate.capture(Role.ANALYZED_PLAN, current))
                 : List.of(Candidate.capture(Role.CURRENT, current), Candidate.capture(Role.BASELINE, baseline)));
     }
 
-    public boolean excludesLifePrincipal() { return version == LIFE_PRINCIPAL_VERSION; }
-    public String algorithm() { return excludesLifePrincipal() ? LIFE_PRINCIPAL_ALGORITHM : ALGORITHM; }
+    public boolean includesPremiums() { return version == PREMIUM_VERSION; }
+    public boolean excludesLifePrincipal() { return version == LIFE_PRINCIPAL_VERSION || includesPremiums() && candidates.stream().anyMatch(c ->
+            ConditionalBenefits.hasExcludedPrincipal(MonteCarloPlanDocument.read(c.originalInputs()).getConditionalBenefits())); }
+    public String algorithm() { return includesPremiums() ? PREMIUM_ALGORITHM : excludesLifePrincipal() ? LIFE_PRINCIPAL_ALGORITHM : ALGORITHM; }
 
     public void validate(AnalysisKind kind, String current, String baseline) {
         if (!equals(capture(kind, current, baseline)))
@@ -120,7 +131,11 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
     }
 
     private static String definitionsDigest(RetirementPlan plan) {
-        try { return AnalysisSnapshotCodec.sha256(JSON.writeValueAsBytes(plan.getConditionalBenefits())); }
+        try { return AnalysisSnapshotCodec.sha256(JSON.writeValueAsBytes(
+                com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(plan)
+                        ? List.of(plan.getConditionalBenefits(), plan.getHousehold().getExpenses().stream().filter(
+                                com.daviddunn.retirementplanner.domain.financial.Expense::isContractualInsurancePremium).toList())
+                        : plan.getConditionalBenefits())); }
         catch (java.io.IOException failure) { throw new IllegalArgumentException("Cannot bind original conditional benefits.", failure); }
     }
 }

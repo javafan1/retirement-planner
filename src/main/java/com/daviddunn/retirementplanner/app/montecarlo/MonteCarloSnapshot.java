@@ -28,6 +28,8 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
     public static final int PAIRED_BENEFIT_VERSION = 5;
     public static final int LIFE_PRINCIPAL_VERSION = 6;
     public static final int PAIRED_LIFE_PRINCIPAL_VERSION = 7;
+    public static final int PREMIUM_VERSION = 8;
+    public static final int PAIRED_PREMIUM_VERSION = 9;
     public static final int MAX_TRIALS = 100_000;
     public static final int MAX_YEARS = 1_000;
     public static final long MAX_ANNUAL_OBSERVATIONS = 1_500_000;
@@ -59,7 +61,7 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
         Objects.requireNonNull(mode); Objects.requireNonNull(settings); Objects.requireNonNull(request);
         Objects.requireNonNull(provenance); Objects.requireNonNull(display);
         Objects.requireNonNull(startedAt); Objects.requireNonNull(completedAt);
-        if ((version < VERSION || version > PAIRED_LIFE_PRINCIPAL_VERSION) || completedAt.isBefore(startedAt))
+        if ((version < VERSION || version > PAIRED_PREMIUM_VERSION) || completedAt.isBefore(startedAt))
             throw invalid("Unsupported version or timestamps.");
         boolean comparison = mode == Mode.PAIRED_FIXED || mode == Mode.PAIRED_LONGEVITY;
         if (version <= PAIRED_EXPENSE_VERSION && ((version == EXPENSE_VERSION) != (expenseExecution != null)
@@ -156,11 +158,13 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
     }
 
     public static int benefitPayloadVersion(ConditionalBenefitAnalysisExecution capability, boolean paired) {
+        if (capability.includesPremiums()) return paired ? PAIRED_PREMIUM_VERSION : PREMIUM_VERSION;
         return capability.excludesLifePrincipal() ? paired ? PAIRED_LIFE_PRINCIPAL_VERSION : LIFE_PRINCIPAL_VERSION
                 : paired ? PAIRED_BENEFIT_VERSION : BENEFIT_VERSION;
     }
 
-    public int fingerprintVersion() { return benefitExecution != null ? benefitExecution.excludesLifePrincipal()
+    public int fingerprintVersion() { return benefitExecution != null && benefitExecution.includesPremiums() ? paired != null ? 10 : 9
+            : benefitExecution != null ? benefitExecution.excludesLifePrincipal()
             ? paired != null ? 8 : 7 : paired != null ? 6 : 5
             : pairedExpenseExecution != null ? 4 : expenseExecution != null ? 3 : 1; }
 
@@ -169,8 +173,8 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
     /** A legacy artifact is never reinterpreted as proof of enabled execution. */
     public void requireInterpretable() {
         requireImplementedPlanInputs();
-        if (benefitExecution == null && (!MonteCarloPlanDocument.read(request.planA()).getConditionalBenefits().isEmpty()
-                || request.planB() != null && !MonteCarloPlanDocument.read(request.planB()).getConditionalBenefits().isEmpty()))
+        if (benefitExecution == null && (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(MonteCarloPlanDocument.read(request.planA()))
+                || request.planB() != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(MonteCarloPlanDocument.read(request.planB()))))
             throw invalid("Historical conditional benefits have no authenticated analyzer execution capability; original artifact preserved.");
         if (!hasExpenseExecution() && (ExpenseExecution.configured(MonteCarloPlanDocument.read(request.planA()))
                 || request.planB() != null && ExpenseExecution.configured(MonteCarloPlanDocument.read(request.planB()))))
@@ -178,6 +182,10 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
     }
 
     private void requireImplementedPlanInputs() {
+        boolean premiums = com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(request.planA()))
+                || request.planB() != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(request.planB()));
+        if (premiums && (benefitExecution == null || !benefitExecution.includesPremiums()))
+            throw invalid("Contractual premiums require their versioned execution capability.");
         if (benefitExecution != null) {
             benefitExecution.validate(kind(), request.planA(), request.planB());
             for (var candidate : benefitExecution.candidates())

@@ -25,7 +25,7 @@ public final class LongevityWeightedContinuationEvaluator {
         request.cancellationToken().throwIfCancellationRequested();
         var baseline = copyService.copy(request.sourcePlan());
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(baseline);
-        if (!baseline.getConditionalBenefits().isEmpty()) {
+        if (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(baseline)) {
             long positive = request.longevityScenarios().scenarios().stream().filter(s -> s.jointProbability().signum() > 0).count();
             long[] counts = new long[4];
             return new LongevityWeightedIntegratedStrategyEvaluator().evaluate(request, event -> {

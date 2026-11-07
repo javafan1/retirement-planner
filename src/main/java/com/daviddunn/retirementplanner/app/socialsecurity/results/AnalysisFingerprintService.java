@@ -48,7 +48,7 @@ public final class AnalysisFingerprintService {
         if (pendingProblem != null) return new Assessment(null, null, "Inputs need attention: " + pendingProblem);
         try { return new Assessment(fingerprint(kind, plan, inputs), effectiveContextFingerprint(kind, plan), null,
                 com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.potentiallyAffected(plan),
-                !plan.getConditionalBenefits().isEmpty()); }
+                com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan)); }
         catch (RuntimeException invalid) { return new Assessment(null, null, "Inputs need attention."); }
     }
     public String fingerprint(AnalysisKind kind, RetirementPlan plan, Inputs next) {
@@ -85,8 +85,9 @@ public final class AnalysisFingerprintService {
             var allowed = Set.of("planId", "household", "accountPortfolio", "planningAssumptions", "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations", "projectionState", "conditionalBenefits");
             f.fieldNames().forEachRemaining(name -> { if (!allowed.contains(name)) throw new IllegalArgumentException("Unclassified plan field: " + name); });
             f.remove(List.of("planId", "baseline", "analyzerConfigurations", "projectionState"));
-            if (!plan.getConditionalBenefits().isEmpty()) plan.validateHouseholdReferences();
+            if (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan)) plan.validateHouseholdReferences();
             com.daviddunn.retirementplanner.app.projection.ConditionalBenefitFinancialInputs.normalize(f);
+            com.daviddunn.retirementplanner.app.projection.DeterministicExpenseInputs.normalizePremiums(f);
             removeDisplayNames(f);
             if (kind == AnalysisKind.COUPLE_WEIGHTED || kind == AnalysisKind.INDIVIDUAL_WEIGHTED) {
                 var assumptions = (ObjectNode) f.get("planningAssumptions");

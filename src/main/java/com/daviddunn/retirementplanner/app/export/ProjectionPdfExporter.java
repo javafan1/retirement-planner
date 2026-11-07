@@ -186,6 +186,12 @@ public class ProjectionPdfExporter {
 
     /** Original supplied frozen inputs plus completed receipts only; no evaluator or projection. */
     private void writeConditionalBenefits(RetirementPlan plan, Projection projection) throws IOException {
+        var premiums = com.daviddunn.retirementplanner.app.projection.ContractualPremiumDisclosures.lines(plan.getHousehold(), "Original plan");
+        if (!premiums.isEmpty()) {
+            ensureSpace(55);
+            writeSectionHeading("CONTRACTUAL INSURANCE PREMIUMS", BLUE);
+            for (var premium : premiums) writeKeyValue("Contractual expense", premium, GRAY);
+        }
         if (plan.getConditionalBenefits().isEmpty()) return;
         ensureSpace(55);
         writeSectionHeading("CONDITIONAL BENEFITS",BLUE);

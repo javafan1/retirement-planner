@@ -178,6 +178,19 @@ public class ExpensesView extends BorderPane {
                 growthColumn,
                 effectiveColumn,
                 endColumn);
+        TableColumn<Expense,String> insured = new TableColumn<>("Insured");
+        insured.setCellValueFactory(cell -> new ReadOnlyStringWrapper(cell.getValue().isContractualInsurancePremium()
+                ? cell.getValue().getContractualPremium().insured() == com.daviddunn.retirementplanner.domain.financial.ContractualPremiumPolicy.Insured.PRIMARY
+                    ? "Primary" : "Spouse" : "—"));
+        table.getColumns().add(insured);
+        descriptionColumn.setCellFactory(column -> new javafx.scene.control.TableCell<>() {
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty); setText(empty ? null : item);
+                var expense=getTableRow() == null ? null : getTableRow().getItem();
+                setTooltip(empty ? null : new javafx.scene.control.Tooltip(item + (expense != null && expense.isContractualInsurancePremium()
+                        ? "\nInsured: " + expense.getContractualPremium().insured() + "\n" + com.daviddunn.retirementplanner.app.projection.ContractualPremiumDisclosures.SCOPE : "")));
+            }
+        });
 
         table.setColumnResizePolicy(
                 TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
@@ -237,7 +250,8 @@ public class ExpensesView extends BorderPane {
         }
 
         ExpenseDialog dialog =
-                new ExpenseDialog(null);
+                new ExpenseDialog(null, false, getHousehold());
+        if (getScene() != null) dialog.initOwner(getScene().getWindow());
 
         Optional<Expense> result =
                 dialog.showAndWait();
@@ -263,7 +277,8 @@ public class ExpensesView extends BorderPane {
         }
 
         ExpenseDialog dialog =
-                new ExpenseDialog(selected);
+                new ExpenseDialog(selected, false, getHousehold());
+        if (getScene() != null) dialog.initOwner(getScene().getWindow());
 
         Optional<Expense> result =
                 dialog.showAndWait();
@@ -336,6 +351,7 @@ public class ExpensesView extends BorderPane {
             case RECURRING -> "Recurring";
 
             case ONE_TIME -> "One-Time";
+            case CONTRACTUAL_INSURANCE_PREMIUM -> "Contractual Insurance Premium";
         };
     }
 }

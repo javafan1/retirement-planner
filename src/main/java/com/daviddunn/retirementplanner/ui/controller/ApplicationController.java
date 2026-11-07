@@ -73,14 +73,16 @@ public class ApplicationController {
     public java.util.concurrent.CompletionStage<Void> getProjectionRestoration() { return projectionRestoration; }
     public boolean isRestoredProjectionMode() { return restoredProjectionMode; }
     public String getProjectionSnapshotNotice() {
-        if (currentPlan != null && !currentPlan.getConditionalBenefits().isEmpty()) {
+        if (currentPlan != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(currentPlan)) {
             try { com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(currentPlan); }
             catch (com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.UnsupportedExecutionException unsupported) {
                 return unsupported.getMessage();
             }
             var original = getAcceptedProjectionSnapshot();
             return original != null && original.matches(currentPlan) && original.calculationSemanticsCurrent() ? projectionSnapshotNotice
-                    : "Run a new deterministic projection to include the configured conditional benefits. Prior results retain their original frozen assumptions. " + projectionSnapshotNotice;
+                    : "Run a new deterministic projection to include the configured "
+                            + (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(currentPlan) ? "conditional benefits or contractual premiums" : "conditional benefits")
+                            + ". Prior results retain their original frozen assumptions. " + projectionSnapshotNotice;
         }
         var accepted = getAcceptedProjectionSnapshot();
         return accepted != null && !accepted.calculationSemanticsCurrent()
@@ -115,7 +117,7 @@ public class ApplicationController {
     /** Called only at an eligible result acceptance, never passive restoration. Save commits the immutable pin. */
     public synchronized boolean associateAnalyzer(AnalyzerAdmission admission, com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion completion) {
         completion.validateCapabilities();
-        if (currentPlan != null && !currentPlan.getConditionalBenefits().isEmpty()
+        if (currentPlan != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(currentPlan)
                 && completion.kind() != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.COUPLE_SOCIAL_SECURITY
                 && completion.kind() != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
                 && completion.benefitExecution() == null

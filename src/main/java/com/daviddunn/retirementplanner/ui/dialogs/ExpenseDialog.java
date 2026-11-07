@@ -8,6 +8,7 @@ import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Kind;
 import com.daviddunn.retirementplanner.domain.financial.Expense;
 import com.daviddunn.retirementplanner.domain.financial.ExpenseType;
 import com.daviddunn.retirementplanner.domain.financial.GrowthCategory;
+import com.daviddunn.retirementplanner.domain.financial.ContractualPremiumPolicy;
 
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
@@ -21,6 +22,11 @@ import java.util.List;
 public class ExpenseDialog extends Dialog<Expense> {
 
     private final boolean guidedCreation;
+    private final ComboBox<ContractualPremiumPolicy.Insured> insuredField = new ComboBox<>();
+    private final Label insuredLabel = new Label("Insured Person:");
+    private final Label premiumNotice = new Label(com.daviddunn.retirementplanner.app.projection.ContractualPremiumDisclosures.SCOPE);
+    private final Label validationMessage = new Label();
+    private final Label fixedPremiumEscalation = new Label("Fixed nominal (no escalation)");
 
     private final TextField descriptionField;
     private final TextField annualAmountField;
@@ -53,6 +59,12 @@ public class ExpenseDialog extends Dialog<Expense> {
 
     public ExpenseDialog(Expense expense, boolean guidedCreation) {
 
+        this(expense, guidedCreation, null);
+    }
+
+    public ExpenseDialog(Expense expense, boolean guidedCreation,
+            com.daviddunn.retirementplanner.domain.model.Household household) {
+
         this.guidedCreation = guidedCreation;
 
         if (expense == null) {
@@ -82,6 +94,40 @@ public class ExpenseDialog extends Dialog<Expense> {
         expenseTypeComboBox = new ComboBox<>();
         expenseTypeComboBox.getItems().addAll(
                 ExpenseType.values());
+        if (household == null && (expense == null || !expense.isContractualInsurancePremium()))
+            expenseTypeComboBox.getItems().remove(ExpenseType.CONTRACTUAL_INSURANCE_PREMIUM);
+        expenseTypeComboBox.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(ExpenseType value) { return value == null ? "" : switch (value) {
+                case RECURRING -> "Recurring";
+                case ONE_TIME -> "One-Time";
+                case CONTRACTUAL_INSURANCE_PREMIUM -> "Contractual Insurance Premium";
+            }; }
+            @Override public ExpenseType fromString(String value) { throw new UnsupportedOperationException(); }
+        });
+        insuredField.setId("premium-insured");
+        insuredField.setAccessibleText("Premium insured person");
+        insuredField.getItems().add(ContractualPremiumPolicy.Insured.PRIMARY);
+        if (household != null && household.hasSpouse() || expense != null && expense.isContractualInsurancePremium()
+                && expense.getContractualPremium().insured() == ContractualPremiumPolicy.Insured.SPOUSE)
+            insuredField.getItems().add(ContractualPremiumPolicy.Insured.SPOUSE);
+        insuredField.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(ContractualPremiumPolicy.Insured insured) {
+                if (insured == null) return "";
+                String role=insured == ContractualPremiumPolicy.Insured.PRIMARY ? "Primary" : "Spouse";
+                if (household == null) return role;
+                var person=insured == ContractualPremiumPolicy.Insured.PRIMARY ? household.getPrimaryPerson() : household.getSpouse();
+                return role + " — " + person.getFirstName();
+            }
+            @Override public ContractualPremiumPolicy.Insured fromString(String value) { throw new UnsupportedOperationException(); }
+        });
+        if (expense != null && expense.isContractualInsurancePremium()) insuredField.setValue(expense.getContractualPremium().insured());
+        premiumNotice.setWrapText(true); premiumNotice.setMaxWidth(350);
+        premiumNotice.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        validationMessage.setWrapText(true); validationMessage.setId("expense-validation");
+        validationMessage.getStyleClass().add("wizard-field-error");
+        validationMessage.setMaxWidth(470);
+        validationMessage.managedProperty().bind(validationMessage.textProperty().isNotEmpty());
+        validationMessage.visibleProperty().bind(validationMessage.managedProperty());
         expenseTypeComboBox.setValue(
                 ExpenseType.RECURRING);
 
@@ -203,10 +249,13 @@ public class ExpenseDialog extends Dialog<Expense> {
                 growthCategoryComboBox,
                 1,
                 row++);
+        grid.add(fixedPremiumEscalation,1,row-1);
 
         grid.add(volatilityLabel, 0, row);
         grid.add(volatilityField, 1, row++);
         grid.add(volatilityNotice, 0, row++, 2, 1);
+        grid.add(insuredLabel,0,row); grid.add(insuredField,1,row++);
+        grid.add(premiumNotice,0,row++,2,1);
 
         grid.add(
                 effectiveDateLabel,
@@ -227,15 +276,19 @@ public class ExpenseDialog extends Dialog<Expense> {
                 endDatePicker,
                 1,
                 row++);
+        grid.add(validationMessage,0,row++,2,1);
         grid.add(RequiredFieldSupport.createLegend(), 0, row, 2, 1);
 
         requiredFieldAttachments.add(RequiredFieldSupport.attach(descriptionLabel, descriptionField));
         requiredFieldAttachments.add(RequiredFieldSupport.attach(expenseTypeLabel, expenseTypeComboBox));
         requiredFieldAttachments.add(RequiredFieldSupport.attach(amountLabel, annualAmountField));
         var oneTime = javafx.beans.binding.Bindings.createBooleanBinding(
-                () -> expenseTypeComboBox.getValue() == ExpenseType.ONE_TIME,
+                () -> expenseTypeComboBox.getValue() == ExpenseType.ONE_TIME || expenseTypeComboBox.getValue() == ExpenseType.CONTRACTUAL_INSURANCE_PREMIUM,
                 expenseTypeComboBox.valueProperty());
         requiredFieldAttachments.add(RequiredFieldSupport.attach(effectiveDateLabel, effectiveDatePicker, oneTime));
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(insuredLabel, insuredField, javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> expenseTypeComboBox.getValue() == ExpenseType.CONTRACTUAL_INSURANCE_PREMIUM, expenseTypeComboBox.valueProperty())));
+        InputHelp.install(insuredField,"Only this named person's life controls premium termination. A modeled death is January 1 of the selected year; no premium is due that year. This does not create a death benefit.");
 
         InputHelp.install(expenseTypeComboBox, "Recurring expenses repeat in active calendar years. One Time records a purchase in its purchase year, uses General Inflation, and is not reduced by the post-death expense factor.");
         InputHelp.install(annualAmountField, "Dollars in the projection's opening-year spending base: annual spending for Recurring, or the single purchase amount for One Time. Later-starting expenses use that same base. Inflation applies only under the selected escalation policy.");
@@ -305,11 +358,21 @@ public class ExpenseDialog extends Dialog<Expense> {
                     + "this editor uses General inflation and the purchase is not repeated annually.");
         }
 
+        if (!guidedCreation && (household != null || expense != null && expense.isContractualInsurancePremium())) {
+            var scroll = new ScrollPane(grid);
+            scroll.setFitToWidth(true); scroll.setPrefViewportHeight(440);
+            getDialogPane().setContent(scroll);
+            getDialogPane().setPrefWidth(610);
+            setResizable(true);
+        }
+        updateExpenseTypeControls(expenseTypeComboBox.getValue());
+
     }
 
     private boolean validateAndBuildExpense() {
 
         try {
+            validationMessage.setText("");
 
             String description =
                     descriptionField
@@ -332,6 +395,11 @@ public class ExpenseDialog extends Dialog<Expense> {
 
             LocalDate effectiveDate =
                     effectiveDatePicker.getValue();
+            if (expenseTypeComboBox.getValue() == ExpenseType.CONTRACTUAL_INSURANCE_PREMIUM) {
+                try { effectiveDatePicker.commitValue(); endDatePicker.commitValue(); }
+                catch (java.time.format.DateTimeParseException invalid) { showValidationError("Enter valid premium dates using the calendar format."); return false; }
+                effectiveDate = effectiveDatePicker.getValue();
+            }
 
             LocalDate endDate;
 
@@ -393,7 +461,9 @@ public class ExpenseDialog extends Dialog<Expense> {
                             growthCategory,
                             effectiveDate,
                             endDate,
-                            expenseTypeComboBox.getValue(), volatility);
+                            expenseTypeComboBox.getValue(), volatility,
+                            expenseTypeComboBox.getValue() == ExpenseType.CONTRACTUAL_INSURANCE_PREMIUM
+                                    ? new ContractualPremiumPolicy(ContractualPremiumPolicy.Model.INSURED_ALIVE_FIXED_NOMINAL_MONTHS_V1,insuredField.getValue()) : null);
             return true;
 
         }
@@ -402,6 +472,10 @@ public class ExpenseDialog extends Dialog<Expense> {
             showValidationError(
                     "Please enter a valid amount.");
 
+            return false;
+        }
+        catch (IllegalArgumentException | NullPointerException ex) {
+            showValidationError(ex.getMessage() == null ? "Complete the required premium fields." : ex.getMessage());
             return false;
         }
     }
@@ -413,19 +487,7 @@ public class ExpenseDialog extends Dialog<Expense> {
             throw new IllegalArgumentException(message);
         }
 
-        Alert alert =
-                new Alert(Alert.AlertType.ERROR);
-
-        alert.setTitle(
-                "Invalid Expense");
-
-        alert.setHeaderText(
-                "Unable to save expense");
-
-        alert.setContentText(
-                message);
-
-        alert.showAndWait();
+        validationMessage.setText(message);
     }
 
     private void updateExpenseTypeControls(
@@ -433,6 +495,11 @@ public class ExpenseDialog extends Dialog<Expense> {
 
         boolean oneTime =
                 expenseType == ExpenseType.ONE_TIME;
+        boolean premium = expenseType == ExpenseType.CONTRACTUAL_INSURANCE_PREMIUM;
+        insuredLabel.setVisible(premium); insuredLabel.setManaged(premium);
+        insuredField.setVisible(premium); insuredField.setManaged(premium);
+        premiumNotice.setVisible(premium); premiumNotice.setManaged(premium);
+        if (premium) growthCategoryComboBox.setValue(GrowthCategory.NONE);
 
         amountLabel.setMinWidth(130);
 
@@ -444,7 +511,17 @@ public class ExpenseDialog extends Dialog<Expense> {
         effectiveDateLabel.setText(
                 oneTime
                         ? "Purchase Date:"
-                        : "Effective Date:");
+                        : premium ? "Premium Start Date:" : "Effective Date:");
+        endDateLabel.setText(premium ? "Premium End Date:" : "End Date:");
+        InputHelp.install(annualAmountField, premium
+                ? "Annualized fixed nominal premium rate in dollars. Each eligible calendar month counts once, including a partial month; a full year uses the full annual rate. This is not a carrier billing schedule."
+                : "Dollars in the projection's opening-year spending base: annual spending for Recurring, or the single purchase amount for One Time. Later-starting expenses use that same base. Inflation applies only under the selected escalation policy.");
+        InputHelp.install(effectiveDatePicker, premium
+                ? "Required first eligible premium date. Payments begin no earlier than the projection opening. Partial eligible months count as whole months."
+                : "First active date for recurring spending; blank means no start restriction. For a one-time expense, a purchase date is required. Recurring expenses are included by calendar-year overlap, with opening-year proration from the projection start.");
+        InputHelp.install(endDatePicker, premium
+                ? "Optional inclusive last premium payment date, independent of any separately configured death benefit's coverage. A partial eligible final month counts as a whole month."
+                : "Optional last active date for a recurring expense; blank means no scheduled end. A calendar year is included when the expense overlaps it. One-time expenses instead use their purchase date.");
 
         /*
          * One-time expenses use a single purchase date.
@@ -465,17 +542,22 @@ public class ExpenseDialog extends Dialog<Expense> {
 
         growthCategoryLabel.setVisible(!oneTime);
         growthCategoryLabel.setManaged(!oneTime);
+        growthCategoryComboBox.setDisable(premium);
 
         growthCategoryComboBox.setVisible(!oneTime);
         growthCategoryComboBox.setManaged(!oneTime);
+        if (premium) { growthCategoryComboBox.setVisible(false); growthCategoryComboBox.setManaged(false); }
+        fixedPremiumEscalation.setVisible(premium); fixedPremiumEscalation.setManaged(premium);
+        var save=getDialogPane().lookupButton(ButtonType.OK);
+        if (save instanceof Button button) button.setText(premium ? "Save" : "OK");
         if (oneTime && !volatilityField.getText().equals("0")) {
             volatilityField.setText("0");
             volatilityNotice.setText("Annual expense volatility was cleared: one-time expenses do not support it.");
         }
-        volatilityLabel.setVisible(!oneTime);
-        volatilityLabel.setManaged(!oneTime);
-        volatilityField.setVisible(!oneTime);
-        volatilityField.setManaged(!oneTime);
+        volatilityLabel.setVisible(!oneTime && !premium);
+        volatilityLabel.setManaged(!oneTime && !premium);
+        volatilityField.setVisible(!oneTime && !premium);
+        volatilityField.setManaged(!oneTime && !premium);
         updateVolatilityAvailability();
     }
 

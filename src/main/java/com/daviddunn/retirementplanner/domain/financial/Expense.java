@@ -13,6 +13,14 @@ import java.util.Objects;
 @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = ExpenseDeserializer.class)
 public class Expense {
 
+    private final ContractualPremiumPolicy contractualPremium;
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public ContractualPremiumPolicy getContractualPremium() { return contractualPremium; }
+
+    @JsonIgnore
+    public boolean isContractualInsurancePremium() { return expenseType == ExpenseType.CONTRACTUAL_INSURANCE_PREMIUM; }
+
     private final BigDecimal annualExpenseVolatility;
 
     private final String description;
@@ -81,6 +89,13 @@ public class Expense {
     public Expense(String description, BigDecimal annualAmount, GrowthCategory growthCategory,
             LocalDate startDate, LocalDate endDate, ExpenseType expenseType, BigDecimal annualExpenseVolatility) {
 
+        this(description, annualAmount, growthCategory, startDate, endDate, expenseType, annualExpenseVolatility, null);
+    }
+
+    public Expense(String description, BigDecimal annualAmount, GrowthCategory growthCategory,
+            LocalDate startDate, LocalDate endDate, ExpenseType expenseType, BigDecimal annualExpenseVolatility,
+            ContractualPremiumPolicy contractualPremium) {
+
         this.description =
                 Objects.requireNonNull(
                         description,
@@ -105,6 +120,25 @@ public class Expense {
                         ? ExpenseType.RECURRING
                         : expenseType;
 
+        this.contractualPremium = contractualPremium;
+        if (isContractualInsurancePremium()) {
+            Objects.requireNonNull(contractualPremium, "Contractual premium policy is required.");
+            Objects.requireNonNull(startDate, "Premium commencement date is required.");
+            if (description.isBlank() || description.length() > 128 || description.chars().anyMatch(Character::isISOControl))
+                throw new IllegalArgumentException("Premium description must contain 1–128 printable characters.");
+            if (annualAmount.signum() < 0 || annualAmount.precision() > 24 || annualAmount.scale() < -12
+                    || annualAmount.scale() > 8 || annualAmount.compareTo(new BigDecimal("1000000000000")) > 0)
+                throw new IllegalArgumentException("Premium amount must be nonnegative, at most 1 trillion, with up to eight decimal places.");
+            if (this.growthCategory != GrowthCategory.NONE
+                    || annualExpenseVolatility != null && annualExpenseVolatility.signum() != 0)
+                throw new IllegalArgumentException("Contractual premiums require fixed nominal escalation and zero volatility.");
+            for (LocalDate date : new LocalDate[]{startDate, endDate})
+                if (date != null && (date.getYear() < 1000 || date.getYear() > 9999))
+                    throw new IllegalArgumentException("Premium dates must be within years 1000–9999.");
+        } else if (contractualPremium != null) {
+            throw new IllegalArgumentException("A premium policy requires the contractual insurance premium expense type.");
+        }
+
         if (annualExpenseVolatility != null && (annualExpenseVolatility.signum() < 0
                 || annualExpenseVolatility.compareTo(BigDecimal.ONE) > 0)) {
             throw new IllegalArgumentException("Annual expense volatility must be between 0% and 100%.");
@@ -117,7 +151,7 @@ public class Expense {
         }
 
         if (this.growthCategory == GrowthCategory.NONE
-                && this.expenseType != ExpenseType.RECURRING) {
+                && this.expenseType != ExpenseType.RECURRING && !isContractualInsurancePremium()) {
             throw new IllegalArgumentException("No Inflation is supported only for recurring expenses.");
         }
 

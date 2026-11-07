@@ -17,6 +17,7 @@ public final class ConditionalBenefitDisclosures {
 
     public static List<String> lines(RetirementPlan plan, String side) {
         var lines = new ArrayList<String>();
+        lines.addAll(ContractualPremiumDisclosures.lines(plan.getHousehold(), side));
         lines.add(side + ": " + (plan.getConditionalBenefits().isEmpty()
                 ? "no conditional benefits configured." : "conditional benefits configured."));
         for (var b : plan.getConditionalBenefits()) {

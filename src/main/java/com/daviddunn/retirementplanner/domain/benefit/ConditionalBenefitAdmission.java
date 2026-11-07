@@ -12,7 +12,7 @@ public final class ConditionalBenefitAdmission {
         private UnsupportedExecutionException(String message) { super(message); }
     }
     public static void requireSupported(RetirementPlan plan) {
-        if (!Objects.requireNonNull(plan).getConditionalBenefits().isEmpty()) throw new UnsupportedExecutionException();
+        if (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(Objects.requireNonNull(plan))) throw new UnsupportedExecutionException();
     }
 
     public static void requireDeterministicSupported(RetirementPlan plan) {
@@ -28,7 +28,7 @@ public final class ConditionalBenefitAdmission {
     }
 
     public static void requireOptimizationSupported(RetirementPlan plan) {
-        if (!Objects.requireNonNull(plan).getConditionalBenefits().isEmpty())
+        if (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(Objects.requireNonNull(plan)))
             throw new UnsupportedExecutionException("Conditional benefits require independent full scenario evaluation. "
                     + "Prefix and strategy-equivalence reuse have not been verified for these inputs.");
     }

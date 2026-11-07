@@ -10,7 +10,8 @@ final class FrozenConditionalBenefitDetails {
         var lines = sections.stream().flatMap(s -> s.lines().stream())
                 .filter(s -> s.contains("Conditional benefit assumptions") || s.contains("conditional benefits configured")
                         || s.contains("fully taxable ordinary non-pension") || s.contains("Configured benefits are conditional")
-                        || s.contains("life insurance") || s.contains("qualification assertion") || s.contains("Future investment earnings"))
+                        || s.contains("life insurance") || s.contains("qualification assertion") || s.contains("Future investment earnings")
+                        || s.contains("Contractual insurance premium"))
                 .toList();
         return lines.isEmpty() ? "" : "\n\nOriginal conditional benefit assumptions\n" + String.join("\n", lines);
     }

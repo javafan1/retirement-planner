@@ -93,6 +93,9 @@ public class Household {
     }
 
     public void validatePersonReferences() {
+        if (expenses.size() > 1000 && expenses.stream().anyMatch(Expense::isContractualInsurancePremium))
+            throw new IllegalArgumentException("The expense occurrence limit is 1000 for premium-bearing plans.");
+        for (var expense : expenses) validatePremium(expense);
         if (!hasSpouse()) {
             primaryPerson.getAccounts().forEach(account ->
                     validateOwnership(account.getOwnership(), "account " + account.getName()));
@@ -110,7 +113,17 @@ public class Household {
     }
 
     public void addExpense(Expense expense) {
+        validatePremium(Objects.requireNonNull(expense));
+        if (expenses.size() >= 1000 && (expense.isContractualInsurancePremium()
+                || expenses.stream().anyMatch(Expense::isContractualInsurancePremium)))
+            throw new IllegalArgumentException("The expense occurrence limit is 1000 for premium-bearing plans.");
         expenses.add(Objects.requireNonNull(expense));
+    }
+
+    private void validatePremium(Expense expense) {
+        if (expense.isContractualInsurancePremium() && !hasSpouse()
+                && expense.getContractualPremium().insured() == com.daviddunn.retirementplanner.domain.financial.ContractualPremiumPolicy.Insured.SPOUSE)
+            throw new IllegalArgumentException("The premium insured references an absent spouse.");
     }
 
     public void removeExpense(Expense expense) {
@@ -125,6 +138,7 @@ public class Household {
 
         Objects.requireNonNull(oldExpense);
         Objects.requireNonNull(newExpense);
+        validatePremium(newExpense);
 
         int index =
                 expenses.indexOf(oldExpense);

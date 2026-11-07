@@ -43,11 +43,15 @@ public final class ProjectionExpensePath {
 
     /** Exact binding values, not a new fingerprint or sampling identity. */
     public record FinancialDefinition(ExpenseType type, BigDecimal amount, LocalDate start,
-            LocalDate end, GrowthCategory escalation) {
+            LocalDate end, GrowthCategory escalation,
+            com.daviddunn.retirementplanner.domain.financial.ContractualPremiumPolicy premium) {
+        public FinancialDefinition(ExpenseType type, BigDecimal amount, LocalDate start, LocalDate end, GrowthCategory escalation) {
+            this(type, amount, start, end, escalation, null);
+        }
         public static FinancialDefinition capture(Expense expense) {
             Objects.requireNonNull(expense);
             return new FinancialDefinition(expense.getExpenseType(), expense.getAnnualAmount(),
-                    expense.getStartDate(), expense.getEndDate(), expense.getGrowthCategory());
+                    expense.getStartDate(), expense.getEndDate(), expense.getGrowthCategory(), expense.getContractualPremium());
         }
     }
 

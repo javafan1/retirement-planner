@@ -69,7 +69,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(a);
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(b);
         com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution = null;
-        if (!a.getConditionalBenefits().isEmpty() || !b.getConditionalBenefits().isEmpty()) {
+        if (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(a) || com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(b)) {
             if (supplied != null || expensesA != null || expensesB != null)
                 throw new UnsupportedOperationException("Conditional-benefit comparison requires supported generated worlds; supplied paths or expense overrides are not supported.");
             var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.valueOf(

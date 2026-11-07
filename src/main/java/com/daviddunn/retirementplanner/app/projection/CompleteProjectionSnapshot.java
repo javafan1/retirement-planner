@@ -39,6 +39,7 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
             throw new IllegalArgumentException("Incomplete or oversized projection context.");
         if (!digest(inputsDocument).equals(inputDigest)) throw new IllegalArgumentException("Projection input digest mismatch.");
         ConditionalBenefitExecutionSemantics.validate(inputsDocument,annual,provenance);
+        ContractualPremiumExecutionSemantics.validate(inputsDocument,annual,provenance);
         for (int i = 0; i < annual.years().size(); i++) {
             if (nonInvestable.get(i).year() != annual.years().get(i).year()
                     || (i > 0 && annual.years().get(i).year() != annual.years().get(i - 1).year() + 1))

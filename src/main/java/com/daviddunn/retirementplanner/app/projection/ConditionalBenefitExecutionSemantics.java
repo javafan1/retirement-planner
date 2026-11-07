@@ -20,6 +20,7 @@ public final class ConditionalBenefitExecutionSemantics {
 
     /** New completion only: compare recorded receipts with authoritative selection before accepting. */
     public static String completed(RetirementPlan frozenPlan, String inputs, RetainedProjectionSnapshot annual, String legacyProvenance) {
+        legacyProvenance = ContractualPremiumExecutionSemantics.completed(frozenPlan, inputs, annual, legacyProvenance);
         if (frozenPlan.getConditionalBenefits().isEmpty()) return legacyProvenance;
         ConditionalBenefitAdmission.requireDeterministicSupported(frozenPlan);
         var deaths = EffectiveHouseholdDeathView.resolve(frozenPlan.getHousehold(), frozenPlan.getPlanningAssumptions().getDeathScenarioAssumptions(), Optional.empty());

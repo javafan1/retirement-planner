@@ -412,7 +412,7 @@ public final class MonteCarloAnalyzer {
 
     private static com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitCapability(
             RetirementPlan plan, String mode, boolean supplied) {
-        if (plan.getConditionalBenefits().isEmpty()) return null;
+        if (!com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan)) return null;
         if (supplied) throw new UnsupportedOperationException("Conditional benefits require supported generated Monte Carlo worlds; supplied paths or expense overrides are not supported.");
         var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.valueOf(
                 (plan.getHousehold().hasSpouse() ? "COUPLE" : "INDIVIDUAL") + "_MONTE_CARLO_" + mode);

@@ -11,7 +11,8 @@ import java.util.*;
 public final class MonteCarloFingerprintService {
     /** Legacy V1, read-only numeric V2, enabled standalone V3 and enabled ordered comparison V4. */
     public enum Contract { EXACT_V1, TEMPORARY_NUMERIC_V2, EXPENSE_MODEL_V3, PAIRED_EXPENSE_V4,
-        BENEFITS_STANDALONE_V5, PAIRED_BENEFITS_V6, LIFE_PRINCIPAL_STANDALONE_V7, PAIRED_LIFE_PRINCIPAL_V8 }
+        BENEFITS_STANDALONE_V5, PAIRED_BENEFITS_V6, LIFE_PRINCIPAL_STANDALONE_V7, PAIRED_LIFE_PRINCIPAL_V8,
+        PREMIUM_STANDALONE_V9, PAIRED_PREMIUM_V10 }
     public record Inputs(AnalysisKind kind, MonteCarloSnapshot.Settings settings, MonteCarloSnapshot.Request request,
             String suppliedWorldFingerprint) {
         public Inputs(AnalysisKind kind, MonteCarloSnapshot.Settings settings, MonteCarloSnapshot.Request request) {
@@ -60,9 +61,9 @@ public final class MonteCarloFingerprintService {
 
     public Contract acceptanceContract(Inputs inputs) {
         if (inputs == null || inputs.request() == null) return Contract.EXACT_V1;
-        boolean benefits = !MonteCarloPlanDocument.read(inputs.request().planA()).getConditionalBenefits().isEmpty()
+        boolean benefits = com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(MonteCarloPlanDocument.read(inputs.request().planA()))
                 || inputs.request().planB() != null
-                    && !MonteCarloPlanDocument.read(inputs.request().planB()).getConditionalBenefits().isEmpty();
+                    && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(MonteCarloPlanDocument.read(inputs.request().planB()));
         if (benefits) {
             var capability = ConditionalBenefitAnalysisExecution.capture(inputs.kind(), inputs.request().planA(), inputs.request().planB());
             return benefitContract(capability, inputs.request().planB() != null);
@@ -93,14 +94,18 @@ public final class MonteCarloFingerprintService {
             boolean sampled = inputs.request().mortality() != null;
             boolean paired = inputs.request().planB() != null;
             boolean principal = contract == Contract.LIFE_PRINCIPAL_STANDALONE_V7 || contract == Contract.PAIRED_LIFE_PRINCIPAL_V8;
-            boolean benefits = principal || contract == Contract.BENEFITS_STANDALONE_V5 || contract == Contract.PAIRED_BENEFITS_V6;
+            boolean premiums = contract == Contract.PREMIUM_STANDALONE_V9 || contract == Contract.PAIRED_PREMIUM_V10;
+            boolean premiumInputs = com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(inputs.request().planA()))
+                    || inputs.request().planB() != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(inputs.request().planB()));
+            if (premiums != premiumInputs) throw new IllegalArgumentException("Contractual premiums require their explicit fingerprint contract.");
+            boolean benefits = premiums || principal || contract == Contract.BENEFITS_STANDALONE_V5 || contract == Contract.PAIRED_BENEFITS_V6;
             if (benefits) {
-                if (paired != (contract == Contract.PAIRED_BENEFITS_V6 || contract == Contract.PAIRED_LIFE_PRINCIPAL_V8) || inputs.suppliedWorldFingerprint() != null)
+                if (paired != (contract == Contract.PAIRED_PREMIUM_V10 || contract == Contract.PAIRED_BENEFITS_V6 || contract == Contract.PAIRED_LIFE_PRINCIPAL_V8) || inputs.suppliedWorldFingerprint() != null)
                     throw new IllegalArgumentException("Conditional-benefit fingerprint requires generated matching-family inputs.");
                 var capability = ConditionalBenefitAnalysisExecution.capture(inputs.kind(), inputs.request().planA(), inputs.request().planB());
-                if (principal != capability.excludesLifePrincipal())
+                if (premiums != capability.includesPremiums() || !premiums && principal != capability.excludesLifePrincipal())
                     throw new IllegalArgumentException("Conditional tax capability does not match the fingerprint contract.");
-                node.put("version", principal ? paired ? 8 : 7 : paired ? 6 : 5);
+                node.put("version", premiums ? paired ? 10 : 9 : principal ? paired ? 8 : 7 : paired ? 6 : 5);
                 var model = node.putObject("conditionalBenefitsExecution");
                 model.put("model", capability.model());
                 model.put("protocol", capability.scenarioProtocol());
@@ -187,6 +192,7 @@ public final class MonteCarloFingerprintService {
     }
 
     private static Contract benefitContract(ConditionalBenefitAnalysisExecution capability, boolean paired) {
+        if (capability.includesPremiums()) return paired ? Contract.PAIRED_PREMIUM_V10 : Contract.PREMIUM_STANDALONE_V9;
         return capability.excludesLifePrincipal() ? paired ? Contract.PAIRED_LIFE_PRINCIPAL_V8 : Contract.LIFE_PRINCIPAL_STANDALONE_V7
                 : paired ? Contract.PAIRED_BENEFITS_V6 : Contract.BENEFITS_STANDALONE_V5;
     }
@@ -220,7 +226,9 @@ public final class MonteCarloFingerprintService {
                 historical.fingerprint().equals(next.fingerprint()) && historical.contextFingerprint().equals(next.contextFingerprint())
                         ? AnalysisCompatibilityPolicy.State.CURRENT : AnalysisCompatibilityPolicy.State.OUTDATED,
                 historical.fingerprint().equals(next.fingerprint()) && historical.contextFingerprint().equals(next.contextFingerprint())
-                        ? frozen.benefitExecution() != null && frozen.benefitExecution().excludesLifePrincipal()
+                        ? frozen.benefitExecution() != null && frozen.benefitExecution().includesPremiums()
+                                ? "Saved results match current effective inputs (contractual premium contract v" + frozen.fingerprintVersion() + ")."
+                                : frozen.benefitExecution() != null && frozen.benefitExecution().excludesLifePrincipal()
                                 ? "Saved results match current effective inputs (life insurance principal contract v" + frozen.fingerprintVersion() + ")."
                                 : !frozen.hasExpenseExecution() ? "Saved results match current effective inputs (temporary numeric compatibility v2)."
                                 : "Saved results match current effective inputs (stochastic expense contract v" + frozen.fingerprintVersion() + ")."
@@ -235,6 +243,7 @@ public final class MonteCarloFingerprintService {
         node.remove(List.of("planId", "baseline", "analyzerConfigurations", "projectionState"));
         if (node.hasNonNull("conditionalBenefits") && !node.get("conditionalBenefits").isEmpty()) MonteCarloPlanDocument.read(document);
         com.daviddunn.retirementplanner.app.projection.ConditionalBenefitFinancialInputs.normalize(node);
+        com.daviddunn.retirementplanner.app.projection.DeterministicExpenseInputs.normalizePremiums(node);
         removeNames(node);
         var assumptions = (ObjectNode) node.get("planningAssumptions");
         if (sampled || alternative) move(assumptions, "projectionLengthYears", context);

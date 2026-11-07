@@ -33,7 +33,7 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
                 contextFingerprint, algorithms, references, payload, context, association, benefitExecution);
     }
     public AcceptedAnalysisCompletion withConditionalBenefits(com.daviddunn.retirementplanner.domain.model.RetirementPlan frozenPlan) {
-        if (frozenPlan.getConditionalBenefits().isEmpty()) return this;
+        if (!com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(frozenPlan)) return this;
         if (kind.isMonteCarlo()) throw new IllegalArgumentException("Monte Carlo benefits require their payload capability.");
         var capability = ConditionalBenefitAnalysisExecution.capture(kind, frozenPlan);
         var versions = new TreeMap<>(AnalysisVersions.calculatedAlgorithms(kind, payload));
