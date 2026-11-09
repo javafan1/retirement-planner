@@ -8,6 +8,10 @@ public final class ConditionalBenefits {
     public static final int MAX_DEFINITIONS = 100;
     private ConditionalBenefits() { }
 
+    public static boolean hasAnnuity(List<ConditionalBenefitDefinition> values) {
+        return values.stream().anyMatch(value -> value.annuityTerms() != null);
+    }
+
     public static boolean hasExcludedPrincipal(List<ConditionalBenefitDefinition> values) {
         return values.stream().anyMatch(ConditionalBenefitDefinition::excludesLifePrincipal);
     }

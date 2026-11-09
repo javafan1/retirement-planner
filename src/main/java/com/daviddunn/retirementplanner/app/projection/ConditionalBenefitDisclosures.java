@@ -14,9 +14,17 @@ public final class ConditionalBenefitDisclosures {
             + "reportable policy sale, employer-owned contract, or unresolved special ownership, assignment or business-purpose exception. "
             + "This is my planning assertion, not a legal determination by Aledrix.";
     private ConditionalBenefitDisclosures() { }
+    public static final String ANNUITY_SCOPE = "Already purchased nonqualified after-tax single-life quotation; recipient is annuitant. "
+            + "Documented General Rule fixed excluded dollars, limited by verified opening remaining investment; later payments fully taxable after exhaustion. "
+            + "No separate liquid asset, purchase, survivor/refund payment or final-return basis deduction. Domestic standard-deduction NIIT subset; "
+            + "no special MAGI adjustments, deductible investment expenses or carryovers. NIIT applies to admitted modeled investment income, separate from Medicare. "
+            + "Unclassified nonqualified cash/retained-asset growth is rejected in annuity-enabled execution; qualified-account growth remains supported. "
+            + "Future taxable earnings are not excluded basis recovery.";
 
     public static List<String> lines(RetirementPlan plan, String side) {
         var lines = new ArrayList<String>();
+        if (plan.getFinancialCalculationMode() != null)
+            lines.add(side + " — Financial Calculation Mode: " + plan.getFinancialCalculationMode().label() + ". " + plan.getFinancialCalculationMode().disclosure());
         lines.addAll(ContractualPremiumDisclosures.lines(plan.getHousehold(), side));
         lines.add(side + ": " + (plan.getConditionalBenefits().isEmpty()
                 ? "no conditional benefits configured." : "conditional benefits configured."));
@@ -39,10 +47,21 @@ public final class ConditionalBenefitDisclosures {
             if (b.paymentPattern() == ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING)
                 text.append("; annual escalation ").append(b.annualEscalationRate().movePointRight(2)
                         .stripTrailingZeros().toPlainString()).append("% from first eligible payment year");
-            text.append(b.excludesLifePrincipal()
+            text.append(b.annuityTerms() != null ? "; nonqualified General Rule finite investment recovery; household retained nonqualified cash."
+                    : b.excludesLifePrincipal()
                     ? "; qualifying personal life insurance death principal; federally excluded; household retained nonqualified cash; qualification PERSONAL_LIFE_PRINCIPAL_ONLY_V1."
                     : "; fully taxable ordinary non-pension income; household retained nonqualified cash.");
             lines.add(text.toString());
+            if (b.annuityTerms() != null) {
+                var a = b.annuityTerms();
+                lines.add(side + " — Original annuity tax facts: excluded per full payment " + a.excludedPerPayment().toPlainString()
+                        + "; original adjusted investment " + a.originalInvestment().toPlainString() + "; opening remaining investment "
+                        + a.openingInvestment().toPlainString() + " as of " + a.basisAsOf() + "; tax annuity starting date "
+                        + a.taxAnnuityStartingDate() + "; acquired " + a.acquisitionDate() + "; qualification " + a.qualification() + ".");
+                lines.add(side + " — " + (plan.getFinancialCalculationMode() == com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.BASIC
+                        ? "Already purchased nonqualified after-tax fixed single-life annuity. Finite documented investment recovery; no separate liquid asset, purchase or survivor/refund. NIIT Not Modeled. Projected federal taxes omit NIIT; future investment earnings are not excluded basis recovery."
+                        : ANNUITY_SCOPE));
+            }
             if (b.excludesLifePrincipal()) {
                 lines.add(side + " — " + LIFE_PRINCIPAL_SCOPE);
                 lines.add(side + " — Original qualification assertion: " + LIFE_QUALIFICATION);

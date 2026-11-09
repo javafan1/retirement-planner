@@ -23,7 +23,19 @@ public record ConditionalBenefitDefinition(
         BigDecimal annualEscalationRate, EscalationOrigin escalationOrigin,
         TaxCharacter taxCharacter, ReceiptDestination destination,
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-        LifeInsuranceQualification lifeInsuranceQualification) {
+        LifeInsuranceQualification lifeInsuranceQualification,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        NonqualifiedAnnuityTerms annuityTerms) {
+
+    public ConditionalBenefitDefinition(UUID id, String label, Category category, Trigger trigger,
+            PersonReference recipient, PaymentPattern paymentPattern, BigDecimal grossAmount,
+            LocalDate notBefore, LocalDate endDate, LocalDate coverageStart, LocalDate coverageEnd,
+            BigDecimal annualEscalationRate, EscalationOrigin escalationOrigin, TaxCharacter taxCharacter,
+            ReceiptDestination destination, LifeInsuranceQualification lifeInsuranceQualification) {
+        this(id, label, category, trigger, recipient, paymentPattern, grossAmount, notBefore, endDate,
+                coverageStart, coverageEnd, annualEscalationRate, escalationOrigin, taxCharacter, destination,
+                lifeInsuranceQualification, null);
+    }
 
     /** Legacy taxable definitions retain their exact original wire shape and constructor. */
     public ConditionalBenefitDefinition(UUID id, String label, Category category, Trigger trigger,
@@ -38,12 +50,12 @@ public record ConditionalBenefitDefinition(
     public static final int MAX_LABEL_LENGTH = 128;
     public static final BigDecimal MAX_AMOUNT = new BigDecimal("1000000000000");
     public enum PersonReference { PRIMARY, SPOUSE }
-    public enum Category { CONDITIONAL_INCOME, DEATH_BENEFIT }
+    public enum Category { CONDITIONAL_INCOME, DEATH_BENEFIT, NONQUALIFIED_INCOME_ANNUITY }
     public enum PaymentPattern { MONTHLY_RECURRING, ONE_TIME_LUMP_SUM }
     public enum TriggerType { FIXED_DATE, AGE, DEATH }
     public enum EscalationOrigin { FIRST_ELIGIBLE_PAYMENT_YEAR }
     public enum TaxCharacter { FULLY_TAXABLE_ORDINARY_NON_PENSION,
-        QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED }
+        QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED, NONQUALIFIED_GENERAL_RULE_FIXED_EXCLUSION }
     /**
      * User affirms ordinary personal death-benefit principal only, with no settlement interest,
      * known transfer-for-value limitation, reportable policy sale, employer-owned contract or
@@ -113,6 +125,21 @@ public record ConditionalBenefitDefinition(
         Objects.requireNonNull(escalationOrigin, "Escalation origin is required.");
         Objects.requireNonNull(taxCharacter, "Tax character is required.");
         Objects.requireNonNull(destination, "Receipt destination is required.");
+        if (isAnnuity(category, taxCharacter)) {
+            Objects.requireNonNull(annuityTerms, "Documented annuity tax and opening investment facts are required.");
+            NonqualifiedAnnuityTerms.money(grossAmount);
+            if (trigger.type() != TriggerType.FIXED_DATE || trigger.date().getDayOfMonth() != 1
+                    || paymentPattern != PaymentPattern.MONTHLY_RECURRING || annualEscalationRate.signum() != 0
+                    || notBefore != null || endDate != null || coverageStart != null || coverageEnd != null
+                    || annuityTerms.excludedPerPayment().compareTo(grossAmount) > 0
+                    || !trigger.date().isBefore(annuityTerms.basisAsOf())
+                        && annuityTerms.openingInvestment().compareTo(annuityTerms.originalInvestment()) != 0
+                    || annuityTerms.openingInvestment().signum() > 0 && annuityTerms.excludedPerPayment().signum() == 0
+                    || trigger.date().isBefore(annuityTerms.taxAnnuityStartingDate()))
+                throw new IllegalArgumentException("Supported annuities require fixed full monthly payments, month-aligned commencement, no escalation/guarantee and a valid documented split.");
+        } else if (annuityTerms != null) {
+            throw new IllegalArgumentException("Annuity facts require the nonqualified annuity category and tax method.");
+        }
         if (taxCharacter == TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED) {
             if (category != Category.DEATH_BENEFIT || paymentPattern != PaymentPattern.ONE_TIME_LUMP_SUM
                     || trigger.type() != TriggerType.DEATH || trigger.person() == recipient
@@ -149,6 +176,18 @@ public record ConditionalBenefitDefinition(
         validatePerson(household, recipient);
         validatePerson(household, trigger.person());
         trigger.fixedOrAgeDate(household).ifPresent(date -> validateTiming(date, notBefore, endDate, coverageStart, coverageEnd));
+        if (annuityTerms != null) {
+            var person = recipient == PersonReference.PRIMARY ? household.getPrimaryPerson() : household.getSpouse();
+            if (person.getBirthDate().plusYears(59).plusMonths(6).isAfter(trigger.date()))
+                throw new IllegalArgumentException("This annuity subset does not model early-distribution penalties; commencement must be at age 59½ or later.");
+        }
+    }
+
+    private static boolean isAnnuity(Category category, TaxCharacter tax) {
+        boolean categoryAnnuity = category == Category.NONQUALIFIED_INCOME_ANNUITY;
+        if (categoryAnnuity != (tax == TaxCharacter.NONQUALIFIED_GENERAL_RULE_FIXED_EXCLUSION))
+            throw new IllegalArgumentException("Nonqualified annuities require their explicit General Rule tax classification.");
+        return categoryAnnuity;
     }
 
     public boolean referencesSpouse() {

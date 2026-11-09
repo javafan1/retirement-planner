@@ -62,7 +62,7 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
         // Benefit eligibility is scenario-specific. Preserve the independent reference path until
         // carrier/prefix/equivalence proofs explicitly include conditional receipt state.
-        if (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan)) {
+        if (plan.getFinancialCalculationMode() == com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.ADVANCED || com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan)) {
             optimize = false;
             continuations = false;
             parallel = false;

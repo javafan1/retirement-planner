@@ -116,7 +116,8 @@ public final class PennsylvaniaProductionTaxCalculator implements StateIncomeTax
                 }
                 case ORDINARY_RETIREMENT_WITHDRAWAL, RMD, OPENING_RMD, ROTH_CONVERSION ->
                         assessRetirement(request, source, reasons, explanations);
-                case OTHER, CONDITIONAL_RECURRING, CONDITIONAL_LUMP_SUM -> {
+                case FINANCIAL_CALCULATION_POLICY -> { }
+                case OTHER, CONDITIONAL_RECURRING, CONDITIONAL_LUMP_SUM, NONQUALIFIED_ANNUITY, NIIT_EVIDENCE -> {
                     reasons.add(StateTaxUnavailableReason.UNSUPPORTED_TRANSACTION_TYPE);
                     explanations.add("Unclassified income cannot establish a Pennsylvania taxable category.");
                 }

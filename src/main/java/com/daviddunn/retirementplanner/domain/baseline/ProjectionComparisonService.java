@@ -18,6 +18,8 @@ public class ProjectionComparisonService {
 
         Objects.requireNonNull(baselineProjection, "Baseline projection is required.");
         Objects.requireNonNull(currentProjection, "Current projection is required.");
+        if (!baselineProjection.isEmpty() && !currentProjection.isEmpty())
+            com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requireComparable(baselineProjection, currentProjection);
         Objects.requireNonNull(baselineNonInvestableAssets, "Baseline non-investable assets are required.");
         Objects.requireNonNull(currentNonInvestableAssets, "Current non-investable assets are required.");
 
@@ -32,7 +34,9 @@ public class ProjectionComparisonService {
                 baseline.peakAnnualTax(), current.peakAnnualTax(),
                 baseline.endingInvestableAssets(), current.endingInvestableAssets(),
                 baseline.netWorth(), current.netWorth(),
-                baseline.afterTaxEstate(), current.afterTaxEstate());
+                baseline.afterTaxEstate(), current.afterTaxEstate(),
+                currentProjection.getYears().stream().findFirst().stream().flatMap(y -> y.getIncomeSources().stream())
+                        .flatMap(s -> s.calculationMode().stream()).findFirst().orElse(null));
     }
 
     private SummaryMetrics calculate(

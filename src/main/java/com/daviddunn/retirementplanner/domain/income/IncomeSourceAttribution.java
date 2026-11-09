@@ -32,7 +32,26 @@ public record IncomeSourceAttribution(
         Optional<BigDecimal> modeledTaxableAmount,
         OptionalInt taxYear,
         Optional<PensionFacts> pension,
-        @com.fasterxml.jackson.annotation.JsonIgnore Optional<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt> conditionalBenefit) {
+        @com.fasterxml.jackson.annotation.JsonIgnore Optional<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt> conditionalBenefit,
+        @com.fasterxml.jackson.annotation.JsonIgnore Optional<com.daviddunn.retirementplanner.domain.tax.NetInvestmentIncomeTaxCalculation> niit,
+        @com.fasterxml.jackson.annotation.JsonIgnore Optional<com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode> calculationMode) {
+
+    public IncomeSourceAttribution(Kind kind, Purpose purpose, Optional<AccountOwnership> owner,
+            Optional<AccountReference> account, Optional<AccountReference> destination, String description,
+            BigDecimal grossAmount, Optional<BigDecimal> modeledTaxableAmount, OptionalInt taxYear,
+            Optional<PensionFacts> pension, Optional<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt> conditionalBenefit,
+            Optional<com.daviddunn.retirementplanner.domain.tax.NetInvestmentIncomeTaxCalculation> niit) {
+        this(kind, purpose, owner, account, destination, description, grossAmount, modeledTaxableAmount,
+                taxYear, pension, conditionalBenefit, niit, Optional.empty());
+    }
+
+    public IncomeSourceAttribution(Kind kind, Purpose purpose, Optional<AccountOwnership> owner,
+            Optional<AccountReference> account, Optional<AccountReference> destination, String description,
+            BigDecimal grossAmount, Optional<BigDecimal> modeledTaxableAmount, OptionalInt taxYear,
+            Optional<PensionFacts> pension, Optional<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt> conditionalBenefit) {
+        this(kind, purpose, owner, account, destination, description, grossAmount, modeledTaxableAmount, taxYear,
+                pension, conditionalBenefit, Optional.empty());
+    }
 
     public IncomeSourceAttribution(Kind kind, Purpose purpose, Optional<AccountOwnership> owner,
             Optional<AccountReference> account, Optional<AccountReference> destination, String description,
@@ -53,7 +72,10 @@ public record IncomeSourceAttribution(
         CAPITAL_GAIN,
         OTHER,
         CONDITIONAL_RECURRING,
-        CONDITIONAL_LUMP_SUM
+        CONDITIONAL_LUMP_SUM,
+        NONQUALIFIED_ANNUITY,
+        NIIT_EVIDENCE,
+        FINANCIAL_CALCULATION_POLICY
     }
 
     public enum Purpose {
@@ -81,12 +103,30 @@ public record IncomeSourceAttribution(
         Objects.requireNonNull(taxYear);
         Objects.requireNonNull(pension);
         Objects.requireNonNull(conditionalBenefit);
-        boolean conditionalKind = kind == Kind.CONDITIONAL_RECURRING || kind == Kind.CONDITIONAL_LUMP_SUM;
+        Objects.requireNonNull(niit);
+        Objects.requireNonNull(calculationMode);
+        if ((kind == Kind.FINANCIAL_CALCULATION_POLICY) != calculationMode.isPresent()
+                || calculationMode.isPresent() && (grossAmount.signum() != 0 || modeledTaxableAmount.isEmpty()
+                    || modeledTaxableAmount.get().signum() != 0 || owner.isPresent() || account.isPresent()
+                    || destination.isPresent() || pension.isPresent() || conditionalBenefit.isPresent()
+                    || niit.isPresent() || taxYear.isEmpty() || purpose != Purpose.INCOME))
+            throw new IllegalArgumentException("Invalid annual calculation policy evidence.");
+        calculationMode.ifPresent(mode -> {
+            if (!description.equals("Financial Calculation Mode: " + mode.label()))
+                throw new IllegalArgumentException("Calculation policy label does not match its mode.");
+        });
+        if ((kind == Kind.NIIT_EVIDENCE) != niit.isPresent()
+                || niit.isPresent() && (grossAmount.signum() != 0 || modeledTaxableAmount.isEmpty()
+                    || modeledTaxableAmount.get().signum() != 0 || account.isPresent() || owner.isPresent()
+                    || destination.isPresent() || pension.isPresent() || conditionalBenefit.isPresent() || taxYear.isEmpty() || purpose != Purpose.INCOME))
+            throw new IllegalArgumentException("Invalid NIIT annual evidence source.");
+        boolean conditionalKind = kind == Kind.CONDITIONAL_RECURRING || kind == Kind.CONDITIONAL_LUMP_SUM || kind == Kind.NONQUALIFIED_ANNUITY;
         if (conditionalKind != conditionalBenefit.isPresent())
             throw new IllegalArgumentException("Conditional income requires its exact receipt facts.");
         conditionalBenefit.ifPresent(receipt -> {
             boolean recurring = receipt.pattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING;
-            if (recurring != (kind == Kind.CONDITIONAL_RECURRING) || purpose != Purpose.INCOME || account.isPresent()
+            if (recurring != (kind == Kind.CONDITIONAL_RECURRING || kind == Kind.NONQUALIFIED_ANNUITY)
+                    || (kind == Kind.NONQUALIFIED_ANNUITY) != (receipt.annuityBasis() != null) || purpose != Purpose.INCOME || account.isPresent()
                     || destination.isPresent() || pension.isPresent() || !description.equals(receipt.label())
                     || owner.orElse(null) != com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitEvaluator.owner(receipt.recipient())
                     || !grossAmount.equals(receipt.gross()) || !modeledTaxableAmount.equals(Optional.of(receipt.taxable()))
@@ -115,15 +155,28 @@ public record IncomeSourceAttribution(
 
     public IncomeSourceAttribution inYear(int year) {
         return new IncomeSourceAttribution(kind, purpose, owner, account, destination,
-                description, grossAmount, modeledTaxableAmount, OptionalInt.of(year), pension, conditionalBenefit);
+                description, grossAmount, modeledTaxableAmount, OptionalInt.of(year), pension, conditionalBenefit, niit, calculationMode);
     }
 
     public static IncomeSourceAttribution conditional(com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt receipt) {
-        return new IncomeSourceAttribution(receipt.pattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING
+        return new IncomeSourceAttribution(receipt.annuityBasis() != null ? Kind.NONQUALIFIED_ANNUITY : receipt.pattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING
                 ? Kind.CONDITIONAL_RECURRING : Kind.CONDITIONAL_LUMP_SUM, Purpose.INCOME,
                 Optional.of(com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitEvaluator.owner(receipt.recipient())),
                 Optional.empty(), Optional.empty(), receipt.label(), receipt.gross(), Optional.of(receipt.taxable()),
                 OptionalInt.of(receipt.year()), Optional.empty(), Optional.of(receipt));
+    }
+
+    public static IncomeSourceAttribution niit(com.daviddunn.retirementplanner.domain.tax.NetInvestmentIncomeTaxCalculation calculation, int year) {
+        return new IncomeSourceAttribution(Kind.NIIT_EVIDENCE, Purpose.INCOME, Optional.empty(), Optional.empty(), Optional.empty(),
+                "Federal NIIT — domestic modeled investment income", BigDecimal.ZERO, Optional.of(BigDecimal.ZERO),
+                OptionalInt.of(year), Optional.empty(), Optional.empty(), Optional.of(calculation));
+    }
+
+    public static IncomeSourceAttribution calculationPolicy(com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode mode, int year) {
+        return new IncomeSourceAttribution(Kind.FINANCIAL_CALCULATION_POLICY, Purpose.INCOME,
+                Optional.empty(), Optional.empty(), Optional.empty(), "Financial Calculation Mode: " + mode.label(),
+                BigDecimal.ZERO, Optional.of(BigDecimal.ZERO), OptionalInt.of(year), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.of(mode));
     }
 
     public static IncomeSourceAttribution withdrawal(

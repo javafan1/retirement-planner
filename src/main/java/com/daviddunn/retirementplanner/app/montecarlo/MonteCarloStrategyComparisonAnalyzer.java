@@ -66,24 +66,28 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         Objects.requireNonNull(cancellation).throwIfCancellationRequested();
         var a = request.strategyA().copyForRun();
         var b = request.strategyB().copyForRun();
+        var originalA = MonteCarloPlanDocument.capture(a);
+        var originalB = MonteCarloPlanDocument.capture(b);
+        var commonMode = com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.comparisonMode(a,b);
+        if (commonMode != null) { a.setFinancialCalculationMode(commonMode); b.setFinancialCalculationMode(commonMode); }
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(a);
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(b);
         com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution = null;
-        if (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(a) || com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(b)) {
-            if (supplied != null || expensesA != null || expensesB != null)
-                throw new UnsupportedOperationException("Conditional-benefit comparison requires supported generated worlds; supplied paths or expense overrides are not supported.");
+        if (com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(a) || com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(b)) {
             var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.valueOf(
                     (a.getHousehold().hasSpouse() ? "COUPLE" : "INDIVIDUAL") + "_MONTE_CARLO_PAIRED_"
                             + (request.assumptions() instanceof MonteCarloStrategyComparisonRequest.Longevity ? "LONGEVITY" : "FIXED"));
             benefitExecution = com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution.capture(
-                    kind, MonteCarloPlanDocument.capture(a), MonteCarloPlanDocument.capture(b));
+                    kind, originalA, originalB);
+            if (expensesA != null || expensesB != null || supplied != null && !benefitExecution.supportsLegacyWorlds())
+                throw new UnsupportedOperationException("This financial comparison capability requires supported generated worlds; supplied paths or expense overrides are not supported.");
         }
         PairedExpenseExecution expenseExecution = null;
         if (expensesA == null && expensesB == null && (ExpenseExecution.configured(a) || ExpenseExecution.configured(b))) {
             if (supplied != null)
                 throw new UnsupportedOperationException("Stochastic expense comparison requires generated worlds; caller-supplied worlds are not supported.");
             ExpenseVolatilityAdmission.requireComparisonSupported(a, b);
-            expenseExecution = PairedExpenseExecution.capture(MonteCarloPlanDocument.capture(a), MonteCarloPlanDocument.capture(b));
+            expenseExecution = PairedExpenseExecution.capture(originalA, originalB);
             if (expenseExecution.current() != null) expensesA = InternalExpenseRun.configured(a);
             if (expenseExecution.baseline() != null) expensesB = InternalExpenseRun.configured(b);
         }
@@ -126,7 +130,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         }
         cancellation.throwIfCancellationRequested();
         if (expenseExecution != null)
-            expenseExecution.validate(MonteCarloPlanDocument.capture(a), MonteCarloPlanDocument.capture(b));
+            expenseExecution.validate(originalA, originalB);
         return new MonteCarloStrategyComparisonResult(request, supplied == null
                 ? MonteCarloStrategyComparisonResult.WorldSource.GENERATED
                 : MonteCarloStrategyComparisonResult.WorldSource.CALLER_SUPPLIED, pairs, null, expenseExecution, benefitExecution);

@@ -13,6 +13,9 @@ final class FrozenConditionalBenefitDetails {
                         || s.contains("life insurance") || s.contains("qualification assertion") || s.contains("Future investment earnings")
                         || s.contains("Contractual insurance premium"))
                 .toList();
-        return lines.isEmpty() ? "" : "\n\nOriginal conditional benefit assumptions\n" + String.join("\n", lines);
+        var annuity = sections.stream().flatMap(s -> s.lines().stream())
+                .filter(s -> s.contains("annuity") || s.contains("NIIT")).filter(s -> !lines.contains(s)).toList();
+        var combined = new java.util.ArrayList<>(lines); combined.addAll(annuity);
+        return combined.isEmpty() ? "" : "\n\nOriginal conditional benefit assumptions\n" + String.join("\n", combined);
     }
 }

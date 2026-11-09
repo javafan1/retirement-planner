@@ -22,6 +22,7 @@ public final class ConditionalBenefitPresentation {
     public static final String INSURANCE_HELP = "This payment remains fully taxable unless you explicitly select qualifying personal life insurance death principal and confirm its restricted qualification. Do not include settlement interest in excluded principal.";
 
     public static String tax(TaxCharacter character) {
+        if(character == TaxCharacter.NONQUALIFIED_GENERAL_RULE_FIXED_EXCLUSION) return "Nonqualified Annuity — General Rule Finite Investment Recovery";
         return character == TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION ? TAX
                 : "Qualifying Life Insurance Death Proceeds — Federally Excluded";
     }
@@ -50,6 +51,7 @@ public final class ConditionalBenefitPresentation {
     }
 
     public static String category(Category value) {
+        if(value == Category.NONQUALIFIED_INCOME_ANNUITY) return "Nonqualified Income Annuity — After-Tax Purchase";
         return value == Category.DEATH_BENEFIT ? "Death Benefit" : "Conditional Income";
     }
 
@@ -62,6 +64,7 @@ public final class ConditionalBenefitPresentation {
     }
 
     public static String timing(ConditionalBenefitDefinition benefit) {
+        if(benefit.annuityTerms() != null) return "Monthly from "+benefit.trigger().date()+" while annuitant survives; remaining investment as of "+benefit.annuityTerms().basisAsOf();
         var parts = new ArrayList<String>();
         if (benefit.notBefore() != null) parts.add("Not before " + benefit.notBefore());
         if (benefit.endDate() != null) parts.add("Payments end " + benefit.endDate());
@@ -78,6 +81,14 @@ public final class ConditionalBenefitPresentation {
         lines.add("Trigger: " + trigger(benefit.trigger(), household));
         lines.add("Living recipient: " + person(benefit.recipient(), household));
         lines.add(timing(benefit));
+        if(benefit.annuityTerms() != null) {
+            lines.add("Documented excluded dollars per payment: "+money(benefit.annuityTerms().excludedPerPayment())
+                    +"; remaining investment at opening: "+money(benefit.annuityTerms().openingInvestment())
+                    +"; original adjusted investment: "+money(benefit.annuityTerms().originalInvestment())
+                    +"; tax annuity starting date: "+benefit.annuityTerms().taxAnnuityStartingDate());
+            lines.add("Finite investment recovery; later payments are fully taxable after exhaustion. Taxable annuity income participates in NIIT. No liquid annuity asset, post-death payment, refund or final-return deduction is modeled.");
+            lines.add("Destination: "+DESTINATION); return List.copyOf(lines);
+        }
         if (benefit.paymentPattern() == PaymentPattern.MONTHLY_RECURRING) {
             lines.add("Annual escalation: " + benefit.annualEscalationRate().movePointRight(2)
                     .stripTrailingZeros().toPlainString() + "% from the first eligible payment year.");

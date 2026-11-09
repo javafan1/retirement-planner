@@ -65,7 +65,8 @@ public final class MonteCarloMortalityAnalysisResult {
             com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitExecution) {
         this.expenseExecution = expenseExecution;
         this.benefitExecution = benefitExecution;
-        if ((expenseExecution != null || benefitExecution != null) && !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
+        if ((expenseExecution != null || benefitExecution != null && !benefitExecution.supportsLegacyWorlds())
+                && !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
             throw new IllegalArgumentException("Enabled expense results require generated worlds.");
         this.request = Objects.requireNonNull(request);
         this.returnModel = Objects.requireNonNull(returnModel);

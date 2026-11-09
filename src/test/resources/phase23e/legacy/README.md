@@ -1,0 +1,1 @@
+Accepted pre-mode RetirementPlan source at HEAD 866b2f7d0fdf25f449b63e851e667866986bc1c3. Phase 23D did not modify this class. Isolated compilation verifies legacy loading and rejection of explicit new mode inputs; no saved artifact is rewritten.

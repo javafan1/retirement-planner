@@ -186,6 +186,17 @@ public class ProjectionPdfExporter {
 
     /** Original supplied frozen inputs plus completed receipts only; no evaluator or projection. */
     private void writeConditionalBenefits(RetirementPlan plan, Projection projection) throws IOException {
+        if (plan.getFinancialCalculationMode() != null) {
+            ensureSpace(55);
+            writeSectionHeading("FINANCIAL CALCULATION MODE", BLUE);
+            writeKeyValue("Original mode", plan.getFinancialCalculationMode().label(), GRAY);
+            writeKeyValue("NIIT modeling", plan.getFinancialCalculationMode().disclosure(), GRAY);
+            for (var year : projection.getYears()) for (var source : year.getIncomeSources()) if (source.niit().isPresent()) {
+                var evidence = source.niit().orElseThrow();
+                writeKeyValue(year.getCalendarYear()+" / Federal NIIT",conditionalMoney(evidence.tax())
+                        + " included in federal tax; MAGI " + conditionalMoney(evidence.magi()) + "; threshold " + conditionalMoney(evidence.threshold()),GRAY);
+            }
+        }
         var premiums = com.daviddunn.retirementplanner.app.projection.ContractualPremiumDisclosures.lines(plan.getHousehold(), "Original plan");
         if (!premiums.isEmpty()) {
             ensureSpace(55);
@@ -196,12 +207,17 @@ public class ProjectionPdfExporter {
         ensureSpace(55);
         writeSectionHeading("CONDITIONAL BENEFITS",BLUE);
         boolean lifePrincipal = com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefits.hasExcludedPrincipal(plan.getConditionalBenefits());
-        writeKeyValue("Planning scope", lifePrincipal
+        boolean annuities = com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefits.hasAnnuity(plan.getConditionalBenefits());
+        writeKeyValue("Planning scope", lifePrincipal || annuities
                 ? "Original tax characters apply independently; household retained non-qualified cash. Future triggers are not current income."
                 : "Fully taxable non-pension receipts; household retained non-qualified cash. Future triggers are not current income.",GRAY);
         if (lifePrincipal) {
             writeKeyValue("Excluded principal", com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.LIFE_PRINCIPAL_SCOPE,GRAY);
             writeKeyValue("Original qualification assertion", com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.LIFE_QUALIFICATION,GRAY);
+        }
+        if (annuities) {
+            for (var line : com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.lines(plan,"Original plan"))
+                if (line.contains("annuity tax facts") || line.contains("Already purchased nonqualified")) writeKeyValue("Nonqualified annuity",line,GRAY);
         }
         for (var definition : plan.getConditionalBenefits()) {
             String trigger = definition.trigger().type().toString() + (definition.trigger().date() == null
@@ -217,15 +233,23 @@ public class ProjectionPdfExporter {
                     + "; recipient " + definition.recipient() + "; trigger " + trigger
                     + (definition.paymentPattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.MONTHLY_RECURRING
                     ? "; annual escalation " + String.format(java.util.Locale.US,"%.2f%%",definition.annualEscalationRate().movePointRight(2)) + " from first eligible payment year" : "") + timing
-                    + (lifePrincipal ? "; tax character " + definition.taxCharacter() : ""),GRAY);
+                    + (lifePrincipal || annuities ? "; tax character " + definition.taxCharacter() : ""),GRAY);
         }
         boolean any = false;
         for (var year : projection.getYears()) for (var source : year.getIncomeSources()) if (source.conditionalBenefit().isPresent()) {
             var receipt = source.conditionalBenefit().orElseThrow(); any = true;
             writeKeyValue(year.getCalendarYear() + " / " + receipt.label(),
-                    (receipt.months() == 0 ? "Lump sum; event " + receipt.eventDate() : "Monthly income; " + receipt.months() + " payments; " + receipt.paymentStart() + " through " + receipt.paymentEnd())
+                    (receipt.pattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.ONE_TIME_LUMP_SUM ? "Lump sum; event " + receipt.eventDate() : "Monthly income; " + receipt.months() + (receipt.annuityBasis() == null ? " payments; " : " eligible payments; ") + receipt.paymentStart() + " through " + receipt.paymentEnd())
                     + "; recipient " + receipt.recipient() + "; gross " + conditionalMoney(receipt.gross()) + "; taxable " + conditionalMoney(receipt.taxable())
-                    + (lifePrincipal ? "; excluded principal " + conditionalMoney(receipt.excluded()) : ""),GRAY);
+                    + (receipt.annuityBasis() != null ? "; investment recovery " + conditionalMoney(receipt.excluded())
+                        + "; closing recoverable investment " + conditionalMoney(receipt.annuityBasis().closing())
+                        : lifePrincipal ? "; excluded principal " + conditionalMoney(receipt.excluded()) : ""),GRAY);
+        }
+        if (annuities && plan.getFinancialCalculationMode() == null) for(var year : projection.getYears()) for(var source : year.getIncomeSources()) if(source.niit().isPresent()) {
+            var evidence = source.niit().orElseThrow();
+            writeKeyValue(year.getCalendarYear()+" / Federal NIIT",conditionalMoney(evidence.tax())
+                    + " included in federal tax; MAGI " + conditionalMoney(evidence.magi()) + "; threshold " + conditionalMoney(evidence.threshold())
+                    + "; taxable annuity income " + conditionalMoney(evidence.taxableAnnuities()) + "; taxable interest " + conditionalMoney(evidence.taxableInterest()),GRAY);
         }
         if (!any) writeKeyValue("Completed projection receipts","No conditional receipt facts are recorded in the original annual data. Definitions alone do not establish execution.",GRAY);
     }
@@ -269,6 +293,8 @@ public class ProjectionPdfExporter {
 
     private void writeBaselineComparison() throws IOException {
         var baseline = report.baselineComparison();
+        if (baseline != null && baseline.calculationMode() != null)
+            writeKeyValue("Comparison calculation mode", baseline.calculationMode().label() + ". Both candidates use this policy. " + baseline.calculationMode().disclosure(), GRAY);
         if (baseline == null) return;
         writeSectionHeading("BASELINE COMPARISON - " + baseline.getCalendarYear(), BLUE);
         String[] titles = {"Investment Growth", "Total Income", "Total Taxes", "Peak Annual Tax",

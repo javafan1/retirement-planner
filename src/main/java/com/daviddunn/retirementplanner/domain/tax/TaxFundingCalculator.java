@@ -537,10 +537,13 @@ public final class TaxFundingCalculator {
                 StateTaxUnavailableException.requireCalculated(
                         finalStateTaxCalculation, projectionDate.getYear());
 
+                var completedSources = new ArrayList<>(finalTaxIncome.getIncomeSources());
+                finalFederalTaxCalculation.niit().ifPresent(value -> completedSources.add(
+                        IncomeSourceAttribution.niit(value, projectionDate.getYear())));
                 return new TaxFundingResult(
                         requiredWithdrawal,
                         finalFederalTaxCalculation,
-                        finalStateTaxCalculation, finalTaxIncome.getIncomeSources());
+                        finalStateTaxCalculation, completedSources);
             }
 
             additionalWithdrawal =

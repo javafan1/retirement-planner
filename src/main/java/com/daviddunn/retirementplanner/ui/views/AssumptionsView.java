@@ -111,6 +111,12 @@ public class AssumptionsView extends VBox {
     private boolean loading;
     private final boolean guidedCreation;
     private RetirementPlan currentPlan;
+    private final ComboBox<com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode> calculationMode = new ComboBox<>();
+    private final Label calculationModeHelp = new Label();
+    private final Button establishCalculationMode = new Button("Use Selected Mode Explicitly");
+    private boolean calculationModeEdited;
+    private boolean lastApplyChangedCalculationMode;
+    public boolean lastApplyChangedCalculationMode() { return lastApplyChangedCalculationMode; }
 
     /*
      * MainWindow registers a callback here so
@@ -251,6 +257,24 @@ public class AssumptionsView extends VBox {
         grid.setVgap(10);
 
         int row = 0;
+        calculationMode.getItems().setAll(com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.values());
+        calculationMode.setId("plan-financial-calculation-mode");
+        calculationMode.setAccessibleText("Financial Calculation Mode");
+        InputHelp.install(calculationMode, "Basic omits NIIT from federal taxes. Advanced includes NIIT only for supported, complete income sources. Both modes keep every application feature. Apply changes this plan; Application Settings controls only new-plan defaults.");
+        calculationModeHelp.setWrapText(true);
+        calculationModeHelp.setMinWidth(0); calculationModeHelp.setMaxWidth(650);
+        calculationMode.setOnAction(event -> {
+            if (!loading) { calculationModeEdited = true; updateDirty(); }
+            if (calculationMode.getValue() != null) calculationModeHelp.setText(calculationMode.getValue().disclosure());
+        });
+        var modeLabel = new Label("Financial Calculation Mode:");
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(modeLabel,calculationMode));
+        grid.add(modeLabel, 0, row);
+        grid.add(calculationMode, 1, row++);
+        grid.add(calculationModeHelp, 0, row++, 3, 1);
+        establishCalculationMode.setId("establish-financial-calculation-mode");
+        establishCalculationMode.setOnAction(event -> { calculationModeEdited = true; updateDirty(); });
+        grid.add(establishCalculationMode,1,row++);
 
         /*
          * =================================================
@@ -673,8 +697,11 @@ public class AssumptionsView extends VBox {
         socialSecurityReductionCard.setId("assumptions-social-security-reduction");
         socialSecurityReductionCard.getStyleClass().add("assumptions-card");
         socialSecurityReductionCard.setMaxHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
-        VBox tax = section(original, "Income Tax Assumptions", filingStatusComboBox, stateJurisdictionComboBox,
+        original.getChildren().removeAll(calculationModeHelp,establishCalculationMode);
+        VBox tax = section(original, "Income Tax Assumptions", calculationMode, filingStatusComboBox, stateJurisdictionComboBox,
                 federalBracketGrowthField, standardDeductionGrowthField);
+        tax.getChildren().add(2,calculationModeHelp);
+        tax.getChildren().add(3,establishCalculationMode);
         VBox adjustment = new VBox(8, inputRow(original, futureFederalMarginalRateAdjustmentField),
                 inputRow(original, futureFederalMarginalRateEffectiveYearField));
         adjustment.getStyleClass().add("assumptions-rate-adjustment");
@@ -1077,6 +1104,12 @@ public class AssumptionsView extends VBox {
 
         currentPlan = Objects.requireNonNull(plan);
         loading = true;
+        calculationModeEdited = false;
+        establishCalculationMode.setVisible(plan.getFinancialCalculationMode() == null);
+        establishCalculationMode.setManaged(plan.getFinancialCalculationMode() == null);
+        calculationMode.setValue(com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.resolved(plan));
+        calculationModeHelp.setText(calculationMode.getValue().disclosure()
+                + (plan.getFinancialCalculationMode() == null ? " Legacy saved-input compatibility; choosing a mode establishes an explicit plan policy." : ""));
         updateHouseholdPresentation();
         loadSocialSecurityBenefitRows(plan);
 
@@ -1310,6 +1343,8 @@ public class AssumptionsView extends VBox {
         PlanningAssumptions updated;
         List<SocialSecurityIncome> updatedSocialSecurity;
         try {
+            if (calculationModeEdited && calculationMode.getValue() == null)
+                throw new InputException(calculationMode,"Select a financial calculation mode.");
             updated = readValidated();
             updatedSocialSecurity = readUpdatedSocialSecuritySources();
         }
@@ -1321,10 +1356,13 @@ public class AssumptionsView extends VBox {
             return false;
         }
         boolean assumptionsChanged = !values(updated).equals(values(currentPlan.getPlanningAssumptions()));
-        boolean changed = assumptionsChanged || socialSecurityChanged(updatedSocialSecurity);
+        boolean modeChanged = calculationModeEdited && currentPlan.getFinancialCalculationMode() != calculationMode.getValue();
+        lastApplyChangedCalculationMode = modeChanged;
+        boolean changed = assumptionsChanged || socialSecurityChanged(updatedSocialSecurity) || modeChanged;
         if (changed) {
             // All parsing and domain validation completes before the single model write.
             if (assumptionsChanged) currentPlan.setPlanningAssumptions(updated);
+            if (modeChanged) currentPlan.setFinancialCalculationMode(Objects.requireNonNull(calculationMode.getValue()));
             applySocialSecuritySources(updatedSocialSecurity);
         }
         load(currentPlan);
@@ -1344,7 +1382,8 @@ public class AssumptionsView extends VBox {
                     && !values(readValidated()).equals(values(currentPlan.getPlanningAssumptions()));
             boolean socialSecurityDiffers = socialSecurityDraftRows.stream()
                     .anyMatch(row -> row.age.getValue() == null || row.age.getValue() != row.source.getClaimingAge());
-            dirty.set(currentPlan != null && (assumptionsDiffer || socialSecurityDiffers));
+            dirty.set(currentPlan != null && (assumptionsDiffer || socialSecurityDiffers || calculationModeEdited
+                    && (calculationMode.getValue() == null || currentPlan.getFinancialCalculationMode() != calculationMode.getValue())));
         }
         catch (InputException exception) {
             dirty.set(currentPlan != null);

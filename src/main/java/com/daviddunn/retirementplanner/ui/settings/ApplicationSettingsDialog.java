@@ -13,6 +13,7 @@ public final class ApplicationSettingsDialog extends Dialog<Void> {
     private final TextField directory = new TextField();
     private final TextField exportDirectory = new TextField();
     private final Label notice = new Label();
+    private final ComboBox<com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode> calculationMode = new ComboBox<>();
     private boolean saving;
     private boolean committed;
     private boolean resetIntroductions;
@@ -21,6 +22,14 @@ public final class ApplicationSettingsDialog extends Dialog<Void> {
         initOwner(owner); initModality(Modality.WINDOW_MODAL);
         setTitle("Application Settings"); setHeaderText("Application preferences"); setResizable(true);
         var initial = service.snapshot();
+        calculationMode.getItems().setAll(com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.values());
+        calculationMode.setValue(initial.getDefaultFinancialCalculationMode());
+        calculationMode.setId("default-financial-calculation-mode");
+        calculationMode.setAccessibleText("Default Financial Calculation Mode for new plans");
+        com.daviddunn.retirementplanner.ui.controls.InputHelp.install(calculationMode,
+                "Default for new plans only. Basic does not model NIIT. Advanced retains bounded NIIT source checks. Both choices and all application features are freely available; saved existing plans keep their own mode.");
+        var calculationHelp = new Label("Default for newly created plans only. Existing plans keep their saved mode.\nBasic: Standard retirement projections with all currently supported financial analysis features. Net Investment Income Tax (NIIT) is not calculated.\nAdvanced: Includes supported NIIT calculations. Certain plans may require additional investment-income details before NIIT-inclusive projections can run.");
+        calculationHelp.setWrapText(true);
         theme.getItems().setAll(ApplicationTheme.values()); theme.setValue(initial.getTheme());
         theme.setConverter(new javafx.util.StringConverter<>() {
             @Override public String toString(ApplicationTheme value) { return value == ApplicationTheme.DARK ? "Dark" : "Light"; }
@@ -98,7 +107,8 @@ public final class ApplicationSettingsDialog extends Dialog<Void> {
             resetIntroductions = true;
             notice.setText("Introductions will be shown again after Save.");
         });
-        var body = new VBox(10, themeLabel, theme, folderLabel, directory, new HBox(8, browse, clear), help,
+        var body = new VBox(10, themeLabel, theme, new Label("Financial Calculation Mode"), calculationMode, calculationHelp,
+                folderLabel, directory, new HBox(8, browse, clear), help,
                 exportFolderLabel, new HBox(8, exportDirectory, browseExport), exportHelp,
                 new Separator(), introductions, introductionHelp, reset, notice);
         HBox.setHgrow(exportDirectory, Priority.ALWAYS);
@@ -109,9 +119,10 @@ public final class ApplicationSettingsDialog extends Dialog<Void> {
         getDialogPane().getButtonTypes().setAll(save, ButtonType.CANCEL);
         getDialogPane().lookupButton(save).addEventFilter(ActionEvent.ACTION, e -> {
             e.consume(); if (saving) return;
+            if (calculationMode.getValue() == null) { notice.setText("Select Basic or Advanced before saving."); return; }
             saving = true; body.setDisable(true); getDialogPane().lookupButton(save).setDisable(true);
             getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(true); notice.setText("Saving application preferences…");
-            service.savePreferences(theme.getValue(), directory.getText().trim(), exportDirectory.getText().trim(), resetIntroductions).whenComplete((ignored, failure) -> Platform.runLater(() -> {
+            service.savePreferences(theme.getValue(), directory.getText().trim(), exportDirectory.getText().trim(), resetIntroductions, calculationMode.getValue()).whenComplete((ignored, failure) -> Platform.runLater(() -> {
                 saving = false; body.setDisable(false); getDialogPane().lookupButton(save).setDisable(false);
                 getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(false);
                 if (failure != null) { notice.setText("Preferences were not saved. Check the directory, permissions or settings recovery notice, then retry or Cancel."); return; }

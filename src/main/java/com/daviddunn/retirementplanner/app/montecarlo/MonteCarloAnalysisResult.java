@@ -82,7 +82,8 @@ public record MonteCarloAnalysisResult(
         Objects.requireNonNull(endingAfterTaxEstate);
         Objects.requireNonNull(lifetimeTaxes);
         Objects.requireNonNull(deterministicReference);
-        if ((expenseExecution != null || benefitExecution != null) && !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
+        if ((expenseExecution != null || benefitExecution != null && !benefitExecution.supportsLegacyWorlds())
+                && !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
             throw new IllegalArgumentException("Enabled expense results require generated worlds.");
         outcomes = List.copyOf(outcomes);
         if (outcomes.size() != settings.simulationCount()) {

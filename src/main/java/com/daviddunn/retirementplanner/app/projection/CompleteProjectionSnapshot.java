@@ -48,8 +48,10 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
     }
 
     public static String freeze(RetirementPlan plan) {
-        return freeze(new RetirementPlanSnapshot(plan.getHousehold(), plan.getAccountPortfolio(),
-                plan.getPlanningAssumptions(), plan.getRothConversionRequest(), plan.getNonInvestableAssets(), plan.getConditionalBenefits()));
+        var inputs = new RetirementPlanSnapshot(plan.getHousehold(), plan.getAccountPortfolio(),
+                plan.getPlanningAssumptions(), plan.getRothConversionRequest(), plan.getNonInvestableAssets(), plan.getConditionalBenefits());
+        if (plan.getFinancialCalculationMode() != null) inputs.setFinancialCalculationMode(plan.getFinancialCalculationMode());
+        return freeze(inputs);
     }
     public static String freeze(RetirementPlanSnapshot snapshot) {
         try {
@@ -58,6 +60,15 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
     }
     public static String digest(String document) {
         return AnalysisSnapshotCodec.sha256(document.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    static boolean hasCalculationModeField(String document) {
+        try {
+            JsonNode node = JSON.reader().with(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).readTree(document);
+            return node.has("financialCalculationMode");
+        } catch (java.io.IOException invalid) {
+            throw new IllegalArgumentException("Invalid original calculation inputs.", invalid);
+        }
     }
     public RetirementPlanSnapshot restoreInputs() {
         return restoreInputs(inputsDocument);
@@ -87,7 +98,7 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
     public boolean calculationSemanticsCurrent() {
         // A pension-selection stamp cannot attest to an unimplemented benefit capability.
         // Decode property names rather than searching raw JSON (which may escape them).
-        try { if (!restoreInputs().getConditionalBenefits().isEmpty())
+        try { if (restoreInputs().getFinancialCalculationMode() != null || !restoreInputs().getConditionalBenefits().isEmpty())
             return ConditionalBenefitExecutionSemantics.current(inputsDocument,annual,provenance); }
         catch (RuntimeException unavailable) { return false; }
         if (provenance.startsWith(PensionSelectionSemantics.PROVENANCE)) return true;

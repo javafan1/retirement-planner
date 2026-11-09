@@ -28,12 +28,18 @@ public final class ConditionalBenefitFinancialInputs {
                 financial.remove(List.of("id", "label"));
                 financial.set("grossAmount", DecimalNode.valueOf(definition.grossAmount().stripTrailingZeros()));
                 financial.set("annualEscalationRate", DecimalNode.valueOf(definition.annualEscalationRate().stripTrailingZeros()));
+                if (definition.annuityTerms() != null) {
+                    var terms = (ObjectNode) financial.get("annuityTerms");
+                    for (String key : List.of("excludedPerPayment", "originalInvestment", "openingInvestment"))
+                        terms.set(key, DecimalNode.valueOf(terms.get(key).decimalValue().stripTrailingZeros()));
+                }
                 definitions.add(financial);
             }
             // Identical independent contracts remain repeated entries, even though identity and labels are excluded.
             definitions.sort(Comparator.comparing(JsonNode::toString));
             var group = plan.putObject("conditionalBenefits");
-            group.put("inputContract", definitions.stream().anyMatch(d ->
+            group.put("inputContract", definitions.stream().anyMatch(d -> d.hasNonNull("annuityTerms"))
+                    ? plan.hasNonNull("financialCalculationMode") ? "MODE_EXPLICIT_ANNUITY_INPUTS_V4" : "NONQUALIFIED_ANNUITY_NIIT_INPUTS_V3" : definitions.stream().anyMatch(d ->
                     d.path("taxCharacter").asText().equals("QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED"))
                     ? "CONDITIONAL_BENEFIT_LIFE_PRINCIPAL_INPUTS_V2" : "CONDITIONAL_BENEFIT_INPUTS_V1");
             var ordered = group.putArray("definitions");

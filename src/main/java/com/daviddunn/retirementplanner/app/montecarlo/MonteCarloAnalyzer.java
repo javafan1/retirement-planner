@@ -120,8 +120,8 @@ public final class MonteCarloAnalyzer {
         Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
-        var benefitExecution = benefitCapability(plan, "LONGEVITY", suppliedWorlds != null || expenses != null
-                || !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel));
+        var benefitExecution = benefitCapability(plan, "LONGEVITY", suppliedWorlds != null
+                || !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel), expenses != null);
         ExpenseExecution expenseExecution = null;
         if (expenses == null && ExpenseExecution.configured(plan)) {
             if (suppliedWorlds != null || !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
@@ -323,8 +323,8 @@ public final class MonteCarloAnalyzer {
         Objects.requireNonNull(source);
         var plan = new RetirementPlanScenarioCopyService().copy(source);
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(plan);
-        var benefitExecution = benefitCapability(plan, "FIXED", expenses != null
-                || !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel));
+        var benefitExecution = benefitCapability(plan, "FIXED",
+                !MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel), expenses != null);
         ExpenseExecution expenseExecution = null;
         if (expenses == null && ExpenseExecution.configured(plan)) {
             if (!MonteCarloScenarioGenerator.MODEL_VERSION.equals(returnModel))
@@ -411,12 +411,15 @@ public final class MonteCarloAnalyzer {
     }
 
     private static com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution benefitCapability(
-            RetirementPlan plan, String mode, boolean supplied) {
-        if (!com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan)) return null;
-        if (supplied) throw new UnsupportedOperationException("Conditional benefits require supported generated Monte Carlo worlds; supplied paths or expense overrides are not supported.");
+            RetirementPlan plan, String mode, boolean supplied, boolean expenseOverrides) {
+        if (!com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(plan)) return null;
+        if (expenseOverrides) throw new UnsupportedOperationException("Financial calculation capabilities require configured expense provenance; internal overrides are not authenticated.");
         var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.valueOf(
                 (plan.getHousehold().hasSpouse() ? "COUPLE" : "INDIVIDUAL") + "_MONTE_CARLO_" + mode);
-        return com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution.capture(kind, plan);
+        var capability = com.daviddunn.retirementplanner.app.socialsecurity.results.ConditionalBenefitAnalysisExecution.capture(kind, plan);
+        if (supplied && !capability.supportsLegacyWorlds())
+            throw new UnsupportedOperationException("This financial capability requires supported generated Monte Carlo worlds; supplied paths or expense overrides are not supported.");
+        return capability;
     }
 
     private static void report(AnalysisProgressListener progress, int completed, int total) {

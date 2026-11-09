@@ -19,7 +19,7 @@ public final class ConditionalBenefitDefinitionDeserializer extends JsonDeserial
         try {
             JsonNode node = TREE.readTree(parser);
             object(node, Set.of("id", "label", "category", "trigger", "recipient", "paymentPattern", "grossAmount",
-                    "notBefore", "endDate", "coverageStart", "coverageEnd", "annualEscalationRate", "escalationOrigin", "taxCharacter", "destination", "lifeInsuranceQualification"));
+                    "notBefore", "endDate", "coverageStart", "coverageEnd", "annualEscalationRate", "escalationOrigin", "taxCharacter", "destination", "lifeInsuranceQualification", "annuityTerms"));
             String identity = text(node, "id");
             UUID id = UUID.fromString(identity);
             if (!id.toString().equals(identity)) throw new IllegalArgumentException("Canonical benefit ID required.");
@@ -39,7 +39,7 @@ public final class ConditionalBenefitDefinitionDeserializer extends JsonDeserial
                     date(node, "endDate"), date(node, "coverageStart"), date(node, "coverageEnd"), number(node, "annualEscalationRate"),
                     EscalationOrigin.valueOf(text(node, "escalationOrigin")), TaxCharacter.valueOf(text(node, "taxCharacter")),
                     ReceiptDestination.valueOf(text(node, "destination")), optional(node, "lifeInsuranceQualification") ? null
-                            : LifeInsuranceQualification.valueOf(text(node, "lifeInsuranceQualification")));
+                            : LifeInsuranceQualification.valueOf(text(node, "lifeInsuranceQualification")), annuity(node));
         } catch (RuntimeException invalid) {
             throw JsonMappingException.from(parser, "Invalid conditional benefit definition.", invalid);
         }
@@ -50,6 +50,15 @@ public final class ConditionalBenefitDefinitionDeserializer extends JsonDeserial
         node.fieldNames().forEachRemaining(key -> { if (!allowed.contains(key)) throw new IllegalArgumentException("Unknown benefit property."); });
     }
     private static boolean optional(JsonNode node, String field) { return !node.hasNonNull(field); }
+    private static NonqualifiedAnnuityTerms annuity(JsonNode node) {
+        if (optional(node, "annuityTerms")) return null;
+        var facts = node.get("annuityTerms");
+        object(facts, Set.of("acquisitionDate", "taxAnnuityStartingDate", "excludedPerPayment", "originalInvestment",
+                "openingInvestment", "basisAsOf", "qualification"));
+        return new NonqualifiedAnnuityTerms(date(facts, "acquisitionDate"), date(facts, "taxAnnuityStartingDate"),
+                number(facts, "excludedPerPayment"), number(facts, "originalInvestment"), number(facts, "openingInvestment"),
+                date(facts, "basisAsOf"), NonqualifiedAnnuityTerms.Qualification.valueOf(text(facts, "qualification")));
+    }
     private static String text(JsonNode node, String field) {
         var value = node.get(field);
         if (value == null || !value.isTextual()) throw new IllegalArgumentException("Required text property: " + field);

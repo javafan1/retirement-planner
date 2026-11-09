@@ -97,6 +97,19 @@ public class ProjectionYearDetailsPane
         content.getChildren().add(
                 createTitle(year));
 
+        if (year.getIncomeSources().stream().anyMatch(s -> s.calculationMode().isPresent())
+                || baselineYear != null && baselineYear.getIncomeSources().stream().anyMatch(s -> s.calculationMode().isPresent())) {
+            String explanation = com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.disclosure(year.getIncomeSources());
+            if (baselineYear != null) explanation += " Original saved Baseline: "
+                    + com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.disclosure(baselineYear.getIncomeSources());
+            if (differentCalculationModes()) explanation += " These original results use different modes; numerical differences are hidden. Run a new common-mode comparison for like-for-like outcomes.";
+            Label policy = new Label(explanation);
+            policy.setId("year-financial-calculation-mode");
+            policy.setWrapText(true);
+            policy.setMaxWidth(1000);
+            content.getChildren().add(policy);
+        }
+
         if (assumptionDisclosure != null) {
             Label disclosure = new Label(assumptionDisclosure);
             disclosure.setWrapText(true);
@@ -463,8 +476,16 @@ public class ProjectionYearDetailsPane
                                 value.getSocialSecurityResult()
                                         .householdBenefit()));
 
-        var kinds = java.util.List.of(com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.CONDITIONAL_RECURRING,
-                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.CONDITIONAL_LUMP_SUM);
+        if (year.getIncomeSources().stream().anyMatch(s -> s.calculationMode().isPresent())
+                || baselineYear != null && baselineYear.getIncomeSources().stream().anyMatch(s -> s.calculationMode().isPresent()))
+            row = addTextComparisonRow(grid,row,"Financial Calculation Mode",
+                    com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(year.getIncomeSources()).label(),
+                    getBaselineText(value -> com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(value.getIncomeSources()).label()));
+        var kinds = new java.util.ArrayList<>(java.util.List.of(com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.CONDITIONAL_RECURRING,
+                com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.CONDITIONAL_LUMP_SUM));
+        if (year.getIncomeSources().stream().anyMatch(s -> s.kind() == com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.NONQUALIFIED_ANNUITY)
+                || baselineYear != null && baselineYear.getIncomeSources().stream().anyMatch(s -> s.kind() == com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.NONQUALIFIED_ANNUITY))
+            kinds.add(com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.NONQUALIFIED_ANNUITY);
         if (year.getIncomeSources().stream().anyMatch(s -> s.conditionalBenefit().isPresent())
                 || baselineYear != null && baselineYear.getIncomeSources().stream().anyMatch(s -> s.conditionalBenefit().isPresent())) {
             row = addSubsectionHeader(grid,row,"Conditional Benefits Received");
@@ -472,20 +493,36 @@ public class ProjectionYearDetailsPane
                 java.util.function.Function<ProjectionYear,BigDecimal> total = value -> value.getIncomeSources().stream()
                         .filter(s -> s.kind() == kind).map(com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution::grossAmount)
                         .reduce(BigDecimal.ZERO,BigDecimal::add);
-                row = addMoneyComparisonRow(grid,row,kind == kinds.getFirst() ? "Conditional Monthly Income" : "Conditional Lump-Sum Receipts",
+                row = addMoneyComparisonRow(grid,row,kind == com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind.NONQUALIFIED_ANNUITY ? "Nonqualified Annuity Gross Income"
+                        : kind == kinds.getFirst() ? "Conditional Monthly Income" : "Conditional Lump-Sum Receipts",
                         total.apply(year),getBaselineValue(total));
             }
             for (var source : year.getIncomeSources()) if (source.conditionalBenefit().isPresent()) {
                 var receipt = source.conditionalBenefit().orElseThrow();
-                var detail = new Label("Received: " + receipt.label() + " / " + receipt.recipient() + " / "
-                        + (receipt.months() == 0 ? "Lump sum " + receipt.eventDate() : receipt.months() + " monthly payments")
-                        + (receipt.taxCharacter() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED
+                var detail = new Label((receipt.annuityBasis() == null ? "Received: " : "Modeled annuity: ") + receipt.label() + " / " + receipt.recipient() + " / "
+                        + (receipt.pattern() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PaymentPattern.ONE_TIME_LUMP_SUM ? "Lump sum " + receipt.eventDate() : receipt.months() + (receipt.annuityBasis() == null ? " monthly payments" : " eligible monthly payments"))
+                        + (receipt.annuityBasis() != null ? " / gross: " + receipt.gross().toPlainString() + "; taxable: " + receipt.taxable().toPlainString()
+                            + "; investment recovery: " + receipt.excluded().toPlainString() + "; closing recoverable investment: " + receipt.annuityBasis().closing().toPlainString()
+                        : receipt.taxCharacter() == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED
                         ? " / federally excluded life principal: " + receipt.excluded().toPlainString()
                             + "; taxable: " + receipt.taxable().toPlainString() + "; future earnings may be taxable"
                         : " / fully taxable"));
                 detail.setWrapText(true); detail.setMinWidth(0); detail.setMaxWidth(850); detail.setAccessibleText(detail.getText());
                 grid.add(detail,0,row++,5,1);
             }
+        }
+
+        if (year.getIncomeSources().stream().anyMatch(s -> s.niit().isPresent())
+                || baselineYear != null && baselineYear.getIncomeSources().stream().anyMatch(s -> s.niit().isPresent())) {
+            java.util.function.Function<ProjectionYear,BigDecimal> niit = value -> value.getIncomeSources().stream()
+                    .flatMap(s -> s.niit().stream()).map(com.daviddunn.retirementplanner.domain.tax.NetInvestmentIncomeTaxCalculation::tax)
+                    .reduce(BigDecimal.ZERO,BigDecimal::add);
+            if (year.getIncomeSources().stream().noneMatch(s -> s.niit().isPresent())
+                    || baselineYear != null && baselineYear.getIncomeSources().stream().noneMatch(s -> s.niit().isPresent())) {
+                java.util.function.Function<ProjectionYear,String> text = value -> value.getIncomeSources().stream().anyMatch(s -> s.niit().isPresent())
+                        ? UIFormatters.money(niit.apply(value)) : "NIIT Not Modeled";
+                row = addTextComparisonRow(grid,row,"Federal NIIT (included when modeled)",text.apply(year),getBaselineText(text));
+            } else row = addMoneyComparisonRow(grid,row,"Federal NIIT (included in federal tax)",niit.apply(year),getBaselineValue(niit));
         }
 
         return row;
@@ -1295,6 +1332,11 @@ public class ProjectionYearDetailsPane
             String text,
             BigDecimal difference) {
 
+        if (differentCalculationModes()) {
+            text = "\u2014";
+            difference = null;
+        }
+
         Label label =
                 new Label(text);
 
@@ -1395,6 +1437,12 @@ public class ProjectionYearDetailsPane
     // ============================================================
     // Baseline Helpers
     // ============================================================
+
+    private boolean differentCalculationModes() {
+        return year != null && baselineYear != null
+                && com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(year.getIncomeSources())
+                    != com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(baselineYear.getIncomeSources());
+    }
 
     private BigDecimal getBaselineValue(
             Function<

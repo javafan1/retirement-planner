@@ -55,6 +55,16 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
         this(owner, new NewPlanDraft());
     }
 
+    public NewRetirementPlanWizard(Window owner, com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode mode) {
+        this(owner, modeDraft(mode));
+    }
+
+    private static NewPlanDraft modeDraft(com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode mode) {
+        var draft = new NewPlanDraft();
+        draft.getPlan().setFinancialCalculationMode(java.util.Objects.requireNonNull(mode));
+        return draft;
+    }
+
     private NewRetirementPlanWizard(Window owner, NewPlanDraft draft) {
 
         this(owner, draft, List.of(new HouseholdWizardStep(draft), new AccountsWizardStep(draft),

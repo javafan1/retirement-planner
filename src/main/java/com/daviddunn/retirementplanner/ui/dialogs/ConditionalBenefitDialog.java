@@ -82,7 +82,7 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
         form.setFillWidth(true);
         form.getChildren().add(heading("General"));
         field("Benefit Name", name, "name", true, "A display name, up to 128 characters without control characters. Renaming does not change the financial definition.");
-        choices(category, List.of(Category.values()), ConditionalBenefitPresentation::category);
+        choices(category, List.of(Category.CONDITIONAL_INCOME,Category.DEATH_BENEFIT), ConditionalBenefitPresentation::category);
         field("Benefit Category", category, "category", true, "Death Benefit requires a person's death. Only qualifying personal death-principal lump sums can use the restricted excluded tax treatment.");
         choices(pattern, List.of(PaymentPattern.values()), value -> value == PaymentPattern.MONTHLY_RECURRING
                 ? "Recurring Monthly Payment" : "One-Time Lump Sum");

@@ -18,7 +18,18 @@ public record ProjectionComparison(
         BigDecimal baselineNetWorth,
         BigDecimal currentNetWorth,
         BigDecimal baselineAfterTaxEstate,
-        BigDecimal currentAfterTaxEstate) {
+        BigDecimal currentAfterTaxEstate,
+        com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode calculationMode) {
+
+    public ProjectionComparison(int calendarYear, BigDecimal baselineInvestmentGrowth, BigDecimal currentInvestmentGrowth,
+            BigDecimal baselineTotalIncome, BigDecimal currentTotalIncome, BigDecimal baselineTotalTaxes, BigDecimal currentTotalTaxes,
+            BigDecimal baselinePeakAnnualTax, BigDecimal currentPeakAnnualTax, BigDecimal baselineEndingInvestableAssets,
+            BigDecimal currentEndingInvestableAssets, BigDecimal baselineNetWorth, BigDecimal currentNetWorth,
+            BigDecimal baselineAfterTaxEstate, BigDecimal currentAfterTaxEstate) {
+        this(calendarYear,baselineInvestmentGrowth,currentInvestmentGrowth,baselineTotalIncome,currentTotalIncome,
+                baselineTotalTaxes,currentTotalTaxes,baselinePeakAnnualTax,currentPeakAnnualTax,baselineEndingInvestableAssets,
+                currentEndingInvestableAssets,baselineNetWorth,currentNetWorth,baselineAfterTaxEstate,currentAfterTaxEstate,null);
+    }
 
     public ProjectionComparison {
         Objects.requireNonNull(baselineInvestmentGrowth);

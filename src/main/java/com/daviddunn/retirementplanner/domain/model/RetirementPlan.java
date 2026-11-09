@@ -13,6 +13,21 @@ import java.util.List;
 import java.util.Objects;
 
 public class RetirementPlan {
+    private FinancialCalculationMode financialCalculationMode;
+
+    /** Null is the preserved pre-mode wire contract, never an application preference. */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public FinancialCalculationMode getFinancialCalculationMode() { return financialCalculationMode; }
+
+    public void setFinancialCalculationMode(FinancialCalculationMode mode) {
+        financialCalculationMode = Objects.requireNonNull(mode, "Calculation mode is required.");
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void copyFinancialCalculationModeFrom(RetirementPlan source) {
+        financialCalculationMode = Objects.requireNonNull(source).financialCalculationMode;
+    }
+
     private List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> conditionalBenefits = List.of();
 
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)

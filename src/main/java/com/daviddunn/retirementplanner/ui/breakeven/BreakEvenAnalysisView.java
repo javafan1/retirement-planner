@@ -379,6 +379,10 @@ public final class BreakEvenAnalysisView extends VBox {
         card.setMaxWidth(Double.MAX_VALUE);
         summary.setMaxWidth(Double.MAX_VALUE);
         card.getChildren().add(summary);
+        if (plan.calculationMode() != null) {
+            card.getChildren().add(label("Financial Calculation Mode: " + plan.calculationMode().label()
+                    + ". " + plan.calculationMode().disclosure()));
+        }
         String disclosureText = BreakEvenPresentation.reductionDisclosure(plan);
         if (disclosureText != null) {
             Label disclosure = label(disclosureText);

@@ -99,6 +99,13 @@ public final class FederalTaxCalculator {
                         filingStatus,
                         projectedGovernmentRules);
 
+        if (FinancialCalculationPolicy.modelsNiit(taxIncome.getIncomeSources())) {
+            if (projectedGovernmentRules.getTaxYear() < NetInvestmentIncomeTaxRules.firstTaxYear())
+                throw new NiitUnsupportedInputException("NIIT rules do not apply before their statutory effective tax year.");
+            var niit = new NetInvestmentIncomeTaxCalculator().calculate(taxIncome, filingStatus, adjustedGrossIncome);
+            return new FederalTaxCalculation(adjustedGrossIncome, taxableSocialSecurity, standardDeduction,
+                    taxableIncome, federalIncomeTax.add(niit.tax()), java.util.Optional.of(niit));
+        }
         return new FederalTaxCalculation(
                 adjustedGrossIncome,
                 taxableSocialSecurity,

@@ -4,6 +4,16 @@ package com.daviddunn.retirementplanner.application.settings;
 
 
 public class ApplicationSettings {
+    private com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode defaultFinancialCalculationMode =
+            com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.BASIC;
+
+    public com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode getDefaultFinancialCalculationMode() {
+        return defaultFinancialCalculationMode;
+    }
+
+    public void setDefaultFinancialCalculationMode(com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode mode) {
+        defaultFinancialCalculationMode = java.util.Objects.requireNonNull(mode);
+    }
     private java.util.Set<AnalyzerIntroduction> suppressedAnalyzerIntroductions = java.util.Set.of();
 
     public java.util.Set<AnalyzerIntroduction> getSuppressedAnalyzerIntroductions() { return suppressedAnalyzerIntroductions; }
@@ -33,6 +43,7 @@ public class ApplicationSettings {
 
     public ApplicationSettings copy() {
         var result = new ApplicationSettings();
+        result.defaultFinancialCalculationMode = defaultFinancialCalculationMode;
         result.suppressedAnalyzerIntroductions = suppressedAnalyzerIntroductions;
         result.theme = theme;
         result.defaultPlanDirectory = defaultPlanDirectory;

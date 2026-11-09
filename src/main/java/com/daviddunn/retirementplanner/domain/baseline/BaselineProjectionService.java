@@ -36,6 +36,7 @@ public class BaselineProjectionService {
                         snapshot.getRothConversionRequest(),
                         snapshot.getNonInvestableAssets());
         baselinePlan.setConditionalBenefits(snapshot.getConditionalBenefits());
+        if (snapshot.getFinancialCalculationMode() != null) baselinePlan.setFinancialCalculationMode(snapshot.getFinancialCalculationMode());
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(baselinePlan);
 
         return projectionEngine.project(

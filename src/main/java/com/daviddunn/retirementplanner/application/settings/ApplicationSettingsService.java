@@ -68,6 +68,18 @@ public final class ApplicationSettingsService implements AutoCloseable {
 
     public CompletionStage<Void> savePreferences(ApplicationTheme theme, String directory,
             String exportDirectory, boolean resetIntroductions) {
+        return savePreferences(theme, directory, exportDirectory, resetIntroductions, java.util.Optional.empty());
+    }
+
+    public CompletionStage<Void> savePreferences(ApplicationTheme theme, String directory,
+            String exportDirectory, boolean resetIntroductions,
+            com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode calculationMode) {
+        return savePreferences(theme,directory,exportDirectory,resetIntroductions,java.util.Optional.of(Objects.requireNonNull(calculationMode)));
+    }
+
+    private CompletionStage<Void> savePreferences(ApplicationTheme theme, String directory,
+            String exportDirectory, boolean resetIntroductions,
+            java.util.Optional<com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode> calculationMode) {
         Objects.requireNonNull(theme);
         var previous = snapshot();
         return background(() -> {
@@ -84,6 +96,7 @@ public final class ApplicationSettingsService implements AutoCloseable {
         }).thenCompose(paths -> submit(worker, () -> {
             update(next -> {
                 next.setTheme(theme);
+                calculationMode.ifPresent(next::setDefaultFinancialCalculationMode);
                 next.setDefaultPlanDirectory(paths[0]);
                 next.setDefaultExportDirectory(paths[1]);
                 if (resetIntroductions) next.setSuppressedAnalyzerIntroductions(java.util.Set.of());

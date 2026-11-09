@@ -1,0 +1,12 @@
+{
+  "version": "irc-1411-2013-v1",
+  "firstTaxYear": 2013,
+  "rate": 0.038,
+  "thresholds": {
+    "SINGLE": 200000,
+    "MARRIED_FILING_JOINTLY": 250000,
+    "MARRIED_FILING_SEPARATELY": 125000,
+    "HEAD_OF_HOUSEHOLD": 200000,
+    "QUALIFYING_SURVIVING_SPOUSE": 250000
+  }
+}

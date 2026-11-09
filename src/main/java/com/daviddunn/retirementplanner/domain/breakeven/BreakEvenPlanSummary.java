@@ -19,6 +19,8 @@ public final class BreakEvenPlanSummary {
     private final PersonSummary spouse;
     @JsonIgnore
     private final SocialSecurityBenefitReductionPolicy benefitReductionPolicy;
+    @JsonIgnore
+    private final com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode calculationMode;
 
     /** Original persisted two-property contract; older strict snapshot decoders remain compatible. */
     @JsonCreator
@@ -30,9 +32,16 @@ public final class BreakEvenPlanSummary {
     /** In-memory comparison metadata; policy provenance is persisted in the frozen plan inputs. */
     public BreakEvenPlanSummary(PersonSummary primary, PersonSummary spouse,
             SocialSecurityBenefitReductionPolicy benefitReductionPolicy) {
+        this(primary, spouse, benefitReductionPolicy, null);
+    }
+
+    private BreakEvenPlanSummary(PersonSummary primary, PersonSummary spouse,
+            SocialSecurityBenefitReductionPolicy benefitReductionPolicy,
+            com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode calculationMode) {
         this.primary = java.util.Objects.requireNonNull(primary);
         this.spouse = spouse;
         this.benefitReductionPolicy = benefitReductionPolicy;
+        this.calculationMode = calculationMode;
     }
 
     @JsonProperty("primary")
@@ -43,6 +52,14 @@ public final class BreakEvenPlanSummary {
 
     @JsonIgnore
     public SocialSecurityBenefitReductionPolicy benefitReductionPolicy() { return benefitReductionPolicy; }
+
+    /** Presentation derived from completed annual policy evidence, never serialized as old summary facts. */
+    @JsonIgnore
+    public com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode calculationMode() { return calculationMode; }
+
+    public BreakEvenPlanSummary withCalculationMode(com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode mode) {
+        return new BreakEvenPlanSummary(primary, spouse, benefitReductionPolicy, java.util.Objects.requireNonNull(mode));
+    }
 
     public record PersonSummary(String name, LocalDate birthDate, Integer retirementClaimingAge,
             LocalDate retirementClaimDate,
@@ -84,7 +101,7 @@ public final class BreakEvenPlanSummary {
     }
 
     public BreakEvenPlanSummary withBenefitReductionPolicy(SocialSecurityBenefitReductionPolicy policy) {
-        return new BreakEvenPlanSummary(primary, spouse, java.util.Objects.requireNonNull(policy));
+        return new BreakEvenPlanSummary(primary, spouse, java.util.Objects.requireNonNull(policy), calculationMode);
     }
 
     public boolean hasSpouse() { return spouse != null; }

@@ -62,6 +62,75 @@ public class ApplicationController {
     }
 
     private volatile RetirementPlan currentPlan;
+    public record CommonModeComparison(RetirementPlan owner, ProjectionBaseline originalBaseline,
+            Projection originalCurrent, long sourceRevision, Projection baseline, Projection current,
+            com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode mode,
+            List<NonInvestableAssetProjection> baselineNonInvestable, List<NonInvestableAssetProjection> currentNonInvestable,
+            BreakEvenPlanSummary baselineAssumptions, BreakEvenPlanSummary currentAssumptions,
+            String currentInputDigest, String baselineInputDigest) {
+        public CommonModeComparison {
+            baselineNonInvestable = List.copyOf(baselineNonInvestable);
+            currentNonInvestable = List.copyOf(currentNonInvestable);
+            if (com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(baseline) != mode
+                    || com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(current) != mode)
+                throw new IllegalArgumentException("Both comparison results must use the selected financial policy.");
+        }
+    }
+    private CommonModeComparison commonModeComparison;
+
+    /** Explicit new calculation only. Saved Current/Baseline records are never overwritten. */
+    public java.util.concurrent.CompletionStage<CommonModeComparison> calculateCommonModeComparison() {
+        var owner = currentPlan;
+        if (owner == null || owner.getBaseline() == null || currentProjection == null || !currentProjectionDeterministicallyApplicable())
+            throw new IllegalStateException("Run a current projection before calculating a common-mode comparison.");
+        var baseline = owner.getBaseline();
+        var originalCurrent = currentProjection;
+        long revision = sourcePlanRevision;
+        var currentDigest = CompleteProjectionSnapshot.digest(CompleteProjectionSnapshot.freeze(owner));
+        var baselineDigest = CompleteProjectionSnapshot.digest(CompleteProjectionSnapshot.freeze(baseline.getSnapshot()));
+        var copier = new com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService();
+        var a = copier.copy(owner);
+        var snapshot = baseline.getSnapshot();
+        var b = new RetirementPlan(snapshot.getHousehold(),snapshot.getAccountPortfolio(),snapshot.getPlanningAssumptions(),
+                snapshot.getRothConversionRequest(),snapshot.getNonInvestableAssets());
+        b.setConditionalBenefits(snapshot.getConditionalBenefits());
+        b = copier.copy(b);
+        var mode = com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.resolved(owner);
+        a.setFinancialCalculationMode(mode); b.setFinancialCalculationMode(mode);
+        var frozenBaseline = b;
+        return analysisResults.background(() -> {
+            var pb = projectionEngine.project(frozenBaseline);
+            var pa = projectionEngine.project(a);
+            return new CommonModeComparison(owner,baseline,originalCurrent,revision,pb,pa,mode,
+                    nonInvestableAssetProjectionService.project(frozenBaseline.getNonInvestableAssets(),pb.getStartYear(),pb.getEndYear()),
+                    nonInvestableAssetProjectionService.project(a.getNonInvestableAssets(),pa.getStartYear(),pa.getEndYear()),
+                    BreakEvenPlanSummary.from(frozenBaseline),BreakEvenPlanSummary.from(a),currentDigest,baselineDigest);
+        });
+    }
+
+    public boolean acceptCommonModeComparison(CommonModeComparison completed) {
+        if (completed.owner() != currentPlan || completed.originalBaseline() != currentPlan.getBaseline()
+                || completed.mode() != com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.resolved(currentPlan)
+                || completed.originalCurrent() != currentProjection || completed.sourceRevision() != sourcePlanRevision
+                || !completed.currentInputDigest().equals(CompleteProjectionSnapshot.digest(CompleteProjectionSnapshot.freeze(currentPlan)))
+                || !completed.baselineInputDigest().equals(CompleteProjectionSnapshot.digest(CompleteProjectionSnapshot.freeze(currentPlan.getBaseline().getSnapshot())))) return false;
+        commonModeComparison = completed;
+        insightSourceResult = null;
+        cachedBreakEvenInsight = null;
+        return true;
+    }
+
+    public String commonModeComparisonDisclosure() {
+        var result = currentCommonModeComparison();
+        return result == null ? "" : "New comparison — Financial Calculation Mode: " + result.mode().label()
+                + ". Both candidates were recomputed under this policy. Original saved Baseline details and history remain unchanged.";
+    }
+
+    private CommonModeComparison currentCommonModeComparison() {
+        var result = commonModeComparison;
+        return result != null && result.owner() == currentPlan && result.originalBaseline() == currentPlan.getBaseline()
+                && result.originalCurrent() == currentProjection && result.sourceRevision() == sourcePlanRevision ? result : null;
+    }
     private ProjectionSummary currentProjectionSummary;
     private Path currentFile;
     private volatile Projection currentProjection;
@@ -73,15 +142,16 @@ public class ApplicationController {
     public java.util.concurrent.CompletionStage<Void> getProjectionRestoration() { return projectionRestoration; }
     public boolean isRestoredProjectionMode() { return restoredProjectionMode; }
     public String getProjectionSnapshotNotice() {
-        if (currentPlan != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(currentPlan)) {
+        if (currentPlan != null && com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(currentPlan)) {
             try { com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(currentPlan); }
-            catch (com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.UnsupportedExecutionException unsupported) {
+            catch (UnsupportedOperationException unsupported) {
                 return unsupported.getMessage();
             }
             var original = getAcceptedProjectionSnapshot();
             return original != null && original.matches(currentPlan) && original.calculationSemanticsCurrent() ? projectionSnapshotNotice
                     : "Run a new deterministic projection to include the configured "
-                            + (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(currentPlan) ? "conditional benefits or contractual premiums" : "conditional benefits")
+                            + (currentPlan.getFinancialCalculationMode() != null ? "financial calculation mode and financial inputs"
+                                : com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(currentPlan) ? "conditional benefits or contractual premiums" : "conditional benefits")
                             + ". Prior results retain their original frozen assumptions. " + projectionSnapshotNotice;
         }
         var accepted = getAcceptedProjectionSnapshot();
@@ -117,7 +187,7 @@ public class ApplicationController {
     /** Called only at an eligible result acceptance, never passive restoration. Save commits the immutable pin. */
     public synchronized boolean associateAnalyzer(AnalyzerAdmission admission, com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion completion) {
         completion.validateCapabilities();
-        if (currentPlan != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(currentPlan)
+        if (currentPlan != null && com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(currentPlan)
                 && completion.kind() != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.COUPLE_SOCIAL_SECURITY
                 && completion.kind() != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
                 && completion.benefitExecution() == null
@@ -290,6 +360,7 @@ public class ApplicationController {
             var inputs = originalBaseline.restoreInputs();
             var target = new RetirementPlan(inputs.getHousehold(), inputs.getAccountPortfolio(), inputs.getPlanningAssumptions(),
                     inputs.getRothConversionRequest(), inputs.getNonInvestableAssets(), owner.getPlanId(), inputs.getConditionalBenefits());
+            if (inputs.getFinancialCalculationMode() != null) target.setFinancialCalculationMode(inputs.getFinancialCalculationMode());
             target.setBaseline(new ProjectionBaseline(originalCurrent.restoreInputs(),
                     java.time.LocalDateTime.ofInstant(originalCurrent.acceptedAt(), java.time.ZoneId.systemDefault()),
                     "Original accepted projection " + originalCurrent.id(), originalCurrent.id()));
@@ -374,6 +445,7 @@ public class ApplicationController {
                     var roots = CompleteProjectionSnapshot.restoreInputs(inputs);
                     var copy = new RetirementPlan(roots.getHousehold(), roots.getAccountPortfolio(), roots.getPlanningAssumptions(),
                             roots.getRothConversionRequest(), roots.getNonInvestableAssets(), identity, roots.getConditionalBenefits());
+            if (roots.getFinancialCalculationMode() != null) copy.setFinancialCalculationMode(roots.getFinancialCalculationMode());
                     if (baseline != null) copy.setBaseline(new ProjectionBaseline(CompleteProjectionSnapshot.restoreInputs(baselineInputs),
                             baseline.getSavedAt(), baseline.getDescription(), baseline.getProjectionSnapshotId()));
                     if (configurations != null) copy.setAnalyzerConfigurations(configurations);
@@ -565,6 +637,7 @@ public class ApplicationController {
             var roots = CompleteProjectionSnapshot.restoreInputs(inputs);
             var copy = new RetirementPlan(roots.getHousehold(), roots.getAccountPortfolio(), roots.getPlanningAssumptions(),
                     roots.getRothConversionRequest(), roots.getNonInvestableAssets(), identity, roots.getConditionalBenefits());
+            if (roots.getFinancialCalculationMode() != null) copy.setFinancialCalculationMode(roots.getFinancialCalculationMode());
             if (baseline != null) copy.setBaseline(new ProjectionBaseline(CompleteProjectionSnapshot.restoreInputs(baselineInputs),
                     baseline.getSavedAt(), baseline.getDescription(), baseline.getProjectionSnapshotId()));
             if (configurations != null) copy.setAnalyzerConfigurations(configurations);
@@ -646,8 +719,11 @@ public class ApplicationController {
     }
 
     public boolean canRequestBreakEven() {
-        return currentPlan != null && currentPlan.getBaseline() != null && currentProjection != null && baselineProjection != null
-                && cachedBaselineIdentity == currentPlan.getBaseline();
+        if (currentCommonModeComparison() != null) return true;
+        if (currentPlan == null || currentPlan.getBaseline() == null || currentProjection == null || baselineProjection == null
+                || cachedBaselineIdentity != currentPlan.getBaseline()) return false;
+        return currentCommonModeComparison() != null || com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(baselineProjection)
+                == com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(currentProjection);
     }
     public BreakEvenAnalysisResult requestBreakEvenAnalysis() {
         return computeBreakEvenAnalysis();
@@ -990,6 +1066,7 @@ public class ApplicationController {
             var executionPlan = new RetirementPlan(frozen.getHousehold(), frozen.getAccountPortfolio(),
                     frozen.getPlanningAssumptions(), frozen.getRothConversionRequest(), frozen.getNonInvestableAssets());
             executionPlan.setConditionalBenefits(frozen.getConditionalBenefits());
+            if (frozen.getFinancialCalculationMode() != null) executionPlan.setFinancialCalculationMode(frozen.getFinancialCalculationMode());
             java.util.UUID ownerIdentity = getAnalysisSessionId();
             // Preserve the established normal-result account identities. The synchronous engine
             // receives the same live graph as before; detached metadata and the post-run guards
@@ -1161,6 +1238,18 @@ public class ApplicationController {
     }
 
     private BreakEvenAnalysisResult computeBreakEvenAnalysis() {
+        var common = currentCommonModeComparison();
+        if (common != null) {
+            var result = breakEvenAnalyzerFactory.get().analyze(
+                    new BreakEvenProjectionSnapshot(common.baseline().getYears(),common.baselineNonInvestable(),common.baselineAssumptions()),
+                    new BreakEvenProjectionSnapshot(common.current().getYears(),common.currentNonInvestable(),common.currentAssumptions()));
+            insightSourceResult = result; insightCurrentProjection = currentProjection; insightBaselineProjection = baselineProjection;
+            insightBaselineIdentity = currentPlan.getBaseline();
+            cachedBreakEvenInsight = new com.daviddunn.retirementplanner.domain.breakeven.BreakEvenInsightService()
+                    .prepare(result,common.baseline().getYears(),common.current().getYears());
+            return result;
+        }
+        if (currentPlan != null && baselineProjection != null && currentProjection != null && !canRequestBreakEven()) return null;
         if (currentPlan == null || currentPlan.getBaseline() == null
                 || cachedBaselineIdentity != currentPlan.getBaseline()
                 || baselineProjection == null || currentProjection == null
@@ -1169,16 +1258,17 @@ public class ApplicationController {
             return null;
         }
         var result = breakEvenAnalyzerFactory.get().analyze(
-                new BreakEvenProjectionSnapshot(baselineProjection.getYears(),
+                new BreakEvenProjectionSnapshot((common == null ? baselineProjection : common.baseline()).getYears(),
                         baselineNonInvestableAssetProjections, baselineProjectionAssumptions),
-                new BreakEvenProjectionSnapshot(currentProjection.getYears(),
+                new BreakEvenProjectionSnapshot((common == null ? currentProjection : common.current()).getYears(),
                         currentNonInvestableAssetProjections, currentProjectionAssumptions));
         insightSourceResult = result;
         insightCurrentProjection = currentProjection;
         insightBaselineProjection = baselineProjection;
         insightBaselineIdentity = currentPlan.getBaseline();
         cachedBreakEvenInsight = new com.daviddunn.retirementplanner.domain.breakeven.BreakEvenInsightService()
-                .prepare(result, baselineProjection.getYears(), currentProjection.getYears());
+                .prepare(result, (common == null ? baselineProjection : common.baseline()).getYears(),
+                        (common == null ? currentProjection : common.current()).getYears());
         return result;
     }
 
@@ -1202,20 +1292,21 @@ public class ApplicationController {
 
         var comparisonOwner = currentPlan;
         var comparisonBaseline = currentPlan.getBaseline();
+        var common = currentCommonModeComparison();
         Projection baseline =
-                getBaselineProjection();
+                common == null ? getBaselineProjection() : common.baseline();
 
         Projection current =
-                getCurrentProjection();
+                common == null ? getCurrentProjection() : common.current();
 
         var comparison = projectionComparisonService.compare(
                 baseline,
-                getBaselineNonInvestableAssetProjections(),
+                common == null ? getBaselineNonInvestableAssetProjections() : common.baselineNonInvestable(),
                 current,
-                getCurrentNonInvestableAssetProjections());
-        if (comparisonOwner == currentPlan && comparisonBaseline == currentPlan.getBaseline() && current == currentProjection) {
+                common == null ? getCurrentNonInvestableAssetProjections() : common.currentNonInvestable());
+        if (comparisonOwner == currentPlan && comparisonBaseline == currentPlan.getBaseline() && (current == currentProjection || common != null)) {
             detailsComparison = comparison;
-            detailsComparisonCurrent = current;
+            detailsComparisonCurrent = currentProjection;
             detailsComparisonBaseline = comparisonBaseline;
             detailsComparisonOwner = comparisonOwner;
         }
@@ -1224,6 +1315,11 @@ public class ApplicationController {
 
     /** Cache-only eligibility. Never calculates or compares editable UI drafts. */
     public synchronized boolean canViewBaselineDetails(Projection displayed) {
+        if (currentPlan != null && currentPlan.getBaseline() != null && displayed != null && displayed == currentProjection
+                && baselineProjection != null && cachedBaselineIdentity == currentPlan.getBaseline()
+                && baselineDetailsInputs != null && currentDetailsContext != null
+                && com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(baselineProjection)
+                    != com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(displayed)) return true;
         return currentPlan != null && currentPlan.getBaseline() != null && displayed != null
                 && currentPlan == detailsComparisonOwner
                 && displayed == currentProjection && displayed == detailsComparisonCurrent
@@ -1239,6 +1335,10 @@ public class ApplicationController {
         String status = context == null ? "Current projection inputs: Not recorded. Live plan values are not substituted."
                 : (getAcceptedProjectionSnapshot() != null ? currentProjectionDeterministicallyApplicable() : context.sourceRevision() == sourcePlanRevision) ? "Current projection — frozen effective inputs"
                 : "Potentially outdated projection — inputs or financial calculation semantics differ. Original frozen results are preserved.";
+        if (baselineProjection != null && (baseline.getSnapshot().getFinancialCalculationMode() != null
+                || displayed.getYearAt(0).getIncomeSources().stream().anyMatch(s -> s.calculationMode().isPresent())))
+            status += " Original Baseline: " + com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.disclosure(baselineProjection.getYearAt(0).getIncomeSources())
+                    + " Current result: " + com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.disclosure(displayed.getYearAt(0).getIncomeSources());
         return new com.daviddunn.retirementplanner.app.baseline.BaselineDetailsSession(baseline.getDescription(), baseline.getSavedAt(),
                 context == null ? null : context.runId(), context == null ? null : context.planIdentity(), context == null ? null : context.completedAt(),
                 displayed.isEmpty() ? "Not recorded" : displayed.getStartYear() + "–" + displayed.getEndYear(), status,
@@ -1326,7 +1426,14 @@ public class ApplicationController {
 
     public RetirementPlan newPlan() {
 
-        return newPlan(RetirementPlanFactory.createSinglePersonPlan());
+        return newUserPlan(RetirementPlanFactory.createSinglePersonPlan());
+    }
+
+    /** User creation boundary only; load, history and generic isolated plans never consult preferences. */
+    public RetirementPlan newUserPlan(RetirementPlan plan) {
+        if (plan.getFinancialCalculationMode() == null)
+            plan.setFinancialCalculationMode(settingsService.snapshot().getDefaultFinancialCalculationMode());
+        return newPlan(plan);
     }
 
     /** Activates an isolated, completed new-plan draft using the existing New lifecycle. */

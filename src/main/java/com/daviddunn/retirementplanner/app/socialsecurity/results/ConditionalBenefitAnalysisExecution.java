@@ -24,6 +24,12 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
     public static final int PREMIUM_VERSION = 3;
     public static final String PREMIUM_MODEL = "ANALYZER_CONTRACTUAL_PREMIUMS_V3";
     public static final String PREMIUM_ALGORITHM = "analyzer-contractual-premiums-v3";
+    public static final int ANNUITY_VERSION = 4;
+    public static final String ANNUITY_MODEL = "ANALYZER_NONQUALIFIED_ANNUITY_NIIT_GUARDED_V4";
+    public static final String ANNUITY_ALGORITHM = "analyzer-nonqualified-annuity-niit-guarded-v4";
+    public static final int MODE_VERSION = 5;
+    public static final String BASIC_MODEL = "ANALYZER_BASIC_NIIT_NOT_MODELED_V5";
+    public static final String ADVANCED_MODEL = "ANALYZER_ADVANCED_NIIT_GUARDED_V5";
     private static final ObjectMapper JSON = new ObjectMapper().registerModule(new JavaTimeModule());
 
     public enum Role { ANALYZED_PLAN, CURRENT, BASELINE }
@@ -35,7 +41,7 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
             var plan = MonteCarloPlanDocument.read(originalInputs);
             if (!digest(originalInputs).equals(inputDigest)
                     || !definitionsDigest(plan).equals(definitionDigest)
-                    || enabled != com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan))
+                    || enabled != com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(plan))
                 throw new IllegalArgumentException("Conditional-benefit candidate input binding is invalid.");
             plan.validateHouseholdReferences();
         }
@@ -43,7 +49,7 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
         static Candidate capture(Role role, String inputs) {
             var plan = MonteCarloPlanDocument.read(inputs);
             return new Candidate(role, inputs, digest(inputs), definitionsDigest(plan),
-                    com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan));
+                    com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(plan));
         }
         @Override public String toString() {
             return "Candidate[role=" + role + ", enabled=" + enabled + ", inputDigest=" + inputDigest
@@ -55,8 +61,10 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
         Objects.requireNonNull(family);
         if (!(version == VERSION && MODEL.equals(model)
                 || version == LIFE_PRINCIPAL_VERSION && LIFE_PRINCIPAL_MODEL.equals(model)
-                || version == PREMIUM_VERSION && PREMIUM_MODEL.equals(model))
-                || !protocol(family).equals(scenarioProtocol))
+                || version == PREMIUM_VERSION && PREMIUM_MODEL.equals(model)
+                || version == ANNUITY_VERSION && ANNUITY_MODEL.equals(model)
+                || version == MODE_VERSION && (BASIC_MODEL.equals(model) || ADVANCED_MODEL.equals(model)))
+                || !(version == MODE_VERSION ? modeProtocol(family) : protocol(family)).equals(scenarioProtocol))
             throw new IllegalArgumentException("Unsupported conditional-benefit analyzer capability.");
         candidates = List.copyOf(candidates);
         boolean paired = family.name().contains("PAIRED");
@@ -70,10 +78,21 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
                 MonteCarloPlanDocument.read(c.originalInputs()).getConditionalBenefits()));
         boolean premiums = candidates.stream().anyMatch(c -> com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(
                 MonteCarloPlanDocument.read(c.originalInputs())));
-        if (premiums != (version == PREMIUM_VERSION) || !premiums && principal != (version == LIFE_PRINCIPAL_VERSION))
+        boolean annuities = candidates.stream().anyMatch(c -> ConditionalBenefits.hasAnnuity(
+                MonteCarloPlanDocument.read(c.originalInputs()).getConditionalBenefits()));
+        boolean explicitMode = candidates.stream().anyMatch(c -> MonteCarloPlanDocument.read(c.originalInputs()).getFinancialCalculationMode() != null);
+        boolean legacyFeatureMismatch = annuities != (version == ANNUITY_VERSION)
+                || !annuities && (premiums != (version == PREMIUM_VERSION)
+                    || !premiums && principal != (version == LIFE_PRINCIPAL_VERSION));
+        if (version == MODE_VERSION ? !model.equals(selectedModeModel(candidates.getFirst().originalInputs()))
+                : explicitMode || legacyFeatureMismatch)
             throw new IllegalArgumentException("Conditional tax character does not match its execution capability.");
         for (var candidate : candidates) {
             var plan = MonteCarloPlanDocument.read(candidate.originalInputs());
+            if (version == MODE_VERSION) plan.setFinancialCalculationMode(BASIC_MODEL.equals(model)
+                    ? com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.BASIC
+                    : com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.ADVANCED);
+            if (annuities || version == MODE_VERSION) NonqualifiedAnnuityAdmission.requireSupported(plan);
             if (plan.getHousehold().hasSpouse() != (family.shape() == AnalysisKind.Shape.COUPLE))
                 throw new IllegalArgumentException("Conditional-benefit candidate household does not match its family.");
         }
@@ -84,23 +103,60 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
     }
 
     public static ConditionalBenefitAnalysisExecution capture(AnalysisKind kind, String current, String baseline) {
+        var a = MonteCarloPlanDocument.read(current);
+        var b = baseline == null ? null : MonteCarloPlanDocument.read(baseline);
+        if (a.getFinancialCalculationMode() != null || b != null
+                && com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.comparisonMode(a,b) != null) {
+            return new ConditionalBenefitAnalysisExecution(MODE_VERSION, selectedModeModel(current), kind, modeProtocol(kind), baseline == null
+                    ? List.of(Candidate.capture(Role.ANALYZED_PLAN,current))
+                    : List.of(Candidate.capture(Role.CURRENT,current),Candidate.capture(Role.BASELINE,baseline)));
+        }
+        return captureLegacy(kind,current,baseline);
+    }
+
+    public static ConditionalBenefitAnalysisExecution captureLegacy(AnalysisKind kind, String current, String baseline) {
+        boolean annuities = ConditionalBenefits.hasAnnuity(MonteCarloPlanDocument.read(current).getConditionalBenefits())
+                || baseline != null && ConditionalBenefits.hasAnnuity(MonteCarloPlanDocument.read(baseline).getConditionalBenefits());
         boolean principal = ConditionalBenefits.hasExcludedPrincipal(MonteCarloPlanDocument.read(current).getConditionalBenefits())
                 || baseline != null && ConditionalBenefits.hasExcludedPrincipal(MonteCarloPlanDocument.read(baseline).getConditionalBenefits());
         boolean premiums = com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(current))
                 || baseline != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(baseline));
-        return new ConditionalBenefitAnalysisExecution(premiums ? PREMIUM_VERSION : principal ? LIFE_PRINCIPAL_VERSION : VERSION,
-                premiums ? PREMIUM_MODEL : principal ? LIFE_PRINCIPAL_MODEL : MODEL, kind, protocol(kind), baseline == null
+        return new ConditionalBenefitAnalysisExecution(annuities ? ANNUITY_VERSION : premiums ? PREMIUM_VERSION : principal ? LIFE_PRINCIPAL_VERSION : VERSION,
+                annuities ? ANNUITY_MODEL : premiums ? PREMIUM_MODEL : principal ? LIFE_PRINCIPAL_MODEL : MODEL, kind, protocol(kind), baseline == null
                 ? List.of(Candidate.capture(Role.ANALYZED_PLAN, current))
                 : List.of(Candidate.capture(Role.CURRENT, current), Candidate.capture(Role.BASELINE, baseline)));
     }
 
-    public boolean includesPremiums() { return version == PREMIUM_VERSION; }
-    public boolean excludesLifePrincipal() { return version == LIFE_PRINCIPAL_VERSION || includesPremiums() && candidates.stream().anyMatch(c ->
+    public boolean hasCalculationMode() { return version == MODE_VERSION; }
+    /** BASIC alone must not remove the established no-feature supplied-world calculation path. */
+    public boolean supportsLegacyWorlds() {
+        return hasCalculationMode() && calculationMode() == com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.BASIC
+                && candidates.stream().noneMatch(c -> {
+                    var plan = MonteCarloPlanDocument.read(c.originalInputs());
+                    return com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan)
+                            || com.daviddunn.retirementplanner.app.montecarlo.ExpenseExecution.configured(plan);
+                });
+    }
+    public com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode calculationMode() {
+        if (!hasCalculationMode()) throw new IllegalStateException("Legacy capability has no common mode.");
+        return BASIC_MODEL.equals(model) ? com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.BASIC
+                : com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.ADVANCED;
+    }
+    private static String selectedModeModel(String inputs) {
+        return com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.resolved(MonteCarloPlanDocument.read(inputs))
+                == com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.BASIC ? BASIC_MODEL : ADVANCED_MODEL;
+    }
+    public boolean includesAnnuities() { return version == ANNUITY_VERSION || hasCalculationMode() && candidates.stream().anyMatch(c ->
+            ConditionalBenefits.hasAnnuity(MonteCarloPlanDocument.read(c.originalInputs()).getConditionalBenefits())); }
+    public boolean includesPremiums() { return version == PREMIUM_VERSION || (includesAnnuities() || hasCalculationMode()) && candidates.stream().anyMatch(c ->
+            com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(c.originalInputs()))); }
+    public boolean excludesLifePrincipal() { return version == LIFE_PRINCIPAL_VERSION || (includesPremiums() || includesAnnuities() || hasCalculationMode()) && candidates.stream().anyMatch(c ->
             ConditionalBenefits.hasExcludedPrincipal(MonteCarloPlanDocument.read(c.originalInputs()).getConditionalBenefits())); }
-    public String algorithm() { return includesPremiums() ? PREMIUM_ALGORITHM : excludesLifePrincipal() ? LIFE_PRINCIPAL_ALGORITHM : ALGORITHM; }
+    public String algorithm() { return hasCalculationMode() ? BASIC_MODEL.equals(model) ? "analyzer-basic-niit-not-modeled-v5" : "analyzer-advanced-niit-guarded-v5"
+            : includesAnnuities() ? ANNUITY_ALGORITHM : includesPremiums() ? PREMIUM_ALGORITHM : excludesLifePrincipal() ? LIFE_PRINCIPAL_ALGORITHM : ALGORITHM; }
 
     public void validate(AnalysisKind kind, String current, String baseline) {
-        if (!equals(capture(kind, current, baseline)))
+        if (!equals(hasCalculationMode() ? capture(kind,current,baseline) : captureLegacy(kind, current, baseline)))
             throw new IllegalArgumentException("Conditional-benefit capability differs from the original analyzer request.");
     }
 
@@ -113,14 +169,25 @@ public record ConditionalBenefitAnalysisExecution(int version, String model, Ana
                 ? "WEIGHTED_LIFETIME_JAN1_PRIOR_DEC31_FULL_EVALUATION_V1" : "INTEGRATED_DETERMINISTIC_V1";
     }
 
+    private static String modeProtocol(AnalysisKind kind) {
+        if (!kind.isMonteCarlo()) return protocol(kind);
+        return kind.name().endsWith("LONGEVITY") ? "FROZEN_REQUEST_LIFETIME_JAN1_PRIOR_DEC31_V1" : "FROZEN_REQUEST_CONFIGURED_DEATHS_V1";
+    }
+
     /** Original assumptions only. This does not evaluate benefits or infer which events occurred. */
     public List<String> disclosure() {
         var lines = new ArrayList<String>();
-        lines.add("Conditional benefit execution: " + model + "; " + scenarioProtocol + ".");
+        lines.add((hasCalculationMode() ? "Financial calculation execution: " : "Conditional benefit execution: ") + model + "; " + scenarioProtocol + ".");
+        if (hasCalculationMode()) lines.add("Financial Calculation Mode: " + calculationMode().label() + ". " + calculationMode().disclosure());
         for (var candidate : candidates) {
             String side = candidate.role() == Role.ANALYZED_PLAN ? "Analyzed plan"
                     : candidate.role() == Role.CURRENT ? "Current" : "Baseline";
             var plan = MonteCarloPlanDocument.read(candidate.originalInputs());
+            if (hasCalculationMode()) {
+                lines.add(side + " — Original saved mode: " + (plan.getFinancialCalculationMode() == null ? "Legacy compatibility" : plan.getFinancialCalculationMode().label())
+                        + "; common execution mode: " + calculationMode().label() + ".");
+                plan.setFinancialCalculationMode(calculationMode());
+            }
             lines.addAll(com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.lines(plan, side));
         }
         return List.copyOf(lines);

@@ -16,6 +16,7 @@ public final class ConditionalBenefitAdmission {
     }
 
     public static void requireDeterministicSupported(RetirementPlan plan) {
+        NonqualifiedAnnuityAdmission.requireSupported(Objects.requireNonNull(plan));
         if (Objects.requireNonNull(plan).getConditionalBenefits().isEmpty()) return;
         plan.validateHouseholdReferences();
         var state = plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction();
@@ -28,7 +29,8 @@ public final class ConditionalBenefitAdmission {
     }
 
     public static void requireOptimizationSupported(RetirementPlan plan) {
-        if (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(Objects.requireNonNull(plan)))
+        if (plan.getFinancialCalculationMode() == com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.ADVANCED
+                || com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(Objects.requireNonNull(plan)))
             throw new UnsupportedExecutionException("Conditional benefits require independent full scenario evaluation. "
                     + "Prefix and strategy-equivalence reuse have not been verified for these inputs.");
     }

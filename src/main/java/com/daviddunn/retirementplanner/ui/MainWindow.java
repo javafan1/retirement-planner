@@ -185,6 +185,13 @@ public class MainWindow {
                 this::onPlanChanged);
 
         assumptionsView.setOnPlanChanged(() -> {
+            if (assumptionsView.lastApplyChangedCalculationMode()) {
+                controller.markModified();
+                refreshProjectionViews(false);
+                updateWindowTitle();
+                statusLabel.setText("Financial calculation mode changed. Run a new projection; historical results are preserved.");
+                return;
+            }
             if (collectingViewEdits) {
                 controller.markModified();
                 controller.invalidateProjection();
@@ -1354,13 +1361,13 @@ public class MainWindow {
     private void onNew() {
         if (planOperationActive || swappingProjections) return;
 
-        new com.daviddunn.retirementplanner.ui.wizard.NewRetirementPlanWizard(stage)
+        new com.daviddunn.retirementplanner.ui.wizard.NewRetirementPlanWizard(stage,controller.getSettingsService().snapshot().getDefaultFinancialCalculationMode())
                 .showAndWait().ifPresent(plan -> {
                     // Opening/canceling the wizard must preserve even unapplied tab edits.
                     if (!confirmPlanDeparture()) {
                         return;
                     }
-                    controller.newPlan(plan);
+                    controller.newUserPlan(plan);
                     // Legal empty plans retain Phase 5A's deferred projection; populated plans use the normal engine.
                     loadCurrentPlan(false);
                     if (!plan.getAccountPortfolio().getAccounts().isEmpty()

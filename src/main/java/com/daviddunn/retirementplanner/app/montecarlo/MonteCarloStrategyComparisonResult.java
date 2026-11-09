@@ -39,8 +39,9 @@ public final class MonteCarloStrategyComparisonResult {
         this.worldSource = Objects.requireNonNull(worldSource);
         this.expenseExecution = expenseExecution;
         this.benefitExecution = benefitExecution;
-        if ((expenseExecution != null || benefitExecution != null) && worldSource != WorldSource.GENERATED)
-            throw new IllegalArgumentException("Enabled paired expenses require generated worlds.");
+        if ((expenseExecution != null || benefitExecution != null && !benefitExecution.supportsLegacyWorlds())
+                && worldSource != WorldSource.GENERATED)
+            throw new IllegalArgumentException("Enabled paired expenses or financial capabilities require generated worlds.");
         this.outcomes = List.copyOf(outcomes);
         outcomes = this.outcomes;
         if (outcomes.size() != request.assumptions().settings().simulationCount()) {

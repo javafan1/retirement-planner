@@ -1,0 +1,344 @@
+package com.daviddunn.retirementplanner.domain.model;
+
+import com.daviddunn.retirementplanner.domain.baseline.ProjectionBaseline;
+import com.daviddunn.retirementplanner.domain.financial.AccountPortfolio;
+import com.daviddunn.retirementplanner.domain.roth.RothConversionRequest;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAsset;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+
+public class RetirementPlan {
+    private List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> conditionalBenefits = List.of();
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
+    public List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> getConditionalBenefits() {
+        return conditionalBenefits;
+    }
+
+    public void setConditionalBenefits(List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> definitions) {
+        conditionalBenefits = com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefits.validatedCopy(definitions, household);
+    }
+
+    private static final java.util.regex.Pattern PLAN_ID_PATTERN = java.util.regex.Pattern.compile(
+            "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    private String planId;
+    private volatile com.daviddunn.retirementplanner.app.projection.ProjectionRoleManifest projectionState;
+    private volatile java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot> associatedAnalyzerResults = java.util.Map.of();
+    private volatile java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion> pendingAnalyzerAssociations = java.util.Map.of();
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion> getPendingAnalyzerAssociations() { return pendingAnalyzerAssociations; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void installPendingAnalyzerAssociations(java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion> values) {
+        if (values.size() > 30) throw new IllegalArgumentException("Too many pending analyzer associations.");
+        pendingAnalyzerAssociations = java.util.Map.copyOf(values);
+    }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot> getAssociatedAnalyzerResults() { return associatedAnalyzerResults; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void installAssociatedAnalyzerResults(java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot> values) {
+        if (values.size() > 30) throw new IllegalArgumentException("Too many associated analyzer results.");
+        associatedAnalyzerResults = java.util.Map.copyOf(values);
+    }
+    private java.nio.file.Path projectionComponentSource;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.nio.file.Path getProjectionComponentSource() { return projectionComponentSource; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void setProjectionComponentSource(java.nio.file.Path source) { projectionComponentSource = source; }
+    private volatile java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> projectionComponents = java.util.Map.of();
+    private java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> pendingPinnedProjections = java.util.Map.of();
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> getPendingPinnedProjections() { return pendingPinnedProjections; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void installPendingPinnedProjections(java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> values) {
+        if (values.size() > 30) throw new IllegalArgumentException("Too many pending pinned projection contexts.");
+        pendingPinnedProjections = java.util.Map.copyOf(values);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public com.daviddunn.retirementplanner.app.projection.ProjectionRoleManifest getProjectionState() { return projectionState; }
+    public void setProjectionState(com.daviddunn.retirementplanner.app.projection.ProjectionRoleManifest state) { projectionState = state; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> getProjectionComponents() { return projectionComponents; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void installProjectionComponents(java.util.Map<java.util.UUID, com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> components) {
+        if (components.size() > 2) throw new IllegalArgumentException("Only current and baseline projection components are supported.");
+        projectionComponents = java.util.Map.copyOf(components);
+    }
+    private volatile com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations analyzerConfigurations;
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations getAnalyzerConfigurations() {
+        return analyzerConfigurations;
+    }
+
+    public void setAnalyzerConfigurations(com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfigurations configurations) {
+        analyzerConfigurations = Objects.requireNonNull(configurations);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public String getPlanId() { return planId; }
+
+    /** Persistence identity only; never consulted by financial calculations. */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void assignPlanId(java.util.UUID identity) {
+        planId = Objects.requireNonNull(identity).toString();
+    }
+
+    public static java.util.UUID validatedPlanId(String value) {
+        if (value == null || !PLAN_ID_PATTERN.matcher(value).matches()) {
+            throw new IllegalArgumentException("Plan identity must be a canonical UUID.");
+        }
+        return java.util.UUID.fromString(value);
+    }
+
+    private Household household;
+    private final AccountPortfolio accountPortfolio;
+
+    private PlanningAssumptions planningAssumptions;
+
+    private RothConversionRequest rothConversionRequest;
+
+    private ProjectionBaseline baseline;
+
+    private final List<NonInvestableAsset>
+            nonInvestableAssets =
+            new ArrayList<>();
+    @JsonCreator
+    public RetirementPlan(
+            @JsonProperty("household")
+            Household household,
+
+            @JsonProperty("accountPortfolio")
+            AccountPortfolio accountPortfolio,
+
+            @JsonProperty("planningAssumptions")
+            PlanningAssumptions planningAssumptions,
+
+            @JsonProperty("rothConversionRequest")
+            RothConversionRequest rothConversionRequest,
+
+            @JsonProperty("nonInvestableAssets")
+            List<NonInvestableAsset> nonInvestableAssets,
+            @JsonProperty("planId") String planId,
+            @JsonProperty("conditionalBenefits") List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> conditionalBenefits) {
+
+        this.planId = planId == null ? null : validatedPlanId(planId).toString();
+
+        this.household =
+                Objects.requireNonNull(
+                        household);
+
+        this.accountPortfolio =
+                accountPortfolio != null
+                        ? accountPortfolio
+                        : new AccountPortfolio();
+
+        this.planningAssumptions =
+                Objects.requireNonNull(
+                        planningAssumptions);
+
+        this.rothConversionRequest =
+                rothConversionRequest;
+
+        if (nonInvestableAssets != null) {
+            this.nonInvestableAssets.addAll(
+                    nonInvestableAssets);
+        }
+        setConditionalBenefits(conditionalBenefits);
+        validateHouseholdReferences();
+    }
+
+    public RetirementPlan(Household household, AccountPortfolio portfolio, PlanningAssumptions assumptions,
+            RothConversionRequest roth, List<NonInvestableAsset> assets, String planId) {
+        this(household, portfolio, assumptions, roth, assets, planId, List.of());
+    }
+
+    public RetirementPlan(Household household, AccountPortfolio portfolio,
+            PlanningAssumptions assumptions, RothConversionRequest roth,
+            List<NonInvestableAsset> assets) {
+        this(household, portfolio, assumptions, roth, assets, java.util.UUID.randomUUID().toString());
+    }
+
+    /** Recheck at persistence/admission boundaries because account and income lists are mutable. */
+    public void validateHouseholdReferences() {
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefits.validatedCopy(conditionalBenefits, household);
+        household.validatePersonReferences();
+        accountPortfolio.getAccounts().forEach(account ->
+                household.validateOwnership(account.getOwnership(), "account " + account.getName()));
+        if (!household.hasSpouse()
+                && planningAssumptions.getDeathScenarioAssumptions().getDeathScenario() != DeathScenario.BOTH_SURVIVE) {
+            throw new IllegalArgumentException("Couple death scenarios are not supported for a single-person plan.");
+        }
+        if (baseline != null) {
+            baseline.getSnapshot().validateHouseholdReferences();
+        }
+    }
+
+    /*
+     * Existing application compatibility constructor.
+     *
+     * Plans created before Roth conversion support
+     * simply have no conversion request.
+     */
+    public RetirementPlan(
+            Household household,
+            AccountPortfolio accountPortfolio,
+            PlanningAssumptions planningAssumptions) {
+
+        this(
+                household,
+                accountPortfolio,
+                planningAssumptions,
+                null,
+                null);
+    }
+
+    public RetirementPlan(
+            Household household,
+            AccountPortfolio accountPortfolio,
+            PlanningAssumptions planningAssumptions,
+            RothConversionRequest rothConversionRequest) {
+
+        this(
+                household,
+                accountPortfolio,
+                planningAssumptions,
+                rothConversionRequest,
+                null);
+    }
+
+    public Household getHousehold() {
+        return household;
+    }
+
+    /** Explicit membership edit. Never deletes or reassigns financial records. */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void setSpouse(Person spouse) {
+        if (household.spouse().orElse(null) == spouse) return;
+        if (household.hasSpouse()) {
+            Person existing = household.getSpouse();
+            List<String> dependencies = new ArrayList<>();
+            conditionalBenefits.stream().filter(com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition::referencesSpouse)
+                    .forEach(benefit -> dependencies.add("conditional benefit " + benefit.label()));
+            existing.getAccounts().forEach(account -> dependencies.add("account " + account.getName()));
+            existing.getIncomeSources().forEach(income -> dependencies.add("income " + income.getName()));
+            household.getPrimaryPerson().getAccounts().stream()
+                    .filter(account -> account.getOwnership() != AccountOwnership.PRIMARY)
+                    .forEach(account -> dependencies.add("account " + account.getName()));
+            accountPortfolio.getAccounts().stream()
+                    .filter(account -> account.getOwnership() != AccountOwnership.PRIMARY)
+                    .forEach(account -> dependencies.add("account " + account.getName()));
+            household.getPrimaryPerson().getIncomeSources().stream()
+                    .filter(income -> income instanceof com.daviddunn.retirementplanner.domain.income.Pension)
+                    .map(income -> (com.daviddunn.retirementplanner.domain.income.Pension) income)
+                    .filter(pension -> pension.getSurvivorMonthlyBenefit() != null
+                            && pension.getSurvivorMonthlyBenefit().signum() > 0)
+                    .forEach(pension -> dependencies.add("survivor pension " + pension.getName()));
+            if (planningAssumptions.getDeathScenarioAssumptions().getDeathScenario() != DeathScenario.BOTH_SURVIVE) {
+                dependencies.add("couple death scenario");
+            }
+            if (!dependencies.isEmpty()) {
+                throw new IllegalArgumentException("Cannot remove or replace spouse while these records depend on them: "
+                        + String.join(", ", dependencies) + ". Update these records first.");
+            }
+        }
+        Household replacement = new Household(household.getPrimaryPerson(), spouse);
+        accountPortfolio.getAccounts().forEach(account ->
+                replacement.validateOwnership(account.getOwnership(), "account " + account.getName()));
+        household.getExpenses().forEach(replacement::addExpense);
+        // Do not alter membership of a previously captured baseline household.
+        household = replacement;
+    }
+
+    public PlanningAssumptions getPlanningAssumptions() {
+        return planningAssumptions;
+    }
+
+    public AccountPortfolio getAccountPortfolio() {
+        return accountPortfolio;
+    }
+
+    public RothConversionRequest getRothConversionRequest() {
+        return rothConversionRequest;
+    }
+
+    public void setPlanningAssumptions(
+            PlanningAssumptions planningAssumptions) {
+
+        this.planningAssumptions =
+                Objects.requireNonNull(
+                        planningAssumptions);
+    }
+
+    public void setRothConversionRequest(
+            RothConversionRequest rothConversionRequest) {
+
+        this.rothConversionRequest =
+                rothConversionRequest;
+    }
+    public List<NonInvestableAsset>
+    getNonInvestableAssets() {
+
+        return Collections.unmodifiableList(
+                nonInvestableAssets);
+    }
+
+    public void addNonInvestableAsset(
+            NonInvestableAsset asset) {
+
+        nonInvestableAssets.add(
+                Objects.requireNonNull(asset));
+    }
+
+    public void removeNonInvestableAsset(
+            NonInvestableAsset asset) {
+
+        nonInvestableAssets.remove(
+                Objects.requireNonNull(asset));
+    }
+
+    public void replaceNonInvestableAsset(
+            NonInvestableAsset oldAsset,
+            NonInvestableAsset newAsset) {
+
+        Objects.requireNonNull(oldAsset);
+        Objects.requireNonNull(newAsset);
+
+        int index =
+                nonInvestableAssets.indexOf(
+                        oldAsset);
+
+        if (index >= 0) {
+            nonInvestableAssets.set(
+                    index,
+                    newAsset);
+        }
+    }
+
+    public void setNonInvestableAssets(
+            List<NonInvestableAsset> assets) {
+
+        nonInvestableAssets.clear();
+
+        if (assets != null) {
+            nonInvestableAssets.addAll(
+                    assets);
+        }
+    }
+
+    public ProjectionBaseline getBaseline() {
+        return baseline;
+    }
+
+    public void setBaseline(
+            ProjectionBaseline baseline) {
+
+        this.baseline = baseline;
+    }
+
+}

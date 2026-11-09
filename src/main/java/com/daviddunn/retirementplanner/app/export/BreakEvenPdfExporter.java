@@ -71,6 +71,8 @@ public final class BreakEvenPdfExporter {
                         + plan.spouse().name() + " — Social Security Claiming Age: "
                         + BreakEvenPresentation.age(plan.spouse().retirementClaimingAge());
         String disclosure = BreakEvenPresentation.reductionDisclosure(plan);
+        if (plan.calculationMode() != null) summary += "\nFinancial Calculation Mode: " + plan.calculationMode().label()
+                + ". " + plan.calculationMode().disclosure();
         return disclosure == null ? summary : summary + "\n" + disclosure;
     }
     private static String values(String title, java.math.BigDecimal baseline, java.math.BigDecimal current, java.math.BigDecimal difference) {

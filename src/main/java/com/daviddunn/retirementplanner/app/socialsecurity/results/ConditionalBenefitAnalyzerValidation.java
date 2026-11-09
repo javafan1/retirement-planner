@@ -22,7 +22,7 @@ public final class ConditionalBenefitAnalyzerValidation {
         if (capability == null) {
             if (algorithms.containsKey(ConditionalBenefitAnalysisExecution.KEY)
                     || retained.stream().flatMap(p -> p.years().stream()).flatMap(y -> y.sources().stream())
-                    .anyMatch(s -> s.conditionalBenefit() != null))
+                    .anyMatch(s -> s.conditionalBenefit() != null || s.calculationMode() != null || s.niit() != null))
                 throw new IllegalArgumentException("Conditional analyzer evidence lacks its execution capability.");
             return;
         }

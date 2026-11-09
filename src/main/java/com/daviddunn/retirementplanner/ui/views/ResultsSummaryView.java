@@ -142,6 +142,7 @@ public class ResultsSummaryView extends BorderPane {
             new ComboBox<>();
 
     private final TextField projectionLengthField = new TextField();
+    private final Label calculationModeDisclosure = new Label();
     private final Label planningHorizonValue = new Label();
     private final Label socialSecurityReductionDisclosure = new Label();
 
@@ -247,6 +248,9 @@ public class ResultsSummaryView extends BorderPane {
     private Projection currentProjection;
 
     private VBox baselineComparisonBox;
+    private final VBox comparisonModeNotice = new VBox(6);
+    private final Label comparisonModeText = new Label();
+    private final Button calculateCommonMode = new Button("Run Comparison Using Current Calculation Mode");
     private final Button breakEvenButton = new Button("Break-Even Analysis");
     private final Button baselineDetailsButton = new Button("View Baseline Details");
     private final Button swapProjectionsButton = new Button("Swap Current and Baseline");
@@ -1102,9 +1106,26 @@ public class ResultsSummaryView extends BorderPane {
         }
 
         section.getChildren().addAll(
+                comparisonModeNotice,
                 baselineComparisonYear,
                 new FlowPane(10, 6, breakEvenButton, baselineDetailsButton, swapProjectionsButton),
                 cards);
+        comparisonModeText.setWrapText(true);
+        comparisonModeNotice.getChildren().setAll(comparisonModeText,calculateCommonMode);
+        comparisonModeNotice.setVisible(false); comparisonModeNotice.setManaged(false);
+        calculateCommonMode.setId("run-common-mode-comparison");
+        calculateCommonMode.setOnAction(event -> {
+            calculateCommonMode.setDisable(true);
+            comparisonModeText.setText("Calculating both candidates using the Current plan's mode…");
+            try {
+                controller.calculateCommonModeComparison().whenComplete((completed,failure) -> javafx.application.Platform.runLater(() -> {
+                    calculateCommonMode.setDisable(false);
+                    if(failure != null) { comparisonModeText.setText("Comparison was not completed: " + failure.getMessage()); return; }
+                    if(!controller.acceptCommonModeComparison(completed)) { comparisonModeText.setText("Inputs changed; run the comparison again. Previous historical results were preserved."); return; }
+                    updateBaselineComparison();
+                }));
+            } catch(RuntimeException invalid) { calculateCommonMode.setDisable(false); comparisonModeText.setText(invalid.getMessage()); }
+        });
 
         baselineDetailsButton.setId("baseline-details-action");
         swapProjectionsButton.setId("swap-projections-action");
@@ -1434,6 +1455,8 @@ public class ResultsSummaryView extends BorderPane {
                 new VBox(12);
         // Let fitToWidth size the content to the viewport even at the sidebar's minimum width.
         assumptionContent.setMinWidth(0);
+        calculationModeDisclosure.setWrapText(true);
+        calculationModeDisclosure.setId("summary-financial-calculation-mode");
 
         assumptionContent.getChildren().addAll(
                 createDeathPanel(),
@@ -1489,6 +1512,7 @@ public class ResultsSummaryView extends BorderPane {
 
         panel.getChildren().addAll(
                 heading,
+                calculationModeDisclosure,
                 scrollPane);
 
         VBox.setVgrow(
@@ -2221,8 +2245,24 @@ public class ResultsSummaryView extends BorderPane {
             return;
         }
 
-        ProjectionComparison comparison =
-                controller.compareProjections();
+        ProjectionComparison comparison;
+        try { comparison = controller.compareProjections(); }
+        catch (UnsupportedOperationException mismatch) {
+            comparisonModeText.setText(mismatch.getMessage());
+            for(var node:baselineComparisonBox.getChildren()) {
+                boolean inspectable = node == comparisonModeNotice || node instanceof FlowPane;
+                node.setVisible(inspectable); node.setManaged(inspectable);
+            }
+            baselineDetailsButton.setDisable(!controller.canViewBaselineDetails(currentProjection));
+            breakEvenButton.setDisable(!controller.canRequestBreakEven());
+            calculateCommonMode.setVisible(true); calculateCommonMode.setManaged(true);
+            baselineComparisonBox.setVisible(true); baselineComparisonBox.setManaged(true);
+            return;
+        }
+        for(var node:baselineComparisonBox.getChildren()) { node.setVisible(true); node.setManaged(true); }
+        var scope=controller.commonModeComparisonDisclosure();
+        comparisonModeNotice.setVisible(!scope.isBlank()); comparisonModeNotice.setManaged(!scope.isBlank());
+        comparisonModeText.setText(scope); calculateCommonMode.setVisible(false); calculateCommonMode.setManaged(false);
         setBreakEvenAnalysis(controller.getCachedBreakEvenAnalysis());
 
         baselineComparisonBox.setVisible(true);
@@ -2504,6 +2544,8 @@ public class ResultsSummaryView extends BorderPane {
                 : "A completed projection is required to view yearly details."));
         exportButton.setTooltip(new Tooltip(projectionAvailable ? "Export the completed projection." : "A completed projection is required to export results."));
         currentProjection = projection;
+        calculationModeDisclosure.setText(projection == null || projection.isEmpty() ? ""
+                : com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.disclosure(projection.getYearAt(0).getIncomeSources()));
 
         loadAssumptions(plan);
 

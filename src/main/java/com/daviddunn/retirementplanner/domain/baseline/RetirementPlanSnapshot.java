@@ -13,6 +13,14 @@ import java.util.List;
 import java.util.Objects;
 
 public class RetirementPlanSnapshot {
+    private com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode financialCalculationMode;
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode getFinancialCalculationMode() { return financialCalculationMode; }
+
+    public void setFinancialCalculationMode(com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode mode) {
+        financialCalculationMode = Objects.requireNonNull(mode);
+    }
     private final List<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition> conditionalBenefits;
 
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
@@ -129,6 +137,7 @@ public class RetirementPlanSnapshot {
                 plan.getPlanningAssumptions(),
                 plan.getRothConversionRequest(),
                 plan.getNonInvestableAssets(), plan.getConditionalBenefits());
+        if (plan.getFinancialCalculationMode() != null) snapshot.setFinancialCalculationMode(plan.getFinancialCalculationMode());
         // Preserve the existing JSON shape while isolating mutable household/accounts.
         // Copy only the snapshot, never the plan's previous baseline recursively.
         var mapper = new com.fasterxml.jackson.databind.ObjectMapper()

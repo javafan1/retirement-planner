@@ -16,6 +16,8 @@ final class TaxIncomeAttribution {
     }
 
     static TaxIncome attach(TaxIncome income, List<IncomeSourceAttribution> supplied, int year) {
+        if (supplied.stream().anyMatch(source -> source.niit().isPresent()))
+            throw new NiitUnsupportedInputException("Completed NIIT evidence cannot be reused as a trial income input.");
         var conditional = supplied.stream().filter(source -> source.conditionalBenefit().isPresent())
                 .map(source -> source.modeledTaxableAmount().orElseThrow()).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (conditional.signum() > 0) income = income.withConditionalOrdinaryIncome(conditional);

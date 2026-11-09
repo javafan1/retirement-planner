@@ -5,12 +5,17 @@ import java.math.BigDecimal;
 import java.util.Objects;
 
 public final class FederalTaxCalculation {
+    public enum NiitModelingStatus { NOT_MODELED, CALCULATED }
+    public NiitModelingStatus niitModelingStatus() {
+        return niit().isPresent() ? NiitModelingStatus.CALCULATED : NiitModelingStatus.NOT_MODELED;
+    }
 
     private final BigDecimal adjustedGrossIncome;
     private final BigDecimal taxableSocialSecurity;
     private final BigDecimal taxableIncome;
     private final BigDecimal federalIncomeTax;
     private final BigDecimal standardDeduction;
+    private final java.util.Optional<NetInvestmentIncomeTaxCalculation> niit;
 
     public FederalTaxCalculation(
             BigDecimal adjustedGrossIncome,
@@ -18,6 +23,17 @@ public final class FederalTaxCalculation {
             BigDecimal standardDeduction,
             BigDecimal taxableIncome,
             BigDecimal federalIncomeTax) {
+        this(adjustedGrossIncome, taxableSocialSecurity, standardDeduction, taxableIncome, federalIncomeTax, java.util.Optional.empty());
+    }
+
+    public FederalTaxCalculation(BigDecimal adjustedGrossIncome, BigDecimal taxableSocialSecurity,
+            BigDecimal standardDeduction, BigDecimal taxableIncome, BigDecimal federalIncomeTax,
+            java.util.Optional<NetInvestmentIncomeTaxCalculation> niit) {
+        this.niit = Objects.requireNonNull(niit);
+        niit.ifPresent(value -> {
+            if (value.magi().compareTo(adjustedGrossIncome) != 0 || value.tax().compareTo(federalIncomeTax) > 0)
+                throw new IllegalArgumentException("NIIT evidence does not match the federal total.");
+        });
 
         this.adjustedGrossIncome =
                 requireNonNegative(
@@ -48,6 +64,9 @@ public final class FederalTaxCalculation {
     public BigDecimal getAdjustedGrossIncome() {
         return adjustedGrossIncome;
     }
+
+    @JsonIgnore
+    public java.util.Optional<NetInvestmentIncomeTaxCalculation> niit() { return niit; }
 
     public BigDecimal getTaxableSocialSecurity() {
         return taxableSocialSecurity;

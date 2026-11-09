@@ -10,6 +10,10 @@ import java.util.*;
  */
 public final class BreakEvenAnalyzer {
     public BreakEvenAnalysisResult analyze(BreakEvenProjectionSnapshot baseline, BreakEvenProjectionSnapshot current) {
+        if (!baseline.years().isEmpty() && !current.years().isEmpty()
+                && com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(baseline.years().getFirst().getIncomeSources())
+                    != com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.completedMode(current.years().getFirst().getIncomeSources()))
+            throw new UnsupportedOperationException("Break-Even requires a common financial calculation mode. Run a new common-mode comparison; historical results remain unchanged.");
         var baselineYears = index(baseline.years());
         var currentYears = index(current.years());
         var shared = new TreeSet<>(baselineYears.keySet());
@@ -39,7 +43,13 @@ public final class BreakEvenAnalyzer {
                 first(currentYears), last(currentYears), shared.isEmpty() ? null : shared.first(),
                 shared.isEmpty() ? null : shared.last(), shared.size(),
                 !baselineYears.keySet().equals(currentYears.keySet()),
-                baseline.assumptions(), current.assumptions(), metrics);
+                completedAssumptions(baseline), completedAssumptions(current), metrics);
+    }
+
+    private BreakEvenPlanSummary completedAssumptions(BreakEvenProjectionSnapshot snapshot) {
+        return snapshot.years().stream().findFirst().stream().flatMap(year -> year.getIncomeSources().stream())
+                .flatMap(source -> source.calculationMode().stream()).findFirst()
+                .map(snapshot.assumptions()::withCalculationMode).orElse(snapshot.assumptions());
     }
 
     private BreakEvenMetricResult summarize(BreakEvenMetric metric, List<BreakEvenYearResult> points) {

@@ -23,6 +23,7 @@ import java.util.function.Function;
 public final class ConditionalBenefitsPane extends VBox {
     private final TableView<ConditionalBenefitDefinition> table = new TableView<>();
     private final Button add = new Button("Add Conditional Benefit");
+    private final Button addAnnuity = new Button("Add Nonqualified Annuity");
     private final Button edit = new Button("Edit");
     private final Button duplicate = new Button("Duplicate");
     private final Button remove = new Button("Remove");
@@ -84,7 +85,10 @@ public final class ConditionalBenefitsPane extends VBox {
         remove.setOnAction(event -> confirmRemove());
         edit.disableProperty().bind(table.getSelectionModel().selectedItemProperty().isNull());
         remove.disableProperty().bind(edit.disableProperty());
-        var buttons = new FlowPane(8, 8, add, edit, duplicate, remove);
+        addAnnuity.setId("conditional-annuity-add");
+        addAnnuity.disableProperty().bind(add.disableProperty());
+        addAnnuity.setOnAction(event -> openEditor(null,false,true));
+        var buttons = new FlowPane(8, 8, add, addAnnuity, edit, duplicate, remove);
         details.setId("conditional-benefit-details");
         details.setExpanded(false);
         details.setAnimated(false);
@@ -122,9 +126,8 @@ public final class ConditionalBenefitsPane extends VBox {
         notice.setText("");
         if (value != null && !value.getConditionalBenefits().isEmpty()) {
             try { ConditionalBenefitAdmission.requireDeterministicSupported(value); }
-            catch (ConditionalBenefitAdmission.UnsupportedExecutionException unsupported) {
-                notice.setText("Definitions are saved, but conditional-benefit projections are not yet supported for "
-                        + value.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction().displayName() + ".");
+            catch (UnsupportedOperationException unsupported) {
+                notice.setText("Definitions are saved. " + unsupported.getMessage());
             }
         }
         showDetails(selected());
@@ -144,9 +147,14 @@ public final class ConditionalBenefitsPane extends VBox {
     }
 
     private void openEditor(ConditionalBenefitDefinition original, boolean copy) {
+        openEditor(original,copy,original != null && original.annuityTerms() != null);
+    }
+    private void openEditor(ConditionalBenefitDefinition original, boolean copy, boolean annuity) {
         if (plan == null || original == null && copy) return;
         var target = plan;
-        var dialog = new ConditionalBenefitDialog(target, original, copy);
+        Dialog<ConditionalBenefitDefinition> dialog = annuity
+                ? new com.daviddunn.retirementplanner.ui.dialogs.NonqualifiedAnnuityDialog(target,original,copy)
+                : new ConditionalBenefitDialog(target, original, copy);
         if (getScene() != null) dialog.initOwner(getScene().getWindow());
         dialog.showAndWait().ifPresent(value -> {
             try { commit(target, copy ? null : original, value); }

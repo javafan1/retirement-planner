@@ -48,7 +48,7 @@ public final class AnalysisFingerprintService {
         if (pendingProblem != null) return new Assessment(null, null, "Inputs need attention: " + pendingProblem);
         try { return new Assessment(fingerprint(kind, plan, inputs), effectiveContextFingerprint(kind, plan), null,
                 com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.potentiallyAffected(plan),
-                com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan)); }
+                com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(plan)); }
         catch (RuntimeException invalid) { return new Assessment(null, null, "Inputs need attention."); }
     }
     public String fingerprint(AnalysisKind kind, RetirementPlan plan, Inputs next) {
@@ -82,7 +82,7 @@ public final class AnalysisFingerprintService {
             if (!kind.isMonteCarlo()) {
                 com.daviddunn.retirementplanner.app.projection.DeterministicExpenseInputs.removeVolatility(f);
             }
-            var allowed = Set.of("planId", "household", "accountPortfolio", "planningAssumptions", "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations", "projectionState", "conditionalBenefits");
+            var allowed = Set.of("planId", "household", "accountPortfolio", "planningAssumptions", "rothConversionRequest", "baseline", "nonInvestableAssets", "analyzerConfigurations", "projectionState", "conditionalBenefits", "financialCalculationMode");
             f.fieldNames().forEachRemaining(name -> { if (!allowed.contains(name)) throw new IllegalArgumentException("Unclassified plan field: " + name); });
             f.remove(List.of("planId", "baseline", "analyzerConfigurations", "projectionState"));
             if (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(plan)) plan.validateHouseholdReferences();
