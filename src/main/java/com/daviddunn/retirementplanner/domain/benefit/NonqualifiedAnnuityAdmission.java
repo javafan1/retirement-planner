@@ -41,6 +41,7 @@ public final class NonqualifiedAnnuityAdmission {
     }
     public static void requireState(StateTaxJurisdiction state) {
         if (state != StateTaxJurisdiction.IL && state != StateTaxJurisdiction.AZ
+                && state != StateTaxJurisdiction.NC
                 && !state.usesNoGeneralIndividualIncomeTaxModel())
             throw new NiitUnsupportedInputException("Nonqualified commercial annuity treatment is not implemented for " + state.displayName() + ".");
     }

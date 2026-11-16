@@ -20,6 +20,7 @@ public final class ProductionStateTaxService {
         registry.put(StateTaxJurisdiction.PA, new PennsylvaniaProductionTaxCalculator());
         registry.put(StateTaxJurisdiction.IA, new IowaProductionTaxCalculator());
         registry.put(StateTaxJurisdiction.AZ, new ArizonaProductionTaxCalculator());
+        registry.put(StateTaxJurisdiction.NC, new NorthCarolinaProductionTaxCalculator());
         var zeroTax = new NoGeneralIndividualIncomeTaxCalculator();
         for (var jurisdiction : StateTaxJurisdiction.values()) {
             if (jurisdiction.usesNoGeneralIndividualIncomeTaxModel()) {

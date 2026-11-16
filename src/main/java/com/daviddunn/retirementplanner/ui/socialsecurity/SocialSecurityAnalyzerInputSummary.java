@@ -115,6 +115,12 @@ record SocialSecurityAnalyzerInputSummary(List<Row> rows) {
                     com.daviddunn.retirementplanner.domain.tax.state.ArizonaProductionTaxCalculator.planningLimitations(
                             firstYear, firstYear + assumptions.getProjectionLengthYears() - 1)), "Tax Assumptions"));
         }
+        if (assumptions.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC) {
+            int firstYear = assumptions.getProjectionStartDate().getYear();
+            rows.add(new Row("North Carolina planning estimate limitations", String.join(" ",
+                    com.daviddunn.retirementplanner.domain.tax.state.NorthCarolinaProductionTaxCalculator.planningLimitations(
+                            firstYear, firstYear + assumptions.getProjectionLengthYears() - 1)), "Tax Assumptions"));
+        }
         rows.add(new Row("Medicare / IRMAA assumptions", "Modeled automatically for alive, age-eligible people using annual federal tax results, filing status and projected government rules; no separate enrollment setting.", "Retirement Plan / Government rules"));
         rows.add(new Row("RMD assumptions", "Owner DOB, eligible account types and prior December 31 balances; "
                 + portfolio.getAccounts().stream().filter(account -> account.getOpeningRmdAccountData() != null).count()

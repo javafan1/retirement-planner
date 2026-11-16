@@ -6,6 +6,21 @@ import java.util.*;
 
 public final class AnalysisVersions {
     private AnalysisVersions() { }
+    /** Adds provenance only for newly calculated NC full-plan results. Never rewrites saved references. */
+    public static Map<String, String> withNorthCarolinaRules(AnalysisKind kind, Map<String, String> references,
+            com.daviddunn.retirementplanner.domain.model.RetirementPlan... frozenPlans) {
+        if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
+                || Arrays.stream(frozenPlans).filter(Objects::nonNull).noneMatch(plan ->
+                        plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC)) {
+            return references;
+        }
+        var result = new TreeMap<>(references.isEmpty() ? references(kind) : references);
+        result.put(com.daviddunn.retirementplanner.domain.tax.state.northcarolina.NorthCarolinaTaxRules.REFERENCE_KEY,
+                com.daviddunn.retirementplanner.domain.tax.state.northcarolina.NorthCarolinaTaxRules.VERSION);
+        return Map.copyOf(result);
+    }
+
     public static boolean usesOrdinaryPensionSelection(AnalysisKind kind) {
         return kind == AnalysisKind.COUPLE_QUICK || kind == AnalysisKind.COUPLE_EXHAUSTIVE
                 || kind.isMonteCarlo() && kind.name().endsWith("FIXED");

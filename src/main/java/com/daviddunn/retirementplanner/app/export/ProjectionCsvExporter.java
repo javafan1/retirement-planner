@@ -40,7 +40,9 @@ public class ProjectionCsvExporter {
                     == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA;
             boolean arizona = projection.getYears().getFirst().getStateTaxJurisdiction()
                     == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ;
-            if (individual) writeIndividualHeader(writer, iowa, arizona); else writeHeader(writer, iowa, arizona);
+            boolean northCarolina = projection.getYears().getFirst().getStateTaxJurisdiction()
+                    == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC;
+            if (individual) writeIndividualHeader(writer, iowa, arizona, northCarolina); else writeHeader(writer, iowa, arizona, northCarolina);
 
             for (ProjectionYear year :
                     projection.getYears()) {
@@ -55,7 +57,7 @@ public class ProjectionCsvExporter {
 
 
     private void writeHeader(
-            BufferedWriter writer, boolean iowa, boolean arizona)
+            BufferedWriter writer, boolean iowa, boolean arizona, boolean northCarolina)
             throws IOException {
 
         writer.write(
@@ -114,6 +116,7 @@ public class ProjectionCsvExporter {
 
         if (iowa) writer.write(",Iowa Planning Limitations");
         if (arizona) writer.write(",Arizona Planning Limitations");
+        if (northCarolina) writer.write(",North Carolina Planning Limitations");
         writer.newLine();
     }
 
@@ -209,7 +212,7 @@ public class ProjectionCsvExporter {
 
 
     private void writeIndividualHeader(
-            BufferedWriter writer, boolean iowa, boolean arizona)
+            BufferedWriter writer, boolean iowa, boolean arizona, boolean northCarolina)
             throws IOException {
 
         writer.write(
@@ -263,6 +266,7 @@ public class ProjectionCsvExporter {
 
         if (iowa) writer.write(",Iowa Planning Limitations");
         if (arizona) writer.write(",Arizona Planning Limitations");
+        if (northCarolina) writer.write(",North Carolina Planning Limitations");
         writer.newLine();
     }
 
@@ -384,7 +388,8 @@ public class ProjectionCsvExporter {
         }
 
         if (year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA
-                || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ) {
+                || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ
+                || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC) {
             writer.write(",");
             writer.write(escape(String.join(" ", year.stateTaxCalculation().orElseThrow().limitations())));
         }

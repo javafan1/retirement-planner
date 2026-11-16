@@ -33,13 +33,22 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
                 contextFingerprint, algorithms, references, payload, context, association, benefitExecution);
     }
     public AcceptedAnalysisCompletion withConditionalBenefits(com.daviddunn.retirementplanner.domain.model.RetirementPlan frozenPlan) {
-        if (!com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(frozenPlan)) return this;
+        var stateAware = withStateTaxRules(frozenPlan);
+        if (!com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(frozenPlan)) return stateAware;
         if (kind.isMonteCarlo()) throw new IllegalArgumentException("Monte Carlo benefits require their payload capability.");
         var capability = ConditionalBenefitAnalysisExecution.capture(kind, frozenPlan);
         var versions = new TreeMap<>(AnalysisVersions.calculatedAlgorithms(kind, payload));
         versions.put(ConditionalBenefitAnalysisExecution.KEY, capability.algorithm());
         return new AcceptedAnalysisCompletion(planId, planFile, kind, runId, completedAt, inputFingerprint,
-                contextFingerprint, versions, references, payload, context, association, capability);
+                contextFingerprint, versions, stateAware.references(), payload, context, association, capability);
+    }
+    /** Worker-side capture from the actual frozen plan(s), including both sides of MC comparisons. */
+    public AcceptedAnalysisCompletion withStateTaxRules(
+            com.daviddunn.retirementplanner.domain.model.RetirementPlan... frozenPlans) {
+        var captured = AnalysisVersions.withNorthCarolinaRules(kind, references, frozenPlans);
+        if (captured.equals(references)) return this;
+        return new AcceptedAnalysisCompletion(planId, planFile, kind, runId, completedAt, inputFingerprint,
+                contextFingerprint, algorithms, captured, payload, context, association, benefitExecution);
     }
     public AcceptedAnalysisCompletion {
         Objects.requireNonNull(planId); Objects.requireNonNull(kind); Objects.requireNonNull(runId);

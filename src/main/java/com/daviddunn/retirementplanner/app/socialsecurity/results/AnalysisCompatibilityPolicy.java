@@ -53,7 +53,13 @@ public final class AnalysisCompatibilityPolicy {
         expectedAlgorithms.remove(com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.KEY);
         originalAlgorithms.remove(ConditionalBenefitAnalysisExecution.KEY);
         expectedAlgorithms.remove(ConditionalBenefitAnalysisExecution.KEY);
-        if (!originalAlgorithms.equals(expectedAlgorithms) || !saved.references().equals(references)
+        var currentReferences = new TreeMap<>(references);
+        String northCarolinaKey = com.daviddunn.retirementplanner.domain.tax.state.northcarolina.NorthCarolinaTaxRules.REFERENCE_KEY;
+        if (saved.references().containsKey(northCarolinaKey)) {
+            currentReferences.put(northCarolinaKey,
+                    com.daviddunn.retirementplanner.domain.tax.state.northcarolina.NorthCarolinaTaxRules.VERSION);
+        }
+        if (!originalAlgorithms.equals(expectedAlgorithms) || !saved.references().equals(currentReferences)
                 || !saved.inputFingerprint().equals(inputs.fingerprint())
                 || !saved.contextFingerprint().equals(inputs.contextFingerprint())) {
             return new Assessment(State.OUTDATED, "These results were generated using previous plan or analysis assumptions and may not reflect the current retirement plan.");

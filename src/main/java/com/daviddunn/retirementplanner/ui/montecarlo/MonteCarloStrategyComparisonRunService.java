@@ -115,6 +115,11 @@ public final class MonteCarloStrategyComparisonRunService {
                         com.daviddunn.retirementplanner.domain.tax.state.ArizonaProductionTaxCalculator.planningLimitations(
                                 p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1));
             }
+            if (p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC) {
+                details += "\nNorth Carolina planning estimate: " + String.join(" ",
+                        com.daviddunn.retirementplanner.domain.tax.state.NorthCarolinaProductionTaxCalculator.planningLimitations(
+                                p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1));
+            }
         }
         return new Prepared(request, mode, details);
     }

@@ -156,7 +156,10 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
                 payload.display().spouseName(), payload.startedAt(), List.of(), List.of(), List.of(), Map.of());
         return new AcceptedAnalysisCompletion(binding.planId(), binding.file(), binding.kind(), UUID.randomUUID(),
                 payload.completedAt(), inputs.fingerprint(), inputs.contextFingerprint(), AnalysisVersions.calculatedAlgorithms(binding.kind(), payload),
-                AnalysisVersions.references(binding.kind()), payload, context);
+                AnalysisVersions.references(binding.kind()), payload, context).withStateTaxRules(
+                        com.daviddunn.retirementplanner.app.montecarlo.MonteCarloPlanDocument.read(payload.request().planA()),
+                        payload.request().planB() == null ? null
+                                : com.daviddunn.retirementplanner.app.montecarlo.MonteCarloPlanDocument.read(payload.request().planB()));
     }
 
     public void assess(Supplier<Supplier<MonteCarloFingerprintService.Inputs>> inputs) {

@@ -708,7 +708,8 @@ public class ProjectionYearDetailsPane
                             && java.util.Objects.equals(GridPane.getRowIndex(node), taxRow)) {
                         var tooltip = new javafx.scene.control.Tooltip(String.join("\n", result.limitations()));
                         if (result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA
-                                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ) {
+                                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ
+                                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC) {
                             tooltip.setWrapText(true);
                             tooltip.setMaxWidth(650);
                         }

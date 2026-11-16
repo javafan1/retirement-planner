@@ -171,7 +171,7 @@ public class ProjectionPdfExporter {
             writeStateTaxTable(projection);
             finishPage();
             startPage();
-            writeKeyAssumptions(plan);
+            writeKeyAssumptions(plan, projection.getYears().getFirst().getStateTaxJurisdiction());
             writeConditionalBenefits(plan,projection);
             finishPage();
             addPageNumbers();
@@ -426,7 +426,8 @@ public class ProjectionPdfExporter {
     // ============================================================
 
     private void writeKeyAssumptions(
-            RetirementPlan plan)
+            RetirementPlan plan,
+            com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction resultJurisdiction)
             throws IOException {
 
         writeSectionHeading(
@@ -557,10 +558,13 @@ public class ProjectionPdfExporter {
         writeKeyValue("Filing Status", tax.getFilingStatus().toString(), GRAY);
         writeKeyValue("Federal Bracket Growth", percent(tax.getFederalTaxBracketGrowthRate()), GRAY);
         writeKeyValue("Standard Deduction Growth", percent(tax.getStandardDeductionGrowthRate()), GRAY);
-        writeKeyValue("State of Residence", assumptions.getStateTaxAssumptions().jurisdiction().displayName(), GRAY);
+        // NC retained results must not acquire the active editor's later jurisdiction.
+        var jurisdiction = resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC
+                ? resultJurisdiction : assumptions.getStateTaxAssumptions().jurisdiction();
+        writeKeyValue("State of Residence", jurisdiction.displayName(), GRAY);
         writeKeyValue("State Tax Calculation", "Simplified state estimate; full-year resident", GRAY);
-        if (assumptions.getStateTaxAssumptions().jurisdiction().usesNoGeneralIndividualIncomeTaxModel()) {
-            writeKeyValue(assumptions.getStateTaxAssumptions().jurisdiction().displayName() + " State Income Tax",
+        if (jurisdiction.usesNoGeneralIndividualIncomeTaxModel()) {
+            writeKeyValue(jurisdiction.displayName() + " State Income Tax",
                     "$0 (no individual income tax)", GRAY);
         }
         writeKeyValue("Estimated Heir Tax Rate", percent(tax.getEstimatedHeirTaxRateOnTaxDeferredAssets()), GRAY);
@@ -741,6 +745,23 @@ public class ProjectionPdfExporter {
             writeText("Arizona Planning Limitations", MARGIN, currentY, FONT_NORMAL, 9, GRAY);
             currentY -= 14;
             for (var limitation : arizonaDisclosures) {
+                for (var line : PdfReportSupport.wrap(limitation, CONTENT_WIDTH, 9)) {
+                    ensureSpace(14);
+                    writeText(line, MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+                    currentY -= 12;
+                }
+                currentY -= 4;
+            }
+        }
+        var northCarolinaDisclosures = projection.getYears().stream()
+                .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC)
+                .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream().filter(note -> !note.startsWith("Annual North Carolina base:")))
+                .distinct().toList();
+        if (!northCarolinaDisclosures.isEmpty()) {
+            ensureSpace(14);
+            writeText("North Carolina Planning Limitations", MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+            currentY -= 14;
+            for (var limitation : northCarolinaDisclosures) {
                 for (var line : PdfReportSupport.wrap(limitation, CONTENT_WIDTH, 9)) {
                     ensureSpace(14);
                     writeText(line, MARGIN, currentY, FONT_NORMAL, 9, GRAY);
