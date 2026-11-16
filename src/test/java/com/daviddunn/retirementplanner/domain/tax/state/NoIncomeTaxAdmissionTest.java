@@ -122,6 +122,6 @@ class NoIncomeTaxAdmissionTest {
         for (var code : List.of("WA", "CA", "MS", "NY", "CO", "NJ", "UNKNOWN")) {
             assertThrows(IllegalArgumentException.class, () -> StateTaxJurisdiction.fromCode(code));
         }
-        assertEquals(14, StateTaxJurisdiction.values().length);
+        assertEquals(15, StateTaxJurisdiction.values().length);
     }
 }

@@ -45,7 +45,8 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
     /** Worker-side capture from the actual frozen plan(s), including both sides of MC comparisons. */
     public AcceptedAnalysisCompletion withStateTaxRules(
             com.daviddunn.retirementplanner.domain.model.RetirementPlan... frozenPlans) {
-        var captured = AnalysisVersions.withNorthCarolinaRules(kind, references, frozenPlans);
+        var captured = AnalysisVersions.withKentuckyRules(kind,
+                AnalysisVersions.withNorthCarolinaRules(kind, references, frozenPlans), frozenPlans);
         if (captured.equals(references)) return this;
         return new AcceptedAnalysisCompletion(planId, planFile, kind, runId, completedAt, inputFingerprint,
                 contextFingerprint, algorithms, captured, payload, context, association, benefitExecution);

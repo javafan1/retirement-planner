@@ -44,6 +44,12 @@ record IndividualReportContext(String household, String primary, Instant started
                     .planningLimitations(a.getProjectionStartDate().getYear(),
                             a.getProjectionStartDate().getYear() + a.getProjectionLengthYears() - 1));
         }
+        if (a.getStateTaxAssumptions().jurisdiction()
+                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY) {
+            lines.addAll(com.daviddunn.retirementplanner.domain.tax.state.KentuckyProductionTaxCalculator
+                    .planningLimitations(a.getProjectionStartDate().getYear(),
+                            a.getProjectionStartDate().getYear() + a.getProjectionLengthYears() - 1));
+        }
         lines.add("Federal bracket / deduction growth: " + UIFormatters.percent(t.getFederalTaxBracketGrowthRate())
                 + " / " + UIFormatters.percent(t.getStandardDeductionGrowthRate())
                 + "; future marginal adjustment: " + UIFormatters.percent(t.getFutureFederalMarginalRateAdjustment())

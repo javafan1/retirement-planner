@@ -157,7 +157,8 @@ public class PennsylvaniaProductionProjectionTest {
             // NC independent worksheet: (243600 federal AGI - 25500 state deduction) * .0399 = 8702.19.
             var expected = state == StateTaxJurisdiction.MI ? "4104.65"
                     : state == StateTaxJurisdiction.AZ ? "5285.00"
-                    : state == StateTaxJurisdiction.NC ? "8702.19" : "0.00";
+                    : state == StateTaxJurisdiction.NC ? "8702.19"
+                    : state == StateTaxJurisdiction.KY ? "7319.55" : "0.00";
             assertEquals(new BigDecimal(expected), year.getStateIncomeTax().setScale(2, RoundingMode.HALF_UP));
             if (state == StateTaxJurisdiction.PA) {
                 assertEquals(new BigDecimal("207668.00"), year.getRothConversion().setScale(2, RoundingMode.HALF_UP));

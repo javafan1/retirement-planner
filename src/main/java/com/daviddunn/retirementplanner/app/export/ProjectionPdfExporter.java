@@ -560,6 +560,7 @@ public class ProjectionPdfExporter {
         writeKeyValue("Standard Deduction Growth", percent(tax.getStandardDeductionGrowthRate()), GRAY);
         // NC retained results must not acquire the active editor's later jurisdiction.
         var jurisdiction = resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC
+                || resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY
                 ? resultJurisdiction : assumptions.getStateTaxAssumptions().jurisdiction();
         writeKeyValue("State of Residence", jurisdiction.displayName(), GRAY);
         writeKeyValue("State Tax Calculation", "Simplified state estimate; full-year resident", GRAY);
@@ -762,6 +763,23 @@ public class ProjectionPdfExporter {
             writeText("North Carolina Planning Limitations", MARGIN, currentY, FONT_NORMAL, 9, GRAY);
             currentY -= 14;
             for (var limitation : northCarolinaDisclosures) {
+                for (var line : PdfReportSupport.wrap(limitation, CONTENT_WIDTH, 9)) {
+                    ensureSpace(14);
+                    writeText(line, MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+                    currentY -= 12;
+                }
+                currentY -= 4;
+            }
+        }
+        var kentuckyDisclosures = projection.getYears().stream()
+                .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY)
+                .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream().filter(note -> !note.startsWith("Annual Kentucky base:")))
+                .distinct().toList();
+        if (!kentuckyDisclosures.isEmpty()) {
+            ensureSpace(14);
+            writeText("Kentucky Planning Limitations", MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+            currentY -= 14;
+            for (var limitation : kentuckyDisclosures) {
                 for (var line : PdfReportSupport.wrap(limitation, CONTENT_WIDTH, 9)) {
                     ensureSpace(14);
                     writeText(line, MARGIN, currentY, FONT_NORMAL, 9, GRAY);

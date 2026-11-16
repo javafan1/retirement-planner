@@ -709,7 +709,8 @@ public class ProjectionYearDetailsPane
                         var tooltip = new javafx.scene.control.Tooltip(String.join("\n", result.limitations()));
                         if (result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA
                                 || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ
-                                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC) {
+                                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC
+                                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY) {
                             tooltip.setWrapText(true);
                             tooltip.setMaxWidth(650);
                         }
