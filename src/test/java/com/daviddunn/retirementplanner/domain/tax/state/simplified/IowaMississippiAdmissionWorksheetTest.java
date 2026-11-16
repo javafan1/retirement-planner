@@ -106,7 +106,7 @@ class IowaMississippiAdmissionWorksheetTest {
 
     @Test
     void iowaAdmissionLeavesMississippiDisabledAndResearchCatalogUnchanged() throws Exception {
-        assertEquals(12, StateTaxJurisdiction.values().length);
+        assertEquals(13, StateTaxJurisdiction.values().length);
         assertEquals(StateTaxJurisdiction.IA, StateTaxJurisdiction.fromCode("IA"));
         assertThrows(IllegalArgumentException.class, () -> StateTaxJurisdiction.fromCode("MS"));
         var catalog = new com.daviddunn.retirementplanner.persistence.StateTaxDatasetRepository().load();

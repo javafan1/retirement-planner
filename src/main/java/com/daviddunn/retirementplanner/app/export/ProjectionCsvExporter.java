@@ -38,7 +38,9 @@ public class ProjectionCsvExporter {
             boolean individual = !projection.getYears().getFirst().getSocialSecurityResult().hasSpouse();
             boolean iowa = projection.getYears().getFirst().getStateTaxJurisdiction()
                     == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA;
-            if (individual) writeIndividualHeader(writer, iowa); else writeHeader(writer, iowa);
+            boolean arizona = projection.getYears().getFirst().getStateTaxJurisdiction()
+                    == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ;
+            if (individual) writeIndividualHeader(writer, iowa, arizona); else writeHeader(writer, iowa, arizona);
 
             for (ProjectionYear year :
                     projection.getYears()) {
@@ -53,7 +55,7 @@ public class ProjectionCsvExporter {
 
 
     private void writeHeader(
-            BufferedWriter writer, boolean iowa)
+            BufferedWriter writer, boolean iowa, boolean arizona)
             throws IOException {
 
         writer.write(
@@ -111,6 +113,7 @@ public class ProjectionCsvExporter {
                         + "After-Tax Estate Value,State of Residence,State Tax Calculation");
 
         if (iowa) writer.write(",Iowa Planning Limitations");
+        if (arizona) writer.write(",Arizona Planning Limitations");
         writer.newLine();
     }
 
@@ -206,7 +209,7 @@ public class ProjectionCsvExporter {
 
 
     private void writeIndividualHeader(
-            BufferedWriter writer, boolean iowa)
+            BufferedWriter writer, boolean iowa, boolean arizona)
             throws IOException {
 
         writer.write(
@@ -259,6 +262,7 @@ public class ProjectionCsvExporter {
                         + "After-Tax Estate Value,State of Residence,State Tax Calculation");
 
         if (iowa) writer.write(",Iowa Planning Limitations");
+        if (arizona) writer.write(",Arizona Planning Limitations");
         writer.newLine();
     }
 
@@ -379,7 +383,8 @@ public class ProjectionCsvExporter {
                             values[i]));
         }
 
-        if (year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA) {
+        if (year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA
+                || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ) {
             writer.write(",");
             writer.write(escape(String.join(" ", year.stateTaxCalculation().orElseThrow().limitations())));
         }

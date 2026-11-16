@@ -32,6 +32,12 @@ record IndividualReportContext(String household, String primary, Instant started
         lines.add("Filing status: " + t.getFilingStatus() + "; State of residence: "
                 + a.getStateTaxAssumptions().jurisdiction() + "; simplified state estimate; full-year resident"
                 + "; Estimated heir tax rate: " + UIFormatters.percent(t.getEstimatedHeirTaxRateOnTaxDeferredAssets()));
+        if (a.getStateTaxAssumptions().jurisdiction()
+                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ) {
+            lines.addAll(com.daviddunn.retirementplanner.domain.tax.state.ArizonaProductionTaxCalculator
+                    .planningLimitations(a.getProjectionStartDate().getYear(),
+                            a.getProjectionStartDate().getYear() + a.getProjectionLengthYears() - 1));
+        }
         lines.add("Federal bracket / deduction growth: " + UIFormatters.percent(t.getFederalTaxBracketGrowthRate())
                 + " / " + UIFormatters.percent(t.getStandardDeductionGrowthRate())
                 + "; future marginal adjustment: " + UIFormatters.percent(t.getFutureFederalMarginalRateAdjustment())

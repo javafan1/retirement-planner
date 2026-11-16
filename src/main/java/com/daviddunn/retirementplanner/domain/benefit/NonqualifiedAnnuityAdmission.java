@@ -40,7 +40,8 @@ public final class NonqualifiedAnnuityAdmission {
             throw new NiitUnsupportedInputException("Brokerage assets have no supported realized-gain/basis attribution in this annuity release.");
     }
     public static void requireState(StateTaxJurisdiction state) {
-        if (state != StateTaxJurisdiction.IL && !state.usesNoGeneralIndividualIncomeTaxModel())
+        if (state != StateTaxJurisdiction.IL && state != StateTaxJurisdiction.AZ
+                && !state.usesNoGeneralIndividualIncomeTaxModel())
             throw new NiitUnsupportedInputException("Nonqualified commercial annuity treatment is not implemented for " + state.displayName() + ".");
     }
     public static void requireOpening(java.time.LocalDate opening) {

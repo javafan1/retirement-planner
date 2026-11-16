@@ -707,7 +707,8 @@ public class ProjectionYearDetailsPane
                     if (node instanceof javafx.scene.control.Label label
                             && java.util.Objects.equals(GridPane.getRowIndex(node), taxRow)) {
                         var tooltip = new javafx.scene.control.Tooltip(String.join("\n", result.limitations()));
-                        if (result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA) {
+                        if (result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA
+                                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ) {
                             tooltip.setWrapText(true);
                             tooltip.setMaxWidth(650);
                         }

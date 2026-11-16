@@ -152,7 +152,10 @@ public class PennsylvaniaProductionProjectionTest {
             var year = new ProjectionEngine().project(plan).getYears().getFirst();
             // Federal worksheet: 2480 + 76000*.12 + 110600*.22 = 35932.
             assertEquals(new BigDecimal("35932.00"), year.getFederalIncomeTax().setScale(2, RoundingMode.HALF_UP));
-            var expected = state == StateTaxJurisdiction.MI ? "4104.65" : "0.00";
+            // Arizona: federal AGI 243600 - basic deduction 32200 = 211400;
+            // both filers are under 65, so 211400 * .025 = 5285. No prior-state golden changes.
+            var expected = state == StateTaxJurisdiction.MI ? "4104.65"
+                    : state == StateTaxJurisdiction.AZ ? "5285.00" : "0.00";
             assertEquals(new BigDecimal(expected), year.getStateIncomeTax().setScale(2, RoundingMode.HALF_UP));
             if (state == StateTaxJurisdiction.PA) {
                 assertEquals(new BigDecimal("207668.00"), year.getRothConversion().setScale(2, RoundingMode.HALF_UP));

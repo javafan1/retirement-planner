@@ -72,6 +72,10 @@ public final class MonteCarloRunService {
                 ? "\nIowa planning estimate: " + String.join(" ", new com.daviddunn.retirementplanner.domain.tax.state.IowaProductionTaxCalculator()
                         .planningLimitations(p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1))
                 : "";
+        String arizona = p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ
+                ? "\nArizona planning estimate: " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.ArizonaProductionTaxCalculator
+                        .planningLimitations(p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1))
+                : "";
         return "Projection start: " + p.getProjectionStartDate()
                 + "\nConfigured planning horizon: " + (p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1)
                 + "\nPlan general inflation: " + percent(p.getGeneralInflationRate())
@@ -79,7 +83,7 @@ public final class MonteCarloRunService {
                 + "\nConfigured deterministic reference return: " + percent(p.getExpectedAnnualInvestmentReturn())
                 + reductionText
                 + "\nState of residence: " + p.getStateTaxAssumptions().jurisdiction()
-                + "; simplified state estimate; full-year resident" + iowa;
+                + "; simplified state estimate; full-year resident" + iowa + arizona;
     }
 
     private static String percent(java.math.BigDecimal value) {

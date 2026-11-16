@@ -732,6 +732,24 @@ public class ProjectionPdfExporter {
                 currentY -= 4;
             }
         }
+        var arizonaDisclosures = projection.getYears().stream()
+                .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ)
+                .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream().limit(3))
+                .distinct().toList();
+        if (!arizonaDisclosures.isEmpty()) {
+            ensureSpace(14);
+            writeText("Arizona Planning Limitations", MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+            currentY -= 14;
+            for (var limitation : arizonaDisclosures) {
+                for (var line : PdfReportSupport.wrap(limitation, CONTENT_WIDTH, 9)) {
+                    ensureSpace(14);
+                    writeText(line, MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+                    currentY -= 12;
+                }
+                currentY -= 4;
+            }
+        }
+        ensureSpace(ROW_HEIGHT * 2);
         writeText("State personal income tax only; local taxes and some credits/relief are outside the estimate.",
                 MARGIN, currentY, FONT_NORMAL, FONT_SIZE, GRAY);
         currentY -= ROW_HEIGHT;

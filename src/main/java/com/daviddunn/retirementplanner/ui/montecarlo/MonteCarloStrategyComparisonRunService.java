@@ -110,6 +110,11 @@ public final class MonteCarloStrategyComparisonRunService {
                         new com.daviddunn.retirementplanner.domain.tax.state.IowaProductionTaxCalculator().planningLimitations(
                                 p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1));
             }
+            if (p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ) {
+                details += "\nArizona planning estimate: " + String.join(" ",
+                        com.daviddunn.retirementplanner.domain.tax.state.ArizonaProductionTaxCalculator.planningLimitations(
+                                p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1));
+            }
         }
         return new Prepared(request, mode, details);
     }
