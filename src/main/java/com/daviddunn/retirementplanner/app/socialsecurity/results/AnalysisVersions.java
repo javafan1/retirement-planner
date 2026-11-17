@@ -47,6 +47,32 @@ public final class AnalysisVersions {
                 com.daviddunn.retirementplanner.domain.tax.state.georgia.GeorgiaTaxRules.VERSION);
         return Map.copyOf(result);
     }
+    public static Map<String, String> withOklahomaRules(AnalysisKind kind, Map<String, String> references,
+            com.daviddunn.retirementplanner.domain.model.RetirementPlan... frozenPlans) {
+        if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
+                || Arrays.stream(frozenPlans).filter(Objects::nonNull).noneMatch(plan ->
+                        plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.OK)) {
+            return references;
+        }
+        var result = new TreeMap<>(references.isEmpty() ? references(kind) : references);
+        result.put(com.daviddunn.retirementplanner.domain.tax.state.oklahoma.OklahomaTaxRules.REFERENCE_KEY,
+                com.daviddunn.retirementplanner.domain.tax.state.oklahoma.OklahomaTaxRules.VERSION);
+        return Map.copyOf(result);
+    }
+    public static Map<String, String> withMississippiRules(AnalysisKind kind, Map<String, String> references,
+            com.daviddunn.retirementplanner.domain.model.RetirementPlan... frozenPlans) {
+        if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
+                || Arrays.stream(frozenPlans).filter(Objects::nonNull).noneMatch(plan ->
+                        plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS)) {
+            return references;
+        }
+        var result = new TreeMap<>(references.isEmpty() ? references(kind) : references);
+        result.put(com.daviddunn.retirementplanner.domain.tax.state.mississippi.MississippiTaxRules.REFERENCE_KEY,
+                com.daviddunn.retirementplanner.domain.tax.state.mississippi.MississippiTaxRules.VERSION);
+        return Map.copyOf(result);
+    }
     public static Map<String, String> withVirginiaRules(AnalysisKind kind, Map<String, String> references,
             com.daviddunn.retirementplanner.domain.model.RetirementPlan... frozenPlans) {
         if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY

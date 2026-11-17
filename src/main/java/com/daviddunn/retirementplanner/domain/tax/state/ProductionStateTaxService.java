@@ -24,6 +24,8 @@ public final class ProductionStateTaxService {
         registry.put(StateTaxJurisdiction.KY, new KentuckyProductionTaxCalculator());
         registry.put(StateTaxJurisdiction.GA, new GeorgiaProductionTaxCalculator());
         registry.put(StateTaxJurisdiction.VA, new VirginiaProductionTaxCalculator());
+        registry.put(StateTaxJurisdiction.OK, new OklahomaProductionTaxCalculator());
+        registry.put(StateTaxJurisdiction.MS, new MississippiProductionTaxCalculator());
         var zeroTax = new NoGeneralIndividualIncomeTaxCalculator();
         for (var jurisdiction : StateTaxJurisdiction.values()) {
             if (jurisdiction.usesNoGeneralIndividualIncomeTaxModel()) {

@@ -441,12 +441,14 @@ public final class RothConversionBracketFillCalculator {
         BigDecimal previousConversion = null;
         BigDecimal previousDifference = null;
 
-        // Kentucky/Georgia per-recipient exclusions require every trial dollar to have
-        // an executable owner. Preserve the established aggregate-tolerant path
-        // for all earlier jurisdictions (Phase 6E-F capacity evidence test).
+        // KY/GA/OK recipient exclusions and MS source qualification require executable
+        // trial attribution. Preserve every other jurisdiction's established path.
+        // Phase 6E-L reproduced the unowned residual separately for OK and MS.
         BigDecimal attributedCapacity = stateTaxAssumptions.jurisdiction()
                 == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY
                 || stateTaxAssumptions.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA
+                || stateTaxAssumptions.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.OK
+                || stateTaxAssumptions.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS
                 ? conversionAttribution.getMaximumConvertibleAmount(portfolio, conversionOwners, projectionDate.getYear())
                 : null;
 

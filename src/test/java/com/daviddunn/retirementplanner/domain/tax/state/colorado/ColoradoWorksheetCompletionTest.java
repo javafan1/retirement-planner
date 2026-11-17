@@ -201,7 +201,7 @@ class ColoradoWorksheetCompletionTest {
 
     @Test
     void noProductionAdmissionOrFutureTaxFallbackAndFrozenNotesAreImmutable() throws Exception {
-        assertEquals(17, StateTaxJurisdiction.values().length);
+        assertEquals(19, StateTaxJurisdiction.values().length);
         assertThrows(IllegalArgumentException.class, () -> StateTaxJurisdiction.fromCode("CO"));
         assertFalse(new ColoradoTaxRules().productionAdmitted());
         var result = calculate(context(60, 60, false), false, new TaxIncome(n("0"), n("0"), n("0"), n("0"), n("0")));

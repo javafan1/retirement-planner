@@ -105,10 +105,10 @@ class IowaMississippiAdmissionWorksheetTest {
     }
 
     @Test
-    void iowaAdmissionLeavesMississippiDisabledAndResearchCatalogUnchanged() throws Exception {
-        assertEquals(17, StateTaxJurisdiction.values().length);
+    void researchCatalogRemainsIndependentOfLaterProductionAdmissions() throws Exception {
+        assertEquals(19, StateTaxJurisdiction.values().length);
         assertEquals(StateTaxJurisdiction.IA, StateTaxJurisdiction.fromCode("IA"));
-        assertThrows(IllegalArgumentException.class, () -> StateTaxJurisdiction.fromCode("MS"));
+        assertEquals(StateTaxJurisdiction.MS, StateTaxJurisdiction.fromCode("MS"));
         var catalog = new com.daviddunn.retirementplanner.persistence.StateTaxDatasetRepository().load();
         assertFalse(catalog.containsKey("IA"));
         assertFalse(catalog.containsKey("MS"));

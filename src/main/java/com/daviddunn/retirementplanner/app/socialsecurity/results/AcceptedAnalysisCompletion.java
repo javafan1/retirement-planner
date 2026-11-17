@@ -49,6 +49,8 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
                 AnalysisVersions.withNorthCarolinaRules(kind, references, frozenPlans), frozenPlans);
         captured = AnalysisVersions.withGeorgiaRules(kind, captured, frozenPlans);
         captured = AnalysisVersions.withVirginiaRules(kind, captured, frozenPlans);
+        captured = AnalysisVersions.withOklahomaRules(kind, captured, frozenPlans);
+        captured = AnalysisVersions.withMississippiRules(kind, captured, frozenPlans);
         if (captured.equals(references)) return this;
         return new AcceptedAnalysisCompletion(planId, planFile, kind, runId, completedAt, inputFingerprint,
                 contextFingerprint, algorithms, captured, payload, context, association, benefitExecution);

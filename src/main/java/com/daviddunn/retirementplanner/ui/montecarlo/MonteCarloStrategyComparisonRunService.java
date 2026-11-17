@@ -130,6 +130,16 @@ public final class MonteCarloStrategyComparisonRunService {
                         com.daviddunn.retirementplanner.domain.tax.state.GeorgiaProductionTaxCalculator.planningLimitations(
                                 p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1));
             }
+        if (p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.OK) {
+                details += "\nOklahoma planning estimate: " + String.join(" ",
+                        com.daviddunn.retirementplanner.domain.tax.state.OklahomaProductionTaxCalculator.planningLimitations(
+                                p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1));
+            }
+        if (p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS) {
+                details += "\nMississippi planning estimate: " + String.join(" ",
+                        com.daviddunn.retirementplanner.domain.tax.state.MississippiProductionTaxCalculator.planningLimitations(
+                                p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1));
+            }
         if (p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA) {
                 details += "\nVirginia planning estimate: " + String.join(" ",
                         com.daviddunn.retirementplanner.domain.tax.state.VirginiaProductionTaxCalculator.planningLimitations(

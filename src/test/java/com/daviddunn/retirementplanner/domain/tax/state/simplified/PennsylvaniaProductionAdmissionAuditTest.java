@@ -234,10 +234,10 @@ class PennsylvaniaProductionAdmissionAuditTest {
 
     @Test
     void boundedPennsylvaniaAdmissionDoesNotExposeOtherResearchStates() {
-        assertEquals(List.of("AK", "AZ", "FL", "GA", "IL", "IA", "KY", "MI", "NV", "NH", "NC", "PA", "SD", "TN", "TX", "VA", "WY"),
+        assertEquals(List.of("AK", "AZ", "FL", "GA", "IL", "IA", "KY", "MI", "MS", "NV", "NH", "NC", "OK", "PA", "SD", "TN", "TX", "VA", "WY"),
                 StateTaxJurisdiction.alphabeticalChoices().stream().map(Enum::name).toList());
         assertEquals(StateTaxJurisdiction.PA, StateTaxJurisdiction.fromCode("PA"));
-        for (var code : List.of("CA", "NY", "CO", "NJ", "WA", "MS")) {
+        for (var code : List.of("CA", "NY", "CO", "NJ", "WA")) {
             assertThrows(IllegalArgumentException.class, () -> StateTaxJurisdiction.fromCode(code));
         }
     }

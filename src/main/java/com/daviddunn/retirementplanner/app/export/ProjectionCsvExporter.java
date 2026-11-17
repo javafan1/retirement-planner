@@ -45,8 +45,10 @@ public class ProjectionCsvExporter {
             boolean kentucky = projection.getYears().getFirst().getStateTaxJurisdiction()
                     == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY;
             boolean georgia = projection.getYears().getFirst().getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA;
+            boolean oklahoma = projection.getYears().getFirst().getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.OK;
+            boolean mississippi = projection.getYears().getFirst().getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS;
             boolean virginia = projection.getYears().getFirst().getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA;
-            if (individual) writeIndividualHeader(writer, iowa, arizona, northCarolina, kentucky, georgia, virginia); else writeHeader(writer, iowa, arizona, northCarolina, kentucky, georgia, virginia);
+            if (individual) writeIndividualHeader(writer, iowa, arizona, northCarolina, kentucky, georgia, virginia, oklahoma, mississippi); else writeHeader(writer, iowa, arizona, northCarolina, kentucky, georgia, virginia, oklahoma, mississippi);
 
             for (ProjectionYear year :
                     projection.getYears()) {
@@ -61,7 +63,7 @@ public class ProjectionCsvExporter {
 
 
     private void writeHeader(
-            BufferedWriter writer, boolean iowa, boolean arizona, boolean northCarolina, boolean kentucky, boolean georgia, boolean virginia)
+            BufferedWriter writer, boolean iowa, boolean arizona, boolean northCarolina, boolean kentucky, boolean georgia, boolean virginia, boolean oklahoma, boolean mississippi)
             throws IOException {
 
         writer.write(
@@ -123,6 +125,8 @@ public class ProjectionCsvExporter {
         if (northCarolina) writer.write(",North Carolina Planning Limitations");
         if (kentucky) writer.write(",Kentucky Planning Limitations");
         if (georgia) writer.write(",Georgia Planning Limitations");
+        if (oklahoma) writer.write(",Oklahoma Planning Limitations");
+        if (mississippi) writer.write(",Mississippi Planning Limitations");
         if (virginia) writer.write(",Virginia Planning Limitations");
         writer.newLine();
     }
@@ -219,7 +223,7 @@ public class ProjectionCsvExporter {
 
 
     private void writeIndividualHeader(
-            BufferedWriter writer, boolean iowa, boolean arizona, boolean northCarolina, boolean kentucky, boolean georgia, boolean virginia)
+            BufferedWriter writer, boolean iowa, boolean arizona, boolean northCarolina, boolean kentucky, boolean georgia, boolean virginia, boolean oklahoma, boolean mississippi)
             throws IOException {
 
         writer.write(
@@ -277,6 +281,8 @@ public class ProjectionCsvExporter {
         if (kentucky) writer.write(",Kentucky Planning Limitations");
         if (georgia) writer.write(",Georgia Planning Limitations");
         if (virginia) writer.write(",Virginia Planning Limitations");
+        if (oklahoma) writer.write(",Oklahoma Planning Limitations");
+        if (mississippi) writer.write(",Mississippi Planning Limitations");
         writer.newLine();
     }
 
@@ -402,7 +408,9 @@ public class ProjectionCsvExporter {
                 || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC
                 || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY
                 || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA
-                || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA) {
+                || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA
+                || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.OK
+                || year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS) {
             writer.write(",");
             writer.write(escape(String.join(" ", year.stateTaxCalculation().orElseThrow().limitations())));
         }
