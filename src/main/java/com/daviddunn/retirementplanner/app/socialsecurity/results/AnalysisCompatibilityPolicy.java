@@ -64,6 +64,16 @@ public final class AnalysisCompatibilityPolicy {
             currentReferences.put(kentuckyKey,
                     com.daviddunn.retirementplanner.domain.tax.state.kentucky.KentuckyTaxRules.VERSION);
         }
+        String georgiaKey = com.daviddunn.retirementplanner.domain.tax.state.georgia.GeorgiaTaxRules.REFERENCE_KEY;
+        if (saved.references().containsKey(georgiaKey)) {
+            currentReferences.put(georgiaKey,
+                    com.daviddunn.retirementplanner.domain.tax.state.georgia.GeorgiaTaxRules.VERSION);
+        }
+        String virginiaKey = com.daviddunn.retirementplanner.domain.tax.state.virginia.VirginiaTaxRules.REFERENCE_KEY;
+        if (saved.references().containsKey(virginiaKey)) {
+            currentReferences.put(virginiaKey,
+                    com.daviddunn.retirementplanner.domain.tax.state.virginia.VirginiaTaxRules.VERSION);
+        }
         if (!originalAlgorithms.equals(expectedAlgorithms) || !saved.references().equals(currentReferences)
                 || !saved.inputFingerprint().equals(inputs.fingerprint())
                 || !saved.contextFingerprint().equals(inputs.contextFingerprint())) {

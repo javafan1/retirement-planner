@@ -34,6 +34,32 @@ public final class AnalysisVersions {
                 com.daviddunn.retirementplanner.domain.tax.state.kentucky.KentuckyTaxRules.VERSION);
         return Map.copyOf(result);
     }
+    public static Map<String, String> withGeorgiaRules(AnalysisKind kind, Map<String, String> references,
+            com.daviddunn.retirementplanner.domain.model.RetirementPlan... frozenPlans) {
+        if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
+                || Arrays.stream(frozenPlans).filter(Objects::nonNull).noneMatch(plan ->
+                        plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA)) {
+            return references;
+        }
+        var result = new TreeMap<>(references.isEmpty() ? references(kind) : references);
+        result.put(com.daviddunn.retirementplanner.domain.tax.state.georgia.GeorgiaTaxRules.REFERENCE_KEY,
+                com.daviddunn.retirementplanner.domain.tax.state.georgia.GeorgiaTaxRules.VERSION);
+        return Map.copyOf(result);
+    }
+    public static Map<String, String> withVirginiaRules(AnalysisKind kind, Map<String, String> references,
+            com.daviddunn.retirementplanner.domain.model.RetirementPlan... frozenPlans) {
+        if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
+                || Arrays.stream(frozenPlans).filter(Objects::nonNull).noneMatch(plan ->
+                        plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA)) {
+            return references;
+        }
+        var result = new TreeMap<>(references.isEmpty() ? references(kind) : references);
+        result.put(com.daviddunn.retirementplanner.domain.tax.state.virginia.VirginiaTaxRules.REFERENCE_KEY,
+                com.daviddunn.retirementplanner.domain.tax.state.virginia.VirginiaTaxRules.VERSION);
+        return Map.copyOf(result);
+    }
 
     public static boolean usesOrdinaryPensionSelection(AnalysisKind kind) {
         return kind == AnalysisKind.COUPLE_QUICK || kind == AnalysisKind.COUPLE_EXHAUSTIVE

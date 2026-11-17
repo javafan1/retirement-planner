@@ -41,6 +41,8 @@ public final class ConditionalBenefitAdmission {
                 && state != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ
                 && state != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC
                 && state != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY
+                && state != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA
+                && state != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA
                 && !state.usesNoGeneralIndividualIncomeTaxModel())
             throw new UnsupportedExecutionException("Conditional non-pension income has no validated " + state.displayName()
                     + " tax classification in this release. The plan and historical results are preserved; no incomplete projection was accepted.");

@@ -561,6 +561,8 @@ public class ProjectionPdfExporter {
         // NC retained results must not acquire the active editor's later jurisdiction.
         var jurisdiction = resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC
                 || resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY
+                || resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA
+                || resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA
                 ? resultJurisdiction : assumptions.getStateTaxAssumptions().jurisdiction();
         writeKeyValue("State of Residence", jurisdiction.displayName(), GRAY);
         writeKeyValue("State Tax Calculation", "Simplified state estimate; full-year resident", GRAY);
@@ -780,6 +782,40 @@ public class ProjectionPdfExporter {
             writeText("Kentucky Planning Limitations", MARGIN, currentY, FONT_NORMAL, 9, GRAY);
             currentY -= 14;
             for (var limitation : kentuckyDisclosures) {
+                for (var line : PdfReportSupport.wrap(limitation, CONTENT_WIDTH, 9)) {
+                    ensureSpace(14);
+                    writeText(line, MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+                    currentY -= 12;
+                }
+                currentY -= 4;
+            }
+        }
+        var georgiaDisclosures = projection.getYears().stream()
+                .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA)
+                .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream().filter(note -> !note.startsWith("Annual Georgia base:")))
+                .distinct().toList();
+        if (!georgiaDisclosures.isEmpty()) {
+            ensureSpace(14);
+            writeText("Georgia Planning Limitations", MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+            currentY -= 14;
+            for (var limitation : georgiaDisclosures) {
+                for (var line : PdfReportSupport.wrap(limitation, CONTENT_WIDTH, 9)) {
+                    ensureSpace(14);
+                    writeText(line, MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+                    currentY -= 12;
+                }
+                currentY -= 4;
+            }
+        }
+        var virginiaDisclosures = projection.getYears().stream()
+                .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA)
+                .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream().filter(note -> !note.startsWith("Annual Virginia base:")))
+                .distinct().toList();
+        if (!virginiaDisclosures.isEmpty()) {
+            ensureSpace(14);
+            writeText("Virginia Planning Limitations", MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+            currentY -= 14;
+            for (var limitation : virginiaDisclosures) {
                 for (var line : PdfReportSupport.wrap(limitation, CONTENT_WIDTH, 9)) {
                     ensureSpace(14);
                     writeText(line, MARGIN, currentY, FONT_NORMAL, 9, GRAY);

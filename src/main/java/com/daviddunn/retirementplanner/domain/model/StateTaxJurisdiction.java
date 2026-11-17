@@ -16,7 +16,9 @@ public enum StateTaxJurisdiction {
     IA("Iowa"),
     AZ("Arizona"),
     NC("North Carolina"),
-    KY("Kentucky");
+    KY("Kentucky"),
+    GA("Georgia"),
+    VA("Virginia");
 
     private final String displayName;
     private final boolean noGeneralIndividualIncomeTax;

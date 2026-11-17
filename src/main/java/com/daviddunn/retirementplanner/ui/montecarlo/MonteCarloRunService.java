@@ -84,6 +84,14 @@ public final class MonteCarloRunService {
                 ? "\nKentucky planning estimate: " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.KentuckyProductionTaxCalculator
                         .planningLimitations(p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1))
                 : "";
+        String georgia = p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA
+                ? "\nGeorgia planning estimate: " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.GeorgiaProductionTaxCalculator
+                        .planningLimitations(p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1))
+                : "";
+        String virginia = p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA
+                ? "\nVirginia planning estimate: " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.VirginiaProductionTaxCalculator
+                        .planningLimitations(p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1))
+                : "";
         return "Projection start: " + p.getProjectionStartDate()
                 + "\nConfigured planning horizon: " + (p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1)
                 + "\nPlan general inflation: " + percent(p.getGeneralInflationRate())
@@ -91,7 +99,7 @@ public final class MonteCarloRunService {
                 + "\nConfigured deterministic reference return: " + percent(p.getExpectedAnnualInvestmentReturn())
                 + reductionText
                 + "\nState of residence: " + p.getStateTaxAssumptions().jurisdiction()
-                + "; simplified state estimate; full-year resident" + iowa + arizona + northCarolina + kentucky;
+                + "; simplified state estimate; full-year resident" + iowa + arizona + northCarolina + kentucky + georgia + virginia;
     }
 
     private static String percent(java.math.BigDecimal value) {

@@ -710,7 +710,9 @@ public class ProjectionYearDetailsPane
                         if (result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA
                                 || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AZ
                                 || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.NC
-                                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY) {
+                                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY
+                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA
+                || result.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA) {
                             tooltip.setWrapText(true);
                             tooltip.setMaxWidth(650);
                         }

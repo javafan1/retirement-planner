@@ -441,11 +441,12 @@ public final class RothConversionBracketFillCalculator {
         BigDecimal previousConversion = null;
         BigDecimal previousDifference = null;
 
-        // Kentucky's per-recipient exclusion requires every trial dollar to have
+        // Kentucky/Georgia per-recipient exclusions require every trial dollar to have
         // an executable owner. Preserve the established aggregate-tolerant path
         // for all earlier jurisdictions (Phase 6E-F capacity evidence test).
         BigDecimal attributedCapacity = stateTaxAssumptions.jurisdiction()
                 == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY
+                || stateTaxAssumptions.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA
                 ? conversionAttribution.getMaximumConvertibleAmount(portfolio, conversionOwners, projectionDate.getYear())
                 : null;
 

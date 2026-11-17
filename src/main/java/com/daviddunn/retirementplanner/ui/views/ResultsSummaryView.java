@@ -2637,6 +2637,24 @@ public class ResultsSummaryView extends BorderPane {
             tooltip.setWrapText(true);
             tooltip.setMaxWidth(650);
             projectionRangeLabel.setTooltip(tooltip);
+        } else if (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA) {
+            var limitations = years.stream()
+                    .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA)
+                    .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream().filter(note -> !note.startsWith("Annual Georgia base:")))
+                    .distinct().toList();
+            var tooltip = new Tooltip(String.join("\n", limitations));
+            tooltip.setWrapText(true);
+            tooltip.setMaxWidth(650);
+            projectionRangeLabel.setTooltip(tooltip);
+        } else if (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA) {
+            var limitations = years.stream()
+                    .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA)
+                    .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream().filter(note -> !note.startsWith("Annual Virginia base:")))
+                    .distinct().toList();
+            var tooltip = new Tooltip(String.join("\n", limitations));
+            tooltip.setWrapText(true);
+            tooltip.setMaxWidth(650);
+            projectionRangeLabel.setTooltip(tooltip);
         } else {
             projectionRangeLabel.setTooltip(null);
         }

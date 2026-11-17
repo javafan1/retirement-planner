@@ -155,10 +155,14 @@ public class PennsylvaniaProductionProjectionTest {
             // Arizona: federal AGI 243600 - basic deduction 32200 = 211400;
             // both filers are under 65, so 211400 * .025 = 5285. No prior-state golden changes.
             // NC independent worksheet: (243600 federal AGI - 25500 state deduction) * .0399 = 8702.19.
+            // GA: only primary age 63 converts, one 35000 cap; (243600-35000-30000)*.0499=8912.14.
+            // VA: both under 65; base 243600-17500-1860=224240; 720+(224240-17000)*.0575=12636.30.
             var expected = state == StateTaxJurisdiction.MI ? "4104.65"
                     : state == StateTaxJurisdiction.AZ ? "5285.00"
                     : state == StateTaxJurisdiction.NC ? "8702.19"
-                    : state == StateTaxJurisdiction.KY ? "7319.55" : "0.00";
+                    : state == StateTaxJurisdiction.KY ? "7319.55"
+                    : state == StateTaxJurisdiction.GA ? "8912.14"
+                    : state == StateTaxJurisdiction.VA ? "12636.30" : "0.00";
             assertEquals(new BigDecimal(expected), year.getStateIncomeTax().setScale(2, RoundingMode.HALF_UP));
             if (state == StateTaxJurisdiction.PA) {
                 assertEquals(new BigDecimal("207668.00"), year.getRothConversion().setScale(2, RoundingMode.HALF_UP));
