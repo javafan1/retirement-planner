@@ -60,6 +60,19 @@ public final class AnalysisVersions {
                 com.daviddunn.retirementplanner.domain.tax.state.oklahoma.OklahomaTaxRules.VERSION);
         return Map.copyOf(result);
     }
+    public static Map<String, String> withAlabamaRules(AnalysisKind kind, Map<String, String> references,
+            com.daviddunn.retirementplanner.domain.model.RetirementPlan... frozenPlans) {
+        if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
+                || Arrays.stream(frozenPlans).filter(Objects::nonNull).noneMatch(plan ->
+                        plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AL)) {
+            return references;
+        }
+        var result = new TreeMap<>(references.isEmpty() ? references(kind) : references);
+        result.put(com.daviddunn.retirementplanner.domain.tax.state.alabama.AlabamaTaxRules.REFERENCE_KEY,
+                com.daviddunn.retirementplanner.domain.tax.state.alabama.AlabamaTaxRules.VERSION);
+        return Map.copyOf(result);
+    }
     public static Map<String, String> withMississippiRules(AnalysisKind kind, Map<String, String> references,
             com.daviddunn.retirementplanner.domain.model.RetirementPlan... frozenPlans) {
         if (kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY

@@ -158,13 +158,15 @@ public class PennsylvaniaProductionProjectionTest {
             // GA: only primary age 63 converts, one 35000 cap; (243600-35000-30000)*.0499=8912.14.
             // VA: both under 65; base 243600-17500-1860=224240; 720+(224240-17000)*.0575=12636.30.
             // OK: base 243600-10000-12700-2000=218900; 218.50+(218900-14400)*.045=9421.
+            // AL, both under65: 243600-5000-3000-35932=199668; .05*199668-80=9903.40.
             var expected = state == StateTaxJurisdiction.MI ? "4104.65"
                     : state == StateTaxJurisdiction.AZ ? "5285.00"
                     : state == StateTaxJurisdiction.NC ? "8702.19"
                     : state == StateTaxJurisdiction.KY ? "7319.55"
                     : state == StateTaxJurisdiction.GA ? "8912.14"
                     : state == StateTaxJurisdiction.VA ? "12636.30"
-                    : state == StateTaxJurisdiction.OK ? "9421.00" : "0.00";
+                    : state == StateTaxJurisdiction.OK ? "9421.00"
+                    : state == StateTaxJurisdiction.AL ? "9903.40" : "0.00";
             assertEquals(new BigDecimal(expected), year.getStateIncomeTax().setScale(2, RoundingMode.HALF_UP));
             if (state == StateTaxJurisdiction.PA) {
                 assertEquals(new BigDecimal("207668.00"), year.getRothConversion().setScale(2, RoundingMode.HALF_UP));

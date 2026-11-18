@@ -1,5 +1,9 @@
 package com.daviddunn.retirementplanner.ui;
 
+import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.tax.state.AlabamaPensionPreflight;
+import com.daviddunn.retirementplanner.ui.controls.AlabamaPensionNotice;
+
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
@@ -92,6 +96,7 @@ public class MainWindow {
     private boolean collectingViewEdits;
     private final Label statusLabel;
     private final Label projectionFundingNotice = new Label();
+    private final AlabamaPensionNotice projectionPensionNotice = new AlabamaPensionNotice("projection-alabama-pension-notice");
 
     public MainWindow() {
         this(new ApplicationController(), true);
@@ -180,6 +185,8 @@ public class MainWindow {
 
         incomeSourcesView.setOnPlanChanged(
                 this::onPlanChanged);
+        assumptionsView.setOnReviewPension(this::reviewPension);
+        projectionPensionNotice.setOnReview(this::reviewPension);
 
         accountsView.setOnPlanChanged(
                 this::onPlanChanged);
@@ -548,6 +555,7 @@ public class MainWindow {
         }
 
         selectedWorkspaceId = viewId;
+        projectionPensionNotice.setWorkspaceVisible(!viewId.equals("assumptions"));
         workspaceScreens.forEach((id, view) -> {
             boolean selected = id.equals(viewId);
             view.setVisible(selected);
@@ -574,6 +582,11 @@ public class MainWindow {
 
     private void navigateToResultsSummary() {
         selectWorkspace("results-summary");
+    }
+
+    private void reviewPension(Pension pension) {
+        selectWorkspace("income");
+        incomeSourcesView.selectPension(pension);
     }
 
     private static boolean isWithin(Node candidate, Node ancestor) {
@@ -609,7 +622,7 @@ public class MainWindow {
         projectionFundingNotice.visibleProperty().bind(projectionFundingNotice.textProperty().isNotEmpty());
         projectionFundingNotice.managedProperty().bind(projectionFundingNotice.visibleProperty());
         projectionFundingNotice.setStyle("-fx-background-color: -fx-control-inner-background; -fx-text-fill: -fx-text-base-color; -fx-border-color: #c49532; -fx-padding: 8;");
-        var statusBar = new javafx.scene.layout.VBox(5, projectionFundingNotice, statusLabel);
+        var statusBar = new javafx.scene.layout.VBox(5, projectionPensionNotice, projectionFundingNotice, statusLabel);
         statusBar.setPadding(new Insets(5));
 
         return statusBar;
@@ -628,7 +641,7 @@ public class MainWindow {
     private void loadCurrentPlan(boolean runProjection, boolean preparedStartup) {
 
         RetirementPlan plan = controller.getCurrentPlan();
-
+        projectionPensionNotice.update(List.of());
 
         householdView.load(plan);
         accountsView.load(plan);
@@ -647,7 +660,7 @@ public class MainWindow {
         else if (preparedStartup) {
             refreshProjectionViews(false, false, true);
         }
-        else if (runProjection) {
+        else if (runProjection && pensionsToReview(plan).isEmpty()) {
             refreshAllViews();
         }
         else {
@@ -1226,6 +1239,8 @@ public class MainWindow {
     }
 
     private void refreshProjectionViews(boolean runProjection, boolean restored, boolean preparedStartup) {
+        var pensions = pensionsToReview(controller.getCurrentPlan());
+        projectionPensionNotice.update(pensions);
 
         resultsView.setBreakEvenAnalysis(null);
         resultsSummaryView.setBreakEvenAnalysis(null);
@@ -1233,9 +1248,11 @@ public class MainWindow {
         if (!restored && !preparedStartup) controller.invalidateProjection();
         projectionFundingNotice.setText("");
 
+        boolean evaluatingCurrent = runProjection && !restored && !preparedStartup;
         try {
             Projection projection =
                     restored || preparedStartup ? controller.peekCurrentProjection() : runProjection ? controller.getCurrentProjection() : null;
+            evaluatingCurrent = false;
 
             ProjectionSummary summary =
                     (runProjection || (restored || preparedStartup) && projection != null) ? controller.getCurrentProjectionSummary() : null;
@@ -1263,14 +1280,20 @@ public class MainWindow {
                     ProjectionFailureMessages.insufficientFundingMessage(failure)));
             statusLabel.setText(funding.isPresent() ? "Projection not completed: insufficient eligible funds."
                     : projection == null
-                            ? "Complete the required plan information to run a projection."
+                            ? !pensions.isEmpty() && !runProjection
+                                    ? "Review the pension classifications or select Recalculate Projection to continue."
+                                    : "Complete the required plan information to run a projection."
                             : "Projection updated.");
             if (restored) statusLabel.setText(controller.getProjectionSnapshotNotice());
         }
         catch (Exception ex) {
-
-            handleProjectionFailure(ex);
+            assumptionsView.refresh(controller.getCurrentPlan());
+            handleProjectionFailure(ex, evaluatingCurrent && !pensions.isEmpty() && AlabamaPensionPreflight.explainsFailure(ex));
         }
+    }
+
+    private static List<Pension> pensionsToReview(RetirementPlan plan) {
+        return AlabamaPensionPreflight.pensionsToReview(plan.getHousehold(), plan.getPlanningAssumptions());
     }
 
     public void setStage(Stage stage) {
@@ -1370,9 +1393,9 @@ public class MainWindow {
                     controller.newUserPlan(plan);
                     // Legal empty plans retain Phase 5A's deferred projection; populated plans use the normal engine.
                     loadCurrentPlan(false);
-                    if (!plan.getAccountPortfolio().getAccounts().isEmpty()
+                    if (pensionsToReview(plan).isEmpty() && (!plan.getAccountPortfolio().getAccounts().isEmpty()
                             || plan.getHousehold().members().stream().anyMatch(person -> !person.getIncomeSources().isEmpty())
-                            || !plan.getHousehold().getExpenses().isEmpty()) {
+                            || !plan.getHousehold().getExpenses().isEmpty())) {
                         refreshProjectionViews();
                     }
                     selectWorkspace("results-summary");
@@ -1474,13 +1497,21 @@ public class MainWindow {
 
     private void handleProjectionFailure(
             Exception exception) {
+        handleProjectionFailure(exception, false);
+    }
 
+    private void handleProjectionFailure(Exception exception, boolean detectedPensionFailure) {
         resultsView.load(null, List.of());
         resultsSummaryView.setYearlyDetailsAvailable(false);
         if (exception instanceof com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.UnsupportedExecutionException) {
             String message = exception.getMessage();
             projectionFundingNotice.setText(message);
             statusLabel.setText(message);
+            return;
+        }
+
+        if (detectedPensionFailure) {
+            statusLabel.setText("State Tax Unavailable. Alabama could not estimate tax without a pension classification.");
             return;
         }
 

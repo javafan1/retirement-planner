@@ -218,6 +218,13 @@ public final class NewRetirementPlanWizard extends Dialog<RetirementPlan> {
         setResultConverter(type -> type == createType ? completedPlan : null);
         for (NewPlanWizardStep step : this.steps) {
             if (step instanceof ReviewWizardStep review) review.setEditStep(this::navigateTo);
+            if (step instanceof AssumptionsWizardStep assumptions) {
+                this.steps.stream().filter(IncomeWizardStep.class::isInstance).map(IncomeWizardStep.class::cast)
+                        .findFirst().ifPresent(pensions -> assumptions.setOnReviewPension(pension -> {
+                            navigateTo(pensions.key());
+                            pensions.selectPension(pension);
+                        }));
+            }
         }
         showStep();
     }

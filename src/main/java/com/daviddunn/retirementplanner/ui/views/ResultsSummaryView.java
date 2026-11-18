@@ -2656,6 +2656,15 @@ public class ResultsSummaryView extends BorderPane {
             tooltip.setMaxWidth(650);
             projectionRangeLabel.setTooltip(tooltip);
 
+        } else if (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AL) {
+            var limitations = years.stream()
+                    .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AL)
+                    .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream().filter(note -> !note.startsWith("Annual Alabama base:")))
+                    .distinct().toList();
+            var tooltip = new Tooltip(String.join("\n", limitations));
+            tooltip.setWrapText(true);
+            tooltip.setMaxWidth(650);
+            projectionRangeLabel.setTooltip(tooltip);
         } else if (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS) {
             var limitations = years.stream()
                     .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS)

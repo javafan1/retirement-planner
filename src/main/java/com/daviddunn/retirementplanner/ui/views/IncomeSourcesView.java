@@ -577,6 +577,18 @@ public class IncomeSourcesView extends BorderPane {
         return table;
     }
 
+    public void selectPension(Pension pension) {
+        for (int index = 0; index < table.getItems().size(); index++) {
+            if (table.getItems().get(index) == pension) {
+                ((ScrollPane) getCenter()).setVvalue(0);
+                table.getSelectionModel().select(index);
+                table.scrollTo(index);
+                javafx.application.Platform.runLater(table::requestFocus);
+                return;
+            }
+        }
+    }
+
     public void setOnPlanChanged(
             Runnable onPlanChanged) {
 

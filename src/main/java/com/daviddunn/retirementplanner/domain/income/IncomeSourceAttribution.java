@@ -210,7 +210,7 @@ public record IncomeSourceAttribution(
         PensionFacts facts = new PensionFacts(source.getOwnership(), source.getMonthlyBenefit(),
                 Optional.ofNullable(source.getSurvivorMonthlyBenefit()), source.getAnnualColaRate(),
                 Optional.ofNullable(source.getStartDate()), Optional.ofNullable(source.getEndDate()),
-                source.getRetirementParticipantFacts());
+                source.getRetirementParticipantFacts(), source.getPlanClassification());
         return new IncomeSourceAttribution(Kind.PENSION, Purpose.INCOME, Optional.of(recipient),
                 Optional.empty(), Optional.empty(), source.getName(), amount, Optional.of(amount),
                 OptionalInt.of(year), Optional.of(facts));
@@ -223,7 +223,17 @@ public record IncomeSourceAttribution(
             BigDecimal annualColaRate,
             Optional<LocalDate> startDate,
             Optional<LocalDate> endDate,
-            RetirementParticipantFacts participantFacts) {
+            RetirementParticipantFacts participantFacts,
+            @com.fasterxml.jackson.annotation.JsonInclude(value = com.fasterxml.jackson.annotation.JsonInclude.Include.CUSTOM,
+                    valueFilter = PensionPlanClassification.UnknownFilter.class)
+            PensionPlanClassification planClassification) {
+        public PensionFacts(AccountOwnership originalOwner, BigDecimal monthlyBenefit,
+                Optional<BigDecimal> survivorMonthlyBenefit, BigDecimal annualColaRate,
+                Optional<LocalDate> startDate, Optional<LocalDate> endDate,
+                RetirementParticipantFacts participantFacts) {
+            this(originalOwner, monthlyBenefit, survivorMonthlyBenefit, annualColaRate, startDate, endDate,
+                    participantFacts, PensionPlanClassification.UNKNOWN);
+        }
         public PensionFacts(AccountOwnership originalOwner, BigDecimal monthlyBenefit,
                 Optional<BigDecimal> survivorMonthlyBenefit, BigDecimal annualColaRate,
                 Optional<LocalDate> startDate, Optional<LocalDate> endDate) {
@@ -232,6 +242,7 @@ public record IncomeSourceAttribution(
         }
 
         public PensionFacts {
+            planClassification = Objects.requireNonNullElse(planClassification, PensionPlanClassification.UNKNOWN);
             Objects.requireNonNull(participantFacts);
             Objects.requireNonNull(originalOwner);
             Objects.requireNonNull(monthlyBenefit);

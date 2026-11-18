@@ -1,5 +1,9 @@
 package com.daviddunn.retirementplanner.ui.views;
 
+import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.tax.state.AlabamaPensionPreflight;
+import com.daviddunn.retirementplanner.ui.controls.AlabamaPensionNotice;
+
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 import com.daviddunn.retirementplanner.ui.wizard.WizardFieldRow;
@@ -86,6 +90,7 @@ public class AssumptionsView extends VBox {
      */
     private final ComboBox<com.daviddunn.retirementplanner.domain.rules.FilingStatus> filingStatusComboBox = new ComboBox<>();
     private final ComboBox<com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction> stateJurisdictionComboBox = new ComboBox<>();
+    private final AlabamaPensionNotice alabamaPensionNotice = new AlabamaPensionNotice("assumptions-alabama-pension-notice");
     private final Label horizonLabel = new Label();
     private final TextField federalBracketGrowthField;
     private final TextField standardDeductionGrowthField;
@@ -477,7 +482,7 @@ public class AssumptionsView extends VBox {
         stateJurisdictionComboBox.getItems().setAll(com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.alphabeticalChoices());
         stateJurisdictionComboBox.setVisibleRowCount(11);
         stateJurisdictionComboBox.setId("state-of-residence");
-        InputHelp.install(stateJurisdictionComboBox, "Full-year residence for every projection year. Michigan uses the modeled retirement rules; Alaska, Florida, Nevada, New Hampshire, South Dakota, Tennessee, Texas and Wyoming have no modeled individual state income tax under validated 2026 rules, projected forward without tax-law forecasting. Illinois subtracts assessed federally taxable qualified retirement income; unassessed pension qualification is conservatively taxable. Pennsylvania supports ordinary IRA retirement receipts, complete IRA-to-Roth IRA transfers, Social Security and ordinary investments; missing plan qualification or basis/history makes the projection unavailable. Illinois and Pennsylvania use the 2026 baseline without future indexing. Arizona uses a bounded full-year domestic Single/MFJ planning estimate. Federally taxable Social Security is subtracted; ordinary retirement income and taxable Roth conversions remain taxable. Brokerage proceeds are not automatically taxable income; Arizona uses modeled taxable investment income. Unmodeled realized gains may cause actual tax to be higher, while omitted qualifying Arizona gain subtractions may overestimate tax. Government/military pension exclusions, special bond adjustments, itemization and dependent/refundable credits are outside the estimate. Arizona holds baseline state parameters nominally fixed for planning, with the temporary senior subtraction ending after 2028. Local taxes, part-year moves and income sourced to other states are not modeled. " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.NorthCarolinaProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.KentuckyProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.GeorgiaProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.VirginiaProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.OklahomaProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.MississippiProductionTaxCalculator.planningLimitations(2026, 2026)));
+        InputHelp.install(stateJurisdictionComboBox, "Full-year residence for every projection year. Michigan uses the modeled retirement rules; Alaska, Florida, Nevada, New Hampshire, South Dakota, Tennessee, Texas and Wyoming have no modeled individual state income tax under validated 2026 rules, projected forward without tax-law forecasting. Illinois subtracts assessed federally taxable qualified retirement income; unassessed pension qualification is conservatively taxable. Pennsylvania supports ordinary IRA retirement receipts, complete IRA-to-Roth IRA transfers, Social Security and ordinary investments; missing plan qualification or basis/history makes the projection unavailable. Illinois and Pennsylvania use the 2026 baseline without future indexing. Arizona uses a bounded full-year domestic Single/MFJ planning estimate. Federally taxable Social Security is subtracted; ordinary retirement income and taxable Roth conversions remain taxable. Brokerage proceeds are not automatically taxable income; Arizona uses modeled taxable investment income. Unmodeled realized gains may cause actual tax to be higher, while omitted qualifying Arizona gain subtractions may overestimate tax. Government/military pension exclusions, special bond adjustments, itemization and dependent/refundable credits are outside the estimate. Arizona holds baseline state parameters nominally fixed for planning, with the temporary senior subtraction ending after 2028. Local taxes, part-year moves and income sourced to other states are not modeled. " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.NorthCarolinaProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.KentuckyProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.GeorgiaProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.VirginiaProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.OklahomaProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.MississippiProductionTaxCalculator.planningLimitations(2026, 2026)) + " " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.AlabamaProductionTaxCalculator.planningLimitations(2026, 2026)));
         Label stateLabel = new Label("State of Residence");
         stateLabel.setLabelFor(stateJurisdictionComboBox);
         grid.add(stateLabel, 0, row);
@@ -702,6 +707,8 @@ public class AssumptionsView extends VBox {
                 federalBracketGrowthField, standardDeductionGrowthField);
         tax.getChildren().add(2,calculationModeHelp);
         tax.getChildren().add(3,establishCalculationMode);
+        int stateRow = tax.getChildren().indexOf(stateJurisdictionComboBox.getParent());
+        tax.getChildren().add(stateRow + 1, alabamaPensionNotice);
         VBox adjustment = new VBox(8, inputRow(original, futureFederalMarginalRateAdjustmentField),
                 inputRow(original, futureFederalMarginalRateEffectiveYearField));
         adjustment.getStyleClass().add("assumptions-rate-adjustment");
@@ -1065,7 +1072,8 @@ public class AssumptionsView extends VBox {
                 socialSecurityBenefitReductionField.textProperty(), socialSecurityBenefitReductionYearField.textProperty()));
         summary.visibleProperty().bind(guidedAdvanced.expandedProperty().not());
         summary.managedProperty().bind(summary.visibleProperty());
-        getChildren().setAll(required, basicHeading, interpretation, compact, summary, guidedAdvanced, fullGrid, statusLabel);
+        getChildren().setAll(required, basicHeading, interpretation, compact, alabamaPensionNotice,
+                summary, guidedAdvanced, fullGrid, statusLabel);
         setPadding(new Insets(8));
     }
 
@@ -1101,6 +1109,8 @@ public class AssumptionsView extends VBox {
 
     public void load(
             RetirementPlan plan) {
+
+        if (plan != currentPlan) alabamaPensionNotice.update(List.of());
 
         currentPlan = Objects.requireNonNull(plan);
         loading = true;
@@ -1312,9 +1322,14 @@ public class AssumptionsView extends VBox {
     }
 
     public void cancelChanges() {
+        alabamaPensionNotice.update(List.of());
         if (currentPlan != null) {
             load(currentPlan);
         }
+    }
+
+    public void setOnReviewPension(java.util.function.Consumer<Pension> action) {
+        alabamaPensionNotice.setOnReview(action);
     }
 
     public boolean validateChanges() {
@@ -1378,8 +1393,10 @@ public class AssumptionsView extends VBox {
             return;
         }
         try {
-            boolean assumptionsDiffer = currentPlan != null
-                    && !values(readValidated()).equals(values(currentPlan.getPlanningAssumptions()));
+            var draft = currentPlan == null ? null : readValidated();
+            boolean assumptionsDiffer = draft != null
+                    && !values(draft).equals(values(currentPlan.getPlanningAssumptions()));
+            refreshPensionNotice(draft);
             boolean socialSecurityDiffers = socialSecurityDraftRows.stream()
                     .anyMatch(row -> row.age.getValue() == null || row.age.getValue() != row.source.getClaimingAge());
             dirty.set(currentPlan != null && (assumptionsDiffer || socialSecurityDiffers || calculationModeEdited
@@ -1387,7 +1404,15 @@ public class AssumptionsView extends VBox {
         }
         catch (InputException exception) {
             dirty.set(currentPlan != null);
+            refreshPensionNotice(currentPlan == null || stateJurisdictionComboBox.getValue() == null ? null
+                    : currentPlan.getPlanningAssumptions().withStateTaxAssumptions(
+                            com.daviddunn.retirementplanner.domain.model.StateTaxAssumptions.simplified(stateJurisdictionComboBox.getValue())));
         }
+    }
+
+    private void refreshPensionNotice(PlanningAssumptions draft) {
+        alabamaPensionNotice.update(draft == null ? List.of()
+                : AlabamaPensionPreflight.pensionsToReview(currentPlan.getHousehold(), draft));
     }
 
     private List<TextField> textFields() {

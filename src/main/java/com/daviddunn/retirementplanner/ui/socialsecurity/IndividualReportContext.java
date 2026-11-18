@@ -63,6 +63,14 @@ record IndividualReportContext(String household, String primary, Instant started
                             a.getProjectionStartDate().getYear() + a.getProjectionLengthYears() - 1));
         }
         if (a.getStateTaxAssumptions().jurisdiction()
+                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AL) {
+            lines.add(com.daviddunn.retirementplanner.domain.tax.state.AlabamaProductionTaxCalculator.pensionAssumptions(plan.getHousehold()));
+            lines.addAll(com.daviddunn.retirementplanner.domain.tax.state.AlabamaProductionTaxCalculator
+                    .planningLimitations(a.getProjectionStartDate().getYear(),
+                            a.getProjectionStartDate().getYear() + a.getProjectionLengthYears() - 1));
+        }
+
+        if (a.getStateTaxAssumptions().jurisdiction()
                 == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS) {
             lines.addAll(com.daviddunn.retirementplanner.domain.tax.state.MississippiProductionTaxCalculator
                     .planningLimitations(a.getProjectionStartDate().getYear(),

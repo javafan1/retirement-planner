@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.ui.wizard;
 
+import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.ui.views.AssumptionsView;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
@@ -31,6 +32,10 @@ public final class AssumptionsWizardStep implements NewPlanWizardStep {
 
     @Override
     public void onEntering() { editor.refresh(draft.getPlan()); }
+
+    void setOnReviewPension(java.util.function.Consumer<Pension> action) {
+        editor.setOnReviewPension(action);
+    }
 
     @Override
     public boolean validateAndApply() { return editor.applyChanges(); }

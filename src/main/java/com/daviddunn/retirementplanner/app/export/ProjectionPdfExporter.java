@@ -565,6 +565,7 @@ public class ProjectionPdfExporter {
                 || resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.VA
                 || resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.OK
                 || resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS
+                || resultJurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AL
                 ? resultJurisdiction : assumptions.getStateTaxAssumptions().jurisdiction();
         writeKeyValue("State of Residence", jurisdiction.displayName(), GRAY);
         writeKeyValue("State Tax Calculation", "Simplified state estimate; full-year resident", GRAY);
@@ -826,6 +827,24 @@ public class ProjectionPdfExporter {
                 currentY -= 4;
             }
         }
+        var alabamaDisclosures = projection.getYears().stream()
+                .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AL)
+                .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream())
+                .distinct().toList();
+        if (!alabamaDisclosures.isEmpty()) {
+            ensureSpace(14);
+            writeText("Alabama Planning Limitations", MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+            currentY -= 14;
+            for (var limitation : alabamaDisclosures) {
+                for (var line : PdfReportSupport.wrap(limitation, CONTENT_WIDTH, 9)) {
+                    ensureSpace(14);
+                    writeText(line, MARGIN, currentY, FONT_NORMAL, 9, GRAY);
+                    currentY -= 12;
+                }
+                currentY -= 4;
+            }
+        }
+
         var mississippiDisclosures = projection.getYears().stream()
                 .filter(year -> year.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS)
                 .flatMap(year -> year.stateTaxCalculation().orElseThrow().limitations().stream().filter(note -> !note.startsWith("Annual Mississippi base:")))

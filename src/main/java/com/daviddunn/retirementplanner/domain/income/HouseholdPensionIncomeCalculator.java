@@ -34,27 +34,35 @@ public final class HouseholdPensionIncomeCalculator {
                         || pension.getSurvivorMonthlyBenefit() != null && pension.getSurvivorMonthlyBenefit().signum() > 0)) {
                     throw new IllegalArgumentException("Single-person pension cannot require a spouse.");
                 }
-                if (deathView.isAlive(owner, date.getYear())) {
-                    BigDecimal amount = pension.getAnnualIncome(person, date);
-                    total = total.add(amount);
-                    if (amount.signum() > 0) {
-                        sources.add(IncomeSourceAttribution.pension(pension, owner, amount, date.getYear()));
-                    }
-                } else if (owner != AccountOwnership.JOINT) {
-                    AccountOwnership survivor = owner == AccountOwnership.PRIMARY
-                            ? AccountOwnership.SPOUSE : AccountOwnership.PRIMARY;
-                    if (deathView.isAlive(survivor, date.getYear())) {
-                        BigDecimal amount = pension.getAnnualSurvivorIncome(date);
-                        total = total.add(amount);
-                        if (amount.signum() > 0) {
-                            sources.add(IncomeSourceAttribution.pension(pension, survivor, amount, date.getYear()));
-                        }
-                    }
+                var receipt = annualReceipt(pension, person, date, deathView);
+                total = total.add(receipt.amount());
+                if (receipt.amount().signum() > 0) {
+                    sources.add(IncomeSourceAttribution.pension(pension, receipt.recipient(), receipt.amount(), date.getYear()));
                 }
             }
         }
         return new PensionIncomeResult(total, sources);
     }
+
+    /** Applies the same owner/survivor selection and payment calendar used by the projection. */
+    public static AnnualReceipt annualReceipt(
+            Pension pension, Person person, LocalDate date, EffectiveHouseholdDeathView deathView) {
+        AccountOwnership owner = pension.getOwnership();
+        if (deathView.isAlive(owner, date.getYear())) {
+            return new AnnualReceipt(owner, pension.getAnnualIncome(person, date));
+        }
+        if (owner != AccountOwnership.JOINT) {
+            AccountOwnership survivor = owner == AccountOwnership.PRIMARY
+                    ? AccountOwnership.SPOUSE : AccountOwnership.PRIMARY;
+            if (deathView.isAlive(survivor, date.getYear())) {
+                return new AnnualReceipt(survivor, pension.getAnnualSurvivorIncome(date));
+            }
+        }
+        return new AnnualReceipt(owner, BigDecimal.ZERO);
+    }
+
+    public record AnnualReceipt(AccountOwnership recipient, BigDecimal amount) { }
+
     public record PensionIncomeResult(BigDecimal total, List<IncomeSourceAttribution> sources) {
         public PensionIncomeResult {
             Objects.requireNonNull(total);

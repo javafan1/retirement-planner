@@ -982,7 +982,9 @@ public class ApplicationController {
             startupPrepared = true;
         }
         openLastPlan();
-        if (!restoredProjectionMode) {
+        if (!restoredProjectionMode
+                && com.daviddunn.retirementplanner.domain.tax.state.AlabamaPensionPreflight.pensionsToReview(
+                        currentPlan.getHousehold(), currentPlan.getPlanningAssumptions()).isEmpty()) {
             try {
                 getCurrentProjection();
                 getCurrentProjectionSummary();

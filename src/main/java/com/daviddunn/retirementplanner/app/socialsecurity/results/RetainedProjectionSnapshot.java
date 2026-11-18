@@ -188,15 +188,51 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
             return reference == null ? null : new Reference(index(reference), reference.participantFacts());
         }
     }
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = PensionFactsReader.class)
     public record PensionFacts(AccountOwnership owner, BigDecimal monthly, BigDecimal survivor, BigDecimal cola,
-            LocalDate start, LocalDate end, RetirementParticipantFacts participant) {
+            LocalDate start, LocalDate end, RetirementParticipantFacts participant,
+            @com.fasterxml.jackson.annotation.JsonInclude(value = com.fasterxml.jackson.annotation.JsonInclude.Include.CUSTOM,
+                    valueFilter = com.daviddunn.retirementplanner.domain.income.PensionPlanClassification.UnknownFilter.class)
+            com.daviddunn.retirementplanner.domain.income.PensionPlanClassification planClassification) {
+        public PensionFacts(AccountOwnership owner, BigDecimal monthly, BigDecimal survivor, BigDecimal cola,
+                LocalDate start, LocalDate end, RetirementParticipantFacts participant) {
+            this(owner, monthly, survivor, cola, start, end, participant,
+                    com.daviddunn.retirementplanner.domain.income.PensionPlanClassification.UNKNOWN);
+        }
+        public PensionFacts {
+            planClassification = java.util.Objects.requireNonNullElse(planClassification,
+                    com.daviddunn.retirementplanner.domain.income.PensionPlanClassification.UNKNOWN);
+        }
         static PensionFacts capture(IncomeSourceAttribution.PensionFacts p) {
             return p == null ? null : new PensionFacts(p.originalOwner(), p.monthlyBenefit(), p.survivorMonthlyBenefit().orElse(null),
-                    p.annualColaRate(), p.startDate().orElse(null), p.endDate().orElse(null), p.participantFacts());
+                    p.annualColaRate(), p.startDate().orElse(null), p.endDate().orElse(null), p.participantFacts(), p.planClassification());
         }
         IncomeSourceAttribution.PensionFacts restore() {
             return new IncomeSourceAttribution.PensionFacts(owner, monthly, Optional.ofNullable(survivor), cola,
-                    Optional.ofNullable(start), Optional.ofNullable(end), participant);
+                    Optional.ofNullable(start), Optional.ofNullable(end), participant, planClassification);
+        }
+    }
+    /** Only classification is optional; preserve the retained codec's original strict field contract. */
+    public static final class PensionFactsReader extends com.fasterxml.jackson.databind.JsonDeserializer<PensionFacts> {
+        @Override
+        public PensionFacts deserialize(com.fasterxml.jackson.core.JsonParser parser,
+                com.fasterxml.jackson.databind.DeserializationContext context) throws java.io.IOException {
+            com.fasterxml.jackson.databind.JsonNode node = IncomeReader.TREE.readTree(parser);
+            var required = Set.of("owner", "monthly", "survivor", "cola", "start", "end", "participant");
+            var fields = new HashSet<String>();
+            if (!node.isObject()) throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, "Retained pension object required.");
+            node.fieldNames().forEachRemaining(fields::add);
+            if (!fields.containsAll(required) || fields.stream().anyMatch(key -> !required.contains(key) && !key.equals("planClassification")))
+                throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, "Missing or unknown retained pension field.");
+            return new PensionFacts(IncomeReader.value(context, node, "owner", AccountOwnership.class),
+                    IncomeReader.value(context, node, "monthly", BigDecimal.class),
+                    IncomeReader.value(context, node, "survivor", BigDecimal.class),
+                    IncomeReader.value(context, node, "cola", BigDecimal.class),
+                    IncomeReader.value(context, node, "start", LocalDate.class),
+                    IncomeReader.value(context, node, "end", LocalDate.class),
+                    IncomeReader.value(context, node, "participant", RetirementParticipantFacts.class),
+                    IncomeReader.value(context, node, "planClassification",
+                            com.daviddunn.retirementplanner.domain.income.PensionPlanClassification.class));
         }
     }
     @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = IncomeReader.class)

@@ -92,6 +92,11 @@ public final class MonteCarloRunService {
                 ? "\nOklahoma planning estimate: " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.OklahomaProductionTaxCalculator
                         .planningLimitations(p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1))
                 : "";
+        String alabama = p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AL
+                ? "\n" + com.daviddunn.retirementplanner.domain.tax.state.AlabamaProductionTaxCalculator.pensionAssumptions(plan.getHousehold())
+                    + "\nAlabama planning estimate: " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.AlabamaProductionTaxCalculator
+                        .planningLimitations(p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1))
+                : "";
         String mississippi = p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS
                 ? "\nMississippi planning estimate: " + String.join(" ", com.daviddunn.retirementplanner.domain.tax.state.MississippiProductionTaxCalculator
                         .planningLimitations(p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1))
@@ -107,7 +112,7 @@ public final class MonteCarloRunService {
                 + "\nConfigured deterministic reference return: " + percent(p.getExpectedAnnualInvestmentReturn())
                 + reductionText
                 + "\nState of residence: " + p.getStateTaxAssumptions().jurisdiction()
-                + "; simplified state estimate; full-year resident" + iowa + arizona + northCarolina + kentucky + georgia + virginia + oklahoma + mississippi;
+                + "; simplified state estimate; full-year resident" + iowa + arizona + northCarolina + kentucky + georgia + virginia + oklahoma + mississippi + alabama;
     }
 
     private static String percent(java.math.BigDecimal value) {

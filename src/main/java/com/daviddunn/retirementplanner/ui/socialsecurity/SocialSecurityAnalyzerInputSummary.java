@@ -139,6 +139,14 @@ record SocialSecurityAnalyzerInputSummary(List<Row> rows) {
                     com.daviddunn.retirementplanner.domain.tax.state.OklahomaProductionTaxCalculator.planningLimitations(
                             firstYear, firstYear + assumptions.getProjectionLengthYears() - 1)), "Tax Assumptions"));
         }
+        if (assumptions.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AL) {
+            rows.add(new Row("Alabama pension legal facts", com.daviddunn.retirementplanner.domain.tax.state.AlabamaProductionTaxCalculator.pensionAssumptions(plan.getHousehold()), "Pension editor"));
+            int firstYear = assumptions.getProjectionStartDate().getYear();
+            rows.add(new Row("Alabama planning estimate limitations", String.join(" ",
+                    com.daviddunn.retirementplanner.domain.tax.state.AlabamaProductionTaxCalculator.planningLimitations(
+                            firstYear, firstYear + assumptions.getProjectionLengthYears() - 1)), "Tax Assumptions"));
+        }
+
         if (assumptions.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS) {
             int firstYear = assumptions.getProjectionStartDate().getYear();
             rows.add(new Row("Mississippi planning estimate limitations", String.join(" ",

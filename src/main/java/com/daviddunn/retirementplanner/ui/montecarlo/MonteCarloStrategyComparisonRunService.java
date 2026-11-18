@@ -135,6 +135,13 @@ public final class MonteCarloStrategyComparisonRunService {
                         com.daviddunn.retirementplanner.domain.tax.state.OklahomaProductionTaxCalculator.planningLimitations(
                                 p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1));
             }
+        if (p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AL) {
+                details += "\n" + com.daviddunn.retirementplanner.domain.tax.state.AlabamaProductionTaxCalculator.pensionAssumptions(candidate.getHousehold());
+                details += "\nAlabama planning estimate: " + String.join(" ",
+                        com.daviddunn.retirementplanner.domain.tax.state.AlabamaProductionTaxCalculator.planningLimitations(
+                                p.getProjectionStartDate().getYear(), p.getProjectionStartDate().getYear() + p.getProjectionLengthYears() - 1));
+            }
+
         if (p.getStateTaxAssumptions().jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MS) {
                 details += "\nMississippi planning estimate: " + String.join(" ",
                         com.daviddunn.retirementplanner.domain.tax.state.MississippiProductionTaxCalculator.planningLimitations(

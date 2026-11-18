@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.MortalityCategory;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.income.PensionPlanClassification;
 import com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager;
 import javafx.application.Platform;
 import javafx.scene.Node;
@@ -14,12 +15,14 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Control;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.StackPane;
+import javafx.scene.text.Text;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
@@ -139,6 +142,78 @@ class PensionLayoutAndRequiredNameTest {
         });
     }
 
+    @Test void classificationUsesOneLabelAndReadableSelectionAtNarrowWidthInBothThemes() throws Exception {
+        for (ApplicationTheme theme : ApplicationTheme.values()) {
+            for (boolean guided : new boolean[] {false, true}) {
+                fx(() -> {
+                    try (var themes = ApplicationThemeManager.start(theme)) {
+                        var dialog = new PensionDialog(null, household(), guided);
+                        dialog.show();
+                        try {
+                            var pane = dialog.getDialogPane();
+                            var stage = (Stage) pane.getScene().getWindow();
+                            String configuredScale = System.getProperty("glass.win.uiScale");
+                            if (configuredScale != null) {
+                                assertEquals(Double.parseDouble(configuredScale), stage.getOutputScaleX(), 0.01);
+                            }
+                            stage.setWidth(350);
+                            stage.setRenderScaleX(1.5);
+                            stage.setRenderScaleY(1.5);
+                            pane.setStyle("-fx-font-size: 18px;");
+                            pane.applyCss();
+                            pane.resize(350, pane.getHeight());
+                            pane.layout();
+                            assertEquals(350, pane.getWidth(), 1);
+                            @SuppressWarnings("unchecked")
+                            var choice = (ComboBox<PensionPlanClassification>)
+                                    pane.lookup(guided ? "#wizard-input-legal-plan-classification" : "#pension-plan-classification");
+                            assertNotNull(choice);
+                            var labels = pane.lookupAll(".label").stream().filter(Label.class::isInstance)
+                                    .map(Label.class::cast).filter(label -> label.getLabelFor() == choice).toList();
+                            assertEquals(1, labels.size());
+                            var labelBounds = labels.getFirst().localToScene(labels.getFirst().getBoundsInLocal());
+                            var choiceBounds = choice.localToScene(choice.getBoundsInLocal());
+                            assertTrue(labelBounds.getMaxY() <= choiceBounds.getMinY());
+                            assertTrue(choice.getPromptText() == null || choice.getPromptText().isEmpty());
+                            assertTrue(pane.lookupButton(ButtonType.CANCEL).lookupAll(".text").stream()
+                                    .filter(Text.class::isInstance).map(Text.class::cast)
+                                    .anyMatch(text -> "Cancel".equals(text.getText())));
+                            var legend = pane.lookup(".required-field-legend");
+                            if (legend != null) {
+                                assertTrue(choiceBounds.getMaxY() <= legend.localToScene(legend.getBoundsInLocal()).getMinY());
+                            }
+                            String[] names = {"Unknown", "Defined Benefit", "Defined Contribution"};
+                            for (var value : PensionPlanClassification.values()) {
+                                choice.setValue(value);
+                                pane.applyCss();
+                                pane.layout();
+                                String expected = names[value.ordinal()];
+                                var selectedText = choice.lookupAll(".text").stream().filter(Text.class::isInstance)
+                                        .map(Text.class::cast).filter(text -> expected.equals(text.getText())).toList();
+                                assertEquals(1, selectedText.size(), () -> expected + " in " + theme + " (guided=" + guided
+                                        + ", control width=" + choice.getWidth() + "), rendered: "
+                                        + choice.lookupAll(".text").stream().filter(Text.class::isInstance).map(Text.class::cast)
+                                                .map(Text::getText).toList());
+                                assertEquals(18, selectedText.getFirst().getFont().getSize(), 0.1);
+                                var rendered = selectedText.getFirst().localToScene(selectedText.getFirst().getBoundsInLocal());
+                                assertTrue(rendered.getMaxX() <= choiceBounds.getMaxX() && rendered.getMaxX() <= pane.getWidth(),
+                                        rendered.toString());
+                            }
+                            choice.setValue(PensionPlanClassification.DEFINED_BENEFIT_414J);
+                            if (pane.lookup("#pension-dialog-form-scroll") instanceof ScrollPane scroll) {
+                                scroll.setVvalue(1);
+                            }
+                            save(pane, theme, "classification-" + (guided ? "guided" : "regular") + "-"
+                                    + (configuredScale == null ? "default" : configuredScale), Path.of("target/phase6e-n3/previews"));
+                        } finally {
+                            dialog.close();
+                        }
+                    }
+                });
+            }
+        }
+    }
+
     @Test void accountNameIsRequiredAndTrimmedAtEditorBoundary() throws Exception {
         fx(() -> {
             var dialog = new AccountDialog(null, household());
@@ -227,6 +302,10 @@ class PensionLayoutAndRequiredNameTest {
     }
 
     private static void save(Dialog<?> dialog, Parent pane, ApplicationTheme theme, String state) throws Exception {
+        save(pane, theme, state, Path.of("target/phase16b2c/previews"));
+    }
+
+    private static void save(Parent pane, ApplicationTheme theme, String state, Path folder) throws Exception {
         pane.applyCss(); pane.layout();
         if (pane.lookup("#pension-dialog-form-scroll") instanceof ScrollPane scroll
                 && scroll.getContent() instanceof javafx.scene.Parent content) {
@@ -238,7 +317,6 @@ class PensionLayoutAndRequiredNameTest {
         for (int y = 0; y < pixels.getHeight(); y++) for (int x = 0; x < pixels.getWidth(); x++) {
             pixels.setRGB(x, y, image.getPixelReader().getArgb(x, y));
         }
-        Path folder = Path.of("target/phase16b2c/previews");
         Files.createDirectories(folder);
         ImageIO.write(pixels, "png", folder.resolve("pension-" + state + "-" + theme.name().toLowerCase() + ".png").toFile());
     }

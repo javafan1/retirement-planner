@@ -10,6 +10,7 @@ import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Field;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Kind;
 import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.income.PensionPlanClassification;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import javafx.geometry.Insets;
 import javafx.geometry.Rectangle2D;
@@ -20,6 +21,7 @@ import javafx.scene.Node;
 import javafx.stage.Screen;
 import javafx.stage.Window;
 import javafx.application.Platform;
+import javafx.util.StringConverter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -39,6 +41,7 @@ public class PensionDialog extends Dialog<Pension> {
     private final TextField survivorMonthlyBenefitField;
     private final TextField colaRateField;
     private final RetirementParticipantFactsEditor participantFactsEditor;
+    private final ComboBox<PensionPlanClassification> planClassificationCombo;
     private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
     private ScrollPane formScrollPane;
     private GridPane formGrid;
@@ -65,7 +68,8 @@ public class PensionDialog extends Dialog<Pension> {
                     new Field("End Date", endDatePicker, Kind.DATE, false),
                     new Field("Monthly Benefit", monthlyBenefitField, Kind.NUMBER, true),
                     new Field("Survivor Monthly Benefit", survivorMonthlyBenefitField, Kind.NUMBER, false),
-                    new Field("Annual COLA Rate", colaRateField, Kind.NUMBER, true)),
+                    new Field("Annual COLA Rate", colaRateField, Kind.NUMBER, true),
+                    new Field("Legal Plan Classification", planClassificationCombo, Kind.CHOICE, false)),
                     () -> converter.call(ButtonType.OK));
             WizardDialogSupport.guidance(this, "Name, owner, start date and monthly benefit are required. End date and survivor amount are optional. "
                     + "Annual COLA is a decimal fraction: 0.02 = 2% annually. Survivor amount, when applicable, is optional dollars/month.");
@@ -125,6 +129,30 @@ public class PensionDialog extends Dialog<Pension> {
         participantFactsEditor = new RetirementParticipantFactsEditor(
                 pension == null ? RetirementParticipantFacts.UNKNOWN
                         : pension.getRetirementParticipantFacts());
+        planClassificationCombo = new ComboBox<>();
+        planClassificationCombo.setId("pension-plan-classification");
+        planClassificationCombo.getItems().setAll(PensionPlanClassification.values());
+        planClassificationCombo.setMaxWidth(Double.MAX_VALUE);
+        planClassificationCombo.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(PensionPlanClassification classification) {
+                if (classification == null) return "";
+                return switch (classification) {
+                    case UNKNOWN -> "Unknown";
+                    case DEFINED_BENEFIT_414J -> "Defined Benefit";
+                    case DEFINED_CONTRIBUTION -> "Defined Contribution";
+                };
+            }
+
+            @Override
+            public PensionPlanClassification fromString(String text) {
+                throw new UnsupportedOperationException("Pension classification is selected from the list.");
+            }
+        });
+        planClassificationCombo.setValue(pension == null
+                ? PensionPlanClassification.UNKNOWN
+                : pension.getPlanClassification());
+        InputHelp.install(planClassificationCombo, "Choose Defined Benefit only for a confirmed IRC §414(j) plan. A cash-balance pension can qualify. Check the original plan documents and leave Unknown / Not Specified if the legal plan type is unverified.");
 
         /*
          * Populate controls when editing
@@ -262,6 +290,10 @@ public class PensionDialog extends Dialog<Pension> {
         validationError.visibleProperty().bind(validationError.managedProperty());
         grid.add(validationError, 0, row + 1, 2, 1);
         grid.add(participantFactsEditor, 0, row + 2, 2, 1);
+        Label classificationLabel = new Label("Legal Plan Classification");
+        InputHelp.link(classificationLabel, planClassificationCombo);
+        grid.add(classificationLabel, 0, row + 3, 2, 1);
+        grid.add(planClassificationCombo, 0, row + 4, 2, 1);
         setResizable(true);
 
         getDialogPane()
@@ -269,6 +301,7 @@ public class PensionDialog extends Dialog<Pension> {
                 .addAll(
                         ButtonType.OK,
                         ButtonType.CANCEL);
+        ButtonBar.setButtonUniformSize(getDialogPane().lookupButton(ButtonType.CANCEL), false);
 
         InputHelp.install(ownershipCombo, "Person whose pension this is. Their death determines when the separate survivor benefit, if provided, replaces the owner's benefit.");
         InputHelp.install(nameField, "Display name for this pension. Leading and trailing whitespace is removed when saved.");
@@ -284,7 +317,7 @@ public class PensionDialog extends Dialog<Pension> {
         requiredFieldAttachments.add(RequiredFieldSupport.attach(monthlyBenefitLabel, monthlyBenefitField));
         // The UI always parses this value at submission; the displayed 0.0 is a valid default.
         requiredFieldAttachments.add(RequiredFieldSupport.attach(colaRateLabel, colaRateField));
-        grid.add(RequiredFieldSupport.createLegend(), 0, row + 3, 2, 1);
+        grid.add(RequiredFieldSupport.createLegend(), 0, row + 5, 2, 1);
         setOnShowing(event -> installScrollableForm());
         setOnShown(event -> resizeToScreen());
         participantFactsEditor.setAnimated(false);
@@ -363,6 +396,7 @@ public class PensionDialog extends Dialog<Pension> {
                     annualColaRate,
                     survivorMonthlyBenefit);
             result.setRetirementParticipantFacts(participantFactsEditor.value());
+            result.setPlanClassification(planClassificationCombo.getValue());
             return result;
         });
     }

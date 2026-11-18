@@ -26,7 +26,7 @@ class GeorgiaUiAcceptanceTest {
             ComboBox<StateTaxJurisdiction> input = field(editor, "stateJurisdictionComboBox");
             assertEquals(StateTaxJurisdiction.GA, input.getValue());
             assertEquals(StateTaxJurisdiction.alphabeticalChoices(), input.getItems());
-            assertEquals(19, input.getItems().size());
+            assertEquals(20, input.getItems().size());
             assertTrue(input.getTooltip().getText().contains("Georgia"));
 
             var details = new ProjectionYearDetailsPane(projection.getYearAt(0), null, BigDecimal.ZERO, null);

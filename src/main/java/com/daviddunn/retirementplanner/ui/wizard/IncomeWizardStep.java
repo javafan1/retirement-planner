@@ -40,6 +40,12 @@ public final class IncomeWizardStep extends WizardListStep<Pension> {
     @Override public String title() { return "Pensions"; }
     @Override public void onEntering() { refresh(); }
 
+    void selectPension(Pension pension) {
+        table.getSelectionModel().select(pension);
+        table.scrollTo(pension);
+        javafx.application.Platform.runLater(table::requestFocus);
+    }
+
     private void edit(Pension original) {
         editDialog(new PensionDialog(original, draft.getPlan().getHousehold(), true), updated -> {
             draft.replaceIncomeSource(original, updated);

@@ -26,6 +26,12 @@ class RetainedProjectionCodecTest {
     void actualStateProjectionsPreserveEveryFieldNestedValueAndGetter(StateTaxJurisdiction state) throws Exception {
         var plan = state == StateTaxJurisdiction.PA || state == StateTaxJurisdiction.IA
                 ? PennsylvaniaProductionProjectionTest.plan(true, state) : FloridaProductionProjectionTest.plan(true, state);
+        if (state == StateTaxJurisdiction.AL) {
+            // A declared ordinary DC fixture, rather than silently exempting a legacy UNKNOWN pension.
+            plan.getHousehold().peopleByOwner().values().forEach(person -> person.getIncomeSources().stream()
+                    .filter(Pension.class::isInstance).map(Pension.class::cast)
+                    .forEach(pension -> pension.setPlanClassification(PensionPlanClassification.DEFINED_CONTRIBUTION)));
+        }
         plan.addNonInvestableAsset(new com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAsset(
                 "Synthetic home", new BigDecimal("123456.789000"), new BigDecimal("0.02")));
         var original = new IntegratedSocialSecurityStrategyEvaluator().evaluateCurrentStrategy(plan);

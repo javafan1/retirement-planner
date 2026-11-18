@@ -10,6 +10,13 @@
     -fx-text-fill: derive(-fx-accent, 15%);
 }
 .app-theme .analysis-stale { -fx-text-fill: -app-warning; }
+.alabama-pension-notice {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-padding: 10;
+    -fx-border-color: -fx-box-border;
+}
+.alabama-pension-notice-title { -fx-font-weight: bold; }
+.app-theme .alabama-pension-notice { -fx-border-color: -app-warning; }
 .app-theme .comparison-positive { -fx-text-fill: #168b50; }
 .app-theme .comparison-negative { -fx-text-fill: -app-error; }
 .plan-operation-dialog { -fx-padding: 22; -fx-background-color: -fx-control-inner-background; -fx-border-color: -fx-box-border; -fx-border-width: 1; -fx-font-size: 14px; }

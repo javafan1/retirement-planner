@@ -20,6 +20,18 @@ public class Pension extends IncomeSource {
 
     private final BigDecimal annualColaRate;
 
+    private PensionPlanClassification planClassification = PensionPlanClassification.UNKNOWN;
+
+    @com.fasterxml.jackson.annotation.JsonInclude(value = com.fasterxml.jackson.annotation.JsonInclude.Include.CUSTOM,
+            valueFilter = PensionPlanClassification.UnknownFilter.class)
+    public PensionPlanClassification getPlanClassification() {
+        return planClassification;
+    }
+
+    public void setPlanClassification(PensionPlanClassification classification) {
+        planClassification = Objects.requireNonNullElse(classification, PensionPlanClassification.UNKNOWN);
+    }
+
     private RetirementParticipantFacts retirementParticipantFacts =
             RetirementParticipantFacts.UNKNOWN;
 

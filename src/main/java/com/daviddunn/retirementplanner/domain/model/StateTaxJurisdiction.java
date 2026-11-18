@@ -20,7 +20,8 @@ public enum StateTaxJurisdiction {
     GA("Georgia"),
     VA("Virginia"),
     OK("Oklahoma"),
-    MS("Mississippi");
+    MS("Mississippi"),
+    AL("Alabama");
 
     private final String displayName;
     private final boolean noGeneralIndividualIncomeTax;
