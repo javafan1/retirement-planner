@@ -61,9 +61,11 @@ class ArkansasValidationAnalysisTest {
         assertFalse(versions.currentFor(changed));
         assertThrows(IllegalArgumentException.class, () -> RetainedProjectionSnapshot.capture(projection));
         var historical = retainedRoundTrip(projection);
+        long exportStarted = System.nanoTime();
         new ProjectionCsvExporter().export(historical, List.of(), csv);
         assertEquals(csvBefore.replace("Arkansas validation only", "Arkansas retained history"), Files.readString(csv));
         new ProjectionPdfExporter().export(plan, historical, List.of(), null, pdf);
+        System.out.println("Arkansas historical PDF and CSV us=" + (System.nanoTime() - exportStarted) / 1000);
         try (var document = org.apache.pdfbox.Loader.loadPDF(pdf.toFile())) {
             var content = new org.apache.pdfbox.text.PDFTextStripper().getText(document);
             assertTrue(content.contains("Arkansas retained history"));
@@ -123,6 +125,7 @@ class ArkansasValidationAnalysisTest {
         var a = CompleteProjectionSnapshot.captureArkansas(owner, original, engine.project(original), started);
         var b = CompleteProjectionSnapshot.captureArkansas(owner, alternative, engine.project(alternative), started);
         var kind = AnalysisKind.COUPLE_MONTE_CARLO_PAIRED_FIXED;
+        long pairedStarted = System.nanoTime();
         var captured = ArkansasAnalysisProvenance.capture(engine, kind, List.of(a, b), () -> {
             var run = new MonteCarloStrategyComparisonAnalyzer(engine).analyzeComparison(request, index -> {
                 calls.incrementAndGet();
@@ -137,6 +140,7 @@ class ArkansasValidationAnalysisTest {
                             new MonteCarloSnapshot.Chart(List.of(), List.of(), List.of(), List.of()), 2026, 2026, false, 0, "Two shared worlds."),
                     started, completed, "a".repeat(64));
         });
+        System.out.println("Arkansas controlled paired worlds and provenance us=" + (System.nanoTime() - pairedStarted) / 1000);
         var payload = (MonteCarloSnapshot) captured.payload();
         var fingerprint = new MonteCarloFingerprintService().storedFingerprint(payload);
         var completion = new AcceptedAnalysisCompletion(owner, output.resolve("paired.json"), kind, java.util.UUID.randomUUID(),
@@ -167,13 +171,17 @@ class ArkansasValidationAnalysisTest {
         original.setProjectionState(manifest);
         var repository = new com.daviddunn.retirementplanner.persistence.JsonRetirementPlanRepository();
         var file = output.resolve("paired.json");
+        long savedAt = System.nanoTime();
         repository.saveWithIdentity(original, file, owner);
+        long reloadedAt = System.nanoTime();
         var reopened = repository.load(file);
         var reloadedManifest = reopened.getProjectionState();
         var components = new com.daviddunn.retirementplanner.persistence.ProjectionSnapshotComponents();
         var savedAssociation = reloadedManifest.associations().getFirst();
         var saved = components.readAnalyzer(file, savedAssociation);
         components.validateArkansasAnalyzer(saved, a, components.load(file, reloadedManifest));
+        System.out.println("Arkansas paired history saveUs=" + (reloadedAt - savedAt) / 1000
+                + " reloadAndVerifyUs=" + (System.nanoTime() - reloadedAt) / 1000);
         assertEquals(b.id(), savedAssociation.alternativeProjectionId());
         assertEquals(snapshot.arkansasExecution(), saved.arkansasExecution());
         assertEquals(payload, saved.payload());

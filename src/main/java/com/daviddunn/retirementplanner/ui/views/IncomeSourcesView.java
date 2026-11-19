@@ -166,18 +166,7 @@ public class IncomeSourcesView extends BorderPane {
         }
 
         if (selected instanceof Pension pension) {
-
-            PensionDialog dialog =
-                    new PensionDialog(pension, currentPlan.getHousehold());
-
-            Optional<Pension> result =
-                    dialog.showAndWait();
-
-            result.ifPresent(updated ->
-                    replaceIncomeSource(
-                            selected,
-                            updated));
-
+            editSelectedPension(pension, this::notifyPlanChanged);
         } else if (
                 selected instanceof
                         SocialSecurityIncome socialSecurity) {
@@ -204,6 +193,10 @@ public class IncomeSourcesView extends BorderPane {
     private void replaceIncomeSource(
             IncomeSource oldIncome,
             IncomeSource newIncome) {
+        replaceIncomeSource(oldIncome, newIncome, this::notifyPlanChanged);
+    }
+
+    private void replaceIncomeSource(IncomeSource oldIncome, IncomeSource newIncome, Runnable onAccepted) {
 
         Person oldOwner =
                 getPerson(
@@ -237,7 +230,7 @@ public class IncomeSourcesView extends BorderPane {
 
         refreshTable();
 
-        notifyPlanChanged();
+        onAccepted.run();
     }
 
     private void onRemove() {
@@ -587,6 +580,17 @@ public class IncomeSourcesView extends BorderPane {
                 return;
             }
         }
+    }
+
+    /** Opens the existing editor only if the requested record is still the selected input row. */
+    public void editSelectedPension(Pension pension, Runnable onAccepted) {
+        if (getSelectedIncomeSource() != pension) return;
+        var originalPlan = currentPlan;
+        new PensionDialog(pension, originalPlan.getHousehold()).showAndWait().ifPresent(updated -> {
+            if (currentPlan == originalPlan && table.getItems().contains(pension)) {
+                replaceIncomeSource(pension, updated, onAccepted);
+            }
+        });
     }
 
     public void setOnPlanChanged(

@@ -1,5 +1,6 @@
 package com.daviddunn.retirementplanner.domain.projection;
 
+import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
@@ -12,7 +13,7 @@ import com.daviddunn.retirementplanner.domain.tax.ArkansasRothFunding;
 import com.daviddunn.retirementplanner.domain.tax.NiitUnsupportedInputException;
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxEvidence;
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasPensionPreflight;
-import com.daviddunn.retirementplanner.domain.tax.state.ArkansasProductionTaxCalculator;
+import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue;
 import com.daviddunn.retirementplanner.domain.tax.state.TaxHouseholdContext;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalBreakdown;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
@@ -67,7 +68,8 @@ final class ArkansasProjectionValidation {
             EffectiveHouseholdDeathView death, FilingStatus filing, GovernmentRules rules,
             HouseholdSocialSecurityResult socialSecurity, WithdrawalBreakdown withdrawals,
             BigDecimal openingRmd, List<IncomeSourceAttribution> supplemental, ArkansasAnnualFunding.Cash cash,
-            ProjectedPortfolio portfolio, WithdrawalStrategy strategy, BigDecimal fixed, BigDecimal target) {
+            ProjectedPortfolio portfolio, WithdrawalStrategy strategy, BigDecimal fixed, BigDecimal target,
+            AnalysisCancellationToken cancellation) {
         int year = rules.getTaxYear();
         try {
             var currentOwners = context.householdOwners().stream().filter(owner -> death.isAlive(owner, year))
@@ -88,14 +90,15 @@ final class ArkansasProjectionValidation {
             var facts = new ArkansasAnnualFunding.Facts(annual, taxEvidence,
                     Optional.empty(), dated.additionalTax(), cash);
 
-            var targeted = target == null ? null : roth.targeted(facts, portfolio, strategy, target);
+            var targeted = target == null ? null : roth.targeted(facts, portfolio, strategy, target, cancellation);
             if (targeted != null && targeted.status() == ArkansasRothFunding.TargetStatus.UNSUPPORTED) {
-                throw unavailableForTrial(year, ArkansasProjectionUnavailableException.Reason.TARGET_PROOF, targeted.detail(),
+                var issue = targeted.issue().orElseGet(() -> ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.TARGET_PROOF));
+                throw unavailableForTrial(year, ArkansasProjectionUnavailableException.Reason.TARGET_PROOF, targeted.detail(), issue,
                         household, firstReceipt, death, pensions, taxEvidence);
             }
             // An exhausted target room preserves the established engine's no-conversion policy.
-            var trial = targeted == null ? roth.fixed(facts, portfolio, strategy, fixed)
-                    : targeted.trial().orElseGet(() -> roth.fixed(facts, portfolio, strategy, ZERO));
+            var trial = targeted == null ? roth.fixed(facts, portfolio, strategy, fixed, cancellation)
+                    : targeted.trial().orElseGet(() -> roth.fixed(facts, portfolio, strategy, ZERO, cancellation));
             var funded = trial.funding();
             if (funded.status() == ArkansasMinimumFundingSolver.Status.INSUFFICIENT_FUNDS) {
                 var terminal = ArkansasAnnualFunding.priceTerminal(facts, trial.conversion(), strategy);
@@ -111,7 +114,9 @@ final class ArkansasProjectionValidation {
                 var reason = funded.reason() == ArkansasMinimumFundingSolver.Reason.SOURCE_OR_TAX
                         ? ArkansasProjectionUnavailableException.Reason.SOURCE_OR_TAX
                         : ArkansasProjectionUnavailableException.Reason.FUNDING_PROOF;
-                throw unavailableForTrial(year, reason, funded.detail(), household, firstReceipt, death, pensions, taxEvidence);
+                var issue = funded.issue().orElseGet(() -> ArkansasTaxIssue.of(reason == ArkansasProjectionUnavailableException.Reason.FUNDING_PROOF
+                        ? ArkansasTaxIssue.Kind.FUNDING_PROOF : ArkansasTaxIssue.Kind.SOURCE_OR_TAX));
+                throw unavailableForTrial(year, reason, funded.detail(), issue, household, firstReceipt, death, pensions, taxEvidence);
             }
             var candidate = funded.candidate().orElseThrow();
             var disclosure = new ArkansasValidationTax(candidate.stateTax(), filing, candidate.taxableFundingIncome(),
@@ -119,7 +124,10 @@ final class ArkansasProjectionValidation {
                     ArkansasValidationTax.reviewedVersions(),
                     ArkansasAnnualProvenance.capture(candidate, taxEvidence, dated.additionalTax(), target));
             return new Execution(trial, candidate, disclosure);
-        } catch (IllegalArgumentException | NiitUnsupportedInputException ex) {
+        } catch (NiitUnsupportedInputException ex) {
+            throw new ArkansasProjectionUnavailableException(year, ArkansasProjectionUnavailableException.Reason.SOURCE_OR_TAX,
+                    ex.getMessage(), ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.NIIT), List.of());
+        } catch (IllegalArgumentException ex) {
             throw unavailable(year, ArkansasProjectionUnavailableException.Reason.SOURCE_OR_TAX, ex.getMessage());
         }
     }
@@ -130,11 +138,12 @@ final class ArkansasProjectionValidation {
     }
 
     private static ArkansasProjectionUnavailableException unavailableForTrial(int year,
-            ArkansasProjectionUnavailableException.Reason reason, String detail,
+            ArkansasProjectionUnavailableException.Reason reason, String detail, ArkansasTaxIssue issue,
             Household household, LocalDate date, EffectiveHouseholdDeathView death,
             List<IncomeSourceAttribution> pensions, ArkansasTaxEvidence evidence) {
-        var review = detail.contains(ArkansasProductionTaxCalculator.UNRESOLVED_PENSION_ORIGIN)
-                ? ArkansasPensionPreflight.pensionsToReview(household, date, death, pensions, evidence) : List.<ArkansasPensionPreflight.Review>of();
-        return new ArkansasProjectionUnavailableException(year, reason, detail, review);
+        var review = issue.kind() == ArkansasTaxIssue.Kind.PENSION_ORIGIN
+                ? ArkansasPensionPreflight.pensionsToReview(household, date, death, pensions, evidence, issue.reviewRecipients())
+                : List.<ArkansasPensionPreflight.Review>of();
+        return new ArkansasProjectionUnavailableException(year, reason, detail, issue, review);
     }
 }

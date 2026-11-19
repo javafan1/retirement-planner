@@ -134,7 +134,8 @@ public class ArkansasProjectionIntegrationTest {
             var unavailable = assertThrows(ArkansasProjectionUnavailableException.class, () -> validationEngine().project(plan));
             assertTrue(unavailable.getMessage().contains("employment-related"));
             var review = unavailable.pensionsToReview().getFirst();
-            assertSame(pension, review.pension());
+            assertSame(pension, com.daviddunn.retirementplanner.domain.tax.state.ArkansasPensionPreflight
+                    .resolve(plan.getHousehold(), review).orElseThrow());
             assertEquals("Employer benefit", review.name());
             assertEquals(deceased, review.originalOwner());
             assertEquals(survivor, review.recipient());
@@ -189,7 +190,9 @@ public class ArkansasProjectionIntegrationTest {
         var zero = new Pension("Zero", PRIMARY, OPENING, null, ZERO, ZERO);
         List.of(first, second, future, zero).forEach(person::addIncomeSource);
         var unavailable = assertThrows(ArkansasProjectionUnavailableException.class, () -> validationEngine().project(plan));
-        assertEquals(List.of(first, second), unavailable.pensionsToReview().stream().map(r -> r.pension()).toList());
+        assertEquals(List.of(first, second), unavailable.pensionsToReview().stream()
+                .map(r -> com.daviddunn.retirementplanner.domain.tax.state.ArkansasPensionPreflight
+                        .resolve(plan.getHousehold(), r).orElseThrow()).toList());
         assertEquals(RetirementIncomeSourceOrigin.UNKNOWN, first.getSourceOrigin());
         first.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
         var year = validationEngine().project(plan).getFirstYear();
@@ -197,6 +200,28 @@ public class ArkansasProjectionIntegrationTest {
         money("1066.41", year.getStateIncomeTax());
         assertEquals(RetirementIncomeSourceOrigin.UNKNOWN, second.getSourceOrigin());
         cashBalances(year);
+    }
+
+    @Test
+    void onlyRecipientsWithMaterialUnresolvedPoolRoomReceiveReviewRows() {
+        var plan = couple(OPENING, 1, DeathScenario.BOTH_SURVIVE);
+        var known = new Pension("Established", PRIMARY, OPENING, null, b("5000"), ZERO);
+        known.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        var primaryUnknown = new Pension("Primary unknown", PRIMARY, OPENING, null, b("500"), ZERO);
+        var spouseUnknown = new Pension("Spouse unknown", SPOUSE, OPENING, null, b("5000"), ZERO);
+        plan.getHousehold().getPrimaryPerson().addIncomeSource(known);
+        plan.getHousehold().getPrimaryPerson().addIncomeSource(primaryUnknown);
+        plan.getHousehold().getSpouse().addIncomeSource(spouseUnknown);
+        var failure = assertThrows(ArkansasProjectionUnavailableException.class, () -> validationEngine().project(plan));
+        assertEquals(java.util.Set.of(SPOUSE), failure.issue().reviewRecipients());
+        assertEquals(List.of("Spouse unknown"), failure.pensionsToReview().stream().map(r -> r.name()).toList());
+        spouseUnknown.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        long start = System.nanoTime();
+        var year = validationEngine().project(plan).getFirstYear();
+        System.out.println("Arkansas ordinary two-owner pensions us=" + (System.nanoTime() - start) / 1000 + " "
+                + year.arkansasValidationTax().orElseThrow().fundingMetrics());
+        money("12000", year.arkansasValidationTax().orElseThrow().provenance().election().retirementExclusion());
+        assertEquals(RetirementIncomeSourceOrigin.UNKNOWN, primaryUnknown.getSourceOrigin());
     }
 
     @Test

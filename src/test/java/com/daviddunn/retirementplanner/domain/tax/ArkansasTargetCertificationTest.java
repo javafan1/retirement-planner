@@ -281,10 +281,15 @@ class ArkansasTargetCertificationTest {
         var portfolio = portfolio(ira("IRA", "90000"), new RothIRA("Roth", PRIMARY, ZERO));
         assertEquals(NO_FEASIBLE_TARGET, measured("target miss after funding", facts, portfolio, DEFERRED_FIRST, b("33910")).status());
         assertEquals(INSUFFICIENT_FUNDS, solver.targeted(facts, portfolio(), DEFERRED_FIRST, b("50400")).status());
-        assertEquals(UNSUPPORTED, new ArkansasRothFunding(1).targeted(facts, portfolio, DEFERRED_FIRST, b("50400")).status());
+        var budget = new ArkansasRothFunding(1).targeted(facts, portfolio, DEFERRED_FIRST, b("50400"));
+        assertEquals(UNSUPPORTED, budget.status());
+        assertEquals(com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue.Kind.TARGET_BUDGET,
+                budget.issue().orElseThrow().kind());
         var lowIncome = ordinary(AGE_60, WithdrawalBreakdown.zero(), "0", "18000", "0");
         var unavailable = measured("unsupported low-income", lowIncome, portfolio, DEFERRED_FIRST, b("3000"));
         assertEquals(UNSUPPORTED, unavailable.status(), unavailable.detail());
+        assertEquals(com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue.Kind.LOW_INCOME,
+                unavailable.issue().orElseThrow().kind());
         assertTrue(unavailable.detail().contains("low-income"));
         var uncertainAge = ordinary(LocalDate.of(1966, 8, 31), WithdrawalBreakdown.zero(), "0", "60000", "0");
         assertEquals(NO_FEASIBLE_TARGET, solver.targeted(uncertainAge, portfolio, DEFERRED_FIRST, b("50400")).status());
@@ -295,6 +300,21 @@ class ArkansasTargetCertificationTest {
         var knownAge = new Facts(uncertainAge.seed(), uncertainAge.evidence(), Optional.of(knownWindow),
                 Map.of(), uncertainAge.cash());
         money("6500", certified(solver.targeted(knownAge, availableCash, TAXABLE_FIRST, b("50400"))).requested());
+    }
+
+    @Test
+    void cancellationAtAnActualDeferredTargetIntervalPropagatesWithoutACandidate() {
+        var facts = ordinary(AGE_60, WithdrawalBreakdown.zero(), "0", "50000", "0");
+        var portfolio = portfolio(ira("IRA", "90000"), new RothIRA("Roth", PRIMARY, ZERO));
+        var walker = StackWalker.getInstance();
+        long started = System.nanoTime();
+        assertThrows(com.daviddunn.retirementplanner.domain.analysis.AnalysisCancelledException.class, () ->
+                solver.targeted(facts, portfolio, DEFERRED_FIRST, b("50400"), () -> walker.walk(frames ->
+                        frames.anyMatch(f -> f.getClassName().equals(ArkansasRothFunding.class.getName() + "$Pass")
+                                && f.getMethodName().equals("search")))));
+        System.out.println("Arkansas controlled target interval cancellation us=" + (System.nanoTime() - started) / 1000);
+        money("90000", portfolio.getTotalBalance());
+        money("8949.09", certified(solver.targeted(facts, portfolio, DEFERRED_FIRST, b("50400"))).requested());
     }
 
     @Test

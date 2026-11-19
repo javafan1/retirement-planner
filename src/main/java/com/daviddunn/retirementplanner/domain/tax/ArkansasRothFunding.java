@@ -1,6 +1,8 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.AccountReference;
+import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken;
+import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 import com.daviddunn.retirementplanner.domain.roth.ProjectedPortfolioRothConverter;
 import com.daviddunn.retirementplanner.domain.roth.ProjectedRothConversionResult;
@@ -50,7 +52,7 @@ public final class ArkansasRothFunding {
                                 int incomeBoxes, int maximumOuterDepth, int peakOuterTrialStates) { }
 
     public record TargetResult(TargetStatus status, Optional<Trial> trial, Optional<BigDecimal> unusedTarget,
-                               TargetMetrics metrics, String detail) {
+                               TargetMetrics metrics, String detail, Optional<ArkansasTaxIssue> issue) {
         public TargetResult {
             if ((status == TargetStatus.CERTIFIED) != (trial.isPresent() && unusedTarget.isPresent())) {
                 throw new IllegalArgumentException("Only a certified Arkansas target has a funded conversion.");
@@ -62,19 +64,30 @@ public final class ArkansasRothFunding {
     /** The caller supplies the already RMD- and spending-debited portfolio. */
     public Trial fixed(ArkansasAnnualFunding.Facts facts, ProjectedPortfolio afterSpending,
                        WithdrawalStrategy order, BigDecimal requested) {
+        return fixed(facts, afterSpending, order, requested, AnalysisCancellationToken.none());
+    }
+
+    public Trial fixed(ArkansasAnnualFunding.Facts facts, ProjectedPortfolio afterSpending,
+                       WithdrawalStrategy order, BigDecimal requested, AnalysisCancellationToken cancellation) {
+        cancellation.throwIfCancellationRequested();
         var conversion = execute(facts, afterSpending, requested);
-        return new Trial(requested, conversion, funding.solve(facts, conversion, order));
+        return new Trial(requested, conversion, funding.solve(facts, conversion, order, cancellation));
     }
 
     public TargetResult targeted(ArkansasAnnualFunding.Facts facts, ProjectedPortfolio afterSpending,
                                  WithdrawalStrategy order, BigDecimal targetTaxableIncome) {
+        return targeted(facts, afterSpending, order, targetTaxableIncome, AnalysisCancellationToken.none());
+    }
+
+    public TargetResult targeted(ArkansasAnnualFunding.Facts facts, ProjectedPortfolio afterSpending,
+                                 WithdrawalStrategy order, BigDecimal targetTaxableIncome, AnalysisCancellationToken cancellation) {
         Objects.requireNonNull(facts);
         Objects.requireNonNull(afterSpending);
         Objects.requireNonNull(order);
         if (Objects.requireNonNull(targetTaxableIncome).signum() < 0) {
             throw new IllegalArgumentException("Negative Arkansas federal taxable-income target.");
         }
-        return new Pass(facts, afterSpending, order, targetTaxableIncome).solve();
+        return new Pass(facts, afterSpending, order, targetTaxableIncome, cancellation).solve();
     }
 
     private ProjectedRothConversionResult execute(ArkansasAnnualFunding.Facts facts, ProjectedPortfolio base,
@@ -89,6 +102,7 @@ public final class ArkansasRothFunding {
         private final ProjectedPortfolio base;
         private final WithdrawalStrategy order;
         private final BigDecimal target;
+        private final AnalysisCancellationToken cancellation;
         private ArkansasTargetBounds bounds;
         private BigDecimal upper;
         private int intervals;
@@ -98,14 +112,17 @@ public final class ArkansasRothFunding {
         private int innerBounds;
         private int maximumDepth;
 
-        Pass(ArkansasAnnualFunding.Facts facts, ProjectedPortfolio base, WithdrawalStrategy order, BigDecimal target) {
+        Pass(ArkansasAnnualFunding.Facts facts, ProjectedPortfolio base, WithdrawalStrategy order, BigDecimal target,
+                AnalysisCancellationToken cancellation) {
             this.facts = facts;
             this.base = base;
             this.order = order;
             this.target = target;
+            this.cancellation = Objects.requireNonNull(cancellation);
         }
 
         TargetResult solve() {
+            cancellation.throwIfCancellationRequested();
             try {
                 facts.verifyCashSources();
                 if (!(order instanceof TaxableFirstWithdrawalStrategy || order instanceof TaxDeferredFirstWithdrawalStrategy)
@@ -151,7 +168,15 @@ public final class ArkansasRothFunding {
                 }
                 return result(TargetStatus.NO_FEASIBLE_TARGET, null,
                         "Every admitted conversion amount was excluded or checked without a funded target result.");
-            } catch (ArkansasTargetBounds.Budget | IllegalArgumentException | NiitUnsupportedInputException | DateTimeException ex) {
+            } catch (ArkansasTargetBounds.Budget ex) {
+                return result(TargetStatus.UNSUPPORTED, null, ex.getMessage(),
+                        ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.TARGET_BUDGET));
+            } catch (ArkansasAnnualFunding.Unavailable ex) {
+                return result(TargetStatus.UNSUPPORTED, null, ex.getMessage(), ex.issue());
+            } catch (NiitUnsupportedInputException ex) {
+                return result(TargetStatus.UNSUPPORTED, null, ex.getMessage(),
+                        ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.NIIT));
+            } catch (IllegalArgumentException | DateTimeException ex) {
                 return result(TargetStatus.UNSUPPORTED, null, ex.getMessage());
             }
         }
@@ -172,6 +197,7 @@ public final class ArkansasRothFunding {
         }
 
         private Trial search(long first, long last, int depth) {
+            cancellation.throwIfCancellationRequested();
             if (intervals == intervalBudget) throw new ArkansasTargetBounds.Budget();
             intervals++;
             maximumDepth = Math.max(maximumDepth, depth);
@@ -187,6 +213,7 @@ public final class ArkansasRothFunding {
         }
 
         private Trial exact(BigDecimal requested) {
+            cancellation.throwIfCancellationRequested();
             if (bounds.federalTaxable(requested).compareTo(target) > 0) return null;
             if (inner == MAX_INNER_EVALUATIONS) throw new ArkansasTargetBounds.Budget();
             trials++;
@@ -195,7 +222,7 @@ public final class ArkansasRothFunding {
                 throw new ArkansasAnnualFunding.Unavailable("Arkansas conversion amount does not reconcile to execution.");
             }
             var priced = new ArkansasMinimumFundingSolver(Math.min(512, MAX_INNER_EVALUATIONS - inner))
-                    .solve(facts, conversion, order);
+                    .solve(facts, conversion, order, cancellation);
             inner += priced.metrics().candidates();
             innerBounds += priced.metrics().intervalTaxBounds();
             if (priced.status() == ArkansasMinimumFundingSolver.Status.UNSUPPORTED) {
@@ -203,7 +230,7 @@ public final class ArkansasRothFunding {
                     excluded++;
                     return null;
                 }
-                throw new ArkansasAnnualFunding.Unavailable(priced.detail());
+                throw new ArkansasAnnualFunding.Unavailable(priced.detail(), priced.issue().orElse(null));
             }
             return priced.candidate().filter(c -> c.annualTaxFacts().federal().getTaxableIncome().compareTo(target) <= 0)
                     .map(c -> new Trial(requested, conversion, priced)).orElse(null);
@@ -214,12 +241,17 @@ public final class ArkansasRothFunding {
         }
 
         private TargetResult result(TargetStatus status, Trial trial, String detail) {
+            return result(status, trial, detail, null);
+        }
+
+        private TargetResult result(TargetStatus status, Trial trial, String detail, ArkansasTaxIssue issue) {
             var unused = Optional.ofNullable(trial).map(t -> target.subtract(
                     t.funding().candidate().orElseThrow().annualTaxFacts().federal().getTaxableIncome()));
             return new TargetResult(status, Optional.ofNullable(trial), unused,
                     new TargetMetrics(intervals, excluded, trials, inner, innerBounds,
                             bounds == null ? 0 : bounds.federalProbes(), bounds == null ? 0 : bounds.stateProbes(),
-                            bounds == null ? 0 : bounds.boxes(), maximumDepth, trials == 0 ? 0 : 1), detail);
+                            bounds == null ? 0 : bounds.boxes(), maximumDepth, trials == 0 ? 0 : 1), detail,
+                    Optional.ofNullable(issue));
         }
     }
 }

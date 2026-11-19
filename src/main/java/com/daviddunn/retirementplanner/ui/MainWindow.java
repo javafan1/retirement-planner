@@ -1501,6 +1501,25 @@ public class MainWindow {
     }
 
     private void handleProjectionFailure(Exception exception, boolean detectedPensionFailure) {
+        var arkansas = ProjectionFailureMessages.arkansasFailure(exception);
+        if (arkansas.isPresent()) {
+            var failure = arkansas.orElseThrow();
+            var choices = failure.pensionsToReview().stream()
+                    .filter(review -> controller.resolveArkansasPensionReview(failure, review).isPresent()).toList();
+            var warning = new ArkansasProjectionWarning(stage, failure, choices);
+            statusLabel.setText("Projection unavailable: Arkansas state income tax could not be estimated for " + failure.year() + ".");
+            warning.dialog().showAndWait().flatMap(warning::selectedReview)
+                    .flatMap(review -> controller.resolveArkansasPensionReview(failure, review))
+                    .ifPresent(pension -> {
+                        reviewPension(pension);
+                        incomeSourcesView.editSelectedPension(pension, () -> {
+                            controller.markModified();
+                            updateWindowTitle();
+                            statusLabel.setText("Pension updated. Request a new projection to check the current inputs.");
+                        });
+                    });
+            return;
+        }
         resultsView.load(null, List.of());
         resultsSummaryView.setYearlyDetailsAvailable(false);
         if (exception instanceof com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.UnsupportedExecutionException) {

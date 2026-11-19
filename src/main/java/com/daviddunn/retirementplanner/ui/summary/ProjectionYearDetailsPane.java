@@ -701,17 +701,32 @@ public class ProjectionYearDetailsPane
         if (arkansas != null) {
             row = addSubsectionHeader(grid, row, arkansas.restoredHistory() ? "Arkansas Retained History" : "Arkansas Validation");
             row = addMoneyComparisonRow(grid, row, "Arkansas State Income Tax", year.getStateIncomeTax(),
-                    getBaselineValue(ProjectionYear::getStateIncomeTax));
+                    getBaselineValue(y -> y.arkansasValidationTax().isPresent() ? y.getStateIncomeTax() : null));
             row = addMoneyComparisonRow(grid, row, "Taxable Funding Income", arkansas.taxableFundingIncome(),
                     getBaselineValue(y -> y.arkansasValidationTax().map(t -> t.taxableFundingIncome()).orElse(null)));
-            return addMoneyComparisonRow(grid, row, "Arkansas Retirement Exclusion", arkansas.provenance().election().retirementExclusion(),
+            row = addMoneyComparisonRow(grid, row, "Arkansas Retirement Exclusion", arkansas.provenance().election().retirementExclusion(),
                     getBaselineValue(y -> y.arkansasValidationTax().map(t -> t.provenance().election().retirementExclusion()).orElse(null)));
+            String election = arkansasSeniorElection(year);
+            String baselineElection = getBaselineText(ProjectionYearDetailsPane::arkansasSeniorElection);
+            if (election != null || baselineElection != null) {
+                row = addTextComparisonRow(grid, row, "Arkansas 65 Special", election == null ? "—" : election, baselineElection);
+            }
+            row = addTextComparisonRow(grid, row, "Arkansas Tax Rules", arkansas.versions().get("arkansas-income-tax-rules"),
+                    getBaselineText(y -> arkansasPolicy(y, "arkansas-income-tax-rules")));
+            row = addTextComparisonRow(grid, row, "Arkansas Funding Policy", arkansas.versions().get("arkansas-tax-funding"),
+                    getBaselineText(y -> arkansasPolicy(y, "arkansas-tax-funding")));
+            String target = arkansasTargetPolicy(year);
+            String baselineTarget = getBaselineText(ProjectionYearDetailsPane::arkansasTargetPolicy);
+            if (target != null || baselineTarget != null) {
+                row = addTextComparisonRow(grid, row, "Arkansas Roth Target Policy", target == null ? "—" : target, baselineTarget);
+            }
+            return row;
         }
         if (year.getStateTaxJurisdiction() != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI) {
             row = addSubsectionHeader(grid, row, year.getStateTaxJurisdiction().displayName());
             int taxRow = row;
             int nextRow = addMoneyComparisonRow(grid, row, year.getStateTaxJurisdiction().displayName() + " State Income Tax",
-                    year.getStateIncomeTax(), getBaselineValue(ProjectionYear::getStateIncomeTax));
+                    year.getStateIncomeTax(), getBaselineValue(y -> y.arkansasValidationTax().isPresent() ? null : y.getStateIncomeTax()));
             year.stateTaxCalculation().ifPresent(result -> {
                 for (var node : grid.getChildren()) {
                     if (node instanceof javafx.scene.control.Label label
@@ -1246,6 +1261,23 @@ public class ProjectionYearDetailsPane
         return row + 1;
     }
 
+
+    private static String arkansasPolicy(ProjectionYear year, String key) {
+        return year.arkansasValidationTax().map(tax -> tax.versions().get(key)).orElse(null);
+    }
+
+    private static String arkansasTargetPolicy(ProjectionYear year) {
+        return year.arkansasValidationTax().filter(tax -> tax.targetMetrics().isPresent())
+                .map(tax -> tax.versions().get("arkansas-roth-target")).orElse(null);
+    }
+
+    private static String arkansasSeniorElection(ProjectionYear year) {
+        return year.arkansasValidationTax().map(tax -> tax.provenance().election().recipients().stream()
+                .filter(recipient -> recipient.senior())
+                .map(recipient -> recipient.owner() + ": " + (recipient.claimRetirementPool() ? "Retirement pool" : "65 Special"))
+                .collect(java.util.stream.Collectors.joining(", ")))
+                .filter(text -> !text.isEmpty()).orElse(null);
+    }
 
     private int addTextComparisonRow(
             GridPane grid,

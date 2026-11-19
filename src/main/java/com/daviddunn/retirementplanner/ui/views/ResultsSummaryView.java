@@ -2604,7 +2604,18 @@ public class ResultsSummaryView extends BorderPane {
                         + years.size()
                         + " years | " + first.getStateTaxJurisdiction() + " State Income Tax"
                         + (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.FL ? ": $0" : ""));
-        if (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA) {
+        if (first.arkansasValidationTax().isPresent()) {
+            var arkansas = first.arkansasValidationTax().orElseThrow();
+            projectionRangeLabel.setText("Projection: " + first.getCalendarYear() + " - " + last.getCalendarYear()
+                    + "  |  " + years.size() + " years | "
+                    + (arkansas.restoredHistory() ? "Arkansas retained history" : "Arkansas validation"));
+            var tooltip = new Tooltip("Arkansas statutory-cent retirement planning estimate. "
+                    + "Future estimates hold reviewed parameters constant. Some low-income, early-distribution and special sources require additional evidence.\n\n"
+                    + String.join("\n", arkansas.calculation().limitations()));
+            tooltip.setWrapText(true);
+            tooltip.setMaxWidth(650);
+            projectionRangeLabel.setTooltip(tooltip);
+        } else if (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.IA) {
             var tooltip = new Tooltip(String.join("\n", new com.daviddunn.retirementplanner.domain.tax.state.IowaProductionTaxCalculator()
                     .planningLimitations(first.getCalendarYear(), last.getCalendarYear())));
             tooltip.setWrapText(true);

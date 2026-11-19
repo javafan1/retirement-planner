@@ -226,7 +226,9 @@ public final class ArkansasAnnualFunding {
                     federal.calculate(income, seed.filingStatus(), seed.projectedRules()), seed.projectedRules());
             var evidence = evidence(trace);
             var result = state.calculateUnregistered(input, evidence);
-            if (result.estimatedIncomeTax().isEmpty()) throw new Unavailable(result.limitations().getFirst());
+            if (result.estimatedIncomeTax().isEmpty()) {
+                throw new Unavailable(result.limitations().getFirst(), result.issue().orElseThrow());
+            }
             return new Priced(new Candidate(withdrawal, allocation, executed.getPortfolio(), input, result,
                     facts.cash(), evidence), evidence);
         }
@@ -277,7 +279,13 @@ public final class ArkansasAnnualFunding {
     }
 
     static final class Unavailable extends IllegalArgumentException {
-        Unavailable(String message) { super(message); }
+        private final com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue issue;
+        Unavailable(String message) { this(message, null); }
+        Unavailable(String message, com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue issue) {
+            super(message);
+            this.issue = issue;
+        }
+        com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue issue() { return issue; }
     }
 
     /** Reconciles a proved capacity failure with the exact deficit at terminal executable capacity. */

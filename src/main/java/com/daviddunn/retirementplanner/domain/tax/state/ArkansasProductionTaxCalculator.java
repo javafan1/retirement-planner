@@ -31,7 +31,14 @@ public final class ArkansasProductionTaxCalculator {
 
     /** Arkansas-specific output with the shared state-tax status and reasons. No surrogate jurisdiction. */
     public record Result(Optional<BigDecimal> estimatedIncomeTax, Optional<FailureCategory> failureCategory, List<String> limitations,
-                         List<StateTaxUnavailableReason> unavailableReasons, Optional<Election> election) {
+                         List<StateTaxUnavailableReason> unavailableReasons, Optional<Election> election,
+                         Optional<ArkansasTaxIssue> issue) {
+        public Result(Optional<BigDecimal> estimatedIncomeTax, Optional<FailureCategory> failureCategory,
+                List<String> limitations, List<StateTaxUnavailableReason> unavailableReasons, Optional<Election> election) {
+            this(estimatedIncomeTax, failureCategory, limitations, unavailableReasons, election,
+                    unavailableReasons.stream().findFirst().map(ArkansasTaxIssue::fromSourceReason));
+        }
+
         public Result {
             Objects.requireNonNull(estimatedIncomeTax);
             Objects.requireNonNull(failureCategory);
@@ -39,6 +46,7 @@ public final class ArkansasProductionTaxCalculator {
             limitations = List.copyOf(limitations);
             unavailableReasons = List.copyOf(unavailableReasons);
             if (estimatedIncomeTax.isPresent() != election.isPresent()
+                    || estimatedIncomeTax.isPresent() == issue.isPresent()
                     || estimatedIncomeTax.isPresent() != unavailableReasons.isEmpty()
                     || estimatedIncomeTax.isPresent() == failureCategory.isPresent()
                     || estimatedIncomeTax.filter(tax -> tax.signum() < 0).isPresent() || limitations.isEmpty()) {
@@ -142,14 +150,16 @@ public final class ArkansasProductionTaxCalculator {
         Objects.requireNonNull(evidence);
         if (request.taxYear() < ArkansasTaxRules.REVIEWED_YEAR) {
             return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.OUTSIDE_REVIEWED_POLICY,
-                    "Arkansas years before 2026 are outside the reviewed planning policy.");
+                    "Arkansas years before 2026 are outside the reviewed planning policy.",
+                    ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.POLICY));
         }
         try {
             int reviewedYear = ArkansasTaxRules.reviewedYearFor(request.taxYear());
             boolean joint = request.filingStatus() == FilingStatus.MARRIED_FILING_JOINTLY;
             if (!joint && request.filingStatus() != FilingStatus.SINGLE) {
                 return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.OUTSIDE_REVIEWED_POLICY,
-                        "Arkansas planning coverage requires Single or actual married filing jointly.");
+                        "Arkansas planning coverage requires Single or actual married filing jointly.",
+                        ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.POLICY));
             }
             require(request.projectedRules().getTaxYear() == request.taxYear(),
                     "Arkansas request requires projected federal rules for the same year.");
@@ -170,22 +180,30 @@ public final class ArkansasProductionTaxCalculator {
                         "Arkansas age-65 credit eligibility is material and cannot be verified at the modeled death or from the available birth dates.");
             }
             if (firstChoice.minimum().compareTo(firstChoice.maximum()) != 0) {
-                if (income.unresolvedPensionRecipients().stream().anyMatch(recipient ->
-                        income.certain().getOrDefault(recipient, ZERO).compareTo(ArkansasTaxRules.RETIREMENT_LIMIT) < 0)) {
+                var recipients = income.unresolvedPensionRecipients().stream().filter(recipient ->
+                        income.certain().getOrDefault(recipient, ZERO).compareTo(ArkansasTaxRules.RETIREMENT_LIMIT) < 0)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                if (!recipients.isEmpty()) {
                     return unsupported(StateTaxUnavailableReason.MISSING_RETIREMENT_QUALIFICATION,
-                            FailureCategory.LEGAL_OR_SOURCE, UNRESOLVED_PENSION_ORIGIN);
+                            FailureCategory.LEGAL_OR_SOURCE, UNRESOLVED_PENSION_ORIGIN,
+                            new ArkansasTaxIssue(ArkansasTaxIssue.Kind.PENSION_ORIGIN, recipients));
                 }
-                requireLegal(false, "Arkansas age-59½ receipt timing is material across the possible taxable range.");
+                return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.LEGAL_OR_SOURCE,
+                        "Arkansas age-59½ receipt timing is material across the possible taxable range.",
+                        ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.RECEIPT_TIMING));
             }
 
             var selected = firstChoice.atCertainReceipts();
             if (selected.tax().signum() > 0 && !ArkansasTaxRules.supportsLowIncomeProof(request.taxYear())) {
                 return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.OUTSIDE_REVIEWED_POLICY,
-                        "Arkansas low-income admission proof is unavailable for this year.");
+                        "Arkansas low-income admission proof is unavailable for this year.",
+                        ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.LOW_INCOME));
             }
-            requireLegal(selected.tax().signum() == 0
-                    || outsideLowIncome(request.taxYear(), joint, filers.size(), income),
-                    "Arkansas low-income qualification is unresolved. The §26-51-301 schedule or §26-51-501 additional credit could change this positive estimate.");
+            if (selected.tax().signum() > 0 && !outsideLowIncome(request.taxYear(), joint, filers.size(), income)) {
+                return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.LEGAL_OR_SOURCE,
+                        "Arkansas low-income qualification is unresolved. The §26-51-301 schedule or §26-51-501 additional credit could change this positive estimate.",
+                        ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.LOW_INCOME));
+            }
 
             var notes = new ArrayList<>(planningLimitations());
             notes.add("Arkansas modeled ordinary income " + income.ordinary().toPlainString()
@@ -199,11 +217,15 @@ public final class ArkansasProductionTaxCalculator {
                         + ". Statutory low-income admission ceilings are bounded separately for that year.");
             var election = new Election(selected.retirementSubtraction(), selected.standardDeduction(),
                     selected.credits(), selected.netIncome(), firstChoice.selectedRecipients());
-            return new Result(Optional.of(selected.tax()), Optional.empty(), notes, List.of(), Optional.of(election));
+            return new Result(Optional.of(selected.tax()), Optional.empty(), notes, List.of(), Optional.of(election), Optional.empty());
         } catch (ArkansasIncomeReconciliation.Rejected rejected) {
-            return unsupported(rejected.reason, rejected.category, rejected.getMessage());
-        } catch (NiitUnsupportedInputException | DateTimeException | IllegalArgumentException rejected) {
-            return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.LEGAL_OR_SOURCE, rejected.getMessage());
+            return unsupported(rejected.reason, rejected.category, rejected.getMessage(), rejected.issue);
+        } catch (NiitUnsupportedInputException rejected) {
+            return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.LEGAL_OR_SOURCE, rejected.getMessage(),
+                    ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.NIIT));
+        } catch (DateTimeException | IllegalArgumentException rejected) {
+            return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.LEGAL_OR_SOURCE, rejected.getMessage(),
+                    ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.SOURCE_OR_TAX));
         }
     }
 
@@ -259,8 +281,9 @@ public final class ArkansasProductionTaxCalculator {
         if (!condition) throw new ArkansasIncomeReconciliation.Rejected(UNSUPPORTED_MODEL_RULE, explanation);
     }
 
-    private static Result unsupported(StateTaxUnavailableReason reason, FailureCategory category, String explanation) {
-        return new Result(Optional.empty(), Optional.of(category), List.of(explanation), List.of(reason), Optional.empty());
+    private static Result unsupported(StateTaxUnavailableReason reason, FailureCategory category, String explanation, ArkansasTaxIssue issue) {
+        return new Result(Optional.empty(), Optional.of(category), List.of(explanation), List.of(reason),
+                Optional.empty(), Optional.of(issue));
     }
 
     public static List<String> planningLimitations() {

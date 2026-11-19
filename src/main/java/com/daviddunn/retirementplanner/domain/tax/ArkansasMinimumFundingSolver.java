@@ -1,6 +1,8 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
 import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
+import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken;
+import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue;
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.AccountReference;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 import com.daviddunn.retirementplanner.domain.roth.ProjectedRothConversionResult;
@@ -28,7 +30,7 @@ public final class ArkansasMinimumFundingSolver {
     public enum Reason { SUFFICIENT, EXHAUSTED_CAPACITY, SOURCE_OR_TAX, UNSUPPORTED_DOMAIN, BUDGET_EXHAUSTED }
     public record Metrics(int sourceSegmentsVisited, int candidates, int intervalTaxBounds, int maximumDepth, int candidateBudget) { }
     public record Result(Status status, Reason reason, Optional<ArkansasAnnualFunding.Candidate> candidate,
-                         BigDecimal capacity, Metrics metrics, String detail) {
+                         BigDecimal capacity, Metrics metrics, String detail, Optional<ArkansasTaxIssue> issue) {
         public Result {
             if ((status == Status.CALCULATED) != candidate.isPresent()) {
                 throw new IllegalArgumentException("Only a calculated Arkansas funding result has a candidate.");
@@ -48,11 +50,17 @@ public final class ArkansasMinimumFundingSolver {
     }
 
     public Result solve(ArkansasAnnualFunding.Facts facts, ProjectedRothConversionResult conversion, WithdrawalStrategy order) {
+        return solve(facts, conversion, order, AnalysisCancellationToken.none());
+    }
+
+    Result solve(ArkansasAnnualFunding.Facts facts, ProjectedRothConversionResult conversion,
+            WithdrawalStrategy order, AnalysisCancellationToken cancellation) {
         Objects.requireNonNull(facts);
         Objects.requireNonNull(conversion);
         Objects.requireNonNull(order);
         var portfolio = conversion.getPortfolio();
-        var pass = new Pass(new ArkansasAnnualFunding.Evaluator(facts, conversion, order), portfolio.getTotalBalance());
+        cancellation.throwIfCancellationRequested();
+        var pass = new Pass(new ArkansasAnnualFunding.Evaluator(facts, conversion, order), portfolio.getTotalBalance(), cancellation);
         if (!(order instanceof TaxableFirstWithdrawalStrategy || order instanceof TaxDeferredFirstWithdrawalStrategy)
                 || portfolio.getAccountBalances().size() > MAX_SOURCES || pass.capacity.compareTo(MAX_CAPACITY) > 0
                 || pass.capacity.scale() > 4096 || portfolio.getAccountBalances().stream()
@@ -78,8 +86,14 @@ public final class ArkansasMinimumFundingSolver {
             return pass.result(Status.INSUFFICIENT_FUNDS, Reason.EXHAUSTED_CAPACITY, null,
                     "Every executable funding amount is insufficient.");
         } catch (BudgetExhausted ex) {
-            return pass.result(Status.UNSUPPORTED, Reason.BUDGET_EXHAUSTED, null, ex.getMessage());
-        } catch (IllegalArgumentException | NiitUnsupportedInputException ex) {
+            return pass.result(Status.UNSUPPORTED, Reason.BUDGET_EXHAUSTED, null, ex.getMessage(),
+                    ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.FUNDING_BUDGET));
+        } catch (ArkansasAnnualFunding.Unavailable ex) {
+            return pass.result(Status.UNSUPPORTED, Reason.SOURCE_OR_TAX, null, ex.getMessage(), ex.issue());
+        } catch (NiitUnsupportedInputException ex) {
+            return pass.result(Status.UNSUPPORTED, Reason.SOURCE_OR_TAX, null, ex.getMessage(),
+                    ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.NIIT));
+        } catch (IllegalArgumentException ex) {
             return pass.result(Status.UNSUPPORTED, Reason.SOURCE_OR_TAX, null, ex.getMessage());
         }
     }
@@ -110,17 +124,20 @@ public final class ArkansasMinimumFundingSolver {
     private final class Pass {
         private final ArkansasAnnualFunding.Evaluator evaluator;
         private final BigDecimal capacity;
+        private final AnalysisCancellationToken cancellation;
         private int segments;
         private int candidates;
         private int bounds;
         private int maximumDepth;
 
-        Pass(ArkansasAnnualFunding.Evaluator evaluator, BigDecimal capacity) {
+        Pass(ArkansasAnnualFunding.Evaluator evaluator, BigDecimal capacity, AnalysisCancellationToken cancellation) {
             this.evaluator = evaluator;
             this.capacity = capacity;
+            this.cancellation = cancellation;
         }
 
         ArkansasAnnualFunding.Evaluator.Priced evaluate(BigDecimal amount) {
+            cancellation.throwIfCancellationRequested();
             if (candidates == evaluationBudget) throw new BudgetExhausted();
             candidates++;
             return evaluator.evaluate(amount);
@@ -133,6 +150,7 @@ public final class ArkansasMinimumFundingSolver {
 
         private ArkansasAnnualFunding.Candidate search(long first, long last, boolean deferred, int depth,
                                                        ArkansasAnnualFunding.Evaluator.Priced left) {
+            cancellation.throwIfCancellationRequested();
             maximumDepth = Math.max(maximumDepth, depth);
             if (left.candidate().deficit().signum() == 0) return left.candidate();
             if (first == last) return null;
@@ -151,8 +169,12 @@ public final class ArkansasMinimumFundingSolver {
         }
 
         Result result(Status status, Reason reason, ArkansasAnnualFunding.Candidate candidate, String detail) {
+            return result(status, reason, candidate, detail, null);
+        }
+
+        Result result(Status status, Reason reason, ArkansasAnnualFunding.Candidate candidate, String detail, ArkansasTaxIssue issue) {
             return new Result(status, reason, Optional.ofNullable(candidate), capacity,
-                    new Metrics(segments, candidates, bounds, maximumDepth, evaluationBudget), detail);
+                    new Metrics(segments, candidates, bounds, maximumDepth, evaluationBudget), detail, Optional.ofNullable(issue));
         }
     }
 

@@ -42,15 +42,21 @@ final class ArkansasIncomeReconciliation {
     static final class Rejected extends IllegalArgumentException {
         final StateTaxUnavailableReason reason;
         final FailureCategory category;
+        final ArkansasTaxIssue issue;
 
         Rejected(StateTaxUnavailableReason reason, String message) {
             this(reason, FailureCategory.LEGAL_OR_SOURCE, message);
         }
 
         Rejected(StateTaxUnavailableReason reason, FailureCategory category, String message) {
+            this(reason, category, message, ArkansasTaxIssue.fromSourceReason(reason));
+        }
+
+        Rejected(StateTaxUnavailableReason reason, FailureCategory category, String message, ArkansasTaxIssue issue) {
             super(message);
             this.reason = reason;
             this.category = category;
+            this.issue = issue;
         }
     }
 
@@ -93,7 +99,9 @@ final class ArkansasIncomeReconciliation {
             if (facts.qualification() == OUTSIDE_ORDINARY_SCOPE)
                 throw new Rejected(UNSUPPORTED_TRANSACTION_TYPE, "Represented specialized Arkansas source or state basis requires separate treatment.");
             if (facts.additionalTax() == APPLICABLE_ADDITIONAL_TAX)
-                throw new Rejected(UNSUPPORTED_MODEL_RULE, "The Arkansas Form 5329-related additional tax is outside the modeled ordinary liability.");
+                throw new Rejected(UNSUPPORTED_MODEL_RULE, FailureCategory.LEGAL_OR_SOURCE,
+                        "The Arkansas Form 5329-related additional tax is outside the modeled ordinary liability.",
+                        ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.ADDITIONAL_TAX));
             source.account().ifPresent(account -> require(accountPayments.add(new AccountPayment(
                     account, source.kind(), source.purpose(), source.grossAmount().stripTrailingZeros(),
                     source.modeledTaxableAmount().map(BigDecimal::stripTrailingZeros).orElse(null))),
@@ -240,7 +248,9 @@ final class ArkansasIncomeReconciliation {
             throw new Rejected(UNSUPPORTED_TRANSACTION_TYPE, "This conditional benefit exclusion is outside ordinary Arkansas coverage.");
         if (receipt.annuityBasis() != null && FinancialCalculationPolicy.modelsNiit(request.income().getIncomeSources())
                 && receipt.annuityBasis().terms().qualification() != Qualification.DOMESTIC_STANDARD_DEDUCTION_GENERAL_RULE_FIXED_SINGLE_LIFE_V1)
-            throw new Rejected(UNSUPPORTED_MODEL_RULE, "Advanced NIIT requires the existing verified domestic annuity qualification.");
+            throw new Rejected(UNSUPPORTED_MODEL_RULE, FailureCategory.LEGAL_OR_SOURCE,
+                    "Advanced NIIT requires the existing verified domestic annuity qualification.",
+                    ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.NIIT));
         add(Kind.CONDITIONAL_RECURRING, taxable(source));
     }
 
@@ -300,7 +310,9 @@ final class ArkansasIncomeReconciliation {
     private static void requireNoEarlyAdditionalTax(ReceiptWindow window, LocalDate birth, ReceiptFacts facts) {
         if (window.first().isBefore(ArkansasRetirementEligibility.age59AndHalf(birth))
                 && facts.additionalTax() != NO_APPLICABLE_ADDITIONAL_TAX)
-            throw new Rejected(UNSUPPORTED_MODEL_RULE, "Potential early cash requires evidence that the Arkansas Form 5329-related additional tax is inapplicable.");
+            throw new Rejected(UNSUPPORTED_MODEL_RULE, FailureCategory.LEGAL_OR_SOURCE,
+                    "Potential early cash requires evidence that the Arkansas Form 5329-related additional tax is inapplicable.",
+                    ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.ADDITIONAL_TAX));
     }
 
     private AccountOwnership activeRecipient(IncomeSourceAttribution source) {

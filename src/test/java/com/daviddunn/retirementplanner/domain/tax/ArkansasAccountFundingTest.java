@@ -330,12 +330,16 @@ public class ArkansasAccountFundingTest {
         var ira = ira("IRA", "30000");
         var facts = ordinary(AGE_60, WithdrawalBreakdown.zero(), "0", "86197", "0");
         var execution = new ProjectedPortfolioRothConverter().convertHousehold(portfolio(ira), ZERO);
-        assertEquals(ArkansasMinimumFundingSolver.Reason.BUDGET_EXHAUSTED,
-                new ArkansasMinimumFundingSolver(1).solve(facts, execution, DEFERRED_FIRST).reason());
+        var budget = new ArkansasMinimumFundingSolver(1).solve(facts, execution, DEFERRED_FIRST);
+        assertEquals(ArkansasMinimumFundingSolver.Reason.BUDGET_EXHAUSTED, budget.reason());
+        assertEquals(com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue.Kind.FUNDING_BUDGET,
+                budget.issue().orElseThrow().kind());
         var early = ordinary(LocalDate.of(1980, 1, 1), WithdrawalBreakdown.zero(), "0", "50000", "0");
         var result = solve(early, portfolio(ira), DEFERRED_FIRST);
         assertEquals(UNSUPPORTED, result.status());
         assertTrue(result.detail().contains("Form 5329"), result.detail());
+        assertEquals(com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue.Kind.ADDITIONAL_TAX,
+                result.issue().orElseThrow().kind());
         assertEquals(INSUFFICIENT_FUNDS, solve(facts, portfolio(ira("Insufficient", "10")), DEFERRED_FIRST).status());
         var unexplainedCash = new Facts(facts.seed(), facts.evidence(), facts.projectedReceipts(),
                 facts.additionalTax(), new Cash(b("90000"), ZERO, ZERO, ZERO, ZERO));

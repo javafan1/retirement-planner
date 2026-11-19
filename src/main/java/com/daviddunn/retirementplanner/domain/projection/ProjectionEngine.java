@@ -115,6 +115,31 @@ public class ProjectionEngine {
 
     private final ArkansasProjectionValidation arkansasValidation;
     private final ThreadLocal<ArkansasRunObserver> arkansasObserver = new ThreadLocal<>();
+    private final ThreadLocal<ArkansasRunControl> arkansasRunControl = new ThreadLocal<>();
+
+    private record ArkansasRunControl(
+            com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation,
+            java.util.function.IntConsumer completedYears) { }
+
+    /** Control applies only to an already gated engine. This method cannot grant the capability. */
+    public final ProjectionExecutionResult projectArkansasWithOutcome(RetirementPlan frozenPlan,
+            com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation,
+            java.util.function.IntConsumer completedYears) {
+        if (arkansasValidation == null || arkansasRunControl.get() != null) {
+            throw new IllegalStateException("Arkansas projection requires an isolated gated engine and one calculation scope.");
+        }
+        var control = new ArkansasRunControl(java.util.Objects.requireNonNull(cancellation),
+                java.util.Objects.requireNonNull(completedYears));
+        arkansasRunControl.set(control);
+        try {
+            cancellation.throwIfCancellationRequested();
+            var result = projectWithOutcome(frozenPlan);
+            cancellation.throwIfCancellationRequested();
+            return result;
+        } finally {
+            arkansasRunControl.remove();
+        }
+    }
 
     @FunctionalInterface
     public interface ArkansasRunObserver {
@@ -258,7 +283,13 @@ public class ProjectionEngine {
             ProjectionEvaluationContext evaluationContext,
             ProjectionEconomicPath economicPath,
             boolean structured) {
-        var execution = runProjection(plan, evaluationContext, economicPath, structured);
+        ProjectionExecutionResult execution;
+        try {
+            execution = runProjection(plan, evaluationContext, economicPath, structured);
+        } catch (com.daviddunn.retirementplanner.domain.tax.NiitUnsupportedInputException failure) {
+            if (arkansasValidation == null) throw failure;
+            throw arkansasNiitUnavailable(plan.getPlanningAssumptions().getProjectionStartDate().getYear(), failure);
+        }
         if (arkansasValidation != null) {
             var observer = arkansasObserver.get();
             if (observer != null) observer.accept(plan, evaluationContext, execution);
@@ -348,9 +379,11 @@ public class ProjectionEngine {
         var benefitOpening = plan.getPlanningAssumptions().getProjectionStartDate();
         boolean householdRmdHasOccurred = false;
         BigDecimal generalExpenseMultiplier = BigDecimal.ONE;
+        var controlledRun = arkansasValidation == null ? null : arkansasRunControl.get();
         for (int yearOffset = 0;
              yearOffset < projectionLength;
              yearOffset++) {
+            if (controlledRun != null) controlledRun.cancellation().throwIfCancellationRequested();
 
             int calendarYear =
                     startYear + yearOffset;
@@ -387,8 +420,7 @@ public class ProjectionEngine {
                             evaluationContext.expensePath().orElse(null), conditionalBenefits, financialMode);
             } catch (RuntimeException exception) {
                 if (arkansasValidation != null && exception instanceof com.daviddunn.retirementplanner.domain.tax.NiitUnsupportedInputException) {
-                    throw new ArkansasProjectionUnavailableException(calendarYear,
-                            ArkansasProjectionUnavailableException.Reason.SOURCE_OR_TAX, exception.getMessage());
+                    throw arkansasNiitUnavailable(calendarYear, exception);
                 }
                 if (!structured || !(exception.getCause() instanceof FundingConstraint constraint)) {
                     throw exception;
@@ -433,9 +465,20 @@ public class ProjectionEngine {
 
             projectedPortfolio =
                     endingPortfolio;
+            if (controlledRun != null) {
+                controlledRun.cancellation().throwIfCancellationRequested();
+                controlledRun.completedYears().accept(projection.getYearsProjected());
+            }
         }
 
         return new ProjectionExecutionResult.Completed(projection.getYears());
+    }
+
+    private static ArkansasProjectionUnavailableException arkansasNiitUnavailable(int year, RuntimeException failure) {
+        return new ArkansasProjectionUnavailableException(year,
+                ArkansasProjectionUnavailableException.Reason.SOURCE_OR_TAX, failure.getMessage(),
+                com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue.of(
+                        com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue.Kind.NIIT), java.util.List.of());
     }
 
     private static Optional<Integer> reportingAge(Person person, LocalDate date) {
@@ -824,7 +867,10 @@ public class ProjectionEngine {
                     projectedGovernmentRules, socialSecurityResult, totalWithdrawalBreakdown,
                     rmdDistributedBeforeProjection, sources, new com.daviddunn.retirementplanner.domain.tax.ArkansasAnnualFunding.Cash(
                             guaranteedIncome, projectedPeriodRmdResult.getTotalRmd(), spendingWithdrawal, annualExpenses, premium),
-                    portfolioAfterAdditionalWithdrawal, withdrawalStrategy, rothConversion, arkansasTarget);
+                    portfolioAfterAdditionalWithdrawal, withdrawalStrategy, rothConversion, arkansasTarget,
+                    arkansasRunControl.get() == null
+                            ? com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken.none()
+                            : arkansasRunControl.get().cancellation());
             requestedRothConversion = arkansas.conversion().requested();
             rothConversionResult = arkansas.conversion().conversion();
             rothConversion = rothConversionResult.getTotalConversion();
