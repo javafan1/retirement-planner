@@ -106,6 +106,48 @@ class ProjectionSnapshotPersistenceTest {
         assertThrows(Exception.class,()->mapper.treeToValue(node,RetainedProjectionSnapshot.Income.class));
     }
 
+    @Test void isolatedFundingSurplusRetainsItsOriginalResultThroughSaveAsAndBothSwaps() throws Exception {
+        var c = controller();
+        c.getCurrentProjection();
+        var original = c.getAcceptedProjectionSnapshot();
+        var projection = com.daviddunn.retirementplanner.domain.tax.ArkansasAccountFundingTest.accountingFixture();
+        var expected = RetainedProjectionSnapshot.capture(projection);
+        var ending = projection.getFinalInvestableAssets();
+        var isolated = new CompleteProjectionSnapshot(1, UUID.randomUUID(), original.owner(), original.sourcePlanId(),
+                original.acceptedAt(), original.inputsDocument(), original.inputDigest(), "Nonproduction Arkansas cash fixture",
+                expected, List.of(new CompleteProjectionSnapshot.NonInvestableYear(2026, List.of(), BigDecimal.ZERO)),
+                new CompleteProjectionSnapshot.Summary(ending, ending, BigDecimal.ZERO, BigDecimal.ZERO,
+                        BigDecimal.ZERO, BigDecimal.ZERO), original.people());
+        var codec = new AnalysisSnapshotCodec();
+        var originalBytes = codec.encodeProjectionDocument(original).bytes();
+        var oldRoundTrip = codec.decodeDocument(originalBytes, CompleteProjectionSnapshot.class);
+        assertArrayEquals(originalBytes, codec.encodeProjectionDocument(oldRoundTrip).bytes());
+        var plan = c.getCurrentPlan();
+        plan.setBaseline(new ProjectionBaseline(isolated.restoreInputs(), java.time.LocalDateTime.now(), "Isolated surplus", isolated.id()));
+        plan.installProjectionComponents(Map.of(original.id(), original, isolated.id(), isolated));
+        plan.setProjectionState(new ProjectionRoleManifest(1, original.owner(),
+                new ProjectionRoleManifest.Reference(original.id(), "0".repeat(64)),
+                new ProjectionRoleManifest.Reference(isolated.id(), "0".repeat(64))));
+        set(c, "projectionEngine", throwing());
+        c.saveAs(directory.resolve("surplus-original.json"));
+        c.saveAs(directory.resolve("surplus-copy.json"));
+        var restored = controller();
+        set(restored, "projectionEngine", throwing());
+        restored.open(c.getCurrentFile());
+        restored.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(original.annual(), restored.getAcceptedProjectionSnapshot().annual());
+        assertTrue(restored.commitProjectionSwap(restored.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(isolated.id(), restored.getAcceptedProjectionSnapshot().id());
+        assertEquals(expected, restored.getAcceptedProjectionSnapshot().annual());
+        assertEquals(0, new BigDecimal("1.34").compareTo(restored.getAcceptedProjectionSnapshot().annual()
+                .restoreProjection().getFirstYear().getRetainedFromTaxFundingSurplus()));
+        restored.save();
+        assertTrue(restored.commitProjectionSwap(restored.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(original.id(), restored.getAcceptedProjectionSnapshot().id());
+        assertEquals(original.annual(), restored.getAcceptedProjectionSnapshot().annual());
+        restored.save();
+    }
+
     @Test void benefitBearingPlanSaveAsSaveAndRestartNeverExecuteOrLoseStoredDefinitions() throws Exception {
         var c = controller();
         var benefit = com.daviddunn.retirementplanner.domain.benefit.BenefitFixtures.monthly();

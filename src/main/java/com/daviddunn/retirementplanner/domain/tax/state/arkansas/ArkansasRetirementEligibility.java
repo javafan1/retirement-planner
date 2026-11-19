@@ -18,7 +18,7 @@ public final class ArkansasRetirementEligibility {
         return switch (source) {
             case OWN_IRA_CASH, OWN_IRA_CONVERSION_INTERPRETATION -> {
                 if (birthDate == null) yield Decision.UNSUPPORTED;
-                var qualifies = birthDate.plusYears(59).plusMonths(6);
+                var qualifies = age59AndHalf(birthDate);
                 if (firstReceipt.isBefore(birthDate)) yield Decision.UNSUPPORTED;
                 if (!firstReceipt.isBefore(qualifies)) yield Decision.QUALIFYING_POOL;
                 if (lastReceipt.isBefore(qualifies)) yield Decision.TAXABLE_WITHOUT_POOL;
@@ -30,5 +30,10 @@ public final class ArkansasRetirementEligibility {
             case QUALIFIED_ROTH -> Decision.OUTSIDE_FEDERAL_BASE;
             case UNSUPPORTED_SPECIAL -> Decision.UNSUPPORTED;
         };
+    }
+
+    /** The preparatory calendar convention clamps month ends at each step. */
+    public static LocalDate age59AndHalf(LocalDate birthDate) {
+        return Objects.requireNonNull(birthDate).plusYears(59).plusMonths(6);
     }
 }

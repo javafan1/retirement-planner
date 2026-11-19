@@ -270,10 +270,49 @@ class RetainedProjectionCodecTest {
         assertEquals(new HashSet<>(Arrays.asList(fields.split(","))), Arrays.stream(ProjectionYear.class.getDeclaredFields())
                 .filter(f -> !Modifier.isStatic(f.getModifiers())).map(Field::getName).collect(java.util.stream.Collectors.toSet()));
         Map.of(HouseholdSocialSecurityResult.class, "primaryOwnBenefit,spouseOwnBenefit,primarySpousalExcessBenefit,spouseSpousalExcessBenefit,primarySurvivorCandidate,spouseSurvivorCandidate,primarySelection,spouseSelection,householdBenefit",
-                HouseholdCashSettlement.class, "guaranteedIncome,projectedPeriodRmdCash,spendingWithdrawal,taxFundingWithdrawal,ordinaryExpenses,medicarePremiums,incomeTaxes,retainedHouseholdSurplus,retainedFromExcessRmd,retainedFromGuaranteedIncome",
+                HouseholdCashSettlement.class, "guaranteedIncome,projectedPeriodRmdCash,spendingWithdrawal,taxFundingWithdrawal,ordinaryExpenses,medicarePremiums,incomeTaxes,retainedHouseholdSurplus,retainedFromExcessRmd,retainedFromGuaranteedIncome,retainedFromTaxFundingSurplus",
                 ProjectionMetrics.class, "totalInvestmentGrowth,totalIncome,totalTaxes,peakAnnualTax,endingInvestableAssets,endingNetWorth,afterTaxEstate,lifetimePortfolioWithdrawals,lifetimeRothConversions,lifetimeRequiredMinimumDistributions,lifetimeMedicarePremiums,lifetimeHouseholdSocialSecurity,lifetimePrimarySocialSecurity,lifetimeSpouseSocialSecurity",
                 RetirementParticipantFacts.class, "separationStatus,separationDate,retirementConditionsStatus,retirementConditionsMetDate")
                 .forEach((type, names) -> assertEquals(names, String.join(",", Arrays.stream(type.getRecordComponents()).map(RecordComponent::getName).toList()), "Explicitly revise the snapshot schema if a shared leaf changes."));
+    }
+
+    @Test void fundingSurplusIsAnOptionalStrictAndLosslessRetainedExtension() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES);
+        var oldWire = """
+                {"guaranteedIncome":100.000,"projectedPeriodRmdCash":0,"spendingWithdrawal":0,"taxFundingWithdrawal":0,"ordinaryExpenses":99,"medicarePremiums":0,"incomeTaxes":0,"retainedHouseholdSurplus":1.000,"retainedFromExcessRmd":0,"retainedFromGuaranteedIncome":1.000}
+                """.strip();
+        var old = mapper.readValue(oldWire, HouseholdCashSettlement.class);
+        assertEquals(java.math.BigDecimal.ZERO, old.retainedFromTaxFundingSurplus());
+        assertEquals(oldWire, mapper.writeValueAsString(old));
+        assertEquals(com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec.sha256(
+                oldWire.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec.sha256(mapper.writeValueAsBytes(old)));
+        for (var bad : List.of(oldWire.replace("\"incomeTaxes\":0,", ""),
+                oldWire.replace("\"incomeTaxes\":0", "\"incomeTaxes\":\"0\""),
+                oldWire.replace("\"incomeTaxes\":0", "\"incomeTaxes\":0,\"unexpected\":0"),
+                oldWire.replace("\"incomeTaxes\":0", "\"incomeTaxes\":0,\"retainedFromTaxFundingSurplus\":null"))) {
+            assertThrows(java.io.IOException.class, () -> mapper.readValue(bad, HouseholdCashSettlement.class));
+        }
+
+        var projection = com.daviddunn.retirementplanner.domain.tax.ArkansasAccountFundingTest.accountingFixture();
+        var positive = RetainedProjectionSnapshot.capture(projection);
+        var codec = new RetainedProjectionCodec();
+        var document = codec.encode(positive).bytes();
+        assertEquals(positive, codec.decode(document));
+        assertArrayEquals(document, codec.encode(codec.decode(document)).bytes());
+        var raw = new String(new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(document)).readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        var amount = positive.years().getFirst().settlement().retainedFromTaxFundingSurplus();
+        assertEquals(0, new java.math.BigDecimal("1.34").compareTo(amount));
+        var field = "\"retainedFromTaxFundingSurplus\":" + amount;
+        assertTrue(raw.contains(field));
+        assertThrows(java.io.IOException.class, () -> codec.decode(gzip(raw.replace(field,
+                "\"retainedFromTaxFundingSurplus\":-1.34"))));
+        assertThrows(java.io.IOException.class, () -> codec.decode(gzip(raw.replace(field,
+                "\"retainedFromTaxFundingSurplus\":1.33"))));
+        assertThrows(java.io.IOException.class, () -> codec.decode(gzip(raw.replace(
+                "\"purpose\":\"TAX_FUNDING\"", "\"purpose\":\"CASH_FLOW\""))));
     }
 
     static RetainedProjectionSnapshot replaceAnnual(RetainedProjectionSnapshot snapshot, int index, String name, Object value) throws Exception {

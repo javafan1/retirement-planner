@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Objects;
 
-/** Alternatives remain deliberately distinct. Neither is an approved production policy. */
+/** Statutory planning cents and the separate dated estimated-payment comparison. */
 public final class ArkansasRateWorksheet {
     public enum Policy { P_STATUTORY_CENTS, OFFICIAL_2026_ESTIMATED_TABLE }
 
@@ -35,14 +35,46 @@ public final class ArkansasRateWorksheet {
     }
 
     public BigDecimal bracketAdjustment(BigDecimal netIncome) {
-        long whole = netIncome.setScale(0, RoundingMode.FLOOR).longValueExact();
-        return whole < 94701 || whole > 97600 ? BigDecimal.ZERO
-                : BigDecimal.valueOf(290 - 10 * ((whole - 94701) / 100));
+        BigDecimal whole = netIncome.setScale(0, RoundingMode.FLOOR);
+        return whole.compareTo(b("94701")) < 0 || whole.compareTo(b("97600")) > 0 ? BigDecimal.ZERO
+                : BigDecimal.valueOf(290 - 10 * ((whole.intValueExact() - 94701) / 100));
     }
+
+    public BigDecimal statutoryTaxBeforeCredits(int reviewedYear, BigDecimal netIncome) {
+        ArkansasTaxRules.requirePublishedYear(reviewedYear);
+        if (Objects.requireNonNull(netIncome).signum() < 0) throw new IllegalArgumentException("Net income must be floored before worksheet.");
+        return statutory(netIncome);
+    }
+
+    /** Conservative extrema over a continuous input interval, including both sides of all jumps. */
+    TaxBounds statutoryGrossBounds(BigDecimal first, BigDecimal last) {
+        BigDecimal low = statutory(first).min(statutory(last));
+        BigDecimal high = statutory(first).max(statutory(last));
+        for (int band = 0; band <= 29; band++) {
+            BigDecimal edge = BigDecimal.valueOf(94701 + 100L * band);
+            if (edge.compareTo(first) <= 0 || edge.compareTo(last) > 0) continue;
+            BigDecimal before = band == 0 ? lower(edge)
+                    : highSchedule(edge).subtract(BigDecimal.valueOf(300 - 10L * band));
+            BigDecimal after = statutory(edge);
+            low = low.min(before).min(after);
+            high = high.max(before).max(after);
+        }
+        return new TaxBounds(low, high);
+    }
+
+    record TaxBounds(BigDecimal minimum, BigDecimal maximum) { }
 
     private BigDecimal statutory(BigDecimal n) {
         if (n.setScale(0, RoundingMode.FLOOR).compareTo(b("94700")) > 0)
-            return n.multiply(b(".037")).subtract(b("79.90")).subtract(bracketAdjustment(n));
+            return highSchedule(n).subtract(bracketAdjustment(n));
+        return lower(n);
+    }
+
+    private static BigDecimal highSchedule(BigDecimal n) {
+        return n.multiply(b(".037")).subtract(b("79.90"));
+    }
+
+    private static BigDecimal lower(BigDecimal n) {
         return slice(n, "5600", "11200", ".02").add(slice(n, "11200", "16000", ".03"))
                 .add(slice(n, "16000", "26400", ".034"))
                 .add(n.subtract(b("26400")).max(BigDecimal.ZERO).multiply(b(".037")));

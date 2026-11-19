@@ -299,6 +299,23 @@ public final class ProjectedWithdrawalAllocator {
             ProjectedPortfolio portfolio,
             BigDecimal withdrawalAmount,
             WithdrawalStrategy withdrawalStrategy) {
+        return allocateAdditionalWithdrawal(portfolio, withdrawalAmount, withdrawalStrategy,
+                IncomeSourceAttribution.Purpose.CASH_FLOW);
+    }
+
+    public ProjectedWithdrawalAllocation allocateTaxFundingWithdrawal(
+            ProjectedPortfolio portfolio,
+            BigDecimal withdrawalAmount,
+            WithdrawalStrategy withdrawalStrategy) {
+        return allocateAdditionalWithdrawal(portfolio, withdrawalAmount, withdrawalStrategy,
+                IncomeSourceAttribution.Purpose.TAX_FUNDING);
+    }
+
+    private ProjectedWithdrawalAllocation allocateAdditionalWithdrawal(
+            ProjectedPortfolio portfolio,
+            BigDecimal withdrawalAmount,
+            WithdrawalStrategy withdrawalStrategy,
+            IncomeSourceAttribution.Purpose purpose) {
 
         Objects.requireNonNull(
                 portfolio,
@@ -344,7 +361,7 @@ public final class ProjectedWithdrawalAllocator {
         if (retainedAssetWithdrawal.signum() > 0) {
             sources.add(IncomeSourceAttribution.aggregate(
                     IncomeSourceAttribution.Kind.ORDINARY_WITHDRAWAL,
-                    IncomeSourceAttribution.Purpose.CASH_FLOW,
+                    purpose,
                     "Retained household assets", retainedAssetWithdrawal,
                     java.util.Optional.of(BigDecimal.ZERO)));
             updatedPortfolio =
@@ -398,8 +415,7 @@ public final class ProjectedWithdrawalAllocator {
                             withdrawal);
 
             sources.add(IncomeSourceAttribution.withdrawal(account, withdrawal,
-                    IncomeSourceAttribution.withdrawalKind(account),
-                    IncomeSourceAttribution.Purpose.CASH_FLOW));
+                    IncomeSourceAttribution.withdrawalKind(account), purpose));
 
             TaxTreatment taxTreatment =
                     account

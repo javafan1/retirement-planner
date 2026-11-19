@@ -964,6 +964,13 @@ public class ProjectionYearDetailsPane
                 year.getRetainedFromGuaranteedIncome(),
                 getBaselineValue(ProjectionYear::getRetainedFromGuaranteedIncome));
 
+        var fundingSurplus = year.getRetainedFromTaxFundingSurplus();
+        var baselineFundingSurplus = getBaselineValue(ProjectionYear::getRetainedFromTaxFundingSurplus);
+        if (fundingSurplus.signum() > 0 || baselineFundingSurplus != null && baselineFundingSurplus.signum() > 0) {
+            row = addMoneyComparisonRow(grid, row, "Retained from Tax-Funding Surplus",
+                    fundingSurplus, baselineFundingSurplus);
+        }
+
         row = addMoneyComparisonRow(
                 grid, row, "New Excess RMD",
                 year.getExcessRmd(),

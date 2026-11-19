@@ -700,6 +700,19 @@ public class ProjectionYear {
                 Objects.requireNonNull(
                         householdCashSettlement,
                         "Household cash settlement is required.");
+        if (householdCashSettlement.retainedFromTaxFundingSurplus().signum() > 0) {
+            var executedFunding = this.incomeSources.stream()
+                    .filter(source -> source.purpose() == IncomeSourceAttribution.Purpose.TAX_FUNDING)
+                    .filter(source -> source.taxYear().orElse(-1) == calendarYear)
+                    .map(IncomeSourceAttribution::grossAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (executedFunding.compareTo(taxFundingWithdrawal) != 0
+                    || householdCashSettlement.taxFundingWithdrawal().compareTo(taxFundingWithdrawal) != 0
+                    || householdCashSettlement.incomeTaxes().compareTo(totalIncomeTax) != 0
+                    || householdCashSettlement.retainedHouseholdSurplus().compareTo(endingRetainedNonQualifiedAssets) > 0) {
+                throw new IllegalArgumentException("Retained tax-funding surplus contradicts the annual execution or ending balance.");
+            }
+        }
 
         this.requestedRothConversion = requireNonNegative(
                 requestedRothConversion,
@@ -1070,6 +1083,11 @@ public class ProjectionYear {
 
     public BigDecimal getRetainedFromGuaranteedIncome() {
         return householdCashSettlement.retainedFromGuaranteedIncome();
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public BigDecimal getRetainedFromTaxFundingSurplus() {
+        return householdCashSettlement.retainedFromTaxFundingSurplus();
     }
 
     public BigDecimal getEstimatedHeirTax() {
