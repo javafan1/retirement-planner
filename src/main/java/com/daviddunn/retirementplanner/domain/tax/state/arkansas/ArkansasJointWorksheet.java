@@ -71,7 +71,12 @@ public final class ArkansasJointWorksheet {
         }
     }
 
-    public record BoundedResult(Result atCertainReceipts, BigDecimal minimum, BigDecimal maximum) { }
+    public record BoundedResult(Result atCertainReceipts, BigDecimal minimum, BigDecimal maximum,
+                                List<Recipient> selectedRecipients) {
+        public BoundedResult {
+            selectedRecipients = List.copyOf(selectedRecipients);
+        }
+    }
 
     /**
      * Bounds the best legal election when any part of a receipt may have qualified.
@@ -91,6 +96,7 @@ public final class ArkansasJointWorksheet {
         BigDecimal minimum = null;
         BigDecimal maximum = null;
         Result bestAtCertain = null;
+        List<Recipient> selectedRecipients = List.of();
         int seniors = (int) recipients.stream().filter(RecipientBounds::senior).count();
         for (int mask = 0; mask < (1 << seniors); mask++) {
             int seniorIndex = 0;
@@ -108,9 +114,12 @@ public final class ArkansasJointWorksheet {
             var high = netTax(range.maximum(), result.credits());
             minimum = minimum == null ? low : minimum.min(low);
             maximum = maximum == null ? high : maximum.min(high);
-            if (bestAtCertain == null || result.tax().compareTo(bestAtCertain.tax()) < 0) bestAtCertain = result;
+            if (bestAtCertain == null || result.tax().compareTo(bestAtCertain.tax()) < 0) {
+                bestAtCertain = result;
+                selectedRecipients = certain;
+            }
         }
-        return new BoundedResult(bestAtCertain, minimum, maximum);
+        return new BoundedResult(bestAtCertain, minimum, maximum, selectedRecipients);
     }
 
     private static BigDecimal netTax(BigDecimal gross, BigDecimal credits) {

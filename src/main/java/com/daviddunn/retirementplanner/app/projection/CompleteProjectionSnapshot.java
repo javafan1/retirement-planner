@@ -40,11 +40,69 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
         if (!digest(inputsDocument).equals(inputDigest)) throw new IllegalArgumentException("Projection input digest mismatch.");
         ConditionalBenefitExecutionSemantics.validate(inputsDocument,annual,provenance);
         ContractualPremiumExecutionSemantics.validate(inputsDocument,annual,provenance);
+        if (annual.arkansas() != null) validateArkansasInputs(restoreInputs(inputsDocument), annual);
         for (int i = 0; i < annual.years().size(); i++) {
             if (nonInvestable.get(i).year() != annual.years().get(i).year()
                     || (i > 0 && annual.years().get(i).year() != annual.years().get(i - 1).year() + 1))
                 throw new IllegalArgumentException("Projection year mismatch.");
         }
+    }
+
+    public boolean arkansasHistory() {
+        return annual.arkansas() != null;
+    }
+
+    /** Controlled acceptance of an already completed gated projection. Ordinary projection capture remains separate. */
+    public static CompleteProjectionSnapshot captureArkansas(UUID owner, RetirementPlan frozenPlan,
+            Projection projection, Instant acceptedAt) {
+        var retained = RetainedProjectionSnapshot.captureArkansas(projection);
+        var inputs = freeze(frozenPlan);
+        var nonInvestable = new NonInvestableAssetProjectionService().project(frozenPlan.getNonInvestableAssets(),
+                projection.getStartYear(), projection.getEndYear());
+        var summary = new ProjectionSummaryService(
+                new com.daviddunn.retirementplanner.domain.projection.statistics.ProjectionStatisticsService(),
+                new IncomeSummaryService()).summarize(frozenPlan, projection);
+        return new CompleteProjectionSnapshot(VERSION, UUID.randomUUID(), owner, owner, acceptedAt, inputs, digest(inputs),
+                ConditionalBenefitExecutionSemantics.completed(frozenPlan, inputs, retained,
+                        PensionSelectionSemantics.PROVENANCE + "Controlled Arkansas projection"),
+                retained, nonInvestable.stream().map(NonInvestableYear::capture).toList(),
+                Summary.capture(summary), BreakEvenPlanSummary.from(frozenPlan));
+    }
+
+    private static void validateArkansasInputs(RetirementPlanSnapshot inputs, RetainedProjectionSnapshot annual) {
+        for (int i = 0; i < annual.years().size(); i++) {
+            var year = annual.years().get(i);
+            var evidence = annual.arkansas().years().get(i).sourceEvidence();
+            for (var pension : evidence.pensions()) {
+                if (pension.sourceIndex() >= year.sources().size()) {
+                    throw new IllegalArgumentException("Arkansas pension reference is outside the retained source list.");
+                }
+                var source = year.sources().get(pension.sourceIndex());
+                findOriginalPension(inputs.getHousehold(), source.description(), source.pension(), pension.origin());
+            }
+        }
+    }
+
+    /** Source occurrence in the original frozen member and income-source order. */
+    public static int findOriginalPension(com.daviddunn.retirementplanner.domain.model.Household household,
+            String name, RetainedProjectionSnapshot.PensionFacts terms,
+            com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin origin) {
+        var pensions = household.members().stream().flatMap(person -> person.getIncomeSources().stream())
+                .filter(com.daviddunn.retirementplanner.domain.income.Pension.class::isInstance)
+                .map(com.daviddunn.retirementplanner.domain.income.Pension.class::cast).toList();
+        int match = -1;
+        for (int i = 0; i < pensions.size(); i++) {
+            var pension = pensions.get(i);
+            if (pension.getSourceOrigin() == origin && pension.getName().equals(name)
+                    && new RetainedProjectionSnapshot.PensionFacts(pension.getOwnership(), pension.getMonthlyBenefit(),
+                        pension.getSurvivorMonthlyBenefit(), pension.getAnnualColaRate(), pension.getStartDate(), pension.getEndDate(),
+                        pension.getRetirementParticipantFacts(), pension.getPlanClassification()).equals(terms)) {
+                if (match != -1) throw new IllegalArgumentException("Ambiguous original Arkansas pension reference.");
+                match = i;
+            }
+        }
+        if (match == -1) throw new IllegalArgumentException("Arkansas pension provenance does not identify an original frozen pension.");
+        return match;
     }
 
     public static String freeze(RetirementPlan plan) {
@@ -96,6 +154,7 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
     public boolean matches(RetirementPlan plan) { return inputDigest.equals(digest(freeze(plan))); }
     /** Separate from exact configured-input identity, which still permits historical swaps. */
     public boolean calculationSemanticsCurrent() {
+        if (arkansasHistory()) return false;
         // A pension-selection stamp cannot attest to an unimplemented benefit capability.
         // Decode property names rather than searching raw JSON (which may escape them).
         try { if (restoreInputs().getFinancialCalculationMode() != null || !restoreInputs().getConditionalBenefits().isEmpty())

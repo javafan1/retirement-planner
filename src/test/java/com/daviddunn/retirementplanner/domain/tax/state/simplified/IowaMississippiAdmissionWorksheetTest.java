@@ -106,7 +106,7 @@ class IowaMississippiAdmissionWorksheetTest {
 
     @Test
     void researchCatalogRemainsIndependentOfLaterProductionAdmissions() throws Exception {
-        assertEquals(20, StateTaxJurisdiction.values().length);
+        assertEquals(20, StateTaxJurisdiction.productionChoices().size());
         assertEquals(StateTaxJurisdiction.IA, StateTaxJurisdiction.fromCode("IA"));
         assertEquals(StateTaxJurisdiction.MS, StateTaxJurisdiction.fromCode("MS"));
         var catalog = new com.daviddunn.retirementplanner.persistence.StateTaxDatasetRepository().load();

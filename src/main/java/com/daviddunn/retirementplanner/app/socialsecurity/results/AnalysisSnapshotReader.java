@@ -22,6 +22,7 @@ public final class AnalysisSnapshotReader extends JsonDeserializer<AnalysisSnaps
         Map<String, String> algorithms = null, references = null;
         AnalysisPayload payload = null; SnapshotContext frozen = null;
         ConditionalBenefitAnalysisExecution benefits = null;
+        ArkansasAnalysisProvenance arkansas = null;
         var seen = new HashSet<String>();
         var mapType = context.getTypeFactory().constructMapType(Map.class, String.class, String.class);
         while (parser.nextToken() != JsonToken.END_OBJECT) {
@@ -47,12 +48,17 @@ public final class AnalysisSnapshotReader extends JsonDeserializer<AnalysisSnaps
                 case "payload" -> payload = context.readValue(parser, AnalysisPayload.class);
                 case "context" -> frozen = context.readValue(parser, SnapshotContext.class);
                 case "benefitExecution" -> benefits = context.readValue(parser, ConditionalBenefitAnalysisExecution.class);
+                case "arkansasExecution" -> {
+                    if (parser.hasToken(JsonToken.VALUE_NULL))
+                        context.reportInputMismatch(AnalysisSnapshot.class, "Arkansas execution evidence must be an object.");
+                    arkansas = context.readValue(parser, ArkansasAnalysisProvenance.class);
+                }
                 default -> context.handleUnknownProperty(parser, this, AnalysisSnapshot.class, name);
             }
         }
         if (context.isEnabled(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES) && !seen.containsAll(ORIGINAL))
             context.reportInputMismatch(AnalysisSnapshot.class, "Missing original envelope creator property.");
         return new AnalysisSnapshot(schema, fingerprintVersion, plan, kind, shape, run, completed, build, algorithms,
-                references, fingerprint, contextFingerprint, digest, payload, frozen, origin, benefits);
+                references, fingerprint, contextFingerprint, digest, payload, frozen, origin, benefits, arkansas);
     }
 }

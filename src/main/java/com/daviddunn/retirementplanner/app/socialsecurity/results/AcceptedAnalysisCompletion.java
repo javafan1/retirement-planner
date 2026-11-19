@@ -11,7 +11,15 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
         Map<String, String> algorithms, Map<String, String> references,
         AnalysisPayload payload, SnapshotContext context,
         com.daviddunn.retirementplanner.app.projection.AnalyzerAdmission association,
-        ConditionalBenefitAnalysisExecution benefitExecution) {
+        ConditionalBenefitAnalysisExecution benefitExecution, ArkansasAnalysisProvenance arkansasExecution) {
+    public AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKind kind, UUID runId,
+            Instant completedAt, String inputFingerprint, String contextFingerprint, Map<String, String> algorithms,
+            Map<String, String> references, AnalysisPayload payload, SnapshotContext context,
+            com.daviddunn.retirementplanner.app.projection.AnalyzerAdmission association,
+            ConditionalBenefitAnalysisExecution benefitExecution) {
+        this(planId, planFile, kind, runId, completedAt, inputFingerprint, contextFingerprint, algorithms, references,
+                payload, context, association, benefitExecution, null);
+    }
     public AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKind kind, UUID runId,
             Instant completedAt, String inputFingerprint, String contextFingerprint, Map<String, String> algorithms,
             Map<String, String> references, AnalysisPayload payload, SnapshotContext context,
@@ -26,11 +34,16 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
     }
     public AcceptedAnalysisCompletion associatedWith(com.daviddunn.retirementplanner.app.projection.AnalyzerAdmission admission) {
         return new AcceptedAnalysisCompletion(planId, planFile, kind, runId, completedAt, inputFingerprint,
-                contextFingerprint, algorithms, references, payload, context, admission, benefitExecution);
+                contextFingerprint, algorithms, references, payload, context, admission, benefitExecution, arkansasExecution);
     }
     public AcceptedAnalysisCompletion forRun(UUID identity) {
         return new AcceptedAnalysisCompletion(planId, planFile, kind, identity, completedAt, inputFingerprint,
-                contextFingerprint, algorithms, references, payload, context, association, benefitExecution);
+                contextFingerprint, algorithms, references, payload, context, association, benefitExecution, arkansasExecution);
+    }
+    public AcceptedAnalysisCompletion withArkansasExecution(ArkansasAnalysisProvenance.Captured captured) {
+        return new AcceptedAnalysisCompletion(planId, planFile, kind, runId, completedAt, inputFingerprint,
+                contextFingerprint, algorithms, references, payload, context, association, benefitExecution,
+                captured.forPayload(payload));
     }
     public AcceptedAnalysisCompletion withConditionalBenefits(com.daviddunn.retirementplanner.domain.model.RetirementPlan frozenPlan) {
         var stateAware = withStateTaxRules(frozenPlan);
@@ -40,7 +53,7 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
         var versions = new TreeMap<>(AnalysisVersions.calculatedAlgorithms(kind, payload));
         versions.put(ConditionalBenefitAnalysisExecution.KEY, capability.algorithm());
         return new AcceptedAnalysisCompletion(planId, planFile, kind, runId, completedAt, inputFingerprint,
-                contextFingerprint, versions, stateAware.references(), payload, context, association, capability);
+                contextFingerprint, versions, stateAware.references(), payload, context, association, capability, arkansasExecution);
     }
     /** Worker-side capture from the actual frozen plan(s), including both sides of MC comparisons. */
     public AcceptedAnalysisCompletion withStateTaxRules(
@@ -54,7 +67,7 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
         captured = AnalysisVersions.withAlabamaRules(kind, captured, frozenPlans);
         if (captured.equals(references)) return this;
         return new AcceptedAnalysisCompletion(planId, planFile, kind, runId, completedAt, inputFingerprint,
-                contextFingerprint, algorithms, captured, payload, context, association, benefitExecution);
+                contextFingerprint, algorithms, captured, payload, context, association, benefitExecution, arkansasExecution);
     }
     public AcceptedAnalysisCompletion {
         Objects.requireNonNull(planId); Objects.requireNonNull(kind); Objects.requireNonNull(runId);
@@ -64,6 +77,7 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
         payload.validate(kind);
         if (benefitExecution != null) ConditionalBenefitAnalyzerValidation.validate(kind, payload, context,
                 benefitExecution, algorithms, inputFingerprint, contextFingerprint);
+        if (arkansasExecution != null) arkansasExecution.validatePayload(kind, payload);
         if (!payload.successful()) throw new IllegalArgumentException("No successful candidates; previous result must be retained.");
     }
     public void validateCapabilities() {
@@ -80,6 +94,6 @@ public record AcceptedAnalysisCompletion(UUID planId, Path planFile, AnalysisKin
                 ? mc.fingerprintVersion() : 1;
         return new AnalysisSnapshot(1, fingerprintVersion, planId, kind, kind.shape(), runId, completedAt,
                 "1.0-SNAPSHOT", algorithms, references.isEmpty() ? AnalysisVersions.references(kind) : references, inputFingerprint, contextFingerprint,
-                codec.digest(payload, context, benefitExecution), payload, context, null, benefitExecution);
+                codec.digest(payload, context, benefitExecution, arkansasExecution), payload, context, null, benefitExecution, arkansasExecution);
     }
 }

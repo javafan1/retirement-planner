@@ -4,6 +4,8 @@ import com.daviddunn.retirementplanner.app.baseline.*;
 import com.daviddunn.retirementplanner.app.projection.*;
 import com.daviddunn.retirementplanner.app.socialsecurity.results.*;
 import com.daviddunn.retirementplanner.domain.baseline.*;
+import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.noninvestable.NonInvestableAsset;
 import com.daviddunn.retirementplanner.domain.projection.*;
@@ -27,6 +29,185 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.app.baseline.BaselineDetailsTest.set;
 
 class ProjectionSnapshotPersistenceTest {
+    @Test void genuineArkansasHistoryKeepsItsResultsAndAnalyzerThroughSaveAsAndRepeatedSwaps() throws Exception {
+        var controller = controller();
+        var plan = com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.single(
+                java.time.LocalDate.of(1965, 7, 1), java.time.LocalDate.of(2026, 1, 1), 2,
+                WithdrawalStrategyType.TAXABLE_FIRST, "1000000");
+        plan.getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.CheckingAccount(
+                "Tax reserve", AccountOwnership.PRIMARY, new BigDecimal("50000")));
+        controller.newPlan(plan);
+        var owner = controller.getAnalysisSessionId();
+        plan.assignPlanId(owner);
+        var start = plan.getPlanningAssumptions().getProjectionStartDate();
+        var pension = new Pension("Original employer pension", AccountOwnership.PRIMARY, start, null,
+                new BigDecimal("4500"), BigDecimal.ZERO);
+        plan.getHousehold().getPrimaryPerson().addIncomeSource(pension);
+        var engine = com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.validationEngine();
+        var baselineEngine = com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.confirmedPensionEngine();
+        var baseline = CompleteProjectionSnapshot.captureArkansas(owner, plan, baselineEngine.project(plan), java.time.Instant.now());
+        pension.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        pension.setPlanClassification(com.daviddunn.retirementplanner.domain.income.PensionPlanClassification.DEFINED_BENEFIT_414J);
+        var projection = engine.project(plan);
+        var current = CompleteProjectionSnapshot.captureArkansas(owner, plan, projection, java.time.Instant.now());
+        var started = java.time.Instant.parse("2026-01-01T00:00:00Z");
+        var completed = started.plusSeconds(1);
+        var settings = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSettings(2, 19L, BigDecimal.ZERO, BigDecimal.ZERO);
+        var people = current.people();
+        var display = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot.Display(
+                people, "Primary", null, List.of(),
+                new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot.Chart(List.of(), List.of(), List.of(), List.of()),
+                projection.getStartYear(), projection.getEndYear(), false, 0, "Bounded Arkansas test.");
+        var captured = ArkansasAnalysisProvenance.capture(engine, AnalysisKind.INDIVIDUAL_MONTE_CARLO_FIXED, List.of(current), () -> {
+            var analyzed = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloAnalyzer(engine)
+                    .analyze(plan, settings, projection, index -> ProjectionEconomicPath.constant(index == 0
+                            ? new BigDecimal(".04") : new BigDecimal("-.02")));
+            return com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshotMapping.fixed(analyzed, plan,
+                    display, started, completed, "a".repeat(64));
+        });
+        var payload = (com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot) captured.payload();
+        var fingerprints = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().storedFingerprint(payload);
+        var completion = new AcceptedAnalysisCompletion(owner, directory.resolve("arkansas-original.json"), payload.kind(),
+                UUID.randomUUID(), completed, fingerprints.fingerprint(), fingerprints.contextFingerprint(),
+                AnalysisVersions.calculatedAlgorithms(payload.kind(), payload), AnalysisVersions.references(payload.kind()),
+                payload, new SnapshotContext("Single", display.primaryName(), null, started, List.of(), List.of(), List.of(), Map.of()))
+                .withArkansasExecution(captured);
+        var zeroHash = "0".repeat(64);
+        var association = new AnalyzerAssociation(1, owner, current.id(), current.inputDigest(), completion.kind(),
+                completion.runId(), completion.inputFingerprint(), completion.contextFingerprint(), zeroHash, zeroHash, completed);
+        plan.setBaseline(new ProjectionBaseline(baseline.restoreInputs(), java.time.LocalDateTime.now(), "Legacy origin", baseline.id()));
+        plan.installProjectionComponents(Map.of(current.id(), current, baseline.id(), baseline));
+        plan.installPendingAnalyzerAssociations(Map.of(completion.runId(), completion));
+        plan.setProjectionState(new ProjectionRoleManifest(2, owner, new ProjectionRoleManifest.Reference(current.id(), zeroHash),
+                new ProjectionRoleManifest.Reference(baseline.id(), zeroHash), List.of(association), List.of()));
+
+        var before = System.nanoTime();
+        controller.saveAs(directory.resolve("arkansas-original.json"));
+        long saveMillis = (System.nanoTime() - before) / 1_000_000;
+        var reopened = controller();
+        set(reopened, "projectionEngine", throwing());
+        before = System.nanoTime();
+        reopened.open(controller.getCurrentFile());
+        reopened.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        long reloadMillis = (System.nanoTime() - before) / 1_000_000;
+        assertEquals(current.annual(), reopened.getAcceptedProjectionSnapshot().annual());
+        assertFalse(reopened.currentProjectionDeterministicallyApplicable());
+        assertNull(reopened.prepareAnalyzerAssociation(completion.kind()));
+        var restored = reopened.loadAssociatedAnalyzer(reopened.getAnalyzerAssociations(current.id()).getFirst()).toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(current.id(), restored.arkansasExecution().dependencies().getFirst().projectionId());
+        assertEquals(StateTaxJurisdiction.AR, restored.arkansasExecution().jurisdiction());
+        assertEquals(19, ((com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot) restored.payload()).settings().seed());
+        assertEquals(payload, restored.payload());
+        assertEquals(AnalysisCompatibilityPolicy.State.OUTDATED, new AnalysisCompatibilityPolicy().assess(
+                restored, fingerprints, restored.algorithms(), restored.references()).state());
+        assertEquals(AnalysisCompatibilityPolicy.State.CURRENT, new AnalysisCompatibilityPolicy().assessArkansas(
+                restored, fingerprints, restored.algorithms(), restored.references(), ArkansasValidationTax.reviewedVersions()).state());
+        assertThrows(IllegalArgumentException.class, () -> restored.arkansasExecution().validateAssociation(baseline.id(), baseline.inputDigest()));
+        var codec = new AnalysisSnapshotCodec();
+        System.out.println("Arkansas two-year lifecycle saveMs=" + saveMillis + ", reloadMs=" + reloadMillis
+                + ", analysisBytes=" + codec.raw(restored).length + ", analysisGzipBytes=" + codec.encode(restored).length);
+
+        for (var expected : List.of(baseline, current, baseline)) {
+            assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+            assertEquals(expected.id(), reopened.getAcceptedProjectionSnapshot().id());
+            assertEquals(expected.annual(), reopened.getAcceptedProjectionSnapshot().annual());
+            assertEquals(expected == current ? AnalysisResultFreshness.Association.CURRENT_PROJECTION
+                    : AnalysisResultFreshness.Association.HISTORICAL_PROJECTION, reopened.analysisAssociation(restored));
+            reopened.save();
+        }
+        reopened.saveAs(directory.resolve("arkansas-copy.json"));
+        var copied = controller();
+        set(copied, "projectionEngine", throwing());
+        copied.open(reopened.getCurrentFile());
+        copied.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertNotEquals(owner, copied.getAnalysisSessionId());
+        assertEquals(baseline.id(), copied.getAcceptedProjectionSnapshot().id());
+        assertEquals(current.id(), copied.getCurrentPlan().getProjectionState().baseline().id());
+        var rebound = copied.loadAssociatedAnalyzer(copied.getAnalyzerAssociations(current.id()).getFirst())
+                .toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(restored.arkansasExecution(), rebound.arkansasExecution());
+        assertEquals(copied.getAnalysisSessionId(), rebound.planId());
+        assertEquals(restored.payloadDigest(), rebound.payloadDigest());
+
+        assertTrue(copied.commitProjectionSwap(copied.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        var frozenCsv = directory.resolve("arkansas-history.csv");
+        var exporter = new com.daviddunn.retirementplanner.app.export.ProjectionCsvExporter();
+        exporter.export(copied.peekCurrentProjection(), List.of(), frozenCsv);
+        var originalCsv = Files.readString(frozenCsv);
+        assertTrue(originalCsv.contains("Arkansas retained history"));
+        var changed = (Pension) copied.getCurrentPlan().getHousehold().getPrimaryPerson().getIncomeSources().getFirst();
+        changed.setSourceOrigin(RetirementIncomeSourceOrigin.UNKNOWN);
+        assertFalse(copied.currentProjectionInputsMatch());
+        assertEquals(AnalysisResultFreshness.Association.INPUTS_EDITED, copied.analysisAssociation(rebound));
+        exporter.export(copied.getAcceptedProjectionSnapshot().annual().restoreProjection(), List.of(), frozenCsv);
+        assertEquals(originalCsv, Files.readString(frozenCsv));
+        var scenario = new com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService()
+                .copyAsScenario(copied.getCurrentPlan());
+        assertNotEquals(copied.getCurrentPlan().getPlanId(), scenario.getPlanId());
+        assertNull(scenario.getProjectionState());
+        assertNull(scenario.getBaseline().getProjectionSnapshotId());
+        assertTrue(scenario.getAssociatedAnalyzerResults().isEmpty());
+    }
+
+    @Test void pensionOriginChangesOnlyFrozenInputsAndSurvivesSaveAsScenarioAndRoleSwaps() throws Exception {
+        var c = controller();
+        var plan = c.getCurrentPlan();
+        var person = plan.getHousehold().getPrimaryPerson();
+        var start = plan.getPlanningAssumptions().getProjectionStartDate();
+        var pension = new Pension("Origin fixture", AccountOwnership.PRIMARY, start, null,
+                new BigDecimal("1000"), BigDecimal.ZERO);
+        person.addIncomeSource(pension);
+        c.invalidateProjection();
+        c.getCurrentProjection();
+        var legacy = c.getAcceptedProjectionSnapshot();
+        assertFalse(legacy.inputsDocument().contains("sourceOrigin"));
+        assertEquals(legacy.inputDigest(), CompleteProjectionSnapshot.digest(
+                CompleteProjectionSnapshot.freeze(legacy.restoreInputs())));
+        assertEquals(RetirementIncomeSourceOrigin.UNKNOWN, pensionOrigin(legacy.restoreInputs().getHousehold()));
+        var fingerprints = new AnalysisFingerprintService();
+        var inputs = AnalysisFingerprintService.Inputs.none();
+        var legacyFingerprint = fingerprints.fingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, plan, inputs);
+        var socialInputs = new AnalysisFingerprintService.Inputs(BigDecimal.ONE, BigDecimal.ONE, start, start,
+                BigDecimal.ZERO, null, null, List.of(), List.of(), null);
+        var socialFingerprint = fingerprints.fingerprint(AnalysisKind.COUPLE_SOCIAL_SECURITY, plan, socialInputs);
+        c.saveCurrentAsBaseline("Original pension origin");
+
+        var classified = new Pension(pension.getName(), pension.getOwnership(), start, null,
+                pension.getMonthlyBenefit(), pension.getAnnualColaRate());
+        classified.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        person.setIncomeSources(person.getIncomeSources().stream().map(s -> s == pension ? classified : s).toList());
+        c.markModified();
+        c.invalidateProjection();
+        c.getCurrentProjection();
+        var updated = c.getAcceptedProjectionSnapshot();
+        assertNotEquals(legacy.inputDigest(), updated.inputDigest());
+        assertNotEquals(legacyFingerprint, fingerprints.fingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, plan, inputs));
+        assertEquals(socialFingerprint, fingerprints.fingerprint(AnalysisKind.COUPLE_SOCIAL_SECURITY, plan, socialInputs));
+        assertEquals(legacy.annual(), updated.annual(), "Accepted-state annual serialization is independent of source origin.");
+        assertEquals(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN, pensionOrigin(
+                new com.daviddunn.retirementplanner.app.socialsecurity.RetirementPlanScenarioCopyService().copy(plan).getHousehold()));
+        c.saveAs(directory.resolve("pension-origin-original.json"));
+        c.saveAs(directory.resolve("pension-origin-copy.json"));
+        var reopened = controller();
+        set(reopened, "projectionEngine", throwing());
+        reopened.open(c.getCurrentFile());
+        reopened.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(updated.id(), reopened.getAcceptedProjectionSnapshot().id());
+        assertEquals(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN, pensionOrigin(reopened.getCurrentPlan().getHousehold()));
+        assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(RetirementIncomeSourceOrigin.UNKNOWN, pensionOrigin(reopened.getCurrentPlan().getHousehold()));
+        assertEquals(legacy.inputDigest(), reopened.getAcceptedProjectionSnapshot().inputDigest());
+        reopened.save();
+        assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN, pensionOrigin(reopened.getCurrentPlan().getHousehold()));
+    }
+
+    private static RetirementIncomeSourceOrigin pensionOrigin(Household household) {
+        return household.getPrimaryPerson().getIncomeSources().stream().filter(Pension.class::isInstance)
+                .map(Pension.class::cast).filter(pension -> "Origin fixture".equals(pension.getName()))
+                .findFirst().orElseThrow().getSourceOrigin();
+    }
+
     private com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition enabledBenefit(String amount) {
         var f = com.daviddunn.retirementplanner.domain.benefit.BenefitFixtures.monthly();
         f = com.daviddunn.retirementplanner.domain.benefit.BenefitFixtures.change(f,"grossAmount",new BigDecimal(amount));

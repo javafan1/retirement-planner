@@ -34,7 +34,7 @@ class StateTaxVisualPreviewTest {
             ((Button) wizard.get().getDialogPane().lookup("#wizard-review-edit-assumptions")).fire();
         });
         try {
-            for (var state : StateTaxJurisdiction.values()) {
+            for (var state : StateTaxJurisdiction.productionChoices()) {
                 fx(() -> stateInput(wizard.get()).setValue(state));
                 Thread.sleep(200);
                 fx(() -> {
@@ -72,7 +72,7 @@ class StateTaxVisualPreviewTest {
                 stage.get().setScene(new Scene(scroller.get(), 1080, 800)); stage.get().show();
             });
             try {
-                for (var state : StateTaxJurisdiction.values()) {
+                for (var state : StateTaxJurisdiction.productionChoices()) {
                     fx(() -> {
                         plan.setPlanningAssumptions(plan.getPlanningAssumptions().withStateTaxAssumptions(StateTaxAssumptions.simplified(state)));
                         editor.get().load(plan);

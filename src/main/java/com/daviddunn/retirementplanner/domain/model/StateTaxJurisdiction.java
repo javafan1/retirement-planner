@@ -1,6 +1,6 @@
 package com.daviddunn.retirementplanner.domain.model;
 
-/** Production-enabled full-year residency choices, independent of the research dataset. */
+/** Stable jurisdiction identities for inputs and results. Historical identities can be read independently. */
 public enum StateTaxJurisdiction {
     MI("Michigan"),
     FL("Florida", true),
@@ -21,7 +21,8 @@ public enum StateTaxJurisdiction {
     VA("Virginia"),
     OK("Oklahoma"),
     MS("Mississippi"),
-    AL("Alabama");
+    AL("Alabama"),
+    AR("Arkansas");
 
     private final String displayName;
     private final boolean noGeneralIndividualIncomeTax;
@@ -45,9 +46,17 @@ public enum StateTaxJurisdiction {
     }
 
     public static java.util.List<StateTaxJurisdiction> alphabeticalChoices() {
-        return java.util.Arrays.stream(values())
+        return productionChoices().stream()
                 .sorted(java.util.Comparator.comparing(StateTaxJurisdiction::displayName))
                 .toList();
+    }
+
+    public static java.util.List<StateTaxJurisdiction> productionChoices() {
+        return java.util.Arrays.stream(values()).filter(StateTaxJurisdiction::productionAdmitted).toList();
+    }
+
+    public boolean productionAdmitted() {
+        return this != AR;
     }
 
     /** Persist stable jurisdiction codes; numeric enum ordinals are not jurisdictions. */

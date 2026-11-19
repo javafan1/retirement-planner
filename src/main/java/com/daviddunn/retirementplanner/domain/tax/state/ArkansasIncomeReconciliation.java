@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.domain.tax.state;
 import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.TaxCharacter;
 import com.daviddunn.retirementplanner.domain.benefit.NonqualifiedAnnuityTerms.Qualification;
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin;
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind;
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Purpose;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
@@ -35,7 +36,8 @@ import static java.math.BigDecimal.ZERO;
 /** Arkansas-local bridge from immutable federal/source facts to ordinary receipts. */
 final class ArkansasIncomeReconciliation {
     record Income(BigDecimal ordinary, BigDecimal grossLowerBound,
-                  Map<AccountOwnership, BigDecimal> certain, Map<AccountOwnership, BigDecimal> possible) { }
+                  Map<AccountOwnership, BigDecimal> certain, Map<AccountOwnership, BigDecimal> possible,
+                  Set<AccountOwnership> unresolvedPensionRecipients) { }
 
     static final class Rejected extends IllegalArgumentException {
         final StateTaxUnavailableReason reason;
@@ -55,13 +57,14 @@ final class ArkansasIncomeReconciliation {
     private record AccountPayment(IncomeSourceAttribution.AccountReference account, Kind kind, Purpose purpose,
                                   BigDecimal gross, BigDecimal taxable) { }
 
-    private final StateTaxCalculationRequest request;
+    private final AnnualIncomeTaxFacts request;
     private final ArkansasTaxEvidence evidence;
     private final LocalDate first;
     private final LocalDate last;
     private final EnumMap<Kind, BigDecimal> totals = new EnumMap<>(Kind.class);
     private final EnumMap<AccountOwnership, BigDecimal> certain = new EnumMap<>(AccountOwnership.class);
     private final EnumMap<AccountOwnership, BigDecimal> possible = new EnumMap<>(AccountOwnership.class);
+    private final Set<AccountOwnership> unresolvedPensionRecipients = new HashSet<>();
     private final Set<AccountPayment> accountPayments = new HashSet<>();
     private final Set<UUID> conditionalIds = new HashSet<>();
     private final Map<IncomeSourceAttribution.AccountReference, Set<Kind>> taxableInvestmentKinds = new HashMap<>();
@@ -69,7 +72,7 @@ final class ArkansasIncomeReconciliation {
     private BigDecimal explicitInterest = ZERO;
     private BigDecimal interestPlaceholder;
 
-    ArkansasIncomeReconciliation(StateTaxCalculationRequest request, ArkansasTaxEvidence evidence) {
+    ArkansasIncomeReconciliation(AnnualIncomeTaxFacts request, ArkansasTaxEvidence evidence) {
         this.request = request;
         this.evidence = evidence;
         first = LocalDate.of(request.taxYear(), 1, 1);
@@ -139,7 +142,8 @@ final class ArkansasIncomeReconciliation {
         var ordinary = request.federal().getAdjustedGrossIncome().subtract(request.federal().getTaxableSocialSecurity());
         // Ignore potentially excluded receipts and other unrepresented income when proving
         // a gross-income lower bound. A lower bound can only increase conservative refusals.
-        return new Income(ordinary, ordinary, Map.copyOf(certain), Map.copyOf(possible));
+        return new Income(ordinary, ordinary, Map.copyOf(certain), Map.copyOf(possible),
+                Set.copyOf(unresolvedPensionRecipients));
     }
 
     private void retirement(IncomeSourceAttribution source, ReceiptFacts facts) {
@@ -193,8 +197,13 @@ final class ArkansasIncomeReconciliation {
         var owner = activeRecipient(source);
         var pension = source.pension().orElseThrow(() -> new Rejected(
                 MISSING_RETIREMENT_QUALIFICATION, "Arkansas pension requires frozen original plan and recipient facts."));
-        if (facts.qualification() != ORDINARY_EMPLOYMENT_PENSION)
-            throw new Rejected(MISSING_RETIREMENT_QUALIFICATION, "Arkansas pension requires confirmation of an ordinary employment-related plan.");
+        var qualification = ArkansasTaxEvidence.pensionQualification(pension.sourceOrigin(), facts);
+        if (qualification == OUTSIDE_ORDINARY_SCOPE) {
+            String detail = pension.sourceOrigin() == RetirementIncomeSourceOrigin.INDIVIDUALLY_PURCHASED_CONTRACT
+                    ? " A privately purchased annuity requires the annuity model's separate taxable-amount and basis evidence."
+                    : " The special arrangement requires separate qualification and tax evidence.";
+            throw new Rejected(UNSUPPORTED_TRANSACTION_TYPE, "Arkansas pension source is outside ordinary employment-plan coverage." + detail);
+        }
         require(source.purpose() == Purpose.INCOME && source.account().isEmpty()
                         && request.household().householdOwners().contains(pension.originalOwner()),
                 "Arkansas pension origin or payment purpose is inconsistent.");
@@ -213,8 +222,14 @@ final class ArkansasIncomeReconciliation {
         if (amount.compareTo(source.grossAmount()) != 0)
             throw new Rejected(MISSING_DISTRIBUTION_BASIS, "Arkansas pension needs separately verified state basis for a partial taxable payment.");
         add(Kind.PENSION, amount);
-        certain.merge(owner, amount, BigDecimal::add);
-        possible.merge(owner, amount, BigDecimal::add);
+        if (amount.signum() > 0) {
+            if (qualification == ORDINARY_EMPLOYMENT_PENSION) {
+                certain.merge(owner, amount, BigDecimal::add);
+            } else {
+                unresolvedPensionRecipients.add(owner);
+            }
+            possible.merge(owner, amount, BigDecimal::add);
+        }
     }
 
     private void conditional(IncomeSourceAttribution source) {

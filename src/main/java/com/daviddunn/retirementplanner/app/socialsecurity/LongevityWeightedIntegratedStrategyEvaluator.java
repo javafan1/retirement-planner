@@ -13,6 +13,13 @@ public final class LongevityWeightedIntegratedStrategyEvaluator {
     private final HouseholdLifetimeScenarioMapper mapper = new HouseholdLifetimeScenarioMapper();
     private final EstateAtSecondDeathCalculator estateCalculator = new EstateAtSecondDeathCalculator();
     private final EstatePresentValueCalculator pvCalculator = new EstatePresentValueCalculator();
+    private final ProjectionEngine injectedEngine;
+
+    public LongevityWeightedIntegratedStrategyEvaluator() { injectedEngine = null; }
+
+    public LongevityWeightedIntegratedStrategyEvaluator(ProjectionEngine engine) {
+        injectedEngine = Objects.requireNonNull(engine);
+    }
 
     public LongevityWeightedIntegratedStrategyResult evaluate(LongevityWeightedIntegratedStrategyRequest request) {
         return evaluate(request, event -> { });
@@ -41,7 +48,7 @@ public final class LongevityWeightedIntegratedStrategyEvaluator {
         if (total == 0 || scenarios.stream().anyMatch(s -> s.jointProbability().signum() < 0)) {
             throw new IllegalArgumentException("Mortality scenarios require positive total mass and nonnegative probabilities.");
         }
-        ProjectionEngine engine = null;
+        ProjectionEngine engine = injectedEngine;
         int projectionRuns = 0;
         Map<LocalDate, BigDecimal> discountFactors = new HashMap<>();
         List<LongevityWeightedIntegratedScenarioOutcome> outcomes = new ArrayList<>();

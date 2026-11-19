@@ -31,15 +31,14 @@ public record ProjectionRoleManifest(int version, UUID owner, Reference current,
         for (var ref : pinnedProjections) {
             var previous = references.putIfAbsent(ref.id(), ref);
             if (previous != null && !previous.equals(ref)) throw new IllegalArgumentException("Inconsistent pinned projection reference.");
-            if (associations.stream().noneMatch(a -> a.projectionId().equals(ref.id())))
+            if (associations.stream().noneMatch(a -> a.references(ref.id())))
                 throw new IllegalArgumentException("Orphan pinned projection reference.");
         }
         var keys = new HashSet<String>();
         for (var association : associations) {
             if (!owner.equals(association.owner()) || !keys.add(association.projectionId()+":"+association.kind())
-                    || (current == null || !current.id().equals(association.projectionId()))
-                    && (baseline == null || !baseline.id().equals(association.projectionId()))
-                    && pinnedProjections.stream().noneMatch(p -> p.id().equals(association.projectionId())))
+                    || !references.containsKey(association.projectionId())
+                    || (association.alternativeProjectionId() != null && !references.containsKey(association.alternativeProjectionId())))
                 throw new IllegalArgumentException("Invalid association ownership or projection role.");
         }
     }
@@ -47,7 +46,7 @@ public record ProjectionRoleManifest(int version, UUID owner, Reference current,
         var pins = new LinkedHashMap<UUID, Reference>();
         for (var ref : pinnedProjections) pins.put(ref.id(), ref);
         for (var ref : new Reference[]{ current, baseline }) if (ref != null
-                && associations.stream().anyMatch(a -> a.projectionId().equals(ref.id()))) pins.put(ref.id(), ref);
+                && associations.stream().anyMatch(a -> a.references(ref.id()))) pins.put(ref.id(), ref);
         return new ProjectionRoleManifest(associations.isEmpty() ? 1 : 2, nextOwner, nextCurrent, nextBaseline, associations, List.copyOf(pins.values()));
     }
     public record Reference(UUID id, String digest) {

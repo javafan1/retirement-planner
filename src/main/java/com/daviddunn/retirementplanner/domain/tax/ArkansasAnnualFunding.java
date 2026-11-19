@@ -15,6 +15,9 @@ import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxEvidence.Rece
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxEvidence.ReceiptWindow;
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxEvidence.SourceQualification;
 import com.daviddunn.retirementplanner.domain.tax.state.StateTaxCalculationRequest;
+import com.daviddunn.retirementplanner.domain.tax.state.AnnualIncomeTaxFacts;
+import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
+import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.tax.state.TaxHouseholdContext;
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalBreakdown;
@@ -51,9 +54,14 @@ public final class ArkansasAnnualFunding {
     }
 
     /** The seed contains the annual attributed income after RMD/spending and before conversion. */
-    public record Facts(StateTaxCalculationRequest seed, ArkansasTaxEvidence evidence,
+    public record Facts(AnnualIncomeTaxFacts seed, ArkansasTaxEvidence evidence,
                         Optional<ReceiptWindow> projectedReceipts, Map<AccountReference, Form5329Status> additionalTax,
                         Cash cash) {
+        public Facts(StateTaxCalculationRequest seed, ArkansasTaxEvidence evidence,
+                     Optional<ReceiptWindow> projectedReceipts, Map<AccountReference, Form5329Status> additionalTax,
+                     Cash cash) {
+            this(seed.annualFacts(), evidence, projectedReceipts, additionalTax, cash);
+        }
         public Facts {
             Objects.requireNonNull(seed);
             Objects.requireNonNull(evidence);
@@ -97,9 +105,19 @@ public final class ArkansasAnnualFunding {
     public static StateTaxCalculationRequest captureIncome(StateTaxCalculationRequest context, Household household,
             HouseholdSocialSecurityResult socialSecurity, WithdrawalBreakdown executedRmdAndSpending,
             BigDecimal openingRmd, BigDecimal investmentIncome, List<IncomeSourceAttribution> supplemental) {
+        var annual = captureIncome(context.household(), context.filingStatus(), context.projectedRules(), household,
+                socialSecurity, executedRmdAndSpending, openingRmd, investmentIncome, supplemental);
+        return new StateTaxCalculationRequest(annual.taxYear(), annual.filingStatus(), annual.household(),
+                annual.income(), annual.federal(), annual.projectedRules(), context.assumptions());
+    }
+
+    public static AnnualIncomeTaxFacts captureIncome(TaxHouseholdContext taxContext, FilingStatus filing,
+            GovernmentRules rules, Household household, HouseholdSocialSecurityResult socialSecurity,
+            WithdrawalBreakdown executedRmdAndSpending, BigDecimal openingRmd, BigDecimal investmentIncome,
+            List<IncomeSourceAttribution> supplemental) {
         Objects.requireNonNull(socialSecurity);
-        TaxHouseholdContext taxContext = context.household();
         var date = taxContext.distributionDate();
+        int year = date.getYear();
         var pensions = taxContext.pensionIncome();
         if (!taxContext.activeOwners().equals(taxContext.householdOwners()) && pensions.isEmpty()) {
             throw new Unavailable("Arkansas survivor income requires the selected annual pension facts.");
@@ -108,21 +126,21 @@ public final class ArkansasAnnualFunding {
         sources.addAll(supplemental);
         pensions.ifPresent(selected -> sources.addAll(selected.sources()));
         if (sources.stream().anyMatch(source -> source.taxYear().isPresent()
-                && source.taxYear().getAsInt() != context.taxYear())) {
+                && source.taxYear().getAsInt() != year)) {
             throw new Unavailable("Arkansas annual evidence belongs to another tax year.");
         }
         var annualIncome = new TaxIncomeCalculator().calculate(household, date,
                 executedRmdAndSpending.getTaxDeferredWithdrawal(), openingRmd, ZERO, investmentIncome, ZERO,
                 null, socialSecurity, pensions.map(result -> result.total()));
-        var attributed = TaxIncomeAttribution.attach(annualIncome, sources, context.taxYear());
-        var federal = new FederalTaxCalculator().calculate(attributed, context.filingStatus(), context.projectedRules());
-        return new StateTaxCalculationRequest(context.taxYear(), context.filingStatus(), taxContext, attributed,
-                federal, context.projectedRules(), context.assumptions());
+        var attributed = TaxIncomeAttribution.attach(annualIncome, sources, year);
+        var federal = new FederalTaxCalculator().calculate(attributed, filing, rules);
+        return new AnnualIncomeTaxFacts(year, filing, taxContext, attributed, federal, rules);
     }
 
     public record Candidate(BigDecimal requested, WithdrawalBreakdown allocation,
-                            ProjectedPortfolio portfolio, StateTaxCalculationRequest annualTaxFacts,
-                            ArkansasProductionTaxCalculator.Result stateTax, Cash cash) {
+                            ProjectedPortfolio portfolio, AnnualIncomeTaxFacts annualTaxFacts,
+                            ArkansasProductionTaxCalculator.Result stateTax, Cash cash,
+                            ArkansasTaxEvidence evidence) {
         public Candidate {
             if (requested.signum() < 0 || cash == null
                     || requested.compareTo(allocation.getTotalWithdrawal()) != 0
@@ -204,13 +222,13 @@ public final class ArkansasAnnualFunding {
             var income = new TaxIncome(original.getPensionIncome(), original.getSocialSecurityIncome(),
                     original.getTaxDeferredWithdrawals().add(allocation.getTaxDeferredWithdrawal()), conversionAmount,
                     original.getTaxableInterestIncome(), sources).withConditionalOrdinaryIncome(original.getConditionalOrdinaryIncome());
-            var input = new StateTaxCalculationRequest(seed.taxYear(), seed.filingStatus(), seed.household(), income,
-                    federal.calculate(income, seed.filingStatus(), seed.projectedRules()), seed.projectedRules(), seed.assumptions());
+            var input = new AnnualIncomeTaxFacts(seed.taxYear(), seed.filingStatus(), seed.household(), income,
+                    federal.calculate(income, seed.filingStatus(), seed.projectedRules()), seed.projectedRules());
             var evidence = evidence(trace);
             var result = state.calculateUnregistered(input, evidence);
             if (result.estimatedIncomeTax().isEmpty()) throw new Unavailable(result.limitations().getFirst());
             return new Priced(new Candidate(withdrawal, allocation, executed.getPortfolio(), input, result,
-                    facts.cash()), evidence);
+                    facts.cash(), evidence), evidence);
         }
 
         Optional<BigDecimal> taxFloor(Priced left, BigDecimal maximumTaxableIncrease) {
@@ -260,5 +278,12 @@ public final class ArkansasAnnualFunding {
 
     static final class Unavailable extends IllegalArgumentException {
         Unavailable(String message) { super(message); }
+    }
+
+    /** Reconciles a proved capacity failure with the exact deficit at terminal executable capacity. */
+    public static Candidate priceTerminal(Facts facts, ProjectedRothConversionResult conversion,
+                                          WithdrawalStrategy strategy) {
+        facts.verifyCashSources();
+        return new Evaluator(facts, conversion, strategy).evaluate(conversion.getPortfolio().getTotalBalance()).candidate();
     }
 }

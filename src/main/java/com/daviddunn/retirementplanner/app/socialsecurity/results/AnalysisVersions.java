@@ -140,7 +140,7 @@ public final class AnalysisVersions {
             versions.put("statistics", "v1");
         }
         if (kind != AnalysisKind.COUPLE_SOCIAL_SECURITY && kind != AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY)
-            versions.put("projection", "v1");
+            versions.put("projection", com.daviddunn.retirementplanner.domain.projection.ProjectionEngine.ALGORITHM_VERSION);
         return Map.copyOf(versions);
     }
     /** Classpath reads belong on the I/O worker, not JavaFX. No remote reference data. */

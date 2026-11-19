@@ -11,6 +11,7 @@ import com.daviddunn.retirementplanner.domain.financial.TraditionalIRA;
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.PensionPlanClassification;
+import com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.projection.EffectiveHouseholdDeathView;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
@@ -171,6 +172,66 @@ class ArkansasDomainCalculationTest {
         var later = new ArkansasTaxEvidence(Map.of(survivor, receiptFacts), Map.of(PRIMARY, OPENING.minusYears(1)));
         assertEquals(b("2990.41"), ARKANSAS.calculateUnregistered(
                 request(survivorIncome, household, FilingStatus.SINGLE, published), later).incomeTax());
+        pension.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        var established = IncomeSourceAttribution.pension(pension, PRIMARY, b("50000"), 2026);
+        assertEquals(b("1140.41"), calculate(income("50000", "0", "0", "0", "0", established),
+                single(OPENING, BIRTH)).incomeTax());
+        var otherYear = IncomeSourceAttribution.pension(pension, PRIMARY, b("50000"), 2027);
+        unsupported(calculate(income("50000", "0", "0", "0", "0", otherYear), single(OPENING, BIRTH)), "same tax year");
+        unsupported(ARKANSAS.calculateUnregistered(request(income, single(OPENING, BIRTH)),
+                facts(established, Optional.empty(), ORDINARY_EMPLOYMENT_PENSION, UNKNOWN)), "absent payment");
+    }
+
+    @Test
+    void jointPensionOriginsAreIndependentOfTheOtherRecipientsCompletedPool() {
+        var first = new Pension("First primary source", PRIMARY, OPENING, null, b("5000"), ZERO);
+        var second = new Pension("Second primary source", PRIMARY, OPENING, null, b("4000"), ZERO);
+        var third = new Pension("Spouse source", SPOUSE, OPENING, null, b("4500"), ZERO);
+        first.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        second.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        var a = IncomeSourceAttribution.pension(first, PRIMARY, b("40000"), 2026);
+        var b = IncomeSourceAttribution.pension(second, PRIMARY, b("10000"), 2026);
+        var unknown = IncomeSourceAttribution.pension(third, SPOUSE, b("50000"), 2026);
+        var joint = joint(BIRTH, BIRTH.plusYears(1), Set.of(PRIMARY, SPOUSE), OPENING);
+        unsupported(calculate(income("100000", "0", "0", "0", "0", a, b, unknown), joint), "employment-related");
+        third.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        var known = IncomeSourceAttribution.pension(third, SPOUSE, b("50000"), 2026);
+        assertEquals(b("2648.02"), calculate(income("100000", "0", "0", "0", "0", a, b, known), joint).incomeTax());
+    }
+
+    @Test
+    void originUncertaintyUsesTheSameRecipientCapAndAdmitsTaxStableZero() {
+        var pension = new Pension("Unresolved", PRIMARY, OPENING, null, b("500"), ZERO);
+        var fullPool = withdrawal(ira(PRIMARY), "50000", ORDINARY_RETIREMENT_WITHDRAWAL, CASH_FLOW);
+        var small = IncomeSourceAttribution.pension(pension, PRIMARY, b("500"), 2026);
+        assertEquals(b("0.00"), calculate(income("500", "0", "0", "0", "0", small),
+                single(OPENING, BIRTH)).incomeTax());
+        assertEquals(b("1158.91"), calculate(income("500", "0", "50000", "0", "0", small, fullPool),
+                single(OPENING, BIRTH)).incomeTax());
+    }
+
+    @Test
+    void employerOriginDoesNotOverrideSpecialTreatmentAndPrivateContractRequiresAnnuityEvidence() {
+        var pension = new Pension("Unverified special plan", PRIMARY, OPENING, null, b("5000"), ZERO);
+        for (var origin : List.of(
+                RetirementIncomeSourceOrigin.INDIVIDUALLY_PURCHASED_CONTRACT,
+                RetirementIncomeSourceOrigin.OTHER_OR_SPECIAL_ARRANGEMENT)) {
+            pension.setSourceOrigin(origin);
+            var receipt = IncomeSourceAttribution.pension(pension, PRIMARY, b("50000"), 2026);
+            var input = income("50000", "0", "0", "0", "0", receipt);
+            unsupported(calculate(input, single(OPENING, BIRTH)), "outside ordinary");
+            unsupported(ARKANSAS.calculateUnregistered(request(input, single(OPENING, BIRTH)),
+                    facts(receipt, Optional.empty(), ORDINARY_EMPLOYMENT_PENSION, UNKNOWN)), "contradicts");
+        }
+        pension.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        var receipt = IncomeSourceAttribution.pension(pension, PRIMARY, b("50000"), 2026);
+        var input = income("50000", "0", "0", "0", "0", receipt);
+        unsupported(ARKANSAS.calculateUnregistered(request(input, single(OPENING, BIRTH)),
+                facts(receipt, Optional.empty(), OUTSIDE_ORDINARY_SCOPE, UNKNOWN)), "specialized");
+        unsupported(calculate(input, single(OPENING, LocalDate.of(1976, 1, 1))), "5329");
+        assertEquals(b("1140.41"), ARKANSAS.calculateUnregistered(
+                request(input, single(OPENING, LocalDate.of(1976, 1, 1))),
+                facts(receipt, Optional.empty(), UNSPECIFIED, NO_APPLICABLE_ADDITIONAL_TAX)).incomeTax());
     }
 
     @Test

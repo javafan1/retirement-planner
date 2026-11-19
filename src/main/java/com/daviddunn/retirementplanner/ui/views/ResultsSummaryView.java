@@ -3497,10 +3497,14 @@ public class ResultsSummaryView extends BorderPane {
                 () -> {
                     // Freeze all renderer inputs before dispatching background PDF I/O.
                     RetirementPlan isolatedPlan = new RetirementPlanScenarioCopyService().copy(selectedPlan);
-                    Projection isolatedProjection = RetainedProjectionSnapshot.capture(selectedProjection).restoreProjection();
+                    var original = controller.getAcceptedProjectionSnapshot();
+                    boolean arkansas = original != null && original.arkansasHistory()
+                            && selectedProjection == controller.peekCurrentProjection();
+                    Projection isolatedProjection = (arkansas ? original.annual()
+                            : RetainedProjectionSnapshot.capture(selectedProjection)).restoreProjection();
                     capturedProjection.set(selectedProjection);
                     return new ProjectionPdfExportCapture(isolatedPlan, isolatedProjection,
-                            List.copyOf(nonInvestableAssetProjections), prepareProjectionPdfReport());
+                            List.copyOf(nonInvestableAssetProjections), arkansas ? null : prepareProjectionPdfReport());
                 },
                 (capture, destination) -> new ProjectionPdfExporter().export(capture.plan(),
                         capture.projection(), capture.nonInvestableAssets(), capture.report(), destination),

@@ -13,6 +13,13 @@ public final class LongevityWeightedContinuationEvaluator {
     private final HouseholdLifetimeScenarioMapper mapper = new HouseholdLifetimeScenarioMapper();
     private final EstateAtSecondDeathCalculator estateCalculator = new EstateAtSecondDeathCalculator();
     private final EstatePresentValueCalculator pvCalculator = new EstatePresentValueCalculator();
+    private final ProjectionEngine injectedEngine;
+
+    public LongevityWeightedContinuationEvaluator() { injectedEngine = null; }
+
+    public LongevityWeightedContinuationEvaluator(ProjectionEngine engine) {
+        injectedEngine = Objects.requireNonNull(engine);
+    }
 
     public LongevityWeightedIntegratedStrategyResult evaluate(LongevityWeightedIntegratedStrategyRequest request) {
         return evaluate(request, event -> { });
@@ -28,7 +35,9 @@ public final class LongevityWeightedContinuationEvaluator {
         if (baseline.getFinancialCalculationMode() == com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.ADVANCED || com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(baseline)) {
             long positive = request.longevityScenarios().scenarios().stream().filter(s -> s.jointProbability().signum() > 0).count();
             long[] counts = new long[4];
-            return new LongevityWeightedIntegratedStrategyEvaluator().evaluate(request, event -> {
+            var evaluator = injectedEngine == null ? new LongevityWeightedIntegratedStrategyEvaluator()
+                    : new LongevityWeightedIntegratedStrategyEvaluator(injectedEngine);
+            return evaluator.evaluate(request, event -> {
                 switch (event) {
                     case SCENARIO_STARTED -> counts[0]++;
                     case SCENARIO_COMPLETED -> counts[1]++;
@@ -55,7 +64,7 @@ public final class LongevityWeightedContinuationEvaluator {
         if (total == 0 || scenarios.stream().anyMatch(s -> s.jointProbability().signum() < 0)) {
             throw new IllegalArgumentException("Mortality scenarios require positive total mass and nonnegative probabilities.");
         }
-        var session = new LongevityContinuationSession(baseline, request, total, workObserver);
+        var session = new LongevityContinuationSession(baseline, request, total, workObserver, injectedEngine);
         Map<LocalDate, BigDecimal> discountFactors = new HashMap<>();
         List<LongevityWeightedIntegratedScenarioOutcome> outcomes = new ArrayList<>();
         BigDecimal probability = BigDecimal.ZERO;

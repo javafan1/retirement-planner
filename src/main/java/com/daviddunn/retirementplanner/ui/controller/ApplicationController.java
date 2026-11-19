@@ -142,6 +142,10 @@ public class ApplicationController {
     public java.util.concurrent.CompletionStage<Void> getProjectionRestoration() { return projectionRestoration; }
     public boolean isRestoredProjectionMode() { return restoredProjectionMode; }
     public String getProjectionSnapshotNotice() {
+        var accepted = getAcceptedProjectionSnapshot();
+        if (accepted != null && accepted.arkansasHistory()) {
+            return "Historical Arkansas projection restored with its original inputs and policies. " + projectionSnapshotNotice;
+        }
         if (currentPlan != null && com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(currentPlan)) {
             try { com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(currentPlan); }
             catch (UnsupportedOperationException unsupported) {
@@ -154,7 +158,6 @@ public class ApplicationController {
                                 : com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(currentPlan) ? "conditional benefits or contractual premiums" : "conditional benefits")
                             + ". Prior results retain their original frozen assumptions. " + projectionSnapshotNotice;
         }
-        var accepted = getAcceptedProjectionSnapshot();
         return accepted != null && !accepted.calculationSemanticsCurrent()
                 ? "Historical/outdated pension-tax calculation semantics. Original results are preserved; run a new projection for corrected pension selection. " + projectionSnapshotNotice
                 : projectionSnapshotNotice;
@@ -250,8 +253,31 @@ public class ApplicationController {
                     || !original.inputDigest().equals(reference.projectionInputDigest())) throw new IllegalArgumentException("Analyzer projection provenance mismatch.");
             if ((reference.kind().shape() == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.Shape.COUPLE)
                     != original.restoreInputs().getHousehold().hasSpouse()) throw new IllegalArgumentException("Analyzer projection household mismatch.");
-            return store.resolveAnalyzer(reference, pending, memory, file);
+            var analysis = store.resolveAnalyzer(reference, pending, memory, file);
+            verifyArkansasAnalyzer(store, file, state, original, analysis, owner.getProjectionComponents());
+            return analysis;
         });
+    }
+
+    private static void verifyArkansasAnalyzer(com.daviddunn.retirementplanner.persistence.ProjectionSnapshotComponents store,
+            java.nio.file.Path file, ProjectionRoleManifest state, CompleteProjectionSnapshot original,
+            com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot analysis,
+            java.util.Map<java.util.UUID, CompleteProjectionSnapshot> available) throws java.io.IOException {
+        if (!original.arkansasHistory() && analysis.arkansasExecution() == null) return;
+        var verified = new java.util.HashMap<>(available);
+        verified.put(original.id(), original);
+        if (analysis.arkansasExecution() != null) {
+            var refs = new java.util.ArrayList<>(state.pinnedProjections());
+            if (state.current() != null) refs.add(state.current());
+            if (state.baseline() != null) refs.add(state.baseline());
+            for (var dependency : analysis.arkansasExecution().dependencies()) {
+                if (verified.containsKey(dependency.projectionId())) continue;
+                var ref = refs.stream().filter(r -> r.id().equals(dependency.projectionId())).findFirst()
+                        .orElseThrow(() -> new java.io.IOException("Arkansas analyzer projection dependency is unavailable."));
+                verified.put(ref.id(), store.read(file, state.owner(), ref));
+            }
+        }
+        store.validateArkansasAnalyzer(analysis, original, verified);
     }
     public boolean currentProjectionInputsMatch() {
         var snapshot = getAcceptedProjectionSnapshot();
@@ -353,9 +379,14 @@ public class ApplicationController {
                         || (association.kind().shape() == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.Shape.COUPLE)
                             != original.restoreInputs().getHousehold().hasSpouse())
                     throw new IllegalStateException("Historical analyzer projection binding is inconsistent.");
-                store.verifyAnalyzer(owner.getProjectionComponentSource(), association,
-                        owner.getPendingAnalyzerAssociations().get(association.runId()),
-                        owner.getAssociatedAnalyzerResults().get(association.runId()));
+                var pending = owner.getPendingAnalyzerAssociations().get(association.runId());
+                var memory = owner.getAssociatedAnalyzerResults().get(association.runId());
+                if (original.arkansasHistory()) {
+                    var analysis = store.resolveAnalyzer(association, pending, memory, owner.getProjectionComponentSource());
+                    verifyArkansasAnalyzer(store, owner.getProjectionComponentSource(), manifest, original, analysis, verified);
+                } else {
+                    store.verifyAnalyzer(owner.getProjectionComponentSource(), association, pending, memory);
+                }
             }
             var inputs = originalBaseline.restoreInputs();
             var target = new RetirementPlan(inputs.getHousehold(), inputs.getAccountPortfolio(), inputs.getPlanningAssumptions(),

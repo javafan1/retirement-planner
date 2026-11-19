@@ -27,6 +27,9 @@ public record StateTaxAssumptions(
             @JsonProperty("calculationMethod") CalculationMethod calculationMethod,
             @JsonProperty("effectiveRateOverride") BigDecimal effectiveRateOverride) {
         this.jurisdiction = Objects.requireNonNull(jurisdiction, "State of residence is required.");
+        if (!jurisdiction.productionAdmitted()) {
+            throw new IllegalArgumentException("State of residence is not admitted for production calculations.");
+        }
         this.calculationMethod = Objects.requireNonNull(calculationMethod, "State tax calculation method is required.");
         if (calculationMethod != CalculationMethod.SIMPLIFIED_STATE_ESTIMATE) {
             throw new IllegalArgumentException("Effective state tax rate override is not enabled in this release.");

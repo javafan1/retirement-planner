@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
@@ -21,6 +22,16 @@ public class Pension extends IncomeSource {
     private final BigDecimal annualColaRate;
 
     private PensionPlanClassification planClassification = PensionPlanClassification.UNKNOWN;
+    private RetirementIncomeSourceOrigin sourceOrigin = RetirementIncomeSourceOrigin.UNKNOWN;
+
+    @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = RetirementIncomeSourceOrigin.UnknownFilter.class)
+    public RetirementIncomeSourceOrigin getSourceOrigin() {
+        return sourceOrigin;
+    }
+
+    public void setSourceOrigin(RetirementIncomeSourceOrigin origin) {
+        sourceOrigin = Objects.requireNonNullElse(origin, RetirementIncomeSourceOrigin.UNKNOWN);
+    }
 
     @com.fasterxml.jackson.annotation.JsonInclude(value = com.fasterxml.jackson.annotation.JsonInclude.Include.CUSTOM,
             valueFilter = PensionPlanClassification.UnknownFilter.class)

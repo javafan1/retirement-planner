@@ -21,9 +21,18 @@ public record QuickComparisonSnapshot(int version, RetainedProjectionSnapshot ba
     }
     public static QuickComparisonSnapshot capture(IntegratedSocialSecurityStrategyComparisonResult result, List<Integer> ranks,
             List<Candidate> candidates, String prerequisite, UUID run, int requested, String baselineDescription) {
-        return new QuickComparisonSnapshot(1, RetainedProjectionSnapshot.capture(result.currentPlanBaseline()), result.suppliedCandidateCount(),
+        return capture(result, ranks, candidates, prerequisite, run, requested, baselineDescription, RetainedProjectionSnapshot::capture);
+    }
+    public static QuickComparisonSnapshot captureArkansas(IntegratedSocialSecurityStrategyComparisonResult result, List<Integer> ranks,
+            List<Candidate> candidates, String prerequisite, UUID run, int requested, String baselineDescription) {
+        return capture(result, ranks, candidates, prerequisite, run, requested, baselineDescription, RetainedProjectionSnapshot::captureArkansas);
+    }
+    private static QuickComparisonSnapshot capture(IntegratedSocialSecurityStrategyComparisonResult result, List<Integer> ranks,
+            List<Candidate> candidates, String prerequisite, UUID run, int requested, String baselineDescription,
+            java.util.function.Function<IntegratedSocialSecurityStrategyResult, RetainedProjectionSnapshot> projectionCapture) {
+        return new QuickComparisonSnapshot(1, projectionCapture.apply(result.currentPlanBaseline()), result.suppliedCandidateCount(),
                 result.entries().stream().map(e -> new Entry(e.callerOrder(), WeightedSnapshots.Strategy.from(e.strategy()),
-                        e.socialSecurityOnlyExpectedValue().orElse(null), e.integratedResult().map(RetainedProjectionSnapshot::capture).orElse(null),
+                        e.socialSecurityOnlyExpectedValue().orElse(null), e.integratedResult().map(projectionCapture).orElse(null),
                         e.differencesFromCurrentPlan().orElse(null), e.failure().map(f -> new WeightedSnapshots.Failure(f.message(), f.category())).orElse(null))).toList(),
                 ranks, candidates, prerequisite, run, requested, baselineDescription);
     }

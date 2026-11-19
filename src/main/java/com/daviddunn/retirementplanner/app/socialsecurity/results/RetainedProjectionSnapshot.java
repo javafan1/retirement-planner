@@ -17,52 +17,178 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
 
-/** Lossless retained-result graph. Not an analysis payload and not connected to any analyzer. */
+/** Lossless retained-result graph used by projection history and detailed analysis payloads. */
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = RetainedProjectionSnapshot.Reader.class)
 public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> accounts, List<Annual> years,
         ProjectionMetrics metrics, WeightedSnapshots.Strategy strategy, Boolean advancedSocialSecurityPathUsed,
-        List<String> warnings) {
+        List<String> warnings,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        Arkansas arkansas) {
     public static final int SCHEMA = 1;
     public static final int AVAILABILITY_SCHEMA = 2;
+    public static final int ARKANSAS_SCHEMA = 3;
+
+    public RetainedProjectionSnapshot(int schemaVersion, List<AccountData> accounts, List<Annual> years,
+            ProjectionMetrics metrics, WeightedSnapshots.Strategy strategy, Boolean advancedSocialSecurityPathUsed,
+            List<String> warnings) {
+        this(schemaVersion, accounts, years, metrics, strategy, advancedSocialSecurityPathUsed, warnings, null);
+    }
+
     public RetainedProjectionSnapshot {
-        if (schemaVersion != SCHEMA && schemaVersion != AVAILABILITY_SCHEMA)
+        if (schemaVersion != SCHEMA && schemaVersion != AVAILABILITY_SCHEMA && schemaVersion != ARKANSAS_SCHEMA)
             throw new IllegalArgumentException("Unsupported retained-projection schema.");
         accounts = List.copyOf(accounts); years = List.copyOf(years); warnings = List.copyOf(warnings);
         boolean explicitAvailability = accounts.stream().anyMatch(a -> a.rothConversionAvailability() != null);
-        if ((schemaVersion == AVAILABILITY_SCHEMA) != explicitAvailability)
+        if (schemaVersion != ARKANSAS_SCHEMA && (schemaVersion == AVAILABILITY_SCHEMA) != explicitAvailability)
             throw new IllegalArgumentException("Retained account availability/schema mismatch.");
+        if ((schemaVersion == ARKANSAS_SCHEMA) != (arkansas != null)
+                || (arkansas != null && (years.isEmpty() || arkansas.years().size() != years.size()
+                        || years.stream().anyMatch(year -> year.state() != null || year.medicare() == null)))) {
+            throw new IllegalArgumentException("Incomplete or conflicting Arkansas retained projection.");
+        }
+        if (arkansas != null) {
+            for (int i = 1; i < years.size(); i++) {
+                var prior = years.get(i - 1);
+                var next = years.get(i);
+                if (next.year() != prior.year() + 1 || next.index() != prior.index() + 1
+                        || next.beginning().compareTo(prior.ending()) != 0
+                        || next.retainedBeginning().compareTo(prior.retainedEnding()) != 0) {
+                    throw new IllegalArgumentException("Arkansas retained opening assets do not identify the preceding closing balances.");
+                }
+            }
+        }
         if ((strategy == null) != (advancedSocialSecurityPathUsed == null))
             throw new IllegalArgumentException("Incomplete retained strategy context.");
         if (strategy != null && metrics == null) throw new IllegalArgumentException("Retained strategy metrics are required.");
         if (strategy != null) strategy.restore();
     }
     public static RetainedProjectionSnapshot capture(Projection projection) {
-        return capture(projection, null, null, null, List.of());
+        return capture(projection, null, null, null, List.of(), false);
+    }
+    /** Controlled history capture requires annual results produced by the gated Arkansas engine. */
+    public static RetainedProjectionSnapshot captureArkansas(Projection projection) {
+        return capture(projection, null, null, null, List.of(), true);
     }
     public static RetainedProjectionSnapshot capture(IntegratedSocialSecurityStrategyResult result) {
         return capture(result.projection(), result.metrics(), WeightedSnapshots.Strategy.from(result.evaluatedStrategy()),
-                result.advancedSocialSecurityPathUsed(), result.warnings());
+                result.advancedSocialSecurityPathUsed(), result.warnings(), false);
+    }
+    public static RetainedProjectionSnapshot captureArkansas(IntegratedSocialSecurityStrategyResult result) {
+        return capture(result.projection(), result.metrics(), WeightedSnapshots.Strategy.from(result.evaluatedStrategy()),
+                result.advancedSocialSecurityPathUsed(), result.warnings(), true);
     }
     private static RetainedProjectionSnapshot capture(Projection projection, ProjectionMetrics metrics,
-            WeightedSnapshots.Strategy strategy, Boolean advanced, List<String> warnings) {
+            WeightedSnapshots.Strategy strategy, Boolean advanced, List<String> warnings, boolean gatedArkansas) {
+        var arkansasYears = projection.getYears().stream().flatMap(year -> year.arkansasValidationTax().stream()).toList();
+        if (!gatedArkansas && !arkansasYears.isEmpty()) {
+            throw new IllegalArgumentException("Arkansas validation output cannot be accepted as production history.");
+        }
+        Arkansas arkansas = null;
+        if (gatedArkansas) {
+            if (arkansasYears.isEmpty() || arkansasYears.size() != projection.getYears().size()
+                    || arkansasYears.stream().anyMatch(year -> !year.versions().equals(arkansasYears.getFirst().versions()))) {
+                throw new IllegalArgumentException("A retained Arkansas run requires one consistent gated policy.");
+            }
+            arkansas = new Arkansas(1, StateTaxJurisdiction.AR, ProjectionEngine.ALGORITHM_VERSION,
+                    arkansasYears.getFirst().versions(),
+                    arkansasYears.stream().map(ArkansasYear::capture).toList());
+        }
         var registry = new CaptureRegistry();
         for (var year : projection.getYears()) for (var balance : year.getEndingAccountSnapshots()) registry.add(balance.getAccount());
-        int version = registry.accounts.stream().anyMatch(a -> a.rothConversionAvailability() != null)
+        int version = gatedArkansas ? ARKANSAS_SCHEMA : registry.accounts.stream().anyMatch(a -> a.rothConversionAvailability() != null)
                 ? AVAILABILITY_SCHEMA : SCHEMA;
         return new RetainedProjectionSnapshot(version, registry.accounts,
-                projection.getYears().stream().map(y -> Annual.capture(y, registry)).toList(), metrics, strategy, advanced, warnings);
+                projection.getYears().stream().map(y -> Annual.capture(y, registry)).toList(), metrics, strategy, advanced, warnings, arkansas);
     }
     public Projection restoreProjection() {
         var identities = accounts.stream().map(AccountData::restore).toList();
         var registry = new CaptureRegistry(); identities.forEach(registry::add);
         var projection = new Projection();
-        for (var year : years) {
-            var restored = year.restore(identities);
+        for (int i = 0; i < years.size(); i++) {
+            var year = years.get(i);
+            var restored = year.restore(identities, arkansas == null ? null : arkansas.years().get(i),
+                    arkansas == null ? null : arkansas.versions());
             // Reject constructor/version drift rather than silently substituting or rounding stored results.
             if (!year.equals(Annual.capture(restored, registry)))
                 throw new IllegalArgumentException("Retained projection cannot be reconstructed exactly.");
             projection.addYear(restored);
         }
         return projection;
+    }
+
+    public static final class Reader extends com.fasterxml.jackson.databind.JsonDeserializer<RetainedProjectionSnapshot> {
+        private record Wire(int schemaVersion, List<AccountData> accounts, List<Annual> years,
+                ProjectionMetrics metrics, WeightedSnapshots.Strategy strategy, Boolean advancedSocialSecurityPathUsed,
+                List<String> warnings, Arkansas arkansas) { }
+
+        @Override
+        public RetainedProjectionSnapshot deserialize(com.fasterxml.jackson.core.JsonParser parser,
+                com.fasterxml.jackson.databind.DeserializationContext context) throws java.io.IOException {
+            var node = IncomeReader.TREE.readTree(parser);
+            if (!(node instanceof com.fasterxml.jackson.databind.node.ObjectNode object)
+                    || (object.has("arkansas") && object.get("arkansas").isNull())) {
+                throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, "Invalid retained projection document.");
+            }
+            if (!object.has("arkansas")) object.putNull("arkansas");
+            var wire = context.readTreeAsValue(object, Wire.class);
+            try {
+                return new RetainedProjectionSnapshot(wire.schemaVersion(), wire.accounts(), wire.years(), wire.metrics(),
+                        wire.strategy(), wire.advancedSocialSecurityPathUsed(), wire.warnings(), wire.arkansas());
+            } catch (IllegalArgumentException invalid) {
+                throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, invalid.getMessage(), invalid);
+            }
+        }
+    }
+
+    public record Arkansas(int version, StateTaxJurisdiction jurisdiction, String projectionAlgorithm, Map<String, String> versions,
+            List<ArkansasYear> years) {
+        /** Readable V1 policy identities remain fixed when a future engine changes its effective rules. */
+        public static final Map<String, String> V1 = Map.of(
+                "arkansas-income-tax-rules", "AR-2026-P2-1",
+                "arkansas-tax-funding", "AR-FUNDING-P2-1",
+                "arkansas-roth-target", "AR-TARGET-P3A-1");
+
+        public Arkansas {
+            versions = Map.copyOf(versions);
+            years = List.copyOf(years);
+            if (version != 1 || jurisdiction != StateTaxJurisdiction.AR || !"v1".equals(projectionAlgorithm) || !versions.equals(V1)) {
+                throw new IllegalArgumentException("Unsupported Arkansas retained jurisdiction, schema or policy.");
+            }
+        }
+
+        public Map<String, String> dependencies() {
+            var applicable = new TreeMap<>(versions);
+            if (years.stream().noneMatch(year -> year.targetMetrics() != null)) {
+                applicable.remove("arkansas-roth-target");
+            }
+            return Map.copyOf(applicable);
+        }
+    }
+
+    public record ArkansasYear(ArkansasAnnualProvenance sourceEvidence, List<String> limitations,
+            com.daviddunn.retirementplanner.domain.tax.ArkansasMinimumFundingSolver.Metrics fundingMetrics,
+            com.daviddunn.retirementplanner.domain.tax.ArkansasRothFunding.TargetMetrics targetMetrics) {
+        public ArkansasYear {
+            Objects.requireNonNull(sourceEvidence);
+            Objects.requireNonNull(fundingMetrics);
+            limitations = List.copyOf(limitations);
+            if (limitations.isEmpty() || limitations.stream().anyMatch(String::isBlank)
+                    || (targetMetrics != null) != (sourceEvidence.targetedFederalTaxableIncome() != null)) {
+                throw new IllegalArgumentException("Incomplete Arkansas calculation provenance.");
+            }
+        }
+
+        static ArkansasYear capture(ArkansasValidationTax result) {
+            return new ArkansasYear(result.provenance(), result.calculation().limitations(),
+                    result.fundingMetrics(), result.targetMetrics().orElse(null));
+        }
+
+        ArkansasValidationTax restore(BigDecimal incomeTax, BigDecimal taxableFunding, Map<String, String> versions) {
+            var calculated = new ArkansasProductionTaxCalculator.Result(Optional.of(incomeTax), Optional.empty(), limitations,
+                    List.of(), Optional.of(sourceEvidence.election()));
+            return new ArkansasValidationTax(calculated, sourceEvidence.filingStatus(), taxableFunding, fundingMetrics,
+                    Optional.ofNullable(targetMetrics), versions, sourceEvidence, true);
+        }
     }
     public IntegratedSocialSecurityStrategyResult restoreStrategyResult() {
         if (strategy == null) throw new IllegalStateException("No strategy context was captured.");
@@ -203,13 +329,16 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
             planClassification = java.util.Objects.requireNonNullElse(planClassification,
                     com.daviddunn.retirementplanner.domain.income.PensionPlanClassification.UNKNOWN);
         }
-        static PensionFacts capture(IncomeSourceAttribution.PensionFacts p) {
+        public static PensionFacts capture(IncomeSourceAttribution.PensionFacts p) {
             return p == null ? null : new PensionFacts(p.originalOwner(), p.monthlyBenefit(), p.survivorMonthlyBenefit().orElse(null),
                     p.annualColaRate(), p.startDate().orElse(null), p.endDate().orElse(null), p.participantFacts(), p.planClassification());
         }
         IncomeSourceAttribution.PensionFacts restore() {
+            return restore(RetirementIncomeSourceOrigin.UNKNOWN);
+        }
+        IncomeSourceAttribution.PensionFacts restore(RetirementIncomeSourceOrigin origin) {
             return new IncomeSourceAttribution.PensionFacts(owner, monthly, Optional.ofNullable(survivor), cola,
-                    Optional.ofNullable(start), Optional.ofNullable(end), participant, planClassification);
+                    Optional.ofNullable(start), Optional.ofNullable(end), participant, planClassification, origin);
         }
     }
     /** Only classification is optional; preserve the retained codec's original strict field contract. */
@@ -289,10 +418,13 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
                     i.taxYear().isPresent() ? i.taxYear().getAsInt() : null, PensionFacts.capture(i.pension().orElse(null)), i.conditionalBenefit().orElse(null), i.niit().orElse(null), i.calculationMode().orElse(null));
         }
         IncomeSourceAttribution restore(List<Account> identities) {
+            return restore(identities, RetirementIncomeSourceOrigin.UNKNOWN);
+        }
+        IncomeSourceAttribution restore(List<Account> identities, RetirementIncomeSourceOrigin origin) {
             return new IncomeSourceAttribution(kind, purpose, Optional.ofNullable(owner),
                     Optional.ofNullable(account).map(r -> r.restore(identities)), Optional.ofNullable(destination).map(r -> r.restore(identities)),
                     description, gross, Optional.ofNullable(taxable), taxYear == null ? OptionalInt.empty() : OptionalInt.of(taxYear),
-                    Optional.ofNullable(pension).map(PensionFacts::restore), Optional.ofNullable(conditionalBenefit), Optional.ofNullable(niit), Optional.ofNullable(calculationMode));
+                    Optional.ofNullable(pension).map(p -> p.restore(origin)), Optional.ofNullable(conditionalBenefit), Optional.ofNullable(niit), Optional.ofNullable(calculationMode));
         }
     }
 
@@ -348,7 +480,12 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
     public record State(StateTaxJurisdiction jurisdiction, StateTaxAssumptions.CalculationMethod method,
             StateTaxCalculationStatus status, BigDecimal incomeTax, List<String> limitations, Michigan michigan,
             List<StateTaxUnavailableReason> unavailableReasons) {
-        public State { limitations = List.copyOf(limitations); unavailableReasons = List.copyOf(unavailableReasons); }
+        public State {
+            if (!jurisdiction.productionAdmitted()) {
+                throw new IllegalArgumentException("Historical-only jurisdiction requires its own retained state component.");
+            }
+            limitations = List.copyOf(limitations); unavailableReasons = List.copyOf(unavailableReasons);
+        }
         static State capture(ProductionStateTaxResult s, CaptureRegistry registry) {
             return s == null ? null : new State(s.jurisdiction(), s.calculationMethod(), s.calculationStatus(), s.estimatedIncomeTax().orElse(null),
                     s.limitations(), Michigan.capture(s.michiganDetails().orElse(null), registry), s.unavailableReasons());
@@ -398,17 +535,77 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
                     y.getRetainedNonQualifiedAssetGrowth(), y.getEndingRetainedNonQualifiedAssets(), y.getHouseholdCashSettlement(), y.getEstimatedHeirTax(),
                     y.getAfterTaxEstateValue(), y.getIncomeSources().stream().map(i -> Income.capture(i, r)).toList());
         }
-        ProjectionYear restore(List<Account> identities) {
+        ProjectionYear restore(List<Account> identities, ArkansasYear arkansas, Map<String, String> versions) {
             var snapshots = balances.stream().map(b -> new ProjectedAccountSnapshot(at(identities, b.account()), b.endingBalance())).toList();
-            if (state == null && medicare == null) {
+            if (state == null && medicare == null && arkansas == null) {
                 return new ProjectionYear(index, year, beginning, growth, income, expenses, cashNeed, withdrawal, rmd, excessRmd, ending, snapshots, primaryAge);
             }
-            if (state == null || medicare == null) throw new IllegalArgumentException("Incomplete retained annual calculation.");
+            if ((state == null) == (arkansas == null) || medicare == null) {
+                throw new IllegalArgumentException("Incomplete retained annual calculation.");
+            }
+            var origins = new HashMap<Integer, RetirementIncomeSourceOrigin>();
+            if (arkansas != null) {
+                for (var pension : arkansas.sourceEvidence().pensions()) {
+                    origins.put(pension.sourceIndex(), pension.origin());
+                }
+            }
+            var restoredSources = new ArrayList<IncomeSourceAttribution>(sources.size());
+            for (int i = 0; i < sources.size(); i++) {
+                restoredSources.add(sources.get(i).restore(identities, origins.getOrDefault(i, RetirementIncomeSourceOrigin.UNKNOWN)));
+            }
+            ArkansasValidationTax arkansasTax = null;
+            if (arkansas != null) {
+                arkansas.sourceEvidence().validateSources(year, restoredSources);
+                var target = arkansas.sourceEvidence().targetedFederalTaxableIncome();
+                if (target != null && roth.signum() > 0 && federalTaxable.compareTo(target) > 0) {
+                    throw new IllegalArgumentException("Arkansas Roth execution exceeds its captured federal tax target.");
+                }
+                validateArkansasAccounting();
+                var taxableFunding = sources.stream().filter(s -> s.purpose() == IncomeSourceAttribution.Purpose.TAX_FUNDING)
+                        .map(Income::taxable).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+                arkansasTax = arkansas.restore(stateTax, taxableFunding, versions);
+            }
             var federal = new FederalTaxCalculation(agi, taxableSocialSecurity, federalDeduction, federalTaxable, federalTax);
             return new ProjectionYear(index, year, beginning, growth, income, socialSecurity, expenses, cashNeed, withdrawal, rmd,
                     rmdBefore, rmdDuring, excessRmd, retainedBeginning, retainedGrowth, retainedEnding, settlement, ending, snapshots,
-                    federal, state.restore(identities), medicare.restore(), taxFunding, requestedRoth, roth, primaryRoth, spouseRoth,
-                    heirTax, estate, primaryAge, sources.stream().map(i -> i.restore(identities)).toList());
+                    federal, state == null ? null : state.restore(identities), medicare.restore(), taxFunding, requestedRoth, roth, primaryRoth, spouseRoth,
+                    heirTax, estate, primaryAge, restoredSources, arkansasTax);
+        }
+
+        private void validateArkansasAccounting() {
+            var funding = sources.stream().filter(s -> s.purpose() == IncomeSourceAttribution.Purpose.TAX_FUNDING)
+                    .map(Income::gross).reduce(BigDecimal.ZERO, BigDecimal::add);
+            var conversion = sources.stream().filter(s -> s.kind() == IncomeSourceAttribution.Kind.ROTH_CONVERSION)
+                    .map(Income::gross).reduce(BigDecimal.ZERO, BigDecimal::add);
+            var retainedDraw = sources.stream().filter(s -> s.kind() == IncomeSourceAttribution.Kind.ORDINARY_WITHDRAWAL
+                            && s.account() == null && s.description().equals("Retained household assets"))
+                    .map(Income::gross).reduce(BigDecimal.ZERO, BigDecimal::add);
+            var accountTotal = balances.stream().map(Balance::endingBalance).reduce(BigDecimal.ZERO, BigDecimal::add);
+            var exactSettlement = HouseholdCashSettlement.settleMinimumSufficient(settlement.guaranteedIncome(),
+                    settlement.projectedPeriodRmdCash(), settlement.spendingWithdrawal(), settlement.taxFundingWithdrawal(),
+                    settlement.ordinaryExpenses(), settlement.medicarePremiums(), settlement.incomeTaxes());
+            if (!exactSettlement.equals(settlement)
+                    || settlement.guaranteedIncome().compareTo(income) != 0
+                    || settlement.projectedPeriodRmdCash().compareTo(rmdDuring) != 0
+                    || settlement.taxFundingWithdrawal().compareTo(taxFunding) != 0
+                    || settlement.ordinaryExpenses().compareTo(expenses) != 0
+                    || settlement.medicarePremiums().compareTo(medicare.total()) != 0
+                    || settlement.incomeTaxes().compareTo(federalTax.add(stateTax)) != 0
+                    || federalTax.signum() < 0 || stateTax.signum() < 0) {
+                throw new IllegalArgumentException("Arkansas retained annual cash settlement does not reconcile.");
+            }
+            if (funding.compareTo(taxFunding) != 0 || conversion.compareTo(roth) != 0
+                    || withdrawal.compareTo(settlement.spendingWithdrawal().add(rmdDuring).add(taxFunding)) != 0) {
+                throw new IllegalArgumentException("Arkansas retained withdrawals or conversions do not reconcile.");
+            }
+            if (balances.stream().anyMatch(b -> b.endingBalance().signum() < 0)
+                    || balances.stream().map(Balance::account).distinct().count() != balances.size()
+                    || retainedEnding.compareTo(retainedBeginning.add(retainedGrowth).subtract(retainedDraw)
+                            .add(settlement.retainedHouseholdSurplus())) != 0
+                    || ending.compareTo(accountTotal.add(retainedEnding)) != 0
+                    || estate.compareTo(ending.subtract(heirTax)) != 0 || heirTax.signum() < 0) {
+                throw new IllegalArgumentException("Arkansas retained balances or estate amounts do not reconcile.");
+            }
         }
     }
     private static <T> T at(List<T> values, int index) {

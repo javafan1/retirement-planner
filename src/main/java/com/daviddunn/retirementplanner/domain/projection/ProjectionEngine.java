@@ -111,12 +111,42 @@ public class ProjectionEngine {
             new AfterTaxEstateCalculator();
 
 
+    public static final String ALGORITHM_VERSION = "v1";
+
+    private final ArkansasProjectionValidation arkansasValidation;
+    private final ThreadLocal<ArkansasRunObserver> arkansasObserver = new ThreadLocal<>();
+
+    @FunctionalInterface
+    public interface ArkansasRunObserver {
+        void accept(RetirementPlan plan, ProjectionEvaluationContext context, ProjectionExecutionResult result);
+    }
+
+    /** Collects completed and funded-prefix facts on the calling thread of a controlled analysis. */
+    public <T> T observeArkansasRuns(
+            ArkansasRunObserver observer,
+            java.util.function.Supplier<T> analysis) {
+        if (arkansasValidation == null || arkansasObserver.get() != null) {
+            throw new IllegalStateException("Arkansas analysis requires an isolated gated engine and one observation scope.");
+        }
+        arkansasObserver.set(java.util.Objects.requireNonNull(observer));
+        try {
+            return analysis.get();
+        } finally {
+            arkansasObserver.remove();
+        }
+    }
+
     public ProjectionEngine() {
         this(new TaxFundingCalculator());
     }
 
     /** Supplies the same annual funding boundary for deterministic and structured evaluations. */
     public ProjectionEngine(TaxFundingCalculator taxFundingCalculator) {
+        this(taxFundingCalculator, null);
+    }
+
+    ProjectionEngine(TaxFundingCalculator taxFundingCalculator, ArkansasProjectionValidation arkansasValidation) {
+        this.arkansasValidation = arkansasValidation;
 
         this.withdrawalCalculator =
                 new WithdrawalCalculator();
@@ -228,6 +258,17 @@ public class ProjectionEngine {
             ProjectionEvaluationContext evaluationContext,
             ProjectionEconomicPath economicPath,
             boolean structured) {
+        var execution = runProjection(plan, evaluationContext, economicPath, structured);
+        if (arkansasValidation != null) {
+            var observer = arkansasObserver.get();
+            if (observer != null) observer.accept(plan, evaluationContext, execution);
+        }
+        return execution;
+    }
+
+    private ProjectionExecutionResult runProjection(
+            RetirementPlan plan, ProjectionEvaluationContext evaluationContext,
+            ProjectionEconomicPath economicPath, boolean structured) {
         java.util.Objects.requireNonNull(plan, "Retirement plan is required.");
         plan.validateHouseholdReferences();
         validateSinglePersonProjection(plan, evaluationContext);
@@ -345,6 +386,10 @@ public class ProjectionEngine {
                             evaluationContext.inflationPath().isPresent() ? generalExpenseMultiplier : null,
                             evaluationContext.expensePath().orElse(null), conditionalBenefits, financialMode);
             } catch (RuntimeException exception) {
+                if (arkansasValidation != null && exception instanceof com.daviddunn.retirementplanner.domain.tax.NiitUnsupportedInputException) {
+                    throw new ArkansasProjectionUnavailableException(calendarYear,
+                            ArkansasProjectionUnavailableException.Reason.SOURCE_OR_TAX, exception.getMessage());
+                }
                 if (!structured || !(exception.getCause() instanceof FundingConstraint constraint)) {
                     throw exception;
                 }
@@ -502,7 +547,7 @@ public class ProjectionEngine {
                 plan.getHousehold();
 
         Set<AccountOwnership> eligibleOwners = household.peopleByOwner().keySet().stream()
-                .filter(owner -> !lifetimeRun || deathView.isAlive(owner, calendarYear))
+                .filter(owner -> !lifetimeRun && arkansasValidation == null || deathView.isAlive(owner, calendarYear))
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
         Optional<PensionIncomeResult> pensionResult = Optional.of(householdPensionIncomeCalculator
                 .calculateWithSources(household, projectionDate, deathView));
@@ -667,8 +712,8 @@ public class ProjectionEngine {
         pensionResult.ifPresent(result -> preConversionSources.addAll(result.sources()));
         preConversionSources.addAll(conditionalSources);
 
-        BigDecimal rothConversion =
-                BigDecimal.ZERO;
+        BigDecimal rothConversion = BigDecimal.ZERO;
+        BigDecimal arkansasTarget = null;
 
         if (rothConversionRequest != null &&
                 scheduledRothConversionPolicy
@@ -733,8 +778,10 @@ public class ProjectionEngine {
                  * to reach the selected taxable-income target after
                  * accounting for the tax-funding withdrawal.
                  */
-                rothConversion =
-                        rothConversionBracketFillCalculator
+                if (arkansasValidation != null) {
+                    arkansasTarget = targetTaxableIncome;
+                } else {
+                    rothConversion = rothConversionBracketFillCalculator
                                 .calculateConversion(
                                         household,
                                         projectionDate,
@@ -753,6 +800,7 @@ public class ProjectionEngine {
                                         socialSecurityResult,
                                         availableHouseholdCashForTaxes,
                                         authoritativePensionIncome, preConversionSources, taxContext, eligibleOwners, assumptions.getStateTaxAssumptions());
+                }
             }
         }
 
@@ -762,63 +810,76 @@ public class ProjectionEngine {
          * Roth destination before it enters household tax calculations.
          */
         BigDecimal requestedRothConversion = rothConversion;
+        ProjectedRothConversionResult rothConversionResult;
+        TaxFundingResult taxFundingResult = null;
+        ArkansasProjectionValidation.Execution arkansas = null;
+        FilingStatus projectionFilingStatus = getProjectionFilingStatus(assumptions, projectionDate, deathView);
+        if (arkansasValidation != null) {
+            var opening = yearOffset == 0 ? projectionStartDate : LocalDate.of(calendarYear, 1, 1);
+            var sources = new java.util.ArrayList<IncomeSourceAttribution>(conditionalSources);
+            if (openingRmdCalculation != null) sources.addAll(openingRmdCalculation.getIncomeSources());
+            var premium = authoritativeMedicarePremium == null ? BigDecimal.ZERO
+                    : authoritativeMedicarePremium.totalAnnualMedicarePremium();
+            arkansas = arkansasValidation.execute(household, taxContext, opening, deathView, projectionFilingStatus,
+                    projectedGovernmentRules, socialSecurityResult, totalWithdrawalBreakdown,
+                    rmdDistributedBeforeProjection, sources, new com.daviddunn.retirementplanner.domain.tax.ArkansasAnnualFunding.Cash(
+                            guaranteedIncome, projectedPeriodRmdResult.getTotalRmd(), spendingWithdrawal, annualExpenses, premium),
+                    portfolioAfterAdditionalWithdrawal, withdrawalStrategy, rothConversion, arkansasTarget);
+            requestedRothConversion = arkansas.conversion().requested();
+            rothConversionResult = arkansas.conversion().conversion();
+            rothConversion = rothConversionResult.getTotalConversion();
+        } else {
+            rothConversion = rothConversion.min(
+                    projectedPortfolioRothConverter
+                            .getMaximumConvertibleAmount(
+                                    portfolioAfterAdditionalWithdrawal, eligibleOwners, calendarYear));
 
-        rothConversion = rothConversion.min(
-                projectedPortfolioRothConverter
-                        .getMaximumConvertibleAmount(
-                                portfolioAfterAdditionalWithdrawal, eligibleOwners, calendarYear));
+            rothConversionResult =
+                    projectedPortfolioRothConverter.convertHousehold(
+                            portfolioAfterAdditionalWithdrawal,
+                            rothConversion, eligibleOwners, calendarYear);
 
-        ProjectedRothConversionResult rothConversionResult =
-                projectedPortfolioRothConverter.convertHousehold(
-                        portfolioAfterAdditionalWithdrawal,
-                        rothConversion, eligibleOwners, calendarYear);
+            rothConversion = rothConversionResult.getTotalConversion();
 
-        rothConversion = rothConversionResult.getTotalConversion();
+            var portfolioAfterConversion = rothConversionResult.getPortfolio();
 
-        ProjectedPortfolio portfolioAfterConversion =
-                rothConversionResult.getPortfolio();
+            List<IncomeSourceAttribution> supplementalIncomeSources = new java.util.ArrayList<>(
+                    rothConversionResult.getIncomeSources(calendarYear));
+            if (openingRmdCalculation != null) {
+                supplementalIncomeSources.addAll(openingRmdCalculation.getIncomeSources());
+            }
+            pensionResult.ifPresent(result -> supplementalIncomeSources.addAll(result.sources()));
+            supplementalIncomeSources.addAll(conditionalSources);
 
-        List<IncomeSourceAttribution> supplementalIncomeSources = new java.util.ArrayList<>(
-                rothConversionResult.getIncomeSources(calendarYear));
-        if (openingRmdCalculation != null) {
-            supplementalIncomeSources.addAll(openingRmdCalculation.getIncomeSources());
+            taxFundingResult =
+                    taxFundingCalculator.calculate(
+                            household,
+                            projectionDate,
+                            portfolioAfterConversion,
+                            totalWithdrawalBreakdown,
+                            withdrawalStrategy,
+                            getProjectionFilingStatus(
+                                    assumptions,
+                                    projectionDate,
+                                    deathView),
+                            projectedGovernmentRules,
+                            rothConversion,
+                            BigDecimal.ZERO,
+                            assumptions.getSocialSecurityColaRate(),
+                            assumptions.getDeathScenarioAssumptions(),
+                            rmdDistributedBeforeProjection,
+                            socialSecurityResult,
+                            availableHouseholdCashForTaxes,
+                            authoritativePensionIncome, supplementalIncomeSources, taxContext, assumptions.getStateTaxAssumptions());
         }
-        pensionResult.ifPresent(result -> supplementalIncomeSources.addAll(result.sources()));
-        supplementalIncomeSources.addAll(conditionalSources);
 
-        TaxFundingResult taxFundingResult =
-                taxFundingCalculator.calculate(
-                        household,
-                        projectionDate,
-                        portfolioAfterConversion,
-                        totalWithdrawalBreakdown,
-                        withdrawalStrategy,
-                        getProjectionFilingStatus(
-                                assumptions,
-                                projectionDate,
-                                deathView),
-                        projectedGovernmentRules,
-                        rothConversion,
-                        BigDecimal.ZERO,
-                        assumptions.getSocialSecurityColaRate(),
-                        assumptions.getDeathScenarioAssumptions(),
-                        rmdDistributedBeforeProjection,
-                        socialSecurityResult,
-                        availableHouseholdCashForTaxes,
-                        authoritativePensionIncome, supplementalIncomeSources, taxContext, assumptions.getStateTaxAssumptions());
-
-        BigDecimal taxFundingWithdrawal =
-                taxFundingResult.getAdditionalWithdrawal();
-
-        BigDecimal totalPortfolioWithdrawal =
-                portfolioWithdrawal.add(
-                        taxFundingWithdrawal);
-
-        FederalTaxCalculation federalTaxCalculation =
-                taxFundingResult.getFederalTaxCalculation();
-
-        ProductionStateTaxResult stateTaxCalculation =
-                taxFundingResult.getStateTaxCalculation();
+        BigDecimal taxFundingWithdrawal = arkansas == null ? taxFundingResult.getAdditionalWithdrawal()
+                : arkansas.funding().spendable();
+        BigDecimal totalPortfolioWithdrawal = (arkansas == null ? portfolioWithdrawal
+                : totalWithdrawalBreakdown.getTotalWithdrawal()).add(taxFundingWithdrawal);
+        FederalTaxCalculation federalTaxCalculation = arkansas == null ? taxFundingResult.getFederalTaxCalculation()
+                : arkansas.funding().annualTaxFacts().federal();
+        ProductionStateTaxResult stateTaxCalculation = arkansas == null ? taxFundingResult.getStateTaxCalculation() : null;
 
         int coveredIndividuals =
                 calculateCoveredMedicareParticipants(
@@ -826,12 +887,6 @@ public class ProjectionEngine {
                         projectionDate,
                         deathView);
 
-
-        FilingStatus projectionFilingStatus =
-                getProjectionFilingStatus(
-                        assumptions,
-                        projectionDate,
-                        deathView);
 
         MedicarePremiumCalculation medicarePremiumCalculation =
                 authoritativeMedicarePremium == null
@@ -865,27 +920,35 @@ public class ProjectionEngine {
                     medicarePremiumCalculation);
         }
 
-        HouseholdCashSettlement cashSettlement =
-                HouseholdCashSettlement.calculate(
-                        guaranteedIncome,
-                        projectedPeriodRmdResult.getTotalRmd(),
-                        spendingWithdrawal,
-                        taxFundingWithdrawal,
-                        annualExpenses,
-                        medicarePremiumCalculation
-                                .totalAnnualMedicarePremium(),
-                        taxFundingResult.getTotalIncomeTax());
+        HouseholdCashSettlement cashSettlement;
+        ProjectedPortfolio endingPortfolio;
+        if (arkansas != null) {
+            var settlement = com.daviddunn.retirementplanner.domain.tax.ArkansasAnnualFunding.settle(arkansas.funding());
+            cashSettlement = settlement.cash();
+            endingPortfolio = settlement.portfolio();
+        } else {
+            cashSettlement =
+                    HouseholdCashSettlement.calculate(
+                            guaranteedIncome,
+                            projectedPeriodRmdResult.getTotalRmd(),
+                            spendingWithdrawal,
+                            taxFundingWithdrawal,
+                            annualExpenses,
+                            medicarePremiumCalculation
+                                    .totalAnnualMedicarePremium(),
+                            taxFundingResult.getTotalIncomeTax());
 
-        ProjectedPortfolio portfolioAfterTaxWithdrawal =
-                withdrawalAllocator.applyAdditionalWithdrawal(
-                        portfolioAfterConversion,
-                        taxFundingWithdrawal,
-                        withdrawalStrategy);
+            ProjectedPortfolio portfolioAfterTaxWithdrawal =
+                    withdrawalAllocator.applyAdditionalWithdrawal(
+                            rothConversionResult.getPortfolio(),
+                            taxFundingWithdrawal,
+                            withdrawalStrategy);
 
-        ProjectedPortfolio endingPortfolio =
-                portfolioAfterTaxWithdrawal
-                        .withAdditionalRetainedNonQualifiedAssets(
-                                cashSettlement.retainedHouseholdSurplus());
+            endingPortfolio =
+                    portfolioAfterTaxWithdrawal
+                            .withAdditionalRetainedNonQualifiedAssets(
+                                    cashSettlement.retainedHouseholdSurplus());
+        }
 
         List<ProjectedAccountSnapshot> endingAccountSnapshots =
                 endingPortfolio
@@ -912,6 +975,7 @@ public class ProjectionEngine {
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
+        if (arkansas != null) endingAssets = endingPortfolio.getTotalBalance();
         Person primaryPerson =
                 household.getPrimaryPerson();
 
@@ -975,7 +1039,8 @@ public class ProjectionEngine {
                         household.hasSpouse() ? rothConversionResult.getConversion(AccountOwnership.SPOUSE) : null,
                         estimatedHeirTax,
                         afterTaxEstateValue,
-                        primaryPersonAge, taxFundingResult.getIncomeSources());
+                        primaryPersonAge, arkansas == null ? taxFundingResult.getIncomeSources() : arkansas.funding().incomeSources(),
+                        arkansas == null ? null : arkansas.disclosure());
 
         return new ProjectionYearCalculation(
                 projectionYear,

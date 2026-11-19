@@ -27,6 +27,10 @@ public class ProjectionCsvExporter {
                     "Projection cannot be empty.");
         }
 
+        if (projection.getYears().getFirst().arkansasValidationTax().isPresent()) {
+            ArkansasValidationReport.capture(projection).writeCsv(file);
+            return;
+        }
         if (nonInvestableProjections == null) {
             nonInvestableProjections =
                     List.of();

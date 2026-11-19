@@ -24,18 +24,22 @@ import static java.math.BigDecimal.ZERO;
 /** Isolated Arkansas annual tax calculation. Arkansas has no production jurisdiction identifier in P1. */
 public final class ArkansasProductionTaxCalculator {
     public static final Policy POLICY = Policy.P_STATUTORY_CENTS;
+    public static final String UNRESOLVED_PENSION_ORIGIN =
+            "Arkansas pension origin may change this year's tax. Verify the original employment-related plan from its documents.";
 
     public enum FailureCategory { LEGAL_OR_SOURCE, ATTRIBUTION, OUTSIDE_REVIEWED_POLICY }
 
     /** Arkansas-specific output with the shared state-tax status and reasons. No surrogate jurisdiction. */
     public record Result(Optional<BigDecimal> estimatedIncomeTax, Optional<FailureCategory> failureCategory, List<String> limitations,
-                         List<StateTaxUnavailableReason> unavailableReasons) {
+                         List<StateTaxUnavailableReason> unavailableReasons, Optional<Election> election) {
         public Result {
             Objects.requireNonNull(estimatedIncomeTax);
             Objects.requireNonNull(failureCategory);
+            Objects.requireNonNull(election);
             limitations = List.copyOf(limitations);
             unavailableReasons = List.copyOf(unavailableReasons);
-            if (estimatedIncomeTax.isPresent() != unavailableReasons.isEmpty()
+            if (estimatedIncomeTax.isPresent() != election.isPresent()
+                    || estimatedIncomeTax.isPresent() != unavailableReasons.isEmpty()
                     || estimatedIncomeTax.isPresent() == failureCategory.isPresent()
                     || estimatedIncomeTax.filter(tax -> tax.signum() < 0).isPresent() || limitations.isEmpty()) {
                 throw new IllegalArgumentException("Invalid isolated Arkansas tax result.");
@@ -51,10 +55,24 @@ public final class ArkansasProductionTaxCalculator {
         }
     }
 
+    public record Election(BigDecimal retirementExclusion, BigDecimal standardDeduction,
+            BigDecimal credits, BigDecimal taxableNet, List<ArkansasJointWorksheet.Recipient> recipients) {
+        public Election {
+            for (var amount : List.of(retirementExclusion, standardDeduction, credits, taxableNet)) {
+                if (amount.signum() < 0) throw new IllegalArgumentException("Negative Arkansas worksheet amount.");
+            }
+            recipients = List.copyOf(recipients);
+            if (recipients.isEmpty() || recipients.size() > 2
+                    || recipients.stream().map(ArkansasJointWorksheet.Recipient::owner).distinct().count() != recipients.size()) {
+                throw new IllegalArgumentException("Invalid Arkansas worksheet recipients.");
+            }
+        }
+    }
+
     private enum AgeCredit { ELIGIBLE, INELIGIBLE, UNCERTAIN }
 
     /** A continuous lower envelope over a homogeneous funding source, including the statutory jumps. */
-    public Optional<BigDecimal> fundingTaxFloor(StateTaxCalculationRequest atStart, ArkansasTaxEvidence evidence,
+    public Optional<BigDecimal> fundingTaxFloor(AnnualIncomeTaxFacts atStart, ArkansasTaxEvidence evidence,
             BigDecimal maximumOrdinaryIncrease) {
         if (maximumOrdinaryIncrease.signum() < 0) throw new IllegalArgumentException("Negative funding interval.");
         try {
@@ -89,7 +107,7 @@ public final class ArkansasProductionTaxCalculator {
     }
 
     /** Exclusion-only envelope. Unknown policy or base evidence supplies no positive lower bound. */
-    public Optional<TargetTaxFloor> prepareTargetTaxFloor(StateTaxCalculationRequest base, ArkansasTaxEvidence evidence) {
+    public Optional<TargetTaxFloor> prepareTargetTaxFloor(AnnualIncomeTaxFacts base, ArkansasTaxEvidence evidence) {
         try {
             var household = base.household();
             boolean joint = base.filingStatus() == FilingStatus.MARRIED_FILING_JOINTLY;
@@ -116,6 +134,10 @@ public final class ArkansasProductionTaxCalculator {
 
     /** The request contributes annual facts. Its registered state is irrelevant to this explicit isolated call. */
     public Result calculateUnregistered(StateTaxCalculationRequest request, ArkansasTaxEvidence evidence) {
+        return calculateUnregistered(request.annualFacts(), evidence);
+    }
+
+    public Result calculateUnregistered(AnnualIncomeTaxFacts request, ArkansasTaxEvidence evidence) {
         Objects.requireNonNull(request);
         Objects.requireNonNull(evidence);
         if (request.taxYear() < ArkansasTaxRules.REVIEWED_YEAR) {
@@ -147,8 +169,14 @@ public final class ArkansasProductionTaxCalculator {
                                 && firstChoice.maximum().compareTo(alternate.maximum()) == 0,
                         "Arkansas age-65 credit eligibility is material and cannot be verified at the modeled death or from the available birth dates.");
             }
-            requireLegal(firstChoice.minimum().compareTo(firstChoice.maximum()) == 0,
-                    "Arkansas age-59½ receipt timing is material across the possible taxable range.");
+            if (firstChoice.minimum().compareTo(firstChoice.maximum()) != 0) {
+                if (income.unresolvedPensionRecipients().stream().anyMatch(recipient ->
+                        income.certain().getOrDefault(recipient, ZERO).compareTo(ArkansasTaxRules.RETIREMENT_LIMIT) < 0)) {
+                    return unsupported(StateTaxUnavailableReason.MISSING_RETIREMENT_QUALIFICATION,
+                            FailureCategory.LEGAL_OR_SOURCE, UNRESOLVED_PENSION_ORIGIN);
+                }
+                requireLegal(false, "Arkansas age-59½ receipt timing is material across the possible taxable range.");
+            }
 
             var selected = firstChoice.atCertainReceipts();
             if (selected.tax().signum() > 0 && !ArkansasTaxRules.supportsLowIncomeProof(request.taxYear())) {
@@ -169,7 +197,9 @@ public final class ArkansasProductionTaxCalculator {
             if (request.taxYear() != reviewedYear)
                 notes.add("Arkansas " + reviewedYear + " reviewed tax parameters held nominally for " + request.taxYear()
                         + ". Statutory low-income admission ceilings are bounded separately for that year.");
-            return new Result(Optional.of(selected.tax()), Optional.empty(), notes, List.of());
+            var election = new Election(selected.retirementSubtraction(), selected.standardDeduction(),
+                    selected.credits(), selected.netIncome(), firstChoice.selectedRecipients());
+            return new Result(Optional.of(selected.tax()), Optional.empty(), notes, List.of(), Optional.of(election));
         } catch (ArkansasIncomeReconciliation.Rejected rejected) {
             return unsupported(rejected.reason, rejected.category, rejected.getMessage());
         } catch (NiitUnsupportedInputException | DateTimeException | IllegalArgumentException rejected) {
@@ -202,7 +232,7 @@ public final class ArkansasProductionTaxCalculator {
                 && lowestPossibleNet(income, filers).compareTo(ArkansasTaxRules.additionalCreditNetCeiling(year)) > 0;
     }
 
-    private static void validateDeaths(StateTaxCalculationRequest request, ArkansasTaxEvidence evidence, boolean joint) {
+    private static void validateDeaths(AnnualIncomeTaxFacts request, ArkansasTaxEvidence evidence, boolean joint) {
         evidence.modeledDeaths().forEach((owner, death) -> {
             var household = request.household();
             var birth = household.birthDates().get(owner);
@@ -213,7 +243,7 @@ public final class ArkansasProductionTaxCalculator {
         });
     }
 
-    private static AgeCredit ageCredit(StateTaxCalculationRequest request, ArkansasTaxEvidence evidence, AccountOwnership owner) {
+    private static AgeCredit ageCredit(AnnualIncomeTaxFacts request, ArkansasTaxEvidence evidence, AccountOwnership owner) {
         var birth = request.household().birthDates().get(owner);
         if (birth == null) return AgeCredit.UNCERTAIN;
         var cutoff = LocalDate.of(request.taxYear(), 12, 31).plusDays(1);
@@ -230,7 +260,7 @@ public final class ArkansasProductionTaxCalculator {
     }
 
     private static Result unsupported(StateTaxUnavailableReason reason, FailureCategory category, String explanation) {
-        return new Result(Optional.empty(), Optional.of(category), List.of(explanation), List.of(reason));
+        return new Result(Optional.empty(), Optional.of(category), List.of(explanation), List.of(reason), Optional.empty());
     }
 
     public static List<String> planningLimitations() {

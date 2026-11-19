@@ -74,17 +74,22 @@ public final class AnalysisSnapshotCodec {
 
     public record Content(AnalysisPayload payload, SnapshotContext context,
             @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-            ConditionalBenefitAnalysisExecution benefitExecution) { }
+            ConditionalBenefitAnalysisExecution benefitExecution,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            ArkansasAnalysisProvenance arkansasExecution) { }
     public String digest(AnalysisPayload payload, SnapshotContext context) {
         return digest(payload, context, mapper);
     }
     public String digest(AnalysisPayload payload, SnapshotContext context, ConditionalBenefitAnalysisExecution benefits) {
-        if (benefits == null) return digest(payload, context);
-        return digestContent(new Content(payload, context, benefits), mapper);
+        return digest(payload, context, benefits, null);
+    }
+    public String digest(AnalysisPayload payload, SnapshotContext context, ConditionalBenefitAnalysisExecution benefits,
+            ArkansasAnalysisProvenance arkansas) {
+        return digestContent(new Content(payload, context, benefits, arkansas), mapper);
     }
 
     private String digest(AnalysisPayload payload, SnapshotContext context, ObjectMapper writer) {
-        return digestContent(new Content(payload, context, null), writer);
+        return digestContent(new Content(payload, context, null, null), writer);
     }
     private String digestContent(Content content, ObjectMapper writer) {
         try {
@@ -351,13 +356,13 @@ public final class AnalysisSnapshotCodec {
                 && (!s.completedAt().equals(mc.completedAt()) || !s.context().startedAt().equals(mc.startedAt())))
             throw new IOException("Monte Carlo timestamps do not match the envelope.");
         if (s.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
-                && (mc.hasExpenseExecution() || mc.benefitExecution() != null)) {
+                && (mc.hasExpenseExecution() || mc.benefitExecution() != null || s.arkansasExecution() != null)) {
             var expected = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().storedFingerprint(mc);
             if (!expected.valid() || !expected.fingerprint().equals(s.inputFingerprint())
                     || !expected.contextFingerprint().equals(s.contextFingerprint()))
-                throw new IOException("Stochastic expense request fingerprint cannot be verified.");
+                throw new IOException("Saved stochastic request fingerprint cannot be verified.");
         }
-        if (digest(s.payload(), s.context(), s.benefitExecution()).equals(s.payloadDigest())) return;
+        if (digest(s.payload(), s.context(), s.benefitExecution(), s.arkansasExecution()).equals(s.payloadDigest())) return;
         if (s.kind() == AnalysisKind.COUPLE_SOCIAL_SECURITY
                 && usesLegacySocialSecurityRequestShape(s)
                 && digest(s.payload(), s.context(), legacySocialSecurityMapper).equals(s.payloadDigest())) return;

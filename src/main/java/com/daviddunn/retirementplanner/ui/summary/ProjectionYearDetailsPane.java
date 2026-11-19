@@ -697,6 +697,16 @@ public class ProjectionYearDetailsPane
             GridPane grid,
             int row) {
 
+        var arkansas = year.arkansasValidationTax().orElse(null);
+        if (arkansas != null) {
+            row = addSubsectionHeader(grid, row, arkansas.restoredHistory() ? "Arkansas Retained History" : "Arkansas Validation");
+            row = addMoneyComparisonRow(grid, row, "Arkansas State Income Tax", year.getStateIncomeTax(),
+                    getBaselineValue(ProjectionYear::getStateIncomeTax));
+            row = addMoneyComparisonRow(grid, row, "Taxable Funding Income", arkansas.taxableFundingIncome(),
+                    getBaselineValue(y -> y.arkansasValidationTax().map(t -> t.taxableFundingIncome()).orElse(null)));
+            return addMoneyComparisonRow(grid, row, "Arkansas Retirement Exclusion", arkansas.provenance().election().retirementExclusion(),
+                    getBaselineValue(y -> y.arkansasValidationTax().map(t -> t.provenance().election().retirementExclusion()).orElse(null)));
+        }
         if (year.getStateTaxJurisdiction() != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI) {
             row = addSubsectionHeader(grid, row, year.getStateTaxJurisdiction().displayName());
             int taxRow = row;
@@ -771,9 +781,7 @@ public class ProjectionYearDetailsPane
                 row,
                 "Michigan Income Tax",
                 year.getMichiganIncomeTax(),
-                getBaselineValue(
-                        ProjectionYear::
-                                getMichiganIncomeTax));
+                getBaselineValue(y -> y.arkansasValidationTax().isPresent() ? null : y.getMichiganIncomeTax()));
     }
 
 

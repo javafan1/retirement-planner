@@ -26,4 +26,8 @@ public record StateTaxCalculationRequest(
         Objects.requireNonNull(projectedRules);
         Objects.requireNonNull(assumptions);
     }
+
+    public AnnualIncomeTaxFacts annualFacts() {
+        return new AnnualIncomeTaxFacts(taxYear, filingStatus, household, income, federal, projectedRules);
+    }
 }

@@ -28,7 +28,7 @@ public final class ProductionStateTaxService {
         registry.put(StateTaxJurisdiction.MS, new MississippiProductionTaxCalculator());
         registry.put(StateTaxJurisdiction.AL, new AlabamaProductionTaxCalculator());
         var zeroTax = new NoGeneralIndividualIncomeTaxCalculator();
-        for (var jurisdiction : StateTaxJurisdiction.values()) {
+        for (var jurisdiction : StateTaxJurisdiction.productionChoices()) {
             if (jurisdiction.usesNoGeneralIndividualIncomeTaxModel()) {
                 registry.put(jurisdiction, zeroTax);
             }
@@ -38,6 +38,9 @@ public final class ProductionStateTaxService {
 
     /** Immutable calculator configuration, useful for bounded evaluation and contract tests. */
     public ProductionStateTaxService(Map<StateTaxJurisdiction, StateIncomeTaxCalculator> calculators) {
+        if (calculators.keySet().stream().anyMatch(state -> !state.productionAdmitted())) {
+            throw new IllegalArgumentException("Unsupported production state tax jurisdiction.");
+        }
         this.calculators = Map.copyOf(calculators);
     }
 
@@ -47,7 +50,7 @@ public final class ProductionStateTaxService {
             throw new IllegalArgumentException("Unsupported production state tax calculation method.");
         }
         var calculator = calculators.get(request.assumptions().jurisdiction());
-        if (calculator == null) {
+        if (!request.assumptions().jurisdiction().productionAdmitted() || calculator == null) {
             throw new IllegalArgumentException("Unsupported production state tax jurisdiction.");
         }
         var result = Objects.requireNonNull(calculator.calculate(request));

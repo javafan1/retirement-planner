@@ -7,7 +7,22 @@ public final class AnalysisCompatibilityPolicy {
     public record Assessment(State state, String explanation) { }
     public Assessment assess(AnalysisSnapshot saved, AnalysisFingerprintService.Assessment inputs,
             Map<String, String> algorithms, Map<String, String> references) {
+        return assess(saved, inputs, algorithms, references, null);
+    }
+
+    /** Controlled comparison uses effective policies explicitly; ordinary workflows have no Arkansas execution context. */
+    public Assessment assessArkansas(AnalysisSnapshot saved, AnalysisFingerprintService.Assessment inputs,
+            Map<String, String> algorithms, Map<String, String> references, Map<String, String> policies) {
+        return assess(saved, inputs, algorithms, references, Map.copyOf(policies));
+    }
+
+    private Assessment assess(AnalysisSnapshot saved, AnalysisFingerprintService.Assessment inputs,
+            Map<String, String> algorithms, Map<String, String> references, Map<String, String> arkansasPolicies) {
         if (saved == null) return new Assessment(State.NO_SAVED_RESULTS, "No saved results.");
+        if (saved.arkansasExecution() != null && arkansasPolicies == null)
+            return new Assessment(State.OUTDATED, "Historical Arkansas calculation. Original results remain available.");
+        if (saved.arkansasExecution() != null && !saved.arkansasExecution().policiesMatch(arkansasPolicies))
+            return new Assessment(State.OUTDATED, "Arkansas calculation policies changed. Original results remain available.");
         boolean enabledExpenses = saved.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc
                 && mc.expenseExecution() != null;
         boolean pairedExpenses = saved.payload() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot mc

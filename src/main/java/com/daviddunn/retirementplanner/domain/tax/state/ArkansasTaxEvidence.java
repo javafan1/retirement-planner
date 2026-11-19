@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax.state;
 
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
+import com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 
 import java.time.LocalDate;
@@ -52,5 +53,20 @@ public record ArkansasTaxEvidence(
 
     ReceiptFacts factsFor(IncomeSourceAttribution source) {
         return receipts.getOrDefault(source, UNKNOWN);
+    }
+
+    static SourceQualification pensionQualification(RetirementIncomeSourceOrigin origin, ReceiptFacts facts) {
+        if (facts.qualification() == SourceQualification.ORDINARY_EMPLOYMENT_PENSION
+                && origin != RetirementIncomeSourceOrigin.UNKNOWN
+                && origin != RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN) {
+            throw new ArkansasIncomeReconciliation.Rejected(StateTaxUnavailableReason.MISSING_RETIREMENT_QUALIFICATION,
+                    ArkansasProductionTaxCalculator.FailureCategory.ATTRIBUTION,
+                    "Arkansas pension source origin contradicts the supplied employment-plan evidence.");
+        }
+        return switch (origin) {
+            case EMPLOYER_RETIREMENT_PLAN -> SourceQualification.ORDINARY_EMPLOYMENT_PENSION;
+            case UNKNOWN -> facts.qualification();
+            case INDIVIDUALLY_PURCHASED_CONTRACT, OTHER_OR_SPECIAL_ARRANGEMENT -> SourceQualification.OUTSIDE_ORDINARY_SCOPE;
+        };
     }
 }

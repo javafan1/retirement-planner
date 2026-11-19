@@ -7,6 +7,7 @@ import com.daviddunn.retirementplanner.domain.model.MortalityCategory;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.PensionPlanClassification;
+import com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin;
 import com.daviddunn.retirementplanner.ui.settings.ApplicationThemeManager;
 import javafx.application.Platform;
 import javafx.scene.Node;
@@ -19,8 +20,10 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
+import javafx.scene.control.skin.ComboBoxListViewSkin;
 import javafx.scene.layout.StackPane;
 import javafx.scene.text.Text;
 import javafx.stage.Screen;
@@ -200,11 +203,49 @@ class PensionLayoutAndRequiredNameTest {
                                         rendered.toString());
                             }
                             choice.setValue(PensionPlanClassification.DEFINED_BENEFIT_414J);
+                            var origin = originChoice(dialog, guided);
+                            var originLabels = pane.lookupAll(".label").stream().filter(Label.class::isInstance)
+                                    .map(Label.class::cast).filter(label -> label.getLabelFor() == origin).toList();
+                            assertEquals(1, originLabels.size());
+                            var originBounds = origin.localToScene(origin.getBoundsInLocal());
+                            assertTrue(choiceBounds.getMaxY() <= originLabels.getFirst().localToScene(
+                                    originLabels.getFirst().getBoundsInLocal()).getMinY());
+                            assertTrue(originLabels.getFirst().localToScene(originLabels.getFirst().getBoundsInLocal())
+                                    .getMaxY() <= originBounds.getMinY());
+                            if (legend != null) {
+                                assertTrue(originBounds.getMaxY() <= legend.localToScene(legend.getBoundsInLocal()).getMinY());
+                            }
+                            assertTrue(origin.getTooltip().getText().contains("original plan documents"));
+                            for (var value : RetirementIncomeSourceOrigin.values()) {
+                                origin.setValue(value);
+                                pane.applyCss();
+                                pane.layout();
+                                String caption = origin.getConverter().toString(value);
+                                var selected = origin.lookupAll(".text").stream().filter(Text.class::isInstance)
+                                        .map(Text.class::cast).filter(text -> caption.equals(text.getText())).toList();
+                                assertEquals(1, selected.size(), caption);
+                                assertTrue(selected.getFirst().localToScene(selected.getFirst().getBoundsInLocal())
+                                        .getMaxX() <= pane.getWidth(), caption);
+                            }
+                            origin.setValue(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
                             if (pane.lookup("#pension-dialog-form-scroll") instanceof ScrollPane scroll) {
                                 scroll.setVvalue(1);
                             }
-                            save(pane, theme, "classification-" + (guided ? "guided" : "regular") + "-"
-                                    + (configuredScale == null ? "default" : configuredScale), Path.of("target/phase6e-n3/previews"));
+                            save(pane, theme, "origin-" + (guided ? "guided" : "regular") + "-"
+                                    + (configuredScale == null ? "default" : configuredScale), Path.of("target/phase6e-p3c1/previews"));
+                            origin.show();
+                            try {
+                                var popup = (ListView<?>) ((ComboBoxListViewSkin<?>) origin.getSkin()).getPopupContent();
+                                popup.applyCss();
+                                popup.layout();
+                                var captions = popup.lookupAll(".text").stream().filter(Text.class::isInstance)
+                                        .map(Text.class::cast).map(Text::getText).toList();
+                                for (var value : RetirementIncomeSourceOrigin.values()) {
+                                    assertTrue(captions.contains(origin.getConverter().toString(value)), captions.toString());
+                                }
+                            } finally {
+                                origin.hide();
+                            }
                         } finally {
                             dialog.close();
                         }
@@ -212,6 +253,46 @@ class PensionLayoutAndRequiredNameTest {
                 });
             }
         }
+    }
+
+    @Test void originAndLegalClassificationAreIndependentDraftEditsInBothEditors() throws Exception {
+        fx(() -> {
+            for (boolean guided : new boolean[] {false, true}) {
+                var original = new Pension("Plan", AccountOwnership.PRIMARY, LocalDate.of(2030, 1, 1),
+                        null, BigDecimal.valueOf(600), BigDecimal.ZERO);
+                original.setPlanClassification(PensionPlanClassification.DEFINED_BENEFIT_414J);
+                var canceled = new PensionDialog(original, household(), guided);
+                canceled.show();
+                originChoice(canceled, guided).setValue(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+                ((Button) canceled.getDialogPane().lookupButton(ButtonType.CANCEL)).fire();
+                assertNull(canceled.getResult());
+                assertEquals(RetirementIncomeSourceOrigin.UNKNOWN, original.getSourceOrigin());
+
+                var saved = new PensionDialog(original, household(), guided);
+                saved.show();
+                originChoice(saved, guided).setValue(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+                ((Button) saved.getDialogPane().lookupButton(ButtonType.OK)).fire();
+                assertNotNull(saved.getResult());
+                assertEquals(PensionPlanClassification.DEFINED_BENEFIT_414J, saved.getResult().getPlanClassification());
+                assertEquals(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN, saved.getResult().getSourceOrigin());
+
+                var legalEdit = new PensionDialog(saved.getResult(), household(), guided);
+                legalEdit.show();
+                @SuppressWarnings("unchecked")
+                var legalChoice = (ComboBox<PensionPlanClassification>) legalEdit.getDialogPane().lookup(
+                        guided ? "#wizard-input-legal-plan-classification" : "#pension-plan-classification");
+                legalChoice.setValue(PensionPlanClassification.DEFINED_CONTRIBUTION);
+                ((Button) legalEdit.getDialogPane().lookupButton(ButtonType.OK)).fire();
+                assertEquals(PensionPlanClassification.DEFINED_CONTRIBUTION, legalEdit.getResult().getPlanClassification());
+                assertEquals(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN, legalEdit.getResult().getSourceOrigin());
+            }
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ComboBox<RetirementIncomeSourceOrigin> originChoice(PensionDialog dialog, boolean guided) {
+        return (ComboBox<RetirementIncomeSourceOrigin>) dialog.getDialogPane().lookup(
+                guided ? "#wizard-input-original-retirement-income-source" : "#pension-source-origin");
     }
 
     @Test void accountNameIsRequiredAndTrimmedAtEditorBoundary() throws Exception {

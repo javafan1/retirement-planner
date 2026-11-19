@@ -22,7 +22,7 @@ class RetirementParticipantPersistenceTest {
             RetirementParticipantFacts.SeparationStatus.SEPARATED, LocalDate.of(2029, 1, 1),
             RetirementParticipantFacts.RetirementConditionsStatus.MET, LocalDate.of(2030, 1, 1));
 
-    @ParameterizedTest @EnumSource(StateTaxJurisdiction.class)
+    @ParameterizedTest @EnumSource(value = StateTaxJurisdiction.class, mode = EnumSource.Mode.EXCLUDE, names = "AR")
     void planScenarioCopyAndLegacyRoundTripsPreserveSafeFacts(StateTaxJurisdiction state) throws Exception {
         var plan = RetirementPlanFactory.createSinglePersonPlan();
         plan.getHousehold().getPrimaryPerson().setBirthDate(LocalDate.of(1960, 1, 1));

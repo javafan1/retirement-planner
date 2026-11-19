@@ -26,16 +26,28 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
 
     private final RetirementPlanScenarioCopyService copyService;
     private final ProjectionMetricsCalculator metricsCalculator;
+    private final java.util.function.Supplier<ProjectionEngine> engineFactory;
 
     public IntegratedSocialSecurityStrategyEvaluator() {
         this(new RetirementPlanScenarioCopyService(), new ProjectionMetricsCalculator());
     }
 
+    public IntegratedSocialSecurityStrategyEvaluator(ProjectionEngine engine) {
+        this(new RetirementPlanScenarioCopyService(), new ProjectionMetricsCalculator(), () -> engine);
+        Objects.requireNonNull(engine);
+    }
+
     IntegratedSocialSecurityStrategyEvaluator(
             RetirementPlanScenarioCopyService copyService,
             ProjectionMetricsCalculator metricsCalculator) {
+        this(copyService, metricsCalculator, ProjectionEngine::new);
+    }
+
+    private IntegratedSocialSecurityStrategyEvaluator(RetirementPlanScenarioCopyService copyService,
+            ProjectionMetricsCalculator metricsCalculator, java.util.function.Supplier<ProjectionEngine> engineFactory) {
         this.copyService = Objects.requireNonNull(copyService);
         this.metricsCalculator = Objects.requireNonNull(metricsCalculator);
+        this.engineFactory = engineFactory;
     }
 
     public IntegratedSocialSecurityStrategyResult evaluate(
@@ -116,7 +128,7 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
             ProjectionEvaluationContext evaluationContext) {
         boolean advanced = new SocialSecurityProjectionIncomeProvider()
                 .supportsAdvancedPath(scenario);
-        Projection projection = new ProjectionEngine().project(
+        Projection projection = engineFactory.get().project(
                 scenario, evaluationContext);
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(scenario, evaluationContext, projection.getYears());
         ProjectionMetrics metrics = metricsCalculator.calculate(scenario, projection);

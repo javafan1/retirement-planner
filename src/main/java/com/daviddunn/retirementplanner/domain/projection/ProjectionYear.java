@@ -24,6 +24,7 @@ public class ProjectionYear {
     private final List<IncomeSourceAttribution> incomeSources;
     private final MichiganTaxCalculation michiganTaxCalculation;
     private final ProductionStateTaxResult stateTaxCalculation;
+    private final ArkansasValidationTax arkansasValidationTax;
 
     @JsonIgnore
     public java.util.Optional<MichiganTaxCalculation> michiganTaxCalculation() {
@@ -239,6 +240,7 @@ public class ProjectionYear {
         this.incomeSources = List.of();
         this.michiganTaxCalculation = null;
         this.stateTaxCalculation = null;
+        this.arkansasValidationTax = null;
         this.primaryRothConversion = BigDecimal.ZERO;
         this.spouseRothConversion = BigDecimal.ZERO;
     }
@@ -385,6 +387,7 @@ public class ProjectionYear {
         this.incomeSources = List.of();
         this.michiganTaxCalculation = null;
         this.stateTaxCalculation = null;
+        this.arkansasValidationTax = null;
         this.primaryRothConversion = BigDecimal.ZERO;
         this.spouseRothConversion = BigDecimal.ZERO;
     }
@@ -534,9 +537,55 @@ public class ProjectionYear {
             BigDecimal afterTaxEstateValue,
             int primaryPersonAge,
             List<IncomeSourceAttribution> incomeSources) {
+        this(projectionYear, calendarYear, beginningInvestableAssets, investmentGrowth, guaranteedIncome,
+                socialSecurityResult, annualExpenses, cashFlowNeed, portfolioWithdrawal, requiredMinimumDistribution,
+                rmdDistributedBeforeProjection, rmdDistributedInProjection, excessRmd, beginningRetainedNonQualifiedAssets, retainedNonQualifiedAssetGrowth,
+                endingRetainedNonQualifiedAssets, householdCashSettlement, endingInvestableAssets, endingAccountSnapshots, federalTaxCalculation,
+                stateTaxCalculation, medicarePremiumCalculation, taxFundingWithdrawal, requestedRothConversion, rothConversion,
+                primaryRothConversion, spouseRothConversion, estimatedHeirTax, afterTaxEstateValue, primaryPersonAge,
+                incomeSources, null);
+    }
+
+    public ProjectionYear(
+            int projectionYear,
+            int calendarYear,
+            BigDecimal beginningInvestableAssets,
+            BigDecimal investmentGrowth,
+            BigDecimal guaranteedIncome,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal annualExpenses,
+            BigDecimal cashFlowNeed,
+            BigDecimal portfolioWithdrawal,
+            BigDecimal requiredMinimumDistribution,
+            BigDecimal rmdDistributedBeforeProjection,
+            BigDecimal rmdDistributedInProjection,
+            BigDecimal excessRmd,
+            BigDecimal beginningRetainedNonQualifiedAssets,
+            BigDecimal retainedNonQualifiedAssetGrowth,
+            BigDecimal endingRetainedNonQualifiedAssets,
+            HouseholdCashSettlement householdCashSettlement,
+            BigDecimal endingInvestableAssets,
+            List<ProjectedAccountSnapshot> endingAccountSnapshots,
+            FederalTaxCalculation federalTaxCalculation,
+            ProductionStateTaxResult stateTaxCalculation,
+            MedicarePremiumCalculation medicarePremiumCalculation,
+            BigDecimal taxFundingWithdrawal,
+            BigDecimal requestedRothConversion,
+            BigDecimal rothConversion,
+            BigDecimal primaryRothConversion,
+            BigDecimal spouseRothConversion,
+            BigDecimal estimatedHeirTax,
+            BigDecimal afterTaxEstateValue,
+            int primaryPersonAge,
+            List<IncomeSourceAttribution> incomeSources,
+            ArkansasValidationTax arkansasValidationTax) {
         this.incomeSources = List.copyOf(Objects.requireNonNull(incomeSources));
-        this.stateTaxCalculation = Objects.requireNonNull(stateTaxCalculation);
-        this.michiganTaxCalculation = stateTaxCalculation.michiganDetails().orElse(null);
+        if ((stateTaxCalculation == null) == (arkansasValidationTax == null)) {
+            throw new IllegalArgumentException("A projection year requires exactly one state tax result.");
+        }
+        this.stateTaxCalculation = stateTaxCalculation;
+        this.arkansasValidationTax = arkansasValidationTax;
+        this.michiganTaxCalculation = stateTaxCalculation == null ? null : stateTaxCalculation.michiganDetails().orElse(null);
 
         this.projectionYear =
                 projectionYear;
@@ -641,13 +690,14 @@ public class ProjectionYear {
 
 
 
-        this.michiganRetirementIncome = stateTaxCalculation.michiganDetails()
+        this.michiganRetirementIncome = java.util.Optional.ofNullable(this.michiganTaxCalculation)
                 .map(MichiganTaxCalculation::retirementIncome).orElse(BigDecimal.ZERO);
-        this.michiganRetirementDeduction = stateTaxCalculation.michiganDetails()
+        this.michiganRetirementDeduction = java.util.Optional.ofNullable(this.michiganTaxCalculation)
                 .map(MichiganTaxCalculation::retirementDeduction).orElse(BigDecimal.ZERO);
-        this.michiganTaxableIncome = stateTaxCalculation.michiganDetails()
+        this.michiganTaxableIncome = java.util.Optional.ofNullable(this.michiganTaxCalculation)
                 .map(MichiganTaxCalculation::taxableIncome).orElse(BigDecimal.ZERO);
-        this.michiganIncomeTax = stateTaxCalculation.incomeTax();
+        this.michiganIncomeTax = arkansasValidationTax == null ? stateTaxCalculation.incomeTax()
+                : arkansasValidationTax.calculation().incomeTax();
         BigDecimal totalIncomeTax =
                 this.federalIncomeTax
                         .add(this.michiganIncomeTax);
@@ -938,7 +988,15 @@ public class ProjectionYear {
         return java.util.Optional.ofNullable(stateTaxCalculation);
     }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public java.util.Optional<ArkansasValidationTax> arkansasValidationTax() {
+        return java.util.Optional.ofNullable(arkansasValidationTax);
+    }
+
     public StateTaxJurisdiction getStateTaxJurisdiction() {
+        if (arkansasValidationTax != null) {
+            return StateTaxJurisdiction.AR;
+        }
         return stateTaxCalculation == null ? StateTaxJurisdiction.MI : stateTaxCalculation.jurisdiction();
     }
 
@@ -947,6 +1005,9 @@ public class ProjectionYear {
     }
 
     public BigDecimal getMichiganIncomeTax() {
+        if (arkansasValidationTax != null) {
+            throw new IllegalStateException("Arkansas validation tax has no Michigan amount.");
+        }
         return michiganIncomeTax;
     }
 

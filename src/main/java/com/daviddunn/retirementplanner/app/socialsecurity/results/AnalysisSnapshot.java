@@ -10,7 +10,9 @@ public record AnalysisSnapshot(int schemaVersion, int fingerprintVersion, UUID p
         String inputFingerprint, String contextFingerprint, String payloadDigest,
         AnalysisPayload payload, SnapshotContext context, UUID originPlanId,
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-        ConditionalBenefitAnalysisExecution benefitExecution) {
+        ConditionalBenefitAnalysisExecution benefitExecution,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        ArkansasAnalysisProvenance arkansasExecution) {
     public static final int SCHEMA = 1;
     public AnalysisSnapshot(int schemaVersion, int fingerprintVersion, UUID planId,
             AnalysisKind kind, AnalysisKind.Shape shape, UUID runId, Instant completedAt,
@@ -19,7 +21,17 @@ public record AnalysisSnapshot(int schemaVersion, int fingerprintVersion, UUID p
             AnalysisPayload payload, SnapshotContext context, UUID originPlanId) {
         this(schemaVersion, fingerprintVersion, planId, kind, shape, runId, completedAt, applicationBuild,
                 algorithms, references, inputFingerprint, contextFingerprint, payloadDigest, payload, context,
-                originPlanId, null);
+                originPlanId, null, null);
+    }
+    public AnalysisSnapshot(int schemaVersion, int fingerprintVersion, UUID planId,
+            AnalysisKind kind, AnalysisKind.Shape shape, UUID runId, Instant completedAt,
+            String applicationBuild, Map<String, String> algorithms, Map<String, String> references,
+            String inputFingerprint, String contextFingerprint, String payloadDigest,
+            AnalysisPayload payload, SnapshotContext context, UUID originPlanId,
+            ConditionalBenefitAnalysisExecution benefitExecution) {
+        this(schemaVersion, fingerprintVersion, planId, kind, shape, runId, completedAt, applicationBuild,
+                algorithms, references, inputFingerprint, contextFingerprint, payloadDigest, payload, context,
+                originPlanId, benefitExecution, null);
     }
     public AnalysisSnapshot {
         Objects.requireNonNull(planId); Objects.requireNonNull(kind); Objects.requireNonNull(shape);
@@ -43,11 +55,18 @@ public record AnalysisSnapshot(int schemaVersion, int fingerprintVersion, UUID p
         payload.validate(kind);
         ConditionalBenefitAnalyzerValidation.validate(kind, payload, context, benefitExecution, algorithms,
                 inputFingerprint, contextFingerprint);
+        if (arkansasExecution != null) {
+            arkansasExecution.validatePayload(kind, payload);
+        } else if (payload instanceof QuickComparisonSnapshot quick
+                && (quick.baseline().arkansas() != null
+                        || quick.entries().stream().anyMatch(e -> e.detail() != null && e.detail().arkansas() != null))) {
+            throw new IllegalArgumentException("Arkansas integrated results require execution provenance.");
+        }
         if (!payload.successful()) throw new IllegalArgumentException("A last-success snapshot requires a successful candidate.");
     }
     public AnalysisSnapshot clonedTo(UUID target) {
         return new AnalysisSnapshot(schemaVersion, fingerprintVersion, target, kind, shape, runId,
                 completedAt, applicationBuild, algorithms, references, inputFingerprint, contextFingerprint,
-                payloadDigest, payload, context, originPlanId == null ? planId : originPlanId, benefitExecution);
+                payloadDigest, payload, context, originPlanId == null ? planId : originPlanId, benefitExecution, arkansasExecution);
     }
 }

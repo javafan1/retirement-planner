@@ -10,13 +10,19 @@ import java.util.function.Function;
 
 /** Exact comparison with bounded representative execution and deterministic ordered assembly. */
 public final class LongevityWeightedIntegratedStrategyComparisonService {
-    private final LongevityWeightedIntegratedStrategyEvaluator evaluator = new LongevityWeightedIntegratedStrategyEvaluator();
-    private final LongevityWeightedContinuationEvaluator continuationEvaluator = new LongevityWeightedContinuationEvaluator();
+    private final LongevityWeightedIntegratedStrategyEvaluator evaluator;
+    private final LongevityWeightedContinuationEvaluator continuationEvaluator;
+    private final boolean sequential;
     private final int workerLimit;
     private final Function<RepresentativeInput, RepresentativeResult> representativeEvaluation;
 
     public LongevityWeightedIntegratedStrategyComparisonService() {
         this(LongevityWeightedRepresentativeEvaluationCoordinator.DEFAULT_LIMIT);
+    }
+
+    /** A controlled injected engine runs on the caller's thread, including continuation carriers. */
+    public LongevityWeightedIntegratedStrategyComparisonService(com.daviddunn.retirementplanner.domain.projection.ProjectionEngine engine) {
+        this(1, LongevityWeightedIntegratedStrategyComparisonService::evaluateRepresentative, Objects.requireNonNull(engine));
     }
 
     LongevityWeightedIntegratedStrategyComparisonService(int workerLimit) {
@@ -25,9 +31,18 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
 
     LongevityWeightedIntegratedStrategyComparisonService(int workerLimit,
             Function<RepresentativeInput, RepresentativeResult> evaluation) {
+        this(workerLimit, evaluation, null);
+    }
+
+    private LongevityWeightedIntegratedStrategyComparisonService(int workerLimit,
+            Function<RepresentativeInput, RepresentativeResult> evaluation,
+            com.daviddunn.retirementplanner.domain.projection.ProjectionEngine engine) {
         if (workerLimit < 1) throw new IllegalArgumentException("Worker limit must be positive.");
         this.workerLimit = workerLimit;
         this.representativeEvaluation = Objects.requireNonNull(evaluation);
+        sequential = engine != null;
+        evaluator = sequential ? new LongevityWeightedIntegratedStrategyEvaluator(engine) : new LongevityWeightedIntegratedStrategyEvaluator();
+        continuationEvaluator = sequential ? new LongevityWeightedContinuationEvaluator(engine) : new LongevityWeightedContinuationEvaluator();
     }
 
     /** Stage 5C3 + Stage 5C2 sequential oracle, without a coordinator. */
@@ -56,6 +71,7 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
     private LongevityWeightedIntegratedStrategyComparisonResult compare(
             LongevityWeightedIntegratedStrategyComparisonRequest request, boolean optimize, boolean continuations, boolean parallel) {
         Objects.requireNonNull(request, "Comparison request is required.");
+        if (sequential) parallel = false;
         long started = System.nanoTime();
         request.cancellationToken().throwIfCancellationRequested();
         var plan = request.newPlanCopy();

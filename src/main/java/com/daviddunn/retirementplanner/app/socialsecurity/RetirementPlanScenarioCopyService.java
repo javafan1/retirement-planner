@@ -30,4 +30,16 @@ public final class RetirementPlanScenarioCopyService {
                     exception);
         }
     }
+
+    /** A distinct scenario retains editable financial inputs and owns no results from the original plan. */
+    public RetirementPlan copyAsScenario(RetirementPlan source) {
+        var scenario = copy(source);
+        scenario.assignPlanId(java.util.UUID.randomUUID());
+        var baseline = scenario.getBaseline();
+        if (baseline != null && baseline.getProjectionSnapshotId() != null) {
+            scenario.setBaseline(new com.daviddunn.retirementplanner.domain.baseline.ProjectionBaseline(
+                    baseline.getSnapshot(), baseline.getSavedAt(), baseline.getDescription()));
+        }
+        return scenario;
+    }
 }

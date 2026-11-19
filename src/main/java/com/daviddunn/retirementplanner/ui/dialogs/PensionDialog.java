@@ -11,6 +11,7 @@ import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Field;
 import com.daviddunn.retirementplanner.ui.wizard.WizardDialogSupport.Kind;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.PensionPlanClassification;
+import com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import javafx.geometry.Insets;
 import javafx.geometry.Rectangle2D;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class PensionDialog extends Dialog<Pension> {
+    private static final String SOURCE_ORIGIN_LABEL = "Original Retirement Income Source";
 
     private final TextField nameField;
     private final Label nameLabel = new Label("Name:");
@@ -42,6 +44,7 @@ public class PensionDialog extends Dialog<Pension> {
     private final TextField colaRateField;
     private final RetirementParticipantFactsEditor participantFactsEditor;
     private final ComboBox<PensionPlanClassification> planClassificationCombo;
+    private final ComboBox<RetirementIncomeSourceOrigin> sourceOriginCombo;
     private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
     private ScrollPane formScrollPane;
     private GridPane formGrid;
@@ -69,7 +72,8 @@ public class PensionDialog extends Dialog<Pension> {
                     new Field("Monthly Benefit", monthlyBenefitField, Kind.NUMBER, true),
                     new Field("Survivor Monthly Benefit", survivorMonthlyBenefitField, Kind.NUMBER, false),
                     new Field("Annual COLA Rate", colaRateField, Kind.NUMBER, true),
-                    new Field("Legal Plan Classification", planClassificationCombo, Kind.CHOICE, false)),
+                    new Field("Legal Plan Classification", planClassificationCombo, Kind.CHOICE, false),
+                    new Field(SOURCE_ORIGIN_LABEL, sourceOriginCombo, Kind.CHOICE, false)),
                     () -> converter.call(ButtonType.OK));
             WizardDialogSupport.guidance(this, "Name, owner, start date and monthly benefit are required. End date and survivor amount are optional. "
                     + "Annual COLA is a decimal fraction: 0.02 = 2% annually. Survivor amount, when applicable, is optional dollars/month.");
@@ -153,6 +157,33 @@ public class PensionDialog extends Dialog<Pension> {
                 ? PensionPlanClassification.UNKNOWN
                 : pension.getPlanClassification());
         InputHelp.install(planClassificationCombo, "Choose Defined Benefit only for a confirmed IRC §414(j) plan. A cash-balance pension can qualify. Check the original plan documents and leave Unknown / Not Specified if the legal plan type is unverified.");
+        sourceOriginCombo = new ComboBox<>();
+        sourceOriginCombo.setId("pension-source-origin");
+        sourceOriginCombo.getItems().setAll(RetirementIncomeSourceOrigin.values());
+        sourceOriginCombo.setMaxWidth(Double.MAX_VALUE);
+        sourceOriginCombo.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(RetirementIncomeSourceOrigin origin) {
+                if (origin == null) return "";
+                return switch (origin) {
+                    case UNKNOWN -> "Unknown";
+                    case EMPLOYER_RETIREMENT_PLAN -> "Employer Plan";
+                    case INDIVIDUALLY_PURCHASED_CONTRACT -> "Private Contract";
+                    case OTHER_OR_SPECIAL_ARRANGEMENT -> "Other / Special";
+                };
+            }
+
+            @Override
+            public RetirementIncomeSourceOrigin fromString(String text) {
+                throw new UnsupportedOperationException("Pension source is selected from the list.");
+            }
+        });
+        sourceOriginCombo.setValue(pension == null ? RetirementIncomeSourceOrigin.UNKNOWN : pension.getSourceOrigin());
+        InputHelp.install(sourceOriginCombo, "Identify how the original benefit was established. "
+                + "An Employer Plan is an ordinary retirement plan tied directly to the original owner's employment. "
+                + "A Private Contract is purchased individually. Choose Other / Special for arrangements such as "
+                + "military, railroad, disability or divorce-order benefits. This is separate from Defined Benefit "
+                + "or Defined Contribution. Check the original plan documents and choose Unknown if unsure.");
 
         /*
          * Populate controls when editing
@@ -294,6 +325,11 @@ public class PensionDialog extends Dialog<Pension> {
         InputHelp.link(classificationLabel, planClassificationCombo);
         grid.add(classificationLabel, 0, row + 3, 2, 1);
         grid.add(planClassificationCombo, 0, row + 4, 2, 1);
+        Label sourceOriginLabel = new Label(SOURCE_ORIGIN_LABEL);
+        sourceOriginLabel.setWrapText(true);
+        InputHelp.link(sourceOriginLabel, sourceOriginCombo);
+        grid.add(sourceOriginLabel, 0, row + 5, 2, 1);
+        grid.add(sourceOriginCombo, 0, row + 6, 2, 1);
         setResizable(true);
 
         getDialogPane()
@@ -317,7 +353,7 @@ public class PensionDialog extends Dialog<Pension> {
         requiredFieldAttachments.add(RequiredFieldSupport.attach(monthlyBenefitLabel, monthlyBenefitField));
         // The UI always parses this value at submission; the displayed 0.0 is a valid default.
         requiredFieldAttachments.add(RequiredFieldSupport.attach(colaRateLabel, colaRateField));
-        grid.add(RequiredFieldSupport.createLegend(), 0, row + 5, 2, 1);
+        grid.add(RequiredFieldSupport.createLegend(), 0, row + 7, 2, 1);
         setOnShowing(event -> installScrollableForm());
         setOnShown(event -> resizeToScreen());
         participantFactsEditor.setAnimated(false);
@@ -397,6 +433,7 @@ public class PensionDialog extends Dialog<Pension> {
                     survivorMonthlyBenefit);
             result.setRetirementParticipantFacts(participantFactsEditor.value());
             result.setPlanClassification(planClassificationCombo.getValue());
+            result.setSourceOrigin(sourceOriginCombo.getValue());
             return result;
         });
     }

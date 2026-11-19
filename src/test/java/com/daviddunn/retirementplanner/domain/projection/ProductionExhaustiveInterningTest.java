@@ -37,7 +37,7 @@ class ProductionExhaustiveInterningTest {
         }
     }
 
-    @ParameterizedTest @EnumSource(StateTaxJurisdiction.class)
+    @ParameterizedTest @EnumSource(value = StateTaxJurisdiction.class, mode = EnumSource.Mode.EXCLUDE, names = "AR")
     void optimizedPayloadPreservesActualStateAccountAndAttributionGraphs(StateTaxJurisdiction state) throws Exception {
         var plan = state == StateTaxJurisdiction.PA || state == StateTaxJurisdiction.IA
                 ? PennsylvaniaProductionProjectionTest.plan(true, state) : FloridaProductionProjectionTest.plan(true, state);
