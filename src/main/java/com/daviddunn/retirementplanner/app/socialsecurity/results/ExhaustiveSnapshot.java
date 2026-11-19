@@ -35,11 +35,17 @@ public record ExhaustiveSnapshot(
     public static ExhaustiveSnapshot capture(IntegratedSocialSecurityCompleteStrategySearchResult result,
             Duration runtime, int groupLimit, List<Group> groups, Report report,
             CrossReference reference, Instant completed, Selection selection) {
-        return new ExhaustiveSnapshot(RetainedProjectionSnapshot.capture(result.currentPlanBaseline()),
+        var capture = retain(result.currentPlanBaseline());
+        return new ExhaustiveSnapshot(capture,
                 result.rankingMeasure(), result.entries().stream().map(Entry::capture).toList(),
                 result.rankedSuccessfulEntries().stream().map(e -> e.generationOrder()).toList(),
                 result.currentPlanRank().isPresent() ? result.currentPlanRank().getAsInt() : null,
                 runtime, groupLimit, groups, report, reference, completed, selection);
+    }
+
+    static RetainedProjectionSnapshot retain(IntegratedSocialSecurityStrategyResult result) {
+        return result.projection().getYears().stream().anyMatch(year -> year.arkansasValidationTax().isPresent())
+                ? RetainedProjectionSnapshot.captureArkansas(result) : RetainedProjectionSnapshot.capture(result);
     }
 
     @Override public boolean successful() { return !rankedOrders.isEmpty(); }
@@ -112,7 +118,7 @@ public record ExhaustiveSnapshot(
             return new Entry(e.generationOrder(), WeightedSnapshots.Strategy.from(e.strategy()),
                     e.afterTaxEstateRank().isPresent() ? e.afterTaxEstateRank().getAsInt() : null,
                     e.metrics().orElse(null), e.differencesFromCurrentPlan().orElse(null),
-                    e.retainedDetail().map(RetainedProjectionSnapshot::capture).orElse(null),
+                    e.retainedDetail().map(ExhaustiveSnapshot::retain).orElse(null),
                     e.failure().map(f -> new WeightedSnapshots.Failure(f.message(), f.category())).orElse(null));
         }
         IntegratedSocialSecurityCompleteStrategySearchEntry restore() {

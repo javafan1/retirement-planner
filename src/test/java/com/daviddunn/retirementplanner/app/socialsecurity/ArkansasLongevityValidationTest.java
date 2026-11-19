@@ -28,6 +28,43 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ArkansasLongevityValidationTest {
     @Test
+    void productionQuickAndWeightedRunsVerifyTheOrdinaryArkansasInputDocument() {
+        var plan = com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.selectArkansas(Stage4TestPlans.plan());
+        var primary = plan.getHousehold().getPrimaryPerson();
+        primary.getIncomeSources().stream().filter(Pension.class::isInstance).toList().forEach(primary::removeIncomeSource);
+        var pension = new Pension("Employer pension", com.daviddunn.retirementplanner.domain.model.AccountOwnership.PRIMARY,
+                plan.getPlanningAssumptions().getProjectionStartDate(), null, new java.math.BigDecimal("9000"), ZERO,
+                new java.math.BigDecimal("7500"));
+        pension.setSourceOrigin(com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        primary.addIncomeSource(pension);
+        var cancellation = AnalysisCancellationToken.none();
+        var engine = com.daviddunn.retirementplanner.domain.projection.ProjectionEngine.forArkansasProduction();
+        var outcome = assertInstanceOf(com.daviddunn.retirementplanner.domain.projection.ProjectionExecutionResult.Completed.class,
+                engine.projectArkansasWithOutcome(plan, cancellation, ignored -> { }));
+        var projection = CompleteProjectionSnapshot.captureArkansas(UUID.randomUUID(), plan, outcome.projection(), Instant.now());
+        var strategy = Stage4TestPlans.strategy(plan);
+        var value = new SocialSecurityMortalityWeightedStrategyValue(ZERO, ZERO, ZERO, ZERO, ZERO, 1);
+        var quick = ArkansasAnalysisProvenance.runProduction(AnalysisKind.COUPLE_QUICK, List.of(projection), cancellation,
+                active -> new IntegratedSocialSecurityStrategyComparisonService(new IntegratedSocialSecurityStrategyEvaluator(active))
+                        .compareAnalyzerCandidates(plan, List.of(new SocialSecuritySurvivorClaimingOptimizationCell(strategy, value))),
+                result -> QuickComparisonSnapshot.captureArkansas(result, List.of(1),
+                        List.of(new QuickComparisonSnapshot.Candidate(1, WeightedSnapshots.Strategy.from(strategy), value)),
+                        "a".repeat(64), UUID.randomUUID(), 1, "Original strategy"));
+        assertNotNull(quick.evidence());
+        assertTrue(quick.result().entries().getFirst().integratedResult().isPresent());
+
+        var request = LongevityContinuationTest.request(plan,
+                LongevityContinuationTest.mortality(plan, List.of(2031, 2032), List.of(2033)));
+        var weightedRequest = new LongevityWeightedIntegratedStrategyComparisonRequest(plan, List.of(strategy), request.longevityScenarios(),
+                request.valuationDate(), request.realDiscountRate());
+        var weighted = ArkansasAnalysisProvenance.runProduction(AnalysisKind.COUPLE_WEIGHTED, List.of(projection), cancellation,
+                active -> new LongevityWeightedIntegratedStrategyComparisonService(active).compare(weightedRequest),
+                result -> new WeightedSnapshots.Payload(WeightedSnapshots.Couple.from(result), null));
+        assertNotNull(weighted.evidence());
+        assertEquals(1, weighted.result().rankedSuccessfulEntries().size());
+    }
+
+    @Test
     void actualEngineSupportsBoundedComparisonAndWeightedSurvivorContextsWithoutAcceptedHistory() throws Exception {
         var plan = Stage4TestPlans.plan();
         var primary = plan.getHousehold().getPrimaryPerson();

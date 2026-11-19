@@ -385,7 +385,7 @@ class ArkansasDomainCalculationTest {
                 h, FilingStatus.SINGLE, rules), ArkansasTaxEvidence.NONE);
         assertEquals(b("1362.41"), result.incomeTax());
         assertTrue(result.limitations().getLast().contains("held nominally for 2040"));
-        assertEquals(20, StateTaxJurisdiction.alphabeticalChoices().size());
+        assertEquals(21, StateTaxJurisdiction.alphabeticalChoices().size());
         assertFalse(ArkansasTaxRules.productionAdmitted());
         assertThrows(IllegalArgumentException.class, () -> ArkansasTaxRules.reviewedYearFor(2025));
         assertThrows(IllegalArgumentException.class, () -> new ArkansasRateWorksheet().grossTax(year,

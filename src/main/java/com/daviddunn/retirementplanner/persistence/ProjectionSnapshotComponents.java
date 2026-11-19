@@ -72,12 +72,17 @@ public final class ProjectionSnapshotComponents {
         var refs = new HashMap<UUID, ProjectionRoleManifest.Reference>();
         var inputs = new HashMap<UUID, String>();
         var shapes = new HashMap<UUID, Boolean>();
-        var arkansas = new HashMap<UUID, CompleteProjectionSnapshot>();
+        var originals = new HashMap<UUID, CompleteProjectionSnapshot>();
         var baseline = state.baseline();
         if (baseline != null && (plan.getBaseline() == null || !baseline.id().equals(plan.getBaseline().getProjectionSnapshotId()))) baseline = null;
         var allReferences = new LinkedHashMap<UUID, ProjectionRoleManifest.Reference>();
         references(new ProjectionRoleManifest(1, state.owner(), state.current(), baseline)).forEach(r -> allReferences.put(r.id(), r));
         var retainedRoles = state.withRoles(state.owner(), state.current(), baseline);
+        var pairedDependencies = new HashSet<UUID>();
+        retainedRoles.associations().stream().filter(reference -> reference.alternativeProjectionId() != null).forEach(reference -> {
+            pairedDependencies.add(reference.projectionId());
+            pairedDependencies.add(reference.alternativeProjectionId());
+        });
         state.pinnedProjections().forEach(r -> allReferences.putIfAbsent(r.id(), r));
         if (baseline == null && state.baseline() != null && retainedRoles.associations().stream()
                 .anyMatch(association -> association.alternativeProjectionId() != null && association.references(state.baseline().id()))) {
@@ -119,7 +124,7 @@ public final class ProjectionSnapshotComponents {
             }
             refs.put(ref.id(), ref); inputs.put(ref.id(), rebound.inputDigest());
             shapes.put(ref.id(), rebound.restoreInputs().getHousehold().hasSpouse());
-            if (snapshot.arkansasHistory()) arkansas.put(snapshot.id(), snapshot);
+            if (snapshot.arkansasHistory() || pairedDependencies.contains(snapshot.id())) originals.put(snapshot.id(), snapshot);
             if (state.current() != null && ref.id().equals(state.current().id()) || baseline != null && ref.id().equals(baseline.id()))
                 completed.put(rebound.id(), rebound);
         }
@@ -129,7 +134,8 @@ public final class ProjectionSnapshotComponents {
             if (!reference.projectionInputDigest().equals(inputs.get(reference.projectionId()))) throw new IOException("Analyzer projection association mismatch.");
             if ((reference.kind().shape() == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.Shape.COUPLE)
                     != shapes.get(reference.projectionId())) throw new IOException("Analyzer projection household mismatch.");
-            if (identity.equals(reference.owner()) && !arkansas.containsKey(reference.projectionId())
+            if (identity.equals(reference.owner()) && !originals.containsKey(reference.projectionId())
+                    && reference.alternativeProjectionId() == null
                     && plan.getPendingAnalyzerAssociations().get(reference.runId()) == null
                     && plan.getAssociatedAnalyzerResults().get(reference.runId()) == null
                     && sourceFile != null && sourceFile.toAbsolutePath().normalize().equals(targetFile.toAbsolutePath().normalize())) {
@@ -139,7 +145,7 @@ public final class ProjectionSnapshotComponents {
             }
             var original = resolveAnalyzer(reference, plan.getPendingAnalyzerAssociations().get(reference.runId()),
                     plan.getAssociatedAnalyzerResults().get(reference.runId()), sourceFile);
-            validateArkansasAnalyzer(original, arkansas.get(reference.projectionId()), arkansas);
+            validateArkansasAnalyzer(original, originals.get(reference.projectionId()), originals);
             var snapshot = identity.equals(original.planId()) ? original : original.clonedTo(identity);
             byte[] bytes = documents.encode(snapshot);
             var rebound = new AnalyzerAssociation(reference.version(), identity, reference.projectionId(), reference.projectionInputDigest(),
@@ -174,14 +180,15 @@ public final class ProjectionSnapshotComponents {
             CompleteProjectionSnapshot primary, Map<UUID, CompleteProjectionSnapshot> available) throws IOException {
         var execution = analysis.arkansasExecution();
         var kind = analysis.kind();
-        if ((execution != null) != (primary != null && primary.arkansasHistory())
+        boolean pairedV2 = execution != null && execution.version() == 2 && execution.executionEvidence().paired() != null;
+        if (!pairedV2 && (execution != null) != (primary != null && primary.arkansasHistory())
                 && kind != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.COUPLE_SOCIAL_SECURITY
                 && kind != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY) {
             throw new IOException("Analyzer and original projection use different jurisdiction provenance.");
         }
         if (execution == null) return;
         try {
-            if (primary == null || !primary.arkansasHistory()) throw new IllegalArgumentException("Missing Arkansas projection.");
+            if (primary == null || !pairedV2 && !primary.arkansasHistory()) throw new IllegalArgumentException("Missing Arkansas projection.");
             execution.validateAssociation(primary.id(), primary.inputDigest());
             for (var dependency : execution.dependencies()) {
                 var projection = available.get(dependency.projectionId());

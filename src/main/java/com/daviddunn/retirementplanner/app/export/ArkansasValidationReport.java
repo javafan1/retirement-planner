@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.TreeMap;
 
 /** Detached export facts captured from an Arkansas execution or from its restored annual history. */
-public record ArkansasValidationReport(List<Year> years) {
+public record ArkansasValidationReport(List<Year> years, String acceptedScope) {
     public record Year(int year, ArkansasValidationTax state, BigDecimal federalTax, BigDecimal funding,
                        BigDecimal conversion, BigDecimal surplus, BigDecimal retained, BigDecimal assets, BigDecimal estate) { }
 
@@ -24,12 +24,24 @@ public record ArkansasValidationReport(List<Year> years) {
         if (years.isEmpty()) throw new IllegalArgumentException("Arkansas validation export requires annual results.");
     }
 
+    public ArkansasValidationReport(List<Year> years) {
+        this(years, null);
+    }
+
     public static ArkansasValidationReport capture(Projection projection) {
+        return capture(projection, null);
+    }
+
+    public static ArkansasValidationReport captureAccepted(Projection projection, boolean current) {
+        return capture(projection, current ? "Arkansas planning estimate" : "Arkansas retained history");
+    }
+
+    private static ArkansasValidationReport capture(Projection projection, String scope) {
         return new ArkansasValidationReport(projection.getYears().stream().map(y -> new Year(y.getCalendarYear(),
                 y.arkansasValidationTax().orElseThrow(() -> new IllegalArgumentException("Expected Arkansas validation years.")),
                 y.getFederalIncomeTax(), y.getTaxFundingWithdrawal(), y.getRothConversion(),
                 y.getRetainedFromTaxFundingSurplus(), y.getEndingRetainedNonQualifiedAssets(),
-                y.getEndingInvestableAssets(), y.getAfterTaxEstateValue())).toList());
+                y.getEndingInvestableAssets(), y.getAfterTaxEstateValue())).toList(), scope);
     }
 
     public void writeCsv(Path path) throws IOException {
@@ -89,7 +101,8 @@ public record ArkansasValidationReport(List<Year> years) {
         }
     }
 
-    private static String scope(Year year) {
+    private String scope(Year year) {
+        if (acceptedScope != null) return acceptedScope;
         return year.state().restoredHistory() ? "Arkansas retained history" : "Arkansas validation only";
     }
 

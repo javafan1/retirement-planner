@@ -376,6 +376,13 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
     }
     public record Outcome(History history, MonteCarloMortalityAnalysisResult.TerminalOutcome terminal, Failure failure) {
         public Outcome { Objects.requireNonNull(history); if ((terminal == null) == (failure == null)) throw invalid("Outcome must be complete or funding-failed."); }
+        public static Outcome observed(int firstYear, MonteCarloStrategyOutcome outcome) {
+            return new Outcome(History.capture(outcome.annualInvestableAssets(), firstYear, null),
+                    outcome.terminal().orElse(null), Failure.capture(outcome.fundingFailure().orElse(null)));
+        }
+        public Outcome withoutPrefix(History other) {
+            return observed(history.firstYear(), restore(other));
+        }
         int validate(LocalDate start, History a, int last) {
             if (last < start.getYear() - 1) throw invalid("Lifetime ends before opening.");
             int length = history.length(a);

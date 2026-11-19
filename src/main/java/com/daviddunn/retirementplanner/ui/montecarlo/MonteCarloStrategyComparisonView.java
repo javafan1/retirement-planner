@@ -90,6 +90,8 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
                 MonteCarloSnapshotPresentationMapper::restoreComparison, restored -> session.restore(restored, true),
                 session::clearResult, this::refreshPersistence, session::busy);
         persistence.associationResolver(controller::analysisAssociation);
+        persistence.currentArkansasDependencies(controller::hasCurrentArkansasAnalysisDependencies);
+        persistence.dependencyVerification(controller::captureAnalyzerDependencyVerification);
         pdf = new MonteCarloPdfExportAction("mcc-export-pdf", this::canExportPdf, this::preparePdfReport,
                 session::result, identity -> !session.busy() && session.result() == identity,
                 ignored -> "monte-carlo-strategy-comparison.pdf");
@@ -249,6 +251,7 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     }
 
     private void startPersisted(MonteCarloStrategyComparisonRunService.Prepared captured) {
+        var arkansas = arkansasDependencies(captured.request());
         syncPersistence();
         var binding = persistence.binding();
         var parameterRun = parameters.begin(MonteCarloParameterMapping.capture(captured), new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().forAcceptance(com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService.comparison(captured.request())).fingerprint());
@@ -256,6 +259,17 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         var completion = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion>();
         persistence.beginReplacement();
         session.start((updates, token) -> {
+            if (!arkansas.isEmpty()) {
+                var admission = java.util.Objects.requireNonNull(parameterRun.association(), "Arkansas comparison admission was lost.");
+                var run = com.daviddunn.retirementplanner.app.socialsecurity.results.ArkansasAnalysisProvenance.runPairedProductionV2(
+                        admission.kind(), arkansas, captured.request(), admission.ticket(), admission.requestFingerprint(), token,
+                        analyzer -> new MonteCarloStrategyComparisonRunService().run(captured, updates, token, analyzer),
+                        result -> MonteCarloSnapshotPresentationMapper.capture(result, started, java.time.Instant.now()));
+                var completed = MonteCarloResultLifecycle.completion(binding,
+                        (com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot) run.payload());
+                completion.set(completed.forRun(admission.ticket()).withArkansasExecution(run.evidence()));
+                return run.result();
+            }
             var result = work.run(captured, updates, token);
             token.throwIfCancellationRequested();
             var payload = MonteCarloSnapshotPresentationMapper.capture(result, started, java.time.Instant.now());
@@ -265,7 +279,25 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         }, accepted -> {
             persistence.accept(completion.get());
             parameters.accept(parameterRun, completion.get());
-        }, () -> parameters.rollback(parameterRun));
+        }, () -> parameters.rollback(parameterRun),
+                () -> arkansas.isEmpty() || controller.pairedAnalyzerRequestIsCurrent(parameterRun.association(), arkansas.getLast()));
+    }
+
+    private java.util.List<com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot> arkansasDependencies(
+            com.daviddunn.retirementplanner.app.montecarlo.MonteCarloStrategyComparisonRequest request) {
+        var jurisdiction = com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AR;
+        boolean currentArkansas = request.strategyA().jurisdiction() == jurisdiction;
+        boolean baselineArkansas = request.strategyB().jurisdiction() == jurisdiction;
+        if (!currentArkansas && !baselineArkansas) return java.util.List.of();
+        var current = controller.getAcceptedProjectionSnapshot();
+        var plan = controller.getCurrentPlan();
+        var baselineId = plan.getBaseline().getProjectionSnapshotId();
+        var baseline = baselineId == null ? null : plan.getProjectionComponents().get(baselineId);
+        if (current == null || baseline == null || !current.calculationSemanticsCurrent() || !baseline.calculationSemanticsCurrent()
+                || !controller.currentProjectionInputsMatch()) {
+            throw new IllegalArgumentException("Paired Arkansas analysis requires accepted Current and Baseline projections for the original inputs.");
+        }
+        return java.util.List.of(current, baseline);
     }
 
     private void start() {
@@ -375,6 +407,8 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
         return runFeedback;
     }
     private static String messageOrFallback(Throwable failure, String fallback) {
+        var arkansas = com.daviddunn.retirementplanner.ui.ProjectionFailureMessages.arkansasFailure(failure);
+        if (arkansas.isPresent()) return com.daviddunn.retirementplanner.ui.ProjectionFailureMessages.arkansasUnavailableMessage(arkansas.orElseThrow());
         return failure == null || failure.getMessage() == null || failure.getMessage().isBlank()
                 ? fallback : failure.getMessage();
     }

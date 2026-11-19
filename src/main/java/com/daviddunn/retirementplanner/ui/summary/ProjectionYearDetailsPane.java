@@ -698,29 +698,31 @@ public class ProjectionYearDetailsPane
             int row) {
 
         var arkansas = year.arkansasValidationTax().orElse(null);
-        if (arkansas != null) {
-            row = addSubsectionHeader(grid, row, arkansas.restoredHistory() ? "Arkansas Retained History" : "Arkansas Validation");
-            row = addMoneyComparisonRow(grid, row, "Arkansas State Income Tax", year.getStateIncomeTax(),
+        var baselineArkansas = baselineYear == null ? null : baselineYear.arkansasValidationTax().orElse(null);
+        if (arkansas != null || baselineArkansas != null) {
+            var displayed = arkansas != null ? arkansas : baselineArkansas;
+            row = addSubsectionHeader(grid, row, displayed.restoredHistory() ? "Arkansas Retained History" : "Arkansas Planning Estimate");
+            row = addMoneyComparisonRow(grid, row, "Arkansas State Income Tax", arkansas == null ? null : year.getStateIncomeTax(),
                     getBaselineValue(y -> y.arkansasValidationTax().isPresent() ? y.getStateIncomeTax() : null));
-            row = addMoneyComparisonRow(grid, row, "Taxable Funding Income", arkansas.taxableFundingIncome(),
+            row = addMoneyComparisonRow(grid, row, "Taxable Funding Income", arkansas == null ? null : arkansas.taxableFundingIncome(),
                     getBaselineValue(y -> y.arkansasValidationTax().map(t -> t.taxableFundingIncome()).orElse(null)));
-            row = addMoneyComparisonRow(grid, row, "Arkansas Retirement Exclusion", arkansas.provenance().election().retirementExclusion(),
+            row = addMoneyComparisonRow(grid, row, "Arkansas Retirement Exclusion", arkansas == null ? null : arkansas.provenance().election().retirementExclusion(),
                     getBaselineValue(y -> y.arkansasValidationTax().map(t -> t.provenance().election().retirementExclusion()).orElse(null)));
             String election = arkansasSeniorElection(year);
             String baselineElection = getBaselineText(ProjectionYearDetailsPane::arkansasSeniorElection);
             if (election != null || baselineElection != null) {
                 row = addTextComparisonRow(grid, row, "Arkansas 65 Special", election == null ? "—" : election, baselineElection);
             }
-            row = addTextComparisonRow(grid, row, "Arkansas Tax Rules", arkansas.versions().get("arkansas-income-tax-rules"),
+            row = addTextComparisonRow(grid, row, "Arkansas Tax Rules", java.util.Objects.toString(arkansasPolicy(year, "arkansas-income-tax-rules"), "—"),
                     getBaselineText(y -> arkansasPolicy(y, "arkansas-income-tax-rules")));
-            row = addTextComparisonRow(grid, row, "Arkansas Funding Policy", arkansas.versions().get("arkansas-tax-funding"),
+            row = addTextComparisonRow(grid, row, "Arkansas Funding Policy", java.util.Objects.toString(arkansasPolicy(year, "arkansas-tax-funding"), "—"),
                     getBaselineText(y -> arkansasPolicy(y, "arkansas-tax-funding")));
             String target = arkansasTargetPolicy(year);
             String baselineTarget = getBaselineText(ProjectionYearDetailsPane::arkansasTargetPolicy);
             if (target != null || baselineTarget != null) {
                 row = addTextComparisonRow(grid, row, "Arkansas Roth Target Policy", target == null ? "—" : target, baselineTarget);
             }
-            return row;
+            if (arkansas != null) return row;
         }
         if (year.getStateTaxJurisdiction() != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.MI) {
             row = addSubsectionHeader(grid, row, year.getStateTaxJurisdiction().displayName());
@@ -1101,7 +1103,7 @@ public class ProjectionYearDetailsPane
 
         addRightAligned(
                 grid,
-                UIFormatters.money(current),
+                current == null ? "—" : UIFormatters.money(current),
                 1,
                 row);
 
@@ -1111,11 +1113,11 @@ public class ProjectionYearDetailsPane
          *
          * Do not treat this as zero.
          */
-        if (baseline == null) {
+        if (baseline == null || current == null) {
 
             addRightAligned(
                     grid,
-                    "—",
+                    baseline == null ? "—" : UIFormatters.money(baseline),
                     2,
                     row);
 

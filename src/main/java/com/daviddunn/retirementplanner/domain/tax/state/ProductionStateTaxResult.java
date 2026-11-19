@@ -35,7 +35,8 @@ public record ProductionStateTaxResult(
         unavailableReasons = List.copyOf(unavailableReasons);
         Objects.requireNonNull(michiganDetails);
         boolean unsupported = calculationStatus == StateTaxCalculationStatus.UNSUPPORTED;
-        if (!jurisdiction.productionAdmitted() || calculationStatus == StateTaxCalculationStatus.PROVISIONAL
+        if (!jurisdiction.productionAdmitted() || jurisdiction == StateTaxJurisdiction.AR
+                || calculationStatus == StateTaxCalculationStatus.PROVISIONAL
                 || unsupported == estimatedIncomeTax.isPresent()
                 || unsupported != !unavailableReasons.isEmpty()
                 || (unsupported && (limitations.isEmpty() || limitations.stream().anyMatch(String::isBlank)

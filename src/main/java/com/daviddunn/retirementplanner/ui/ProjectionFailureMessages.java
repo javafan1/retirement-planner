@@ -58,14 +58,14 @@ public final class ProjectionFailureMessages {
         return java.util.Optional.empty();
     }
 
-    static java.util.Optional<ArkansasProjectionUnavailableException> arkansasFailure(Throwable exception) {
+    public static java.util.Optional<ArkansasProjectionUnavailableException> arkansasFailure(Throwable exception) {
         for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
             if (cause instanceof ArkansasProjectionUnavailableException failure) return java.util.Optional.of(failure);
         }
         return java.util.Optional.empty();
     }
 
-    private static String arkansasUnavailableMessage(ArkansasProjectionUnavailableException failure) {
+    public static String arkansasUnavailableMessage(ArkansasProjectionUnavailableException failure) {
         String explanation = switch (failure.issue().kind()) {
             case PENSION_ORIGIN -> "Verify the original retirement income source for the affected pensions using the plan documents.";
             case RETIREMENT_SOURCE -> "This retirement arrangement requires different tax treatment than the supported ordinary sources.";
@@ -81,7 +81,9 @@ public final class ProjectionFailureMessages {
             case TARGET_PROOF -> "The calculation could not verify a targeted Roth conversion.";
             case SOURCE_OR_TAX -> "The available source or tax evidence is incomplete or inconsistent.";
         };
-        return "Arkansas state income tax is unavailable for " + failure.year() + ".\n\n" + explanation
-                + "\n\nNo new projection was completed. Your edits and previously accepted results are preserved.";
+        var detail = Objects.toString(failure.detail(), "").replaceAll("\\s+", " ").strip();
+        if (detail.length() > 240) detail = detail.substring(0, 239) + "…";
+        return "Arkansas state income tax is unavailable for " + failure.year() + ". " + explanation
+                + (detail.isBlank() ? "" : " " + detail);
     }
 }

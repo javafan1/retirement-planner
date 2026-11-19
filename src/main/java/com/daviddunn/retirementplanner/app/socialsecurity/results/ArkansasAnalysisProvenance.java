@@ -12,6 +12,8 @@ import com.daviddunn.retirementplanner.domain.projection.ProjectionEvaluationCon
 import com.daviddunn.retirementplanner.domain.projection.ProjectionExecutionResult;
 import com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec;
 import com.daviddunn.retirementplanner.persistence.RetainedProjectionCodec;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -25,8 +27,14 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /** Compact proof of gated financial execution and the original accepted projection dependencies. */
+@JsonDeserialize(using = ArkansasAnalysisProvenanceReader.class)
 public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction jurisdiction, List<Dependency> dependencies,
-        Map<String, String> policies, List<WeightedPension> weightedPensions) {
+        Map<String, String> policies, List<WeightedPension> weightedPensions,
+        @JsonInclude(JsonInclude.Include.NON_NULL) ArkansasAnalysisEvidenceV2 executionEvidence) {
+    public ArkansasAnalysisProvenance(int version, StateTaxJurisdiction jurisdiction, List<Dependency> dependencies,
+            Map<String, String> policies, List<WeightedPension> weightedPensions) {
+        this(version, jurisdiction, dependencies, policies, weightedPensions, null);
+    }
     public record WeightedPension(WeightedSnapshots.Strategy strategy, int primaryDeathYear, int spouseDeathYear,
             int year, int pensionIndex, AccountOwnership recipient, BigDecimal annualReceipt,
             com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxEvidence.SourceQualification qualification,
@@ -48,7 +56,6 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
             Objects.requireNonNull(projectionId);
             if (!inputDigest.matches("[0-9a-f]{64}") || !annualDigest.matches("[0-9a-f]{64}")
                     || completedRuns < 0 || insufficientFundsRuns < 0
-                    || (long) completedRuns + insufficientFundsRuns == 0
                     || completedYears < completedRuns || (targetedRothUsed && completedYears == 0)) {
                 throw new IllegalArgumentException("Invalid Arkansas analyzer projection dependency.");
             }
@@ -60,12 +67,24 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
         policies = Map.copyOf(policies);
         weightedPensions = List.copyOf(weightedPensions);
         boolean targeted = dependencies.stream().anyMatch(Dependency::targetedRothUsed);
-        if (version != 1 || jurisdiction != StateTaxJurisdiction.AR
+        if (jurisdiction != StateTaxJurisdiction.AR
                 || dependencies.isEmpty() || dependencies.size() > 2
                 || weightedPensions.size() > 10_000
-                || dependencies.stream().map(Dependency::projectionId).distinct().count() != dependencies.size()
-                || !policies.equals(applicable(RetainedProjectionSnapshot.Arkansas.V1, targeted))) {
+                || ((executionEvidence == null || executionEvidence.paired() == null)
+                        && dependencies.stream().map(Dependency::projectionId).distinct().count() != dependencies.size())
+                || !policies.equals(applicable(RetainedProjectionSnapshot.Arkansas.V1, targeted))
+                || (version == 1 && executionEvidence != null)
+                || (version == 1 && dependencies.stream().anyMatch(d -> d.completedRuns() == 0 && d.insufficientFundsRuns() == 0))
+                || (version == 2 && (executionEvidence == null || !weightedPensions.isEmpty()))
+                || (version != 1 && version != 2)) {
             throw new IllegalArgumentException("Unsupported Arkansas analyzer provenance.");
+        }
+        if (version == 2 && executionEvidence.paired() != null) {
+            var paired = executionEvidence.paired();
+            if (dependencies.size() != 2 || !dependencies.get(0).projectionId().equals(paired.current().source().acceptedId())
+                    || !dependencies.get(1).projectionId().equals(paired.baseline().source().acceptedId())) {
+                throw new IllegalArgumentException("Ordered paired evidence differs from its accepted dependencies.");
+            }
         }
     }
 
@@ -73,10 +92,21 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
     public static final class Captured {
         private final AnalysisPayload payload;
         private final ArkansasAnalysisProvenance provenance;
+        private final Map<UUID, java.lang.ref.WeakReference<CompleteProjectionSnapshot>> verified;
 
-        private Captured(AnalysisPayload payload, ArkansasAnalysisProvenance provenance) {
+        private Captured(AnalysisPayload payload, ArkansasAnalysisProvenance provenance,
+                List<CompleteProjectionSnapshot> projections) {
             this.payload = payload;
             this.provenance = provenance;
+            if (provenance.version() == 2) {
+                ArkansasAnalysisEvidenceV2.CANONICAL.requireArkansasArchiveCapacity(payload, provenance);
+            }
+            var references = new LinkedHashMap<UUID, java.lang.ref.WeakReference<CompleteProjectionSnapshot>>();
+            for (var projection : projections) {
+                provenance.validateDependency(projection);
+                references.put(projection.id(), new java.lang.ref.WeakReference<>(projection));
+            }
+            verified = Map.copyOf(references);
         }
 
         public AnalysisPayload payload() { return payload; }
@@ -85,10 +115,183 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
             if (original != payload) throw new IllegalArgumentException("Arkansas provenance belongs to another analysis result.");
             return provenance;
         }
+
+        public boolean dependenciesStillInstalled(Map<UUID, CompleteProjectionSnapshot> available) {
+            return verified.entrySet().stream().allMatch(entry -> {
+                var original = entry.getValue().get();
+                return original != null && original == available.get(entry.getKey());
+            });
+        }
     }
 
     public static Captured capture(ProjectionEngine engine, AnalysisKind kind, List<CompleteProjectionSnapshot> projections,
             Supplier<? extends AnalysisPayload> work) {
+        return captureRun(engine, kind, projections, work, java.util.function.Function.identity()).evidence();
+    }
+
+    public record ObservedRun<T>(T result, AnalysisPayload payload, Captured evidence) { }
+
+    /** Side engines and their observation callback are confined to one controlled comparison worker. */
+    public static <T> ObservedRun<T> runPairedProductionV2(AnalysisKind kind, List<CompleteProjectionSnapshot> sources,
+            com.daviddunn.retirementplanner.app.montecarlo.MonteCarloStrategyComparisonRequest request, UUID identity,
+            String fingerprint, com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation,
+            java.util.function.Function<com.daviddunn.retirementplanner.app.montecarlo.MonteCarloStrategyComparisonAnalyzer, T> work,
+            java.util.function.Function<? super T, ? extends AnalysisPayload> payloadFactory) {
+        if (sources.size() != 2 || sources.stream().anyMatch(source -> !source.calculationSemanticsCurrent()
+                || !source.owner().equals(sources.getFirst().owner())) || sources.stream().noneMatch(CompleteProjectionSnapshot::arkansasHistory)) {
+            throw new IllegalArgumentException("Arkansas paired analysis requires accepted Current and Baseline projections.");
+        }
+        if (request.assumptions().settings().simulationCount() > ArkansasPairedEvidence.MAX_WORLDS) {
+            throw ArkansasAnalysisEvidenceV2.capacity();
+        }
+        boolean longevity = request.assumptions() instanceof com.daviddunn.retirementplanner.app.montecarlo.MonteCarloStrategyComparisonRequest.Longevity;
+        var current = ArkansasPairedEvidence.Source.capture(ArkansasPairedEvidence.Role.CURRENT_A, sources.getFirst(), request.strategyA(), longevity);
+        var baseline = ArkansasPairedEvidence.Source.capture(ArkansasPairedEvidence.Role.BASELINE_B, sources.getLast(), request.strategyB(), longevity);
+        int first = request.assumptions().start().getYear();
+        var currentObserver = new ArkansasPairedEvidence.Observer(current, first);
+        var baselineObserver = new ArkansasPairedEvidence.Observer(baseline, first);
+        var gated = ProjectionEngine.forArkansasProduction();
+        var calculate = new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloStrategyComparisonAnalyzer(
+                current.jurisdiction() == StateTaxJurisdiction.AR ? gated : new ProjectionEngine(),
+                baseline.jurisdiction() == StateTaxJurisdiction.AR ? gated : new ProjectionEngine(),
+                (side, world, execution, outcome) -> {
+                    var observer = side == com.daviddunn.retirementplanner.app.montecarlo.MonteCarloStrategyComparisonAnalyzer.Stage.STRATEGY_A
+                            ? currentObserver : baselineObserver;
+                    observer.observe(side, world.scenarioIndex(), execution, outcome, cancellation);
+                });
+        var result = gated.runArkansasAnalysis(cancellation, () -> work.apply(calculate));
+        cancellation.throwIfCancellationRequested();
+        var payload = payloadFactory.apply(result);
+        if (payload == null || !payload.successful()) return new ObservedRun<>(result, payload, null);
+        var dependencies = List.of(currentObserver.dependency(sources.getFirst()), baselineObserver.dependency(sources.getLast()));
+        var evidence = new ArkansasAnalysisEvidenceV2(identity, fingerprint,
+                ArkansasAnalysisEvidenceV2.CANONICAL.executionDigest(payload), List.of(), List.of(), List.of(),
+                new ArkansasPairedEvidence(currentObserver.finish(), baselineObserver.finish()), null, null, null);
+        var provenance = new ArkansasAnalysisProvenance(2, StateTaxJurisdiction.AR, dependencies,
+                applicable(ArkansasValidationTax.reviewedVersions(), dependencies.stream().anyMatch(Dependency::targetedRothUsed)),
+                List.of(), evidence);
+        provenance.validatePayload(kind, payload);
+        var captured = new Captured(payload, provenance, sources);
+        cancellation.throwIfCancellationRequested();
+        return new ObservedRun<>(result, payload, captured);
+    }
+
+    public static <T> ObservedRun<T> runDeterministicProductionV2(AnalysisKind kind, CompleteProjectionSnapshot source,
+            UUID request, String fingerprint, Integer deathOverride,
+            com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation,
+            java.util.function.Function<com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityCompleteStrategySearchCalculator, T> work,
+            java.util.function.Function<? super T, ? extends AnalysisPayload> payloadFactory) {
+        if (!source.arkansasHistory() || !source.calculationSemanticsCurrent()) {
+            throw new IllegalArgumentException("This analysis requires a matching accepted Arkansas production projection.");
+        }
+        var engine = ProjectionEngine.forArkansasProduction();
+        var observation = new Observation(source);
+        var evidence = new ArkansasDeterministicEvidence.Observer(source, deathOverride, cancellation);
+        var calculator = new com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityCompleteStrategySearchCalculator(
+                new com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityStrategyEvaluator(engine), evidence);
+        return engine.runArkansasAnalysis(cancellation, () -> {
+            var result = engine.observeArkansasRuns((plan, context, execution) -> {
+                observation.accept(execution);
+                evidence.projected(plan, context, execution);
+            }, () -> work.apply(calculator));
+            cancellation.throwIfCancellationRequested();
+            var payload = payloadFactory.apply(result);
+            if (payload == null || !payload.successful()) return new ObservedRun<>(result, payload, null);
+            var dependency = observation.dependency();
+            var v2 = new ArkansasAnalysisEvidenceV2(request, fingerprint, ArkansasAnalysisEvidenceV2.CANONICAL.executionDigest(payload),
+                    List.of(), List.of(), List.of(), null, evidence.finish(), null, null);
+            var provenance = new ArkansasAnalysisProvenance(2, StateTaxJurisdiction.AR, List.of(dependency),
+                    applicable(ArkansasValidationTax.reviewedVersions(), dependency.targetedRothUsed()), List.of(), v2);
+            provenance.validatePayload(kind, payload);
+            var captured = new Captured(payload, provenance, List.of(source));
+            cancellation.throwIfCancellationRequested();
+            return new ObservedRun<>(result, payload, captured);
+        });
+    }
+
+    public static ObservedRun<com.daviddunn.retirementplanner.app.socialsecurity.SinglePersonMortalityAnalysis.Result>
+            runIndividualMortalityProductionV2(CompleteProjectionSnapshot source, UUID request, String fingerprint,
+                    com.daviddunn.retirementplanner.domain.model.RetirementPlan plan,
+                    com.daviddunn.retirementplanner.domain.socialsecurity.analysis.IndividualLongevityScenarios mortality,
+                    java.time.LocalDate valuation, BigDecimal discount,
+                    com.daviddunn.retirementplanner.domain.analysis.AnalysisProgressListener progress,
+                    com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation) {
+        if (!source.arkansasHistory() || !source.calculationSemanticsCurrent() || !source.matches(plan)) {
+            throw new IllegalArgumentException("This analysis requires a matching accepted Arkansas production projection.");
+        }
+        var kind = AnalysisKind.INDIVIDUAL_WEIGHTED;
+        var engine = ProjectionEngine.forArkansasProduction();
+        var observation = new Observation(source);
+        var evidence = new ArkansasIndividualMortalityEvidence.Observer(source, cancellation);
+        var analysis = new com.daviddunn.retirementplanner.app.socialsecurity.SinglePersonMortalityAnalysis();
+        return engine.runArkansasAnalysis(cancellation, () -> {
+            var result = engine.observeArkansasRuns((inputs, context, execution) -> {
+                observation.accept(execution);
+                evidence.projected(inputs, context, execution);
+            }, () -> analysis.calculate(plan, mortality, valuation, discount,
+                    com.daviddunn.retirementplanner.app.socialsecurity.SinglePersonMortalityAnalysis.Mode.INTEGRATED,
+                    progress, cancellation, engine, evidence));
+            cancellation.throwIfCancellationRequested();
+            var payload = new WeightedSnapshots.Payload(null, WeightedSnapshots.Individual.from(result));
+            var dependency = observation.dependency();
+            var v2 = new ArkansasAnalysisEvidenceV2(request, fingerprint, ArkansasAnalysisEvidenceV2.CANONICAL.executionDigest(payload),
+                    List.of(), List.of(), List.of(), null, null, evidence.finish(), null);
+            var provenance = new ArkansasAnalysisProvenance(2, StateTaxJurisdiction.AR, List.of(dependency),
+                    applicable(ArkansasValidationTax.reviewedVersions(), dependency.targetedRothUsed()), List.of(), v2);
+            provenance.validatePayload(kind, payload);
+            var captured = new Captured(payload, provenance, List.of(source));
+            cancellation.throwIfCancellationRequested();
+            return new ObservedRun<>(result, payload, captured);
+        });
+    }
+
+    public static <T> ObservedRun<T> runWeightedProductionV2(CompleteProjectionSnapshot source, UUID request,
+            String fingerprint, com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation,
+            java.util.function.Function<com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedIntegratedStrategyComparisonService, T> work,
+            java.util.function.Function<? super T, ? extends AnalysisPayload> payloadFactory) {
+        if (!source.arkansasHistory() || !source.calculationSemanticsCurrent()) {
+            throw new IllegalArgumentException("This analysis requires a matching accepted Arkansas production projection.");
+        }
+        var engine = ProjectionEngine.forArkansasProduction();
+        var observation = new Observation(source);
+        var evidence = new ArkansasAnalysisEvidenceV2.Collector(source, cancellation);
+        var comparison = new com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedIntegratedStrategyComparisonService(engine, evidence);
+        return engine.runArkansasAnalysis(cancellation, () -> {
+            var result = engine.observeArkansasRuns((plan, context, execution) -> {
+                observation.accept(execution);
+                evidence.observe(plan, context, execution);
+            }, () -> work.apply(comparison));
+            cancellation.throwIfCancellationRequested();
+            var payload = payloadFactory.apply(result);
+            if (payload == null || !payload.successful()) return new ObservedRun<>(result, payload, null);
+            var dependency = observation.dependency();
+            var provenance = new ArkansasAnalysisProvenance(2, StateTaxJurisdiction.AR, List.of(dependency),
+                    applicable(ArkansasValidationTax.reviewedVersions(), dependency.targetedRothUsed()),
+                    List.of(), evidence.finish(request, fingerprint, payload));
+            provenance.validatePayload(AnalysisKind.COUPLE_WEIGHTED, payload);
+            var captured = new Captured(payload, provenance, List.of(source));
+            cancellation.throwIfCancellationRequested();
+            return new ObservedRun<>(result, payload, captured);
+        });
+    }
+
+    public static <T> ObservedRun<T> runProduction(AnalysisKind kind, List<CompleteProjectionSnapshot> projections,
+            com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation,
+            java.util.function.Function<ProjectionEngine, T> work,
+            java.util.function.Function<? super T, ? extends AnalysisPayload> payloadFactory) {
+        if (projections.isEmpty() || projections.stream().anyMatch(projection -> !projection.arkansasHistory()
+                || !projection.calculationSemanticsCurrent())) {
+            throw new IllegalArgumentException("This analysis requires matching accepted Arkansas production projections.");
+        }
+        var engine = ProjectionEngine.forArkansasProduction();
+        return engine.runArkansasAnalysis(cancellation,
+                () -> captureRun(engine, kind, projections, () -> work.apply(engine), payloadFactory));
+    }
+
+    /** Captures the payload instance that is eligible for acceptance, together with observations of the actual work. */
+    public static <T> ObservedRun<T> captureRun(ProjectionEngine engine, AnalysisKind kind,
+            List<CompleteProjectionSnapshot> projections, Supplier<T> work,
+            java.util.function.Function<? super T, ? extends AnalysisPayload> payloadFactory) {
         var observed = new LinkedHashMap<String, Observation>();
         for (var projection : List.copyOf(projections)) {
             if (!projection.arkansasHistory() || observed.putIfAbsent(projection.inputDigest(), new Observation(projection)) != null) {
@@ -96,15 +299,20 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
             }
         }
         var weightedPensions = new java.util.LinkedHashSet<WeightedPension>();
-        var payload = engine.observeArkansasRuns((plan, context, execution) -> {
+        var result = engine.observeArkansasRuns((plan, context, execution) -> {
             var input = CompleteProjectionSnapshot.digest(CompleteProjectionSnapshot.freeze(plan));
             var observation = observed.get(input);
             if (observation == null) throw new IllegalArgumentException("Arkansas analysis ran against different frozen inputs.");
             observation.accept(execution);
-            if (kind == AnalysisKind.COUPLE_WEIGHTED) {
+            if (kind == AnalysisKind.COUPLE_WEIGHTED && weightedPensions.size() <= 10_000) {
                 capturePensions(plan.getHousehold(), context, execution, weightedPensions);
             }
         }, work);
+        var payload = payloadFactory.apply(result);
+        if (payload == null || !payload.successful()) return new ObservedRun<>(result, payload, null);
+        if (weightedPensions.size() > 10_000) {
+            throw new IllegalArgumentException("Arkansas weighted analysis exceeded the retained pension evidence limit. Previous successful results were retained.");
+        }
         var dependencies = new ArrayList<Dependency>();
         var executedPolicies = new TreeMap<String, String>();
         for (var observation : observed.values()) {
@@ -115,7 +323,7 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
         var provenance = new ArkansasAnalysisProvenance(1, StateTaxJurisdiction.AR,
                 dependencies, applicable(executedPolicies, targeted), List.copyOf(weightedPensions));
         provenance.validatePayload(kind, payload);
-        return new Captured(payload, provenance);
+        return new ObservedRun<>(result, payload, new Captured(payload, provenance, projections));
     }
 
     private static void capturePensions(com.daviddunn.retirementplanner.domain.model.Household household,
@@ -181,6 +389,11 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
     public boolean policiesCurrent() { return policiesMatch(ArkansasValidationTax.reviewedVersions()); }
 
     public void validatePayload(AnalysisKind kind, AnalysisPayload payload) {
+        if (version == 2) {
+            executionEvidence.validatePayload(kind, payload);
+            validateObservedCounts(payload);
+            return;
+        }
         if (kind != AnalysisKind.COUPLE_WEIGHTED && !weightedPensions.isEmpty()) {
             throw new IllegalArgumentException("Unexpected Arkansas longevity receipt provenance.");
         }
@@ -229,6 +442,58 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
         throw new IllegalArgumentException("Analysis kind does not support Arkansas financial execution provenance.");
     }
 
+    public void validateRequest(UUID request, String fingerprint) {
+        if (version == 2 && (!executionEvidence.request().equals(request) || !executionEvidence.fingerprint().equals(fingerprint))) {
+            throw new IllegalArgumentException("Arkansas evidence belongs to a different analysis request.");
+        }
+    }
+
+    private void validateObservedCounts(AnalysisPayload payload) {
+        if (executionEvidence.paired() != null) {
+            var paired = ((MonteCarloSnapshot) payload).paired();
+            var proof = executionEvidence.paired();
+            for (int index = 0; index < 2; index++) {
+                boolean current = index == 0;
+                var side = current ? proof.current() : proof.baseline();
+                long complete = side.trials().stream().filter(t -> t.status() == ArkansasPairedEvidence.Status.COMPLETED).count();
+                long shortages = side.trials().stream().filter(t -> t.status() == ArkansasPairedEvidence.Status.INSUFFICIENT_FUNDS).count();
+                long years = paired.outcomes().stream().mapToLong(pair -> {
+                    var history = (current ? pair.a() : pair.b()).history();
+                    return history.sharedLength() + history.suffix().size();
+                }).sum();
+                validateCounts(dependencies.get(index), complete, shortages, years);
+            }
+            return;
+        }
+        if (dependencies.size() != 1) throw new IllegalArgumentException("Exactly one accepted Arkansas projection is required.");
+        long completed;
+        long shortages;
+        long years;
+        if (executionEvidence.deterministic() != null) {
+            var candidates = executionEvidence.deterministic().candidates();
+            completed = candidates.stream().filter(candidate -> candidate.metricsDigest() != null).count();
+            shortages = candidates.stream().filter(candidate -> candidate.shortage() != null).count();
+            years = candidates.stream().mapToLong(ArkansasDeterministicEvidence.Candidate::completedYears).sum();
+        } else if (executionEvidence.individualMortality() != null) {
+            var mortality = executionEvidence.individualMortality();
+            completed = mortality.scenarios().stream().filter(scenario -> scenario.annualDigest() != null).count();
+            shortages = 0;
+            years = mortality.scenarios().stream().mapToLong(scenario -> scenario.deathYear() - (long) mortality.firstYear()).sum();
+        } else {
+            var executions = executionEvidence.executions();
+            completed = executions.stream().filter(execution -> execution.shortage() == null).count();
+            shortages = executions.size() - completed;
+            years = executions.stream().mapToLong(ArkansasAnalysisEvidenceV2.Execution::completedYears).sum();
+        }
+        validateCounts(dependencies.getFirst(), completed, shortages, years);
+    }
+
+    private static void validateCounts(Dependency dependency, long complete, long shortages, long years) {
+        if (dependency.completedRuns() != complete || dependency.insufficientFundsRuns() != shortages || dependency.completedYears() != years) {
+            throw new IllegalArgumentException("Retained financial execution counts differ from their Arkansas dependency.");
+        }
+    }
+
     public void validateAssociation(UUID projectionId, String inputDigest) {
         var source = dependencies.getFirst();
         if (!source.projectionId().equals(projectionId) || !source.inputDigest().equals(inputDigest)) {
@@ -237,10 +502,31 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
     }
 
     public void validateDependency(CompleteProjectionSnapshot projection) {
+        if (version == 2 && executionEvidence.paired() != null) {
+            var pair = executionEvidence.paired();
+            boolean matched = false;
+            for (int i = 0; i < dependencies.size(); i++) {
+                var dependency = dependencies.get(i);
+                if (!dependency.projectionId().equals(projection.id())) continue;
+                var side = i == 0 ? pair.current() : pair.baseline();
+                validateIdentity(projection, dependency);
+                side.source().validate(projection);
+                matched = true;
+            }
+            if (!matched) throw new IllegalArgumentException("Missing original paired projection dependency.");
+            return;
+        }
         var source = dependencies.stream().filter(d -> d.projectionId().equals(projection.id())).findFirst().orElseThrow();
         if (!projection.arkansasHistory() || !source.inputDigest().equals(projection.inputDigest())
                 || !source.annualDigest().equals(annualDigest(projection))) {
             throw new IllegalArgumentException("Arkansas analysis dependency differs from the original retained projection.");
+        }
+        if (version == 2) {
+            if (projection.restoreInputs().getPlanningAssumptions().getStateTaxAssumptions().jurisdiction() != StateTaxJurisdiction.AR)
+                throw new IllegalArgumentException("Arkansas v2 evidence requires original Arkansas inputs.");
+            if (executionEvidence.deterministic() != null) executionEvidence.deterministic().validateSource(projection);
+            else if (executionEvidence.individualMortality() != null) executionEvidence.individualMortality().validateSource(projection);
+            else executionEvidence.validateSource(projection.restoreInputs());
         }
         if (!weightedPensions.isEmpty()) {
             var pensions = projection.restoreInputs().getHousehold().members().stream()
@@ -260,7 +546,13 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
         }
     }
 
-    private static String annualDigest(CompleteProjectionSnapshot projection) { return annualDigest(projection.annual()); }
+    private static void validateIdentity(CompleteProjectionSnapshot projection, Dependency dependency) {
+        if (!dependency.inputDigest().equals(projection.inputDigest()) || !dependency.annualDigest().equals(annualDigest(projection))) {
+            throw new IllegalArgumentException("Arkansas analysis dependency differs from the original retained projection.");
+        }
+    }
+
+    static String annualDigest(CompleteProjectionSnapshot projection) { return annualDigest(projection.annual()); }
 
     private static String annualDigest(RetainedProjectionSnapshot annual) {
         try { return AnalysisSnapshotCodec.sha256(new RetainedProjectionCodec().encode(annual).bytes()); }

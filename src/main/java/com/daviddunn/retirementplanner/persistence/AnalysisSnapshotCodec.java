@@ -106,6 +106,38 @@ public final class AnalysisSnapshotCodec {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
         catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
+    /** Canonical bounded content digest for the versioned Arkansas execution proof. */
+    public String executionDigest(Object value) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256");
+            try (var output = limited(new DigestOutputStream(OutputStream.nullOutputStream(), digest))) {
+                mapper.writeValue(output, value);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (IOException | NoSuchAlgorithmException failure) {
+            throw new IllegalArgumentException("Arkansas execution exceeded its canonical evidence budget.", failure);
+        }
+    }
+
+    /** Worker admission leaves room for the launcher envelope and its frozen comparison rows. */
+    public void requireArkansasArchiveCapacity(AnalysisPayload payload, ArkansasAnalysisProvenance provenance) {
+        try {
+            var buffer = new ByteArrayOutputStream(8192);
+            try (var output = limited(buffer)) {
+                mapper.writeValue(output, new Content(payload, null, null, provenance));
+            }
+            var raw = buffer.toByteArray();
+            if (raw.length > MAX_RAW_BYTES - 4 * 1024 * 1024) {
+                throw new IOException("Analysis data leaves too little room for its retained report context.");
+            }
+            checkDocument(raw, MAX_TOKENS - 250_000, MAX_ARRAYS - 8_192);
+            if (compress(raw).bytes().length > MAX_COMPRESSED_BYTES - 2 * 1024 * 1024)
+                throw new IOException("Analysis data leaves too little compressed room for its retained report context.");
+        } catch (IOException failure) {
+            throw new IllegalArgumentException(
+                    "Arkansas analysis exceeded its retained document budget. Previous successful results were retained.", failure);
+        }
+    }
     public byte[] raw(AnalysisSnapshot snapshot) throws IOException {
         try { validate(snapshot); }
         catch (Exception failure) { throw AnalysisSnapshotSaveException.at(AnalysisSnapshotSaveException.Stage.DTO_VALIDATION, -1, -1, failure); }
@@ -262,13 +294,19 @@ public final class AnalysisSnapshotCodec {
         return true;
     }
     private void checkDocument(byte[] raw) throws IOException {
+        checkDocument(raw, MAX_TOKENS, MAX_ARRAYS);
+    }
+
+    private void checkDocument(byte[] raw, int tokenBudget, int arrayBudget) throws IOException {
         // One summary per numeric field family, rather than thousands of messages for a full search.
         var longNumbers = new LinkedHashMap<String, Integer>();
         try (var parser = mapper.createParser(raw)) {
             int arrays = 0;
             int count = 0;
+            var arkansasBudget = new ArkansasDocumentBudget();
             while (true) {
                 JsonToken token;
+                var enclosing = parser.getParsingContext();
                 try { token = parser.nextToken(); }
                 catch (com.fasterxml.jackson.core.exc.StreamConstraintsException failure) {
                     // Jackson's constraint message reports lengths, never the numeric value.
@@ -276,9 +314,10 @@ public final class AnalysisSnapshotCodec {
                     throw new IOException("Snapshot token constraint at JSON path " + path + ": " + failure.getOriginalMessage(), failure);
                 }
                 if (token == null) break;
-                if (++count > MAX_TOKENS) throw new IOException("Snapshot collection/token limit exceeded.");
-                if (parser.currentToken() == JsonToken.START_ARRAY && ++arrays > MAX_ARRAYS)
+                if (++count > tokenBudget) throw new IOException("Snapshot collection/token limit exceeded.");
+                if (parser.currentToken() == JsonToken.START_ARRAY && ++arrays > arrayBudget)
                     throw new IOException("Snapshot collection limit exceeded.");
+                arkansasBudget.read(parser, token, enclosing);
                 if (token.isNumeric()) {
                     int length = parser.getTextLength();
                     if (length > 1024) {
@@ -294,6 +333,61 @@ public final class AnalysisSnapshotCodec {
         for (var entry : longNumbers.entrySet()) {
             LOG.info("Exact snapshot numeric tokens: JSON path=" + entry.getKey() + " maximumLength=" + entry.getValue()
                     + " permittedLength=" + MAX_NUMBER_LENGTH + " rawBytes=" + raw.length);
+        }
+    }
+
+    /** Check v2 cardinality before Jackson allocates any of the retained evidence collections. */
+    private static final class ArkansasDocumentBudget {
+        private final Map<JsonStreamContext, String> arrays = new IdentityHashMap<>();
+        private JsonStreamContext evidence;
+        private long receipts;
+        private long scenarios;
+
+        void read(JsonParser parser, JsonToken token, JsonStreamContext enclosing) throws IOException {
+            if (evidence == null) {
+                if (token == JsonToken.START_OBJECT && "executionEvidence".equals(parser.currentName())
+                        && enclosing.getParent() != null && "arkansasExecution".equals(enclosing.getParent().getCurrentName())) {
+                    evidence = parser.getParsingContext();
+                }
+                return;
+            }
+            if (token == JsonToken.END_OBJECT && enclosing == evidence) {
+                evidence = null;
+                return;
+            }
+            if (parser.getParsingContext().getNestingDepth() - evidence.getNestingDepth() > 24) {
+                throw new IOException("Arkansas retained evidence nesting limit exceeded.");
+            }
+            if (token == JsonToken.END_ARRAY) {
+                arrays.remove(enclosing);
+                return;
+            }
+            String parent = arrays.get(enclosing);
+            if (parent != null) {
+                int limit = limit(parent);
+                if (enclosing.getEntryCount() > limit
+                        || "pensionReferences".equals(parent) && ++receipts > ArkansasAnalysisEvidenceV2.MAX_REFERENCES
+                        || "scenarios".equals(parent) && ++scenarios > ArkansasWeightedAttribution.MAX_SCENARIO_LINKS) {
+                    throw new IOException("Arkansas retained evidence collection limit exceeded.");
+                }
+            }
+            if (token == JsonToken.START_ARRAY) {
+                String field = "pensionVectors".equals(parent) ? "pensionReferences" : parser.currentName();
+                if (field != null && limit(field) > 0) arrays.put(parser.getParsingContext(), field);
+            }
+        }
+
+        private static int limit(String field) {
+            return switch (field) {
+                case "facts" -> ArkansasAnalysisEvidenceV2.MAX_FACTS;
+                case "pensionVectors" -> ArkansasAnalysisEvidenceV2.MAX_PENSION_VECTORS;
+                case "executions", "candidates" -> ArkansasAnalysisEvidenceV2.MAX_EXECUTIONS;
+                case "pensionReferences" -> ArkansasAnalysisEvidenceV2.MAX_REFERENCES_PER_EXECUTION;
+                case "scenarios" -> ArkansasWeightedAttribution.MAX_SCENARIO_LINKS;
+                case "worlds" -> ArkansasWeightedAttribution.MAX_WORLDS;
+                case "trials" -> ArkansasPairedEvidence.MAX_WORLDS;
+                default -> 0;
+            };
         }
     }
     private static final Set<String> NUMERIC_PATH_FIELDS = numericPathFields();

@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.ui.socialsecurity;
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityStrategyComparisonEntry;
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityStrategyComparisonService;
+import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityStrategyEvaluator;
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityStrategyResult;
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityCompleteStrategySearchCalculator;
 import com.daviddunn.retirementplanner.app.socialsecurity.IntegratedSocialSecurityCompleteStrategySearchEntry;
@@ -1010,7 +1011,10 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         "No complete Social Security strategies are available for integrated analysis.");
             }
             var input = SocialSecurityAnalyzerInputs.quick(plan, selected);
-            var association = analysisSource == null ? null : analysisSource.prepareAnalyzerAssociation(AnalysisKind.COUPLE_QUICK, new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_QUICK, input.plan(), quickInputs()));
+            var arkansas = arkansasDependency(input.plan());
+            if (arkansas != null && (socialSecurityReport == null || socialSecurityReport.presentation().result() != presentation.result())) {
+                throw new IllegalArgumentException("Run Social Security Only to capture the prerequisite for Arkansas Quick Comparison.");
+            }
             var prerequisite = new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_SOCIAL_SECURITY, plan, socialSecurityInputs());
             var quickParameters = new AnalysisParameterConfiguration.Quick(integratedCandidateCount.getValue(), prerequisite);
             var candidateInputs = new AnalysisFingerprintService.Inputs(null, null, null, null, null, quickParameters.candidateCount(), prerequisite,
@@ -1021,6 +1025,8 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                             new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_QUICK, input.plan(), candidateInputs))) : null;
             var reportOwner = reportBinding();
             var inputFingerprint = new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_QUICK, input.plan(), candidateInputs);
+            var association = analysisSource == null ? null : analysisSource.prepareAnalyzerAssociation(AnalysisKind.COUPLE_QUICK,
+                    arkansas != null ? inputFingerprint : new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_QUICK, input.plan(), quickInputs()));
             var contextFingerprint = new AnalysisFingerprintService().effectiveContextFingerprint(AnalysisKind.COUPLE_QUICK, input.plan());
             var preparedReport = socialSecurityReport == null || socialSecurityReport.presentation().result() != presentation.result() ? null
                     : new QuickReportSession.Prepared(analysisSource == null ? null : analysisSource.getAnalysisSessionId(), association == null ? java.util.UUID.randomUUID() : association.ticket(),
@@ -1035,6 +1041,23 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             var calculation = quickCalculation.apply(input);
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.QUICK,
                     (progress, cancellation) -> {
+                        if (arkansas != null) {
+                            var run = ArkansasAnalysisProvenance.runProduction(AnalysisKind.COUPLE_QUICK, List.of(arkansas), cancellation,
+                                    engine -> IntegratedSocialSecurityComparisonPresentation.from(
+                                            new IntegratedSocialSecurityStrategyComparisonService(new IntegratedSocialSecurityStrategyEvaluator(engine))
+                                                    .compareAnalyzerCandidates(input.plan(), selected.stream()
+                                                            .map(SocialSecurityStrategyAnalyzerPresentation.RankedStrategy::cell).toList(), progress, cancellation), selected),
+                                    model -> AnalysisSuccessPolicy.accepted(model.comparison()) ? QuickSnapshotAdapter.captureArkansas(model,
+                                            QuickReportSession.accepted(preparedReport, model, java.time.Instant.now())) : null);
+                            if (run.evidence() != null) {
+                                var report = QuickReportSession.accepted(preparedReport, run.result(), java.time.Instant.now());
+                                completedQuick.set(new AcceptedAnalysisCompletion(capturedId, capturedFile, AnalysisKind.COUPLE_QUICK,
+                                        preparedReport.runId(), report.completed(), inputFingerprint, contextFingerprint,
+                                        AnalysisVersions.calculatedAlgorithms(AnalysisKind.COUPLE_QUICK, null), AnalysisVersions.references(AnalysisKind.COUPLE_QUICK),
+                                        run.payload(), QuickSnapshotAdapter.context(report)).withConditionalBenefits(input.plan()).withArkansasExecution(run.evidence()));
+                            }
+                            return run.result();
+                        }
                         var model = calculation.run(progress, cancellation); cancellation.throwIfCancellationRequested();
                         if (preparedReport != null && capturedId != null && AnalysisSuccessPolicy.accepted(model.comparison())) {
                             var report = QuickReportSession.accepted(preparedReport, model, java.time.Instant.now());
@@ -1047,7 +1070,9 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     }, model -> {
                 if (!AnalysisSuccessPolicy.accepted(model.comparison())) {
                     rollbackParameters(AnalysisKind.COUPLE_QUICK, parameterRun);
-                    integratedStatus.setText("No successful candidates. Previous accepted comparison and report retained.");
+                    String detail = arkansas == null ? "" : model.comparison().entries().stream().flatMap(entry -> entry.failure().stream())
+                            .findFirst().map(failure -> " " + failure.message()).orElse("");
+                    integratedStatus.setText("No successful candidates. Previous accepted comparison and report retained." + detail);
                     return;
                 }
                 integratedPresentation = model;
@@ -1056,7 +1081,7 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                         completedQuick.get() == null ? java.time.Instant.now() : completedQuick.get().completedAt());
                 quickReportBinding = reportOwner;
                 if (quickPersistence != null && quickReport != null) {
-                    quickPersistence.accept(completedQuick.get().associatedWith(associationFor(AnalysisKind.COUPLE_QUICK, parameterRun, association)));
+                    quickPersistence.accept(completedQuick.get(), associationFor(AnalysisKind.COUPLE_QUICK, parameterRun, association));
                 }
                 renderIntegrated(model);
                 integratedStale.setText("");
@@ -1073,9 +1098,16 @@ public final class SocialSecurityStrategyAnalyzerDialog {
         }
     }
 
+    private com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot arkansasDependency(RetirementPlan inputPlan) {
+        if (!com.daviddunn.retirementplanner.domain.projection.ProjectionEngine.selectsArkansas(inputPlan)) return null;
+        if (analysisSource == null) throw new IllegalArgumentException("Open the analyzer from a plan with an accepted Arkansas projection.");
+        return analysisSource.requireArkansasProjectionForAnalysis();
+    }
+
     private void runWeightedAnalysis() {
         var navigationTicket = resultNavigation.capture();
         try {
+            var arkansas = arkansasDependency(plan);
             var factory = new LongevityWeightedAnalysisRequestFactory();
             var snapshot = factory.capture(plan,
                     adjustment(primaryMortalityAdjustment.getText(), "Primary"),
@@ -1096,36 +1128,43 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             var inputFingerprint = weightedPersistence == null ? null : fingerprints.fingerprint(AnalysisKind.COUPLE_WEIGHTED, plan, capturedInputs);
             var contextFingerprint = weightedPersistence == null ? null : fingerprints.effectiveContextFingerprint(AnalysisKind.COUPLE_WEIGHTED, plan);
             var association = analysisSource == null ? null : analysisSource.prepareAnalyzerAssociation(AnalysisKind.COUPLE_WEIGHTED, inputFingerprint);
+            if (arkansas != null && association == null) throw new IllegalArgumentException("No current Arkansas analyzer admission.");
+            var runIdentity = association == null ? java.util.UUID.randomUUID() : association.ticket();
+            var observed = new java.util.concurrent.atomic.AtomicReference<ArkansasAnalysisProvenance.ObservedRun<
+                    com.daviddunn.retirementplanner.app.socialsecurity.LongevityWeightedIntegratedStrategyComparisonResult>>();
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.WEIGHTED,
-                    (progress, cancellation) -> weightedCalculation.apply(factory.create(snapshot, progress, cancellation)), result -> {
+                    (progress, cancellation) -> {
+                        var request = factory.create(snapshot, progress, cancellation);
+                        if (arkansas == null) return weightedCalculation.apply(request);
+                        var run = ArkansasAnalysisProvenance.runWeightedProductionV2(arkansas, runIdentity, inputFingerprint, cancellation,
+                                comparison -> comparison.compare(request),
+                                result -> AnalysisSuccessPolicy.accepted(result)
+                                        ? new WeightedSnapshots.Payload(WeightedSnapshots.Couple.from(result), null) : null);
+                        observed.set(run);
+                        return run.result();
+                    }, result -> {
                         if (!AnalysisSuccessPolicy.accepted(result)) {
                             rollbackParameters(AnalysisKind.COUPLE_WEIGHTED, parameterRun);
-                            weightedView.status.setText("No candidate completed successfully. Previous successful results were retained.");
+                            String detail = arkansas == null ? "" : result.orderedEntries().stream().flatMap(entry -> entry.failure().stream())
+                                    .findFirst().map(failure -> " " + failure.message()).orElse("");
+                            weightedView.status.setText("No candidate completed successfully. Previous successful results were retained." + detail);
                             return;
                         }
-                        weightedPresentation = new LongevityWeightedIntegratedPresentation(result,
+                        var nextPresentation = new LongevityWeightedIntegratedPresentation(result,
                                 snapshot.planRevision, snapshot.assumptionsRevision);
-                        acceptParameters(AnalysisKind.COUPLE_WEIGHTED, parameterRun);
-                        weightedCurrent = true;
-                        weightedReportContext = reportContext;
-                        historicalWeightedComparison = null;
-                        historicalWeightedRanks = null;
-                        weightedView.render(weightedPresentation, snapshot.baseline);
-                        weightedView.originalBenefitAssumptions(reportContext.assumptions());
-                        displayResult(AnalysisKind.COUPLE_WEIGHTED, result, navigationTicket);
-                        weightedView.resultTabs.setVisible(true);
-                        weightedView.resultTabs.setManaged(true);
-                        refreshWeightedComparison();
+                        java.util.List<IntegratedAnalysisComparisonPresentation.Row> savedRows = null;
+                        java.util.function.Function<SocialSecurityHouseholdClaimingStrategy, java.util.OptionalInt> savedRanks = null;
+                        String persistenceMessage = null;
                         if (weightedPersistence != null) {
                             var b = snapshot.baseline;
                             var baseline = new SnapshotContext.Baseline(b.elections().stream()
                                     .map(e -> new SnapshotContext.Election(e.name(), e.value(), e.source())).toList(),
                                     b.strategy().map(WeightedSnapshots.Strategy::from).orElse(null), b.problem());
-                            var rows = IntegratedAnalysisComparisonPresentation.create(weightedPresentation,
-                                    exhaustivePresentation == null ? null : exhaustivePresentation.result(), exhaustiveRevision, planRevision, weightedCurrent);
+                            var rows = IntegratedAnalysisComparisonPresentation.create(nextPresentation,
+                                    exhaustivePresentation == null ? null : exhaustivePresentation.result(), exhaustiveRevision, planRevision, true);
                             var deterministic = exhaustivePresentation == null ? null : exhaustivePresentation.result();
-                            boolean compatible = IntegratedAnalysisComparisonPresentation.compatible(weightedPresentation, deterministic,
-                                    exhaustiveRevision, planRevision, weightedCurrent);
+                            boolean compatible = IntegratedAnalysisComparisonPresentation.compatible(nextPresentation, deterministic,
+                                    exhaustiveRevision, planRevision, true);
                             var deterministicRanks = new java.util.HashMap<List<Object>, java.util.OptionalInt>();
                             if (compatible) deterministic.entries().forEach(e -> deterministicRanks.putIfAbsent(
                                     LongevityWeightedIntegratedPresentation.identity(e.strategy()), e.afterTaxEstateRank()));
@@ -1141,24 +1180,44 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                                             "Comparison captured at original weighted completion.", rows.stream().map(AnalysisSnapshotPresentationMapper::capture).toList()),
                                             new SnapshotContext.HistoricalComparison(AnalysisKind.COUPLE_EXHAUSTIVE, null, null,
                                                     "Frozen strategy-detail ranks", detailRanks)));
-                            historicalWeightedComparison = rows;
-                            historicalWeightedRanks = AnalysisSnapshotPresentationMapper.ranks(detailRanks);
-                            weightedView.comparisons(rows);
-                            weightedView.historicalRanks(historicalWeightedRanks);
                             try {
-                                weightedPersistence.accept(new AcceptedAnalysisCompletion(completedPlanId, completedFile, AnalysisKind.COUPLE_WEIGHTED,
-                                        association == null ? java.util.UUID.randomUUID() : association.ticket(), java.time.Instant.now(), inputFingerprint, contextFingerprint,
+                                var completed = new AcceptedAnalysisCompletion(completedPlanId, completedFile, AnalysisKind.COUPLE_WEIGHTED,
+                                        runIdentity, java.time.Instant.now(), inputFingerprint, contextFingerprint,
                                         AnalysisVersions.algorithms(AnalysisKind.COUPLE_WEIGHTED), java.util.Map.of(),
-                                        new WeightedSnapshots.Payload(WeightedSnapshots.Couple.from(result), null), context)
+                                        arkansas == null ? new WeightedSnapshots.Payload(WeightedSnapshots.Couple.from(result), null)
+                                                : observed.get().payload(), context)
                                         .withConditionalBenefits(snapshot.originalPlanCopy())
-                                        .associatedWith(associationFor(AnalysisKind.COUPLE_WEIGHTED, parameterRun, association)));
+                                        .associatedWith(associationFor(AnalysisKind.COUPLE_WEIGHTED, parameterRun, association));
+                                weightedPersistence.accept(arkansas == null ? completed : completed.withArkansasExecution(observed.get().evidence()));
                             } catch (RuntimeException saving) {
-                                weightedView.status.setText("Analysis completed, but result saving could not start. Previous saved results were retained.");
+                                persistenceMessage = "Analysis completed, but result saving could not start. Previous saved results were retained.";
+                                if (arkansas != null) {
+                                    rollbackParameters(AnalysisKind.COUPLE_WEIGHTED, parameterRun);
+                                    weightedView.status.setText(persistenceMessage);
+                                    return;
+                                }
                             }
+                            savedRows = rows;
+                            savedRanks = AnalysisSnapshotPresentationMapper.ranks(detailRanks);
                         }
+                        weightedPresentation = nextPresentation;
+                        acceptParameters(AnalysisKind.COUPLE_WEIGHTED, parameterRun);
+                        weightedCurrent = true;
+                        weightedReportContext = reportContext;
+                        historicalWeightedComparison = savedRows;
+                        historicalWeightedRanks = savedRanks;
+                        weightedView.render(weightedPresentation, snapshot.baseline);
+                        if (savedRanks != null) weightedView.historicalRanks(savedRanks);
+                        weightedView.originalBenefitAssumptions(reportContext.assumptions());
+                        displayResult(AnalysisKind.COUPLE_WEIGHTED, result, navigationTicket);
+                        weightedView.resultTabs.setVisible(true);
+                        weightedView.resultTabs.setManaged(true);
+                        refreshWeightedComparison();
+                        if (persistenceMessage != null) weightedView.status.setText(persistenceMessage);
                         refreshExportActions();
                     }, failure -> weightedView.status.setText(SocialSecurityAnalysisFailurePresentation.message(failure)),
-                    () -> rollbackParameters(AnalysisKind.COUPLE_WEIGHTED, parameterRun));
+                    () -> rollbackParameters(AnalysisKind.COUPLE_WEIGHTED, parameterRun),
+                    () -> arkansas == null || analysisSource.analyzerRequestIsCurrent(association));
             if (!accepted) {
                 weightedView.status.setText("Another Social Security analysis is running or cleaning up.");
             } else if (weightedPresentation != null) {
@@ -1187,13 +1246,17 @@ public final class SocialSecurityStrategyAnalyzerDialog {
     private void runExhaustiveSearch() {
         var navigationTicket = resultNavigation.capture();
         try {
+            var arkansas = arkansasDependency(plan);
             var standard = SocialSecurityAnalyzerInputs.exhaustive(plan);
             var request = acceptedExhaustiveProfile == null ? standard : new IntegratedSocialSecurityCompleteStrategySearchRequest(
                     standard.plan(), standard.primaryRetirementAges(), standard.spouseRetirementAges(), standard.primarySurvivorCandidates(),
                     standard.spouseSurvivorCandidates(), com.daviddunn.retirementplanner.app.socialsecurity.IntegratedStrategyRankingMeasure.valueOf(acceptedExhaustiveProfile.rankingMeasure()),
                     acceptedExhaustiveProfile.retainedDetails());
             var parameterRun = parameterRun(AnalysisKind.COUPLE_EXHAUSTIVE, SocialSecurityParameterMapping.search(request));
-            var association = analysisSource == null ? null : analysisSource.prepareAnalyzerAssociation(AnalysisKind.COUPLE_EXHAUSTIVE, new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan(), AnalysisFingerprintService.Inputs.none()));
+            var fingerprint = new AnalysisFingerprintService().fingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan(), AnalysisFingerprintService.Inputs.none());
+            var association = analysisSource == null ? null : analysisSource.prepareAnalyzerAssociation(AnalysisKind.COUPLE_EXHAUSTIVE, fingerprint);
+            if (arkansas != null && association == null) throw new IllegalArgumentException("No current Arkansas analyzer admission.");
+            var identity = association == null ? java.util.UUID.randomUUID() : association.ticket();
             long capturedRevision = planRevision;
             var reportContext = captureReportContext(false);
             var planId = analysisSource == null ? null : analysisSource.getAnalysisSessionId();
@@ -1210,24 +1273,30 @@ public final class SocialSecurityStrategyAnalyzerDialog {
             boolean accepted = jobs.start(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
                     (progress, cancellation) -> {
                         long started = System.nanoTime();
-                        var result = calculation.run(progress, cancellation);
-                        var model = ExhaustiveIntegratedSearchPresentation.from(result,
+                        var run = arkansas == null ? null : ArkansasAnalysisProvenance.runDeterministicProductionV2(
+                                AnalysisKind.COUPLE_EXHAUSTIVE, arkansas, identity, fingerprint, null, cancellation,
+                                search -> ExhaustiveIntegratedSearchPresentation.from(search.calculate(request, progress, cancellation),
+                                        Duration.ofNanos(System.nanoTime() - started), 20),
+                                model -> AnalysisSuccessPolicy.accepted(model.result())
+                                        ? ExhaustiveResultSnapshots.capture(model, reportContext, basis, java.time.Instant.now(), metric, tab) : null);
+                        var model = run != null ? run.result() : ExhaustiveIntegratedSearchPresentation.from(calculation.run(progress, cancellation),
                                 Duration.ofNanos(System.nanoTime() - started), 20);
                         AcceptedAnalysisCompletion completion = null;
                         ExhaustiveSnapshot payload = null;
-                        if (planId != null && AnalysisSuccessPolicy.accepted(result)) {
-                            var completed = java.time.Instant.now();
-                            payload = ExhaustiveResultSnapshots.capture(model, reportContext, basis, completed, metric, tab);
+                        if (planId != null && AnalysisSuccessPolicy.accepted(model.result())) {
+                            var completed = run == null ? java.time.Instant.now() : ((ExhaustiveSnapshot) run.payload()).completedAt();
+                            payload = run == null ? ExhaustiveResultSnapshots.capture(model, reportContext, basis, completed, metric, tab)
+                                    : (ExhaustiveSnapshot) run.payload();
                             var context = new SnapshotContext(reportContext.household(), reportContext.primary(), reportContext.spouse(),
                                     reportContext.runStarted(), reportContext.assumptions().stream()
                                             .map(s -> new SnapshotContext.Section(s.title(), s.lines())).toList(), List.of(), List.of(), java.util.Map.of());
                             var fingerprints = new AnalysisFingerprintService();
                             completion = new AcceptedAnalysisCompletion(planId, file, AnalysisKind.COUPLE_EXHAUSTIVE,
-                                    association == null ? java.util.UUID.randomUUID() : association.ticket(), completed,
-                                    fingerprints.fingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan(), AnalysisFingerprintService.Inputs.none()),
+                                    identity, completed, fingerprint,
                                     fingerprints.effectiveContextFingerprint(AnalysisKind.COUPLE_EXHAUSTIVE, request.plan()),
                                     AnalysisVersions.calculatedAlgorithms(AnalysisKind.COUPLE_EXHAUSTIVE, null), AnalysisVersions.references(AnalysisKind.COUPLE_EXHAUSTIVE),
                                     payload, context).withConditionalBenefits(request.plan());
+                            if (run != null) completion = completion.withArkansasExecution(run.evidence());
                         }
                         return new ExhaustiveRun(model, payload, completion);
                     }, run -> {
@@ -1238,6 +1307,15 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                     exhaustiveStatus.setText("No successful candidates. Previous results retained.");
                     return;
                 }
+                if (run.completion() != null) {
+                    try {
+                        exhaustivePersistence.accept(run.completion().associatedWith(associationFor(AnalysisKind.COUPLE_EXHAUSTIVE, parameterRun, association)));
+                    } catch (IllegalArgumentException obsolete) {
+                        if (arkansas == null) throw obsolete;
+                        showError(obsolete);
+                        return;
+                    }
+                }
                 exhaustivePresentation = model;
                 acceptParameters(AnalysisKind.COUPLE_EXHAUSTIVE, parameterRun);
                 exhaustiveRevision = capturedRevision;
@@ -1245,14 +1323,13 @@ public final class SocialSecurityStrategyAnalyzerDialog {
                 historicalExhaustiveReference = run.payload() == null ? null : run.payload().socialSecurityReference();
                 renderExhaustive(model);
                 displayResult(AnalysisKind.COUPLE_EXHAUSTIVE, model.result(), navigationTicket);
-                if (run.completion() != null) exhaustivePersistence.accept(run.completion()
-                        .associatedWith(associationFor(AnalysisKind.COUPLE_EXHAUSTIVE, parameterRun, association)));
                 refreshWeightedComparison();
                 exhaustiveStale.setText("");
                 exhaustiveStatus.setText("Exhaustive integrated search complete - "
                         + model.result().totalStrategyCount() + " strategies evaluated; " + model.result().failedStrategyCount() + " unavailable.");
                 refreshExportActions();
-            }, this::showError, () -> rollbackParameters(AnalysisKind.COUPLE_EXHAUSTIVE, parameterRun));
+            }, this::showError, () -> rollbackParameters(AnalysisKind.COUPLE_EXHAUSTIVE, parameterRun),
+                    () -> arkansas == null || analysisSource.analyzerRequestIsCurrent(association));
             if (accepted && exhaustivePersistence != null) exhaustivePersistence.beginReplacement();
             if (!accepted) {
                 exhaustiveStatus.setText("Another Social Security analysis is running or cleaning up.");

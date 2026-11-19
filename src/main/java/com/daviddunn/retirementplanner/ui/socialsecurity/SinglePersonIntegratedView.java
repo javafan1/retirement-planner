@@ -204,6 +204,9 @@ final class SinglePersonIntegratedView extends VBox {
         try {
             if (plan.getHousehold().hasSpouse()) throw new IllegalArgumentException("Household composition changed; reopen the analyzer.");
             var frozen = new RetirementPlanScenarioCopyService().copy(plan);
+            var arkansas = com.daviddunn.retirementplanner.domain.projection.ProjectionEngine.selectsArkansas(frozen)
+                    ? Objects.requireNonNull(source, "Open the analyzer from an accepted Arkansas projection.").requireArkansasProjectionForAnalysis() : null;
+            var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_DETERMINISTIC;
             var captured = IndividualReportContext.capture(frozen);
             var base = IntegratedSocialSecurityCompleteStrategySearchRequest.standard(frozen);
             Optional<Year> death = deathYear.getText().isBlank() ? Optional.empty()
@@ -213,14 +216,28 @@ final class SinglePersonIntegratedView extends VBox {
                             : IntegratedStrategyRankingMeasure.valueOf(acceptedProfile.rankingMeasure()),
                     acceptedProfile == null ? 9 : acceptedProfile.retainedDetails(), death);
             var parameterRun = parameters == null ? null : parameters.begin(SocialSecurityParameterMapping.search(request));
-            String capturedFingerprint = parameters == null ? null : inputFingerprint(frozen, request.primaryDeathYear().map(java.time.Year::getValue).orElse(null));
-            var admission = source == null ? null : source.prepareAnalyzerAssociation(com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_DETERMINISTIC, capturedFingerprint);
+            Integer effectiveDeath = request.primaryDeathYear().map(java.time.Year::getValue).orElse(null);
+            String capturedFingerprint = parameters == null && arkansas == null ? null : inputFingerprint(frozen, effectiveDeath);
+            var admission = source == null ? null : source.prepareAnalyzerAssociation(kind, capturedFingerprint);
+            if (arkansas != null && admission == null) throw new IllegalArgumentException("No current Arkansas analyzer admission.");
+            var identity = admission == null ? UUID.randomUUID() : admission.ticket();
             var capturedPayload = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.IndividualDeterministicSnapshot>();
+            var observed = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.ArkansasAnalysisProvenance.Captured>();
             var calculationWork = calculation.apply(request);
             current = false;
             if (persistence != null) persistence.beginReplacement();
             boolean started = jobs.start(SocialSecurityAnalyzerJobController.Mode.EXHAUSTIVE,
                     (progress, cancellation) -> {
+                        if (arkansas != null) {
+                            var run = com.daviddunn.retirementplanner.app.socialsecurity.results.ArkansasAnalysisProvenance
+                                    .runDeterministicProductionV2(kind, arkansas, identity, capturedFingerprint, effectiveDeath, cancellation,
+                                            calculator -> SinglePersonIntegratedAnalysis.calculate(request, progress, cancellation, calculator),
+                                            result -> com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result.result())
+                                                    ? com.daviddunn.retirementplanner.app.socialsecurity.results.IndividualDeterministicSnapshot.capture(result) : null);
+                            observed.set(run.evidence());
+                            capturedPayload.set((com.daviddunn.retirementplanner.app.socialsecurity.results.IndividualDeterministicSnapshot) run.payload());
+                            return run.result();
+                        }
                         var result = calculationWork.run(progress, cancellation); cancellation.throwIfCancellationRequested();
                         if (com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result.result()))
                             capturedPayload.set(com.daviddunn.retirementplanner.app.socialsecurity.results.IndividualDeterministicSnapshot.capture(result));
@@ -231,21 +248,28 @@ final class SinglePersonIntegratedView extends VBox {
                             status.setText("No successful candidates. Previous accepted result and parameters retained.");
                             return;
                         }
-                        reportContext = captured; acceptedInputFingerprint = capturedFingerprint; render(result);
                         if (persistence != null) {
-                            var kind = com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_DETERMINISTIC;
                             var context = new com.daviddunn.retirementplanner.app.socialsecurity.results.SnapshotContext(captured.household(), captured.primary(), null, captured.started(),
                                     captured.assumptions().stream().map(s -> new com.daviddunn.retirementplanner.app.socialsecurity.results.SnapshotContext.Section(s.title(), s.lines())).toList(), List.of(), List.of(), Map.of());
                             var completion = new com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion(source.getAnalysisSessionId(),
-                                    source.canPersistAnalysisResults() ? source.getCurrentFile() : null, kind, admission == null ? UUID.randomUUID() : admission.ticket(), java.time.Instant.now(), capturedFingerprint,
+                                    source.canPersistAnalysisResults() ? source.getCurrentFile() : null, kind, identity, java.time.Instant.now(), capturedFingerprint,
                                     new com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisFingerprintService().effectiveContextFingerprint(kind, frozen),
                                     com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisVersions.algorithms(kind), Map.of(),
                                     capturedPayload.get(), context).withConditionalBenefits(frozen);
-                            persistence.accept(completion.associatedWith(parameterRun != null && parameterRun.edit() == parameters.editEpoch() ? admission : null));
+                            if (arkansas != null) completion = completion.withArkansasExecution(observed.get());
+                            try {
+                                persistence.accept(completion.associatedWith(parameterRun != null && parameterRun.edit() == parameters.editEpoch() ? admission : null));
+                            } catch (IllegalArgumentException obsolete) {
+                                if (arkansas == null) throw obsolete;
+                                status.setText(obsolete.getMessage() + " Previous successful results were retained.");
+                                return;
+                            }
                         }
+                        reportContext = captured; acceptedInputFingerprint = capturedFingerprint; render(result);
                         if (parameterRun != null && com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result)) parameters.accept(parameterRun);
-                    }, failure -> status.setText("Analysis failed: " + failure.getMessage()),
-                    () -> { if (parameterRun != null) parameters.rollback(parameterRun); });
+                    }, failure -> status.setText(SocialSecurityAnalysisFailurePresentation.message(failure)),
+                    () -> { if (parameterRun != null) parameters.rollback(parameterRun); },
+                    () -> arkansas == null || source.analyzerRequestIsCurrent(admission));
             if (!started) { if (persistence != null) persistence.finishReplacement(); status.setText("Another analysis is running. Try again when it finishes."); }
             refreshControls();
         } catch (RuntimeException invalid) {

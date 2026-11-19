@@ -27,7 +27,12 @@ final class IndividualCompletionPersistence {
         view.getChildren().add(noticeIndex, view.persistence.controls);
         view.conditioning.getEditor().textProperty().addListener((o, a, b) -> { if (view.parameters == null || !view.parameters.applying()) { WeightedResultPersistence.dateEdited(view.conditioning); view.persistence.reassess(); } });
         view.valuation.getEditor().textProperty().addListener((o, a, b) -> { if (view.parameters == null || !view.parameters.applying()) { WeightedResultPersistence.dateEdited(view.valuation); view.persistence.reassess(); } });
-        view.acceptedCompletion = input -> {
+        view.acceptedCompletion = input -> prepare(view, source, kind, input, false).accept();
+        if (view.integrated()) view.prepareArkansas = input -> prepare(view, source, kind, input, true);
+    }
+
+    private static SinglePersonMortalityView.ArkansasWork prepare(SinglePersonMortalityView view,
+            ApplicationController source, AnalysisKind kind, SinglePersonMortalityView.CompletionInput input, boolean arkansas) {
             UUID identity = input.plan().getPlanId() == null ? source.getAnalysisSessionId() : UUID.fromString(input.plan().getPlanId());
             var file = source.canPersistAnalysisResults() && Objects.equals(input.plan().getPlanId(), source.getCurrentPlan().getPlanId())
                     ? source.getCurrentFile() : null;
@@ -37,7 +42,10 @@ final class IndividualCompletionPersistence {
                     request.mortalityBaseDate(), input.valuation(), input.rate(), null, null, List.of(), List.of(), null);
             var fingerprints = new AnalysisFingerprintService();
             String fingerprint = fingerprints.fingerprint(kind, input.plan(), next);
+            var projection = arkansas ? source.requireArkansasProjectionForAnalysis() : null;
             var admission = source.prepareAnalyzerAssociation(kind, fingerprint);
+            if (arkansas && admission == null) throw new IllegalArgumentException("No current Arkansas analyzer admission.");
+            var runId = admission == null ? UUID.randomUUID() : admission.ticket();
             var context = new SnapshotContext(input.context().household(), input.context().primary(), null,
                     input.context().started(), input.context().assumptions().stream()
                     .map(s -> new SnapshotContext.Section(s.title(), s.lines())).toList(),
@@ -45,14 +53,21 @@ final class IndividualCompletionPersistence {
                             "Factor: " + request.mortalityAdjustment().factor(), "Conditioning: " + request.mortalityBaseDate(),
                             "Valuation: " + input.valuation(), "Real discount: " + input.rate()))), List.of(), Map.of());
             String contextFingerprint = fingerprints.effectiveContextFingerprint(kind, input.plan());
-            return result -> {
+            var observed = new java.util.concurrent.atomic.AtomicReference<ArkansasAnalysisProvenance.ObservedRun<
+                    com.daviddunn.retirementplanner.app.socialsecurity.SinglePersonMortalityAnalysis.Result>>();
+            return new SinglePersonMortalityView.ArkansasWork(arkansas ? (progress, cancellation) -> {
+                var run = ArkansasAnalysisProvenance.runIndividualMortalityProductionV2(projection, runId, fingerprint,
+                        input.plan(), input.mortality(), input.valuation(), input.rate(), progress, cancellation);
+                observed.set(run);
+                return run.result();
+            } : null, result -> {
                 if (!AnalysisSuccessPolicy.accepted(result)) return;
-                var completion = new AcceptedAnalysisCompletion(identity, file, kind, admission == null ? UUID.randomUUID() : admission.ticket(), Instant.now(),
+                var completion = new AcceptedAnalysisCompletion(identity, file, kind, runId, Instant.now(),
                         fingerprint, contextFingerprint, AnalysisVersions.algorithms(kind), Map.of(),
-                        new WeightedSnapshots.Payload(null, WeightedSnapshots.Individual.from(result)), context);
+                        arkansas ? observed.get().payload() : new WeightedSnapshots.Payload(null, WeightedSnapshots.Individual.from(result)), context);
                 if (view.integrated()) completion = completion.withConditionalBenefits(input.plan());
+                if (arkansas) completion = completion.withArkansasExecution(observed.get().evidence());
                 view.persistence.accept(completion.associatedWith(view.parameters == null || edit == view.parameters.editEpoch() ? admission : null));
-            };
-        };
+            }, () -> !arkansas || source.analyzerRequestIsCurrent(admission));
     }
 }

@@ -15,6 +15,7 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
     private final boolean sequential;
     private final int workerLimit;
     private final Function<RepresentativeInput, RepresentativeResult> representativeEvaluation;
+    private final LongevityFinancialObservation financialObservation;
 
     public LongevityWeightedIntegratedStrategyComparisonService() {
         this(LongevityWeightedRepresentativeEvaluationCoordinator.DEFAULT_LIMIT);
@@ -22,7 +23,12 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
 
     /** A controlled injected engine runs on the caller's thread, including continuation carriers. */
     public LongevityWeightedIntegratedStrategyComparisonService(com.daviddunn.retirementplanner.domain.projection.ProjectionEngine engine) {
-        this(1, LongevityWeightedIntegratedStrategyComparisonService::evaluateRepresentative, Objects.requireNonNull(engine));
+        this(engine, null);
+    }
+
+    public LongevityWeightedIntegratedStrategyComparisonService(com.daviddunn.retirementplanner.domain.projection.ProjectionEngine engine,
+            LongevityFinancialObservation observer) {
+        this(1, LongevityWeightedIntegratedStrategyComparisonService::evaluateRepresentative, Objects.requireNonNull(engine), observer);
     }
 
     LongevityWeightedIntegratedStrategyComparisonService(int workerLimit) {
@@ -31,16 +37,17 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
 
     LongevityWeightedIntegratedStrategyComparisonService(int workerLimit,
             Function<RepresentativeInput, RepresentativeResult> evaluation) {
-        this(workerLimit, evaluation, null);
+        this(workerLimit, evaluation, null, null);
     }
 
     private LongevityWeightedIntegratedStrategyComparisonService(int workerLimit,
             Function<RepresentativeInput, RepresentativeResult> evaluation,
-            com.daviddunn.retirementplanner.domain.projection.ProjectionEngine engine) {
+            com.daviddunn.retirementplanner.domain.projection.ProjectionEngine engine, LongevityFinancialObservation observer) {
         if (workerLimit < 1) throw new IllegalArgumentException("Worker limit must be positive.");
         this.workerLimit = workerLimit;
         this.representativeEvaluation = Objects.requireNonNull(evaluation);
         sequential = engine != null;
+        financialObservation = observer;
         evaluator = sequential ? new LongevityWeightedIntegratedStrategyEvaluator(engine) : new LongevityWeightedIntegratedStrategyEvaluator();
         continuationEvaluator = sequential ? new LongevityWeightedContinuationEvaluator(engine) : new LongevityWeightedContinuationEvaluator();
     }
@@ -134,6 +141,7 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
                     }
                 } else {
                     avoided++;
+                    if (financialObservation != null) financialObservation.reused(order, request.candidates().get(index), representative);
                 }
                 // Detail outcomes contain no strategy identity. The original entry owns identity.
                 // Failed representatives are never shared: each member executes the reference path.
@@ -200,6 +208,7 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
             WorkCounter work, boolean continuations) {
         request.cancellationToken().throwIfCancellationRequested();
         var strategy = request.strategy();
+        if (financialObservation != null) financialObservation.starting(order, strategy);
         try {
             LongevityWeightedIntegratedStrategyComparisonRequest.validateCompleteStrategy(request.sourcePlan(), strategy);
             var evaluationRequest = request;
@@ -208,17 +217,19 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
                 work.continuationEvaluations++;
                 LongevityContinuationWork[] latest = {LongevityContinuationWork.zero()};
                 try {
-                    result = continuationEvaluator.evaluate(evaluationRequest, value -> latest[0] = value);
+                    result = continuationEvaluator.evaluate(evaluationRequest, value -> latest[0] = value, financialObservation);
                 } finally {
                     work.continuation = work.continuation.plus(latest[0]);
                 }
             } else {
                 work.evaluations++;
-                result = evaluator.evaluate(evaluationRequest, work::observe);
+                result = evaluator.evaluate(evaluationRequest, work::observe, financialObservation);
             }
             request.cancellationToken().throwIfCancellationRequested();
+            var aggregate = LongevityWeightedStrategyAggregate.from(result);
+            if (financialObservation != null) financialObservation.completed(aggregate);
             return new LongevityWeightedIntegratedStrategyComparisonEntry(order, strategy,
-                    Optional.of(LongevityWeightedStrategyAggregate.from(result)), Optional.empty(),
+                    Optional.of(aggregate), Optional.empty(),
                     retainDetail ? Optional.of(result.scenarioOutcomes()) : Optional.empty(),
                     OptionalInt.empty(), Optional.empty(), Optional.empty());
         } catch (AnalysisCancelledException cancelled) {
@@ -235,8 +246,10 @@ public final class LongevityWeightedIntegratedStrategyComparisonService {
             if (failure.getCause() != null && failure.getCause().getMessage() != null) {
                 message += " Cause: " + failure.getCause().getMessage();
             }
+            var unavailable = new IntegratedSocialSecurityStrategyEvaluationFailure(strategy, message, category);
+            if (financialObservation != null) financialObservation.failed(unavailable, failure);
             return new LongevityWeightedIntegratedStrategyComparisonEntry(order, strategy, Optional.empty(),
-                    Optional.of(new IntegratedSocialSecurityStrategyEvaluationFailure(strategy, message, category)),
+                    Optional.of(unavailable),
                     Optional.empty(), OptionalInt.empty(), Optional.empty(), Optional.empty());
         }
     }

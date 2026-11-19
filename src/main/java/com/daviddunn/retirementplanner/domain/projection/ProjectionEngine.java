@@ -114,6 +114,7 @@ public class ProjectionEngine {
     public static final String ALGORITHM_VERSION = "v1";
 
     private final ArkansasProjectionValidation arkansasValidation;
+    private final boolean arkansasProduction;
     private final ThreadLocal<ArkansasRunObserver> arkansasObserver = new ThreadLocal<>();
     private final ThreadLocal<ArkansasRunControl> arkansasRunControl = new ThreadLocal<>();
 
@@ -125,6 +126,19 @@ public class ProjectionEngine {
     public final ProjectionExecutionResult projectArkansasWithOutcome(RetirementPlan frozenPlan,
             com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation,
             java.util.function.IntConsumer completedYears) {
+        return withArkansasRunControl(cancellation, completedYears, () -> projectWithOutcome(frozenPlan));
+    }
+
+    /** Runs an Arkansas analysis on its existing worker with cancellation inside annual proofs. */
+    public final <T> T runArkansasAnalysis(
+            com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation,
+            java.util.function.Supplier<T> work) {
+        return withArkansasRunControl(cancellation, ignored -> { }, work);
+    }
+
+    private <T> T withArkansasRunControl(
+            com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation,
+            java.util.function.IntConsumer completedYears, java.util.function.Supplier<T> work) {
         if (arkansasValidation == null || arkansasRunControl.get() != null) {
             throw new IllegalStateException("Arkansas projection requires an isolated gated engine and one calculation scope.");
         }
@@ -133,7 +147,7 @@ public class ProjectionEngine {
         arkansasRunControl.set(control);
         try {
             cancellation.throwIfCancellationRequested();
-            var result = projectWithOutcome(frozenPlan);
+            var result = work.get();
             cancellation.throwIfCancellationRequested();
             return result;
         } finally {
@@ -165,13 +179,31 @@ public class ProjectionEngine {
         this(new TaxFundingCalculator());
     }
 
+    public static boolean selectsArkansas(RetirementPlan plan) {
+        return plan != null && plan.getPlanningAssumptions() != null
+                && plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AR;
+    }
+
+    /** Production evidence comes only from the frozen plan and executed annual ledgers. */
+    public static ProjectionEngine forArkansasProduction() {
+        return new ProjectionEngine(new TaxFundingCalculator(),
+                new ArkansasProjectionValidation((year, pensions) -> ArkansasProjectionValidation.AnnualEvidence.EMPTY), true);
+    }
+
     /** Supplies the same annual funding boundary for deterministic and structured evaluations. */
     public ProjectionEngine(TaxFundingCalculator taxFundingCalculator) {
         this(taxFundingCalculator, null);
     }
 
     ProjectionEngine(TaxFundingCalculator taxFundingCalculator, ArkansasProjectionValidation arkansasValidation) {
+        this(taxFundingCalculator, arkansasValidation, false);
+    }
+
+    private ProjectionEngine(TaxFundingCalculator taxFundingCalculator, ArkansasProjectionValidation arkansasValidation,
+            boolean arkansasProduction) {
         this.arkansasValidation = arkansasValidation;
+        this.arkansasProduction = arkansasProduction;
 
         this.withdrawalCalculator =
                 new WithdrawalCalculator();
@@ -283,6 +315,16 @@ public class ProjectionEngine {
             ProjectionEvaluationContext evaluationContext,
             ProjectionEconomicPath economicPath,
             boolean structured) {
+        if (arkansasProduction && (!selectsArkansas(plan) || arkansasRunControl.get() == null)) {
+            throw new IllegalStateException("Arkansas production requires Arkansas inputs and a controlled calculation scope.");
+        }
+        if (selectsArkansas(plan) && !arkansasProduction) {
+            throw new ArkansasProjectionUnavailableException(plan.getPlanningAssumptions().getProjectionStartDate().getYear(),
+                    ArkansasProjectionUnavailableException.Reason.SOURCE_OR_TAX,
+                    "This action requires the controlled Arkansas projection route.",
+                    com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue.of(
+                            com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue.Kind.POLICY), java.util.List.of());
+        }
         ProjectionExecutionResult execution;
         try {
             execution = runProjection(plan, evaluationContext, economicPath, structured);

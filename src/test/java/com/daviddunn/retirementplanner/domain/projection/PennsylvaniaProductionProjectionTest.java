@@ -37,7 +37,7 @@ public class PennsylvaniaProductionProjectionTest {
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void multiYearSingleCouplePersistenceAndFourStateComparison(boolean couple, @TempDir Path directory) throws Exception {
         var results = new EnumMap<StateTaxJurisdiction, Projection>(StateTaxJurisdiction.class);
-        for (var state : StateTaxJurisdiction.productionChoices()) {
+        for (var state : StateTaxJurisdiction.productionChoices().stream().filter(choice -> choice != StateTaxJurisdiction.AR).toList()) {
             var plan = plan(couple, state);
             plan.setRothConversionRequest(new RothConversionRequest(true, 2027, new BigDecimal("100000"),
                     RothConversionStopRule.NEVER, RothConversionStrategy.FIXED_AMOUNT, RothConversionFrequency.ANNUAL));
@@ -63,7 +63,7 @@ public class PennsylvaniaProductionProjectionTest {
         for (var metric : List.of("getFederalIncomeTax", "getStateIncomeTax", "getTotalIncomeTax", "getTaxFundingWithdrawal",
                 "getRothConversion", "getEndingInvestableAssets", "getAfterTaxEstateValue")) {
             var row = new ArrayList<String>(); row.add(metric);
-            for (var state : StateTaxJurisdiction.productionChoices()) row.add(((BigDecimal) ProjectionYear.class.getMethod(metric)
+            for (var state : StateTaxJurisdiction.productionChoices().stream().filter(choice -> choice != StateTaxJurisdiction.AR).toList()) row.add(((BigDecimal) ProjectionYear.class.getMethod(metric)
                     .invoke(results.get(state).getYears().getLast())).setScale(2, RoundingMode.HALF_UP).toPlainString());
             lines.add(String.join("|", row));
         }
@@ -147,7 +147,7 @@ public class PennsylvaniaProductionProjectionTest {
         plan.setRothConversionRequest(new RothConversionRequest(true, 2026, BigDecimal.ZERO,
                 RothConversionStopRule.FIRST_HOUSEHOLD_RMD, RothConversionStrategy.FILL_22_PERCENT_BRACKET, RothConversionFrequency.ONE_TIME));
         var rows = new ArrayList<String>(); rows.add("State|Federal Tax|State Tax|Total Tax|Tax Funding|Conversion|Ending Assets|After Tax Estate");
-        for (var state : StateTaxJurisdiction.productionChoices()) {
+        for (var state : StateTaxJurisdiction.productionChoices().stream().filter(choice -> choice != StateTaxJurisdiction.AR).toList()) {
             plan.setPlanningAssumptions(plan.getPlanningAssumptions().withStateTaxAssumptions(StateTaxAssumptions.simplified(state)));
             var year = new ProjectionEngine().project(plan).getYears().getFirst();
             // Federal worksheet: 2480 + 76000*.12 + 110600*.22 = 35932.

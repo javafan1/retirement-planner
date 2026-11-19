@@ -27,34 +27,47 @@ final class LongevityContinuationSession {
     private final int firstYear;
     private final Map<Path, ScheduleKey> carrierKeys = new HashMap<>();
     private final long positive;
+    private final boolean structuredFunding;
     private long carriers, successes, failures, fallback, starts, completed, scenarios, outcomes, reused, rows;
 
     LongevityContinuationSession(RetirementPlan plan, LongevityWeightedIntegratedStrategyRequest request,
             int positive, Consumer<LongevityContinuationWork> observer) {
-        this(plan, request, positive, observer, null);
+        this(plan, request, positive, observer, null, false);
     }
 
     LongevityContinuationSession(RetirementPlan plan, LongevityWeightedIntegratedStrategyRequest request,
             int positive, Consumer<LongevityContinuationWork> observer, ProjectionEngine engine) {
+        this(plan, request, positive, observer, engine, false);
+    }
+
+    LongevityContinuationSession(RetirementPlan plan, LongevityWeightedIntegratedStrategyRequest request,
+            int positive, Consumer<LongevityContinuationWork> observer, ProjectionEngine engine, boolean structuredFunding) {
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireOptimizationSupported(plan);
         this.engine = engine;
         this.plan = plan;
         this.request = request;
         this.observer = observer;
         this.positive = positive;
+        this.structuredFunding = structuredFunding;
         firstYear = plan.getPlanningAssumptions().getProjectionStartDate().getYear();
         groups = new LongevityScenarioContinuationPlanner().plan(request.longevityScenarios().scenarios(),
                 plan.getPlanningAssumptions().getProjectionStartDate(), request.cancellationToken());
         report();
     }
 
+    record SnapshotSource(EstateAtSecondDeathSnapshot snapshot, HouseholdLifetimeScenario execution) { }
+
     EstateAtSecondDeathSnapshot snapshot(SocialSecurityJointMortalityScenario member) {
+        return snapshotWithSource(member).snapshot();
+    }
+
+    SnapshotSource snapshotWithSource(SocialSecurityJointMortalityScenario member) {
         request.cancellationToken().throwIfCancellationRequested();
         int death = secondDeathYear(member);
         var deathDate = LocalDate.of(death, 1, 1);
         estate.validateCoverageStart(plan, deathDate);
         if (deathDate.equals(plan.getPlanningAssumptions().getProjectionStartDate())) {
-            return estate.calculateOpening(plan, deathDate);
+            return new SnapshotSource(estate.calculateOpening(plan, deathDate), null);
         }
         Path path = path(member);
         // Preserve the member's own finite-horizon request validation, including election omission.
@@ -82,7 +95,8 @@ final class LongevityContinuationSession {
         if (result == null) return independent(member);
         reused++;
         report();
-        return result;
+        var carrier = request.longevityScenarios().scenarios().get(groups.get(path).carrierIndex());
+        return new SnapshotSource(result, mapper.map(carrier));
     }
 
     private void attempt(Path path, Group group) {
@@ -101,6 +115,8 @@ final class LongevityContinuationSession {
             }
         } catch (AnalysisCancelledException cancelled) {
             throw cancelled;
+        } catch (com.daviddunn.retirementplanner.app.socialsecurity.results.ArkansasAnalysisEvidenceV2.BudgetExceeded exceeded) {
+            throw exceeded;
         } catch (RuntimeException unavailable) {
             // Discard every speculative prefix. Members will run independently in original order.
             failures++;
@@ -112,7 +128,7 @@ final class LongevityContinuationSession {
         report();
     }
 
-    private EstateAtSecondDeathSnapshot independent(SocialSecurityJointMortalityScenario member) {
+    private SnapshotSource independent(SocialSecurityJointMortalityScenario member) {
         request.cancellationToken().throwIfCancellationRequested();
         fallback++;
         report();
@@ -120,7 +136,7 @@ final class LongevityContinuationSession {
         var projection = project(isolated, member);
         var result = estate.calculate(isolated, projection, LocalDate.of(secondDeathYear(member), 1, 1));
         request.cancellationToken().throwIfCancellationRequested();
-        return result;
+        return new SnapshotSource(result, mapper.map(member));
     }
 
     private Projection project(RetirementPlan isolated, SocialSecurityJointMortalityScenario member) {
@@ -128,7 +144,9 @@ final class LongevityContinuationSession {
         if (engine == null) engine = new ProjectionEngine();
         starts++;
         report();
-        var projection = engine.project(isolated, context(member));
+        var context = context(member);
+        var projection = structuredFunding ? IntegratedSocialSecurityStrategyEvaluator.projectFinancial(engine, isolated, context)
+                : engine.project(isolated, context);
         completed++;
         rows += projection.size();
         report();

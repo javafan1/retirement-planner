@@ -19,21 +19,152 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import com.daviddunn.retirementplanner.ui.controller.ApplicationController;
+import com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultStore;
+import com.daviddunn.retirementplanner.persistence.JsonAnalysisSnapshotRepository;
+import com.daviddunn.retirementplanner.persistence.JsonApplicationSettingsRepository;
+import com.daviddunn.retirementplanner.persistence.JsonRetirementPlanRepository;
+import com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode;
 
 import static com.daviddunn.retirementplanner.domain.model.AccountOwnership.PRIMARY;
 import static com.daviddunn.retirementplanner.domain.model.WithdrawalStrategyType.TAXABLE_FIRST;
 import static com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.single;
 import static com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.validationEngine;
+import static com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.selectArkansas;
+import static com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.surplusPlan;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ArkansasWorkflowUiTest {
     @BeforeAll static void startFx() throws Exception { PlanFileOperationsTest.startFx(); }
+
+    @Test void loadedPlanProjectsThroughResultsSummaryAndReviewsTheLivePension(@TempDir Path folder) throws Exception {
+        var repository = new JsonRetirementPlanRepository();
+        var plan = selectArkansas(surplusPlan("1000000", 1));
+        plan.setFinancialCalculationMode(FinancialCalculationMode.BASIC);
+        var file = folder.resolve("arkansas.json");
+        repository.save(plan, file);
+        var store = new AnalysisResultStore(new JsonAnalysisSnapshotRepository(folder.resolve("analyses")));
+        var controller = new ApplicationController(repository, new JsonApplicationSettingsRepository(folder.resolve("settings.json")), store);
+        var owner = PlanFileOperationsTest.fx(() -> {
+            controller.open(file);
+            var main = new MainWindow(controller);
+            var stage = new Stage();
+            stage.setScene(main.createScene());
+            main.setStage(stage);
+            stage.show();
+            return stage;
+        });
+        var release = new CountDownLatch(1);
+        try {
+            var storage = store.background(() -> {
+                assertFalse(Platform.isFxApplicationThread());
+                if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Queued fixture timed out.");
+                return null;
+            });
+            PlanFileOperationsTest.fx(() -> { recalculate(owner); return null; });
+            awaitFx(() -> visibleControl("#plan-operation-cancel") != null);
+            long cancellation = System.nanoTime();
+            PlanFileOperationsTest.fx(() -> {
+                assertNull(controller.peekCurrentProjection());
+                ((Button) visibleControl("#plan-operation-cancel")).fire();
+                assertFalse(controller.isArkansasProjectionRunning());
+                return null;
+            });
+            System.out.printf("Arkansas queued UI cancellation dispatch ms=%.3f%n", (System.nanoTime() - cancellation) / 1_000_000.0);
+            assertFalse(storage.toCompletableFuture().isDone());
+            release.countDown();
+            storage.toCompletableFuture().get(10, TimeUnit.SECONDS);
+            PlanFileOperationsTest.fx(() -> { recalculate(owner); return null; });
+            awaitFx(() -> controller.getAcceptedProjectionSnapshot() != null);
+            var original = PlanFileOperationsTest.fx(controller::getAcceptedProjectionSnapshot);
+            assertTrue(original.calculationSemanticsCurrent());
+            assertEquals(controller.getAnalysisSessionId(), original.owner());
+
+            PlanFileOperationsTest.fx(() -> {
+                var pension = new Pension("Review this pension", PRIMARY, LocalDate.of(2026, 1, 1), null,
+                        BigDecimal.valueOf(12000), BigDecimal.ZERO);
+                pension.setPlanClassification(PensionPlanClassification.DEFINED_BENEFIT_414J);
+                controller.getCurrentPlan().getHousehold().getPrimaryPerson().addIncomeSource(pension);
+                controller.markModified();
+                recalculate(owner);
+                return null;
+            });
+            openReviewEditor();
+            PlanFileOperationsTest.fx(() -> {
+                var editor = (DialogPane) visibleControl("#pension-source-origin").getScene().getRoot();
+                ((Button) editor.lookupButton(ButtonType.CANCEL)).fire();
+                assertEquals(original.id(), controller.getAcceptedProjectionSnapshot().id());
+                return null;
+            });
+            PlanFileOperationsTest.fx(() -> { recalculate(owner); return null; });
+            openReviewEditor();
+            PlanFileOperationsTest.fx(() -> {
+                @SuppressWarnings("unchecked") var origin = (ComboBox<RetirementIncomeSourceOrigin>) visibleControl("#pension-source-origin");
+                assertEquals(RetirementIncomeSourceOrigin.UNKNOWN, origin.getValue());
+                origin.setValue(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+                ((Button) ((DialogPane) origin.getScene().getRoot()).lookupButton(ButtonType.OK)).fire();
+                return null;
+            });
+            awaitFx(() -> !original.id().equals(controller.getAcceptedProjectionSnapshot().id()));
+            var pension = PlanFileOperationsTest.fx(() -> (Pension) controller.getCurrentPlan().getHousehold()
+                    .getPrimaryPerson().getIncomeSources().getLast());
+            assertEquals(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN, pension.getSourceOrigin());
+            assertEquals(PensionPlanClassification.DEFINED_BENEFIT_414J, pension.getPlanClassification());
+        } finally {
+            release.countDown();
+            PlanFileOperationsTest.fx(() -> { owner.hide(); return null; });
+            assertTrue(controller.getAnalysisParameters().drain(Duration.ofSeconds(10)).complete());
+            controller.getAnalysisParameters().shutdown();
+            assertTrue(store.drain(Duration.ofSeconds(10)).safeToExit());
+            store.shutdownAfterSuccessfulDrain();
+            controller.getSettingsService().close();
+        }
+    }
+
+    private static void recalculate(Stage owner) {
+        var menuBar = (javafx.scene.control.MenuBar) owner.getScene().lookup(".menu-bar");
+        menuBar.getMenus().stream().filter(menu -> "view-menu".equals(menu.getId())).findFirst().orElseThrow()
+                .getItems().stream().filter(item -> "view-results-summary".equals(item.getId())).findFirst().orElseThrow().fire();
+        var button = (Button) owner.getScene().lookup("#recalculate-projection");
+        assertNotNull(button);
+        button.fire();
+    }
+
+    private static void openReviewEditor() throws Exception {
+        awaitFx(() -> visibleControl("#arkansas-pension-review") != null);
+        PlanFileOperationsTest.fx(() -> {
+            var pane = (DialogPane) visibleControl("#arkansas-pension-review").getScene().getRoot();
+            var review = pane.getButtonTypes().stream().filter(type -> "Review Pensions".equals(type.getText())).findFirst().orElseThrow();
+            ((Button) pane.lookupButton(review)).fire();
+            return null;
+        });
+        awaitFx(() -> visibleControl("#pension-source-origin") != null);
+    }
+
+    private static javafx.scene.Node visibleControl(String selector) {
+        return Window.getWindows().stream().filter(Window::isShowing).map(Window::getScene)
+                .filter(java.util.Objects::nonNull).map(scene -> scene.lookup(selector))
+                .filter(java.util.Objects::nonNull).findFirst().orElse(null);
+    }
+
+    private static void awaitFx(java.util.concurrent.Callable<Boolean> ready) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        do {
+            if (PlanFileOperationsTest.fx(ready)) return;
+            Thread.sleep(15);
+        } while (System.nanoTime() < deadline);
+        fail("Timed out waiting for the Arkansas UI operation.");
+    }
 
     @Test void reviewAndProgressUseExistingDialogsInLightAndDark() throws Exception {
         var opening = LocalDate.of(2026, 1, 1);
@@ -128,7 +259,7 @@ class ArkansasWorkflowUiTest {
     }
 
     private static void capture(javafx.scene.Node node, String name) throws Exception {
-        var folder = Files.createDirectories(Path.of("target/phase6e-p3c3-previews"));
+        var folder = Files.createDirectories(Path.of("target/phase6e-p3d1-previews"));
         var snapshot = node.snapshot(null, null);
         int width = (int) snapshot.getWidth();
         int height = (int) snapshot.getHeight();

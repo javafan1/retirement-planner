@@ -22,6 +22,13 @@ import java.util.PriorityQueue;
 public final class IntegratedSocialSecurityCompleteStrategySearchCalculator {
 
     private final IntegratedSocialSecurityStrategyEvaluator evaluator;
+    private final CandidateObserver observer;
+
+    public interface CandidateObserver {
+        void starting(int occurrence, SocialSecurityHouseholdClaimingStrategy strategy);
+        void completed(IntegratedSocialSecurityStrategyResult result);
+        void failed(RuntimeException exception, IntegratedSocialSecurityStrategyEvaluationFailure failure);
+    }
 
     public IntegratedSocialSecurityCompleteStrategySearchCalculator() {
         this(new IntegratedSocialSecurityStrategyEvaluator());
@@ -29,7 +36,13 @@ public final class IntegratedSocialSecurityCompleteStrategySearchCalculator {
 
     IntegratedSocialSecurityCompleteStrategySearchCalculator(
             IntegratedSocialSecurityStrategyEvaluator evaluator) {
+        this(evaluator, null);
+    }
+
+    public IntegratedSocialSecurityCompleteStrategySearchCalculator(
+            IntegratedSocialSecurityStrategyEvaluator evaluator, CandidateObserver observer) {
         this.evaluator = Objects.requireNonNull(evaluator);
+        this.observer = observer;
     }
 
     public IntegratedSocialSecurityCompleteStrategySearchResult calculate(
@@ -55,8 +68,10 @@ public final class IntegratedSocialSecurityCompleteStrategySearchCalculator {
         cancellationToken.throwIfCancellationRequested();
         progressListener.onProgress(new AnalysisProgress(
                 AnalysisPhase.CURRENT_PLAN_BASELINE, 0, 1));
+        if (observer != null) observer.starting(0, evaluator.extractCurrentStrategy(plan));
         IntegratedSocialSecurityStrategyResult baseline =
                 evaluator.evaluateCurrentStrategy(plan, request.primaryDeathYear());
+        if (observer != null) observer.completed(baseline);
         cancellationToken.throwIfCancellationRequested();
         progressListener.onProgress(new AnalysisProgress(
                 AnalysisPhase.CURRENT_PLAN_BASELINE, 1, 1));
@@ -72,6 +87,7 @@ public final class IntegratedSocialSecurityCompleteStrategySearchCalculator {
         for (SocialSecurityHouseholdClaimingStrategy strategy : request.strategies()) {
             cancellationToken.throwIfCancellationRequested();
             generationOrder++;
+            if (observer != null) observer.starting(generationOrder, strategy);
             Outcome outcome = evaluate(plan, strategy, generationOrder, baseline.metrics(), request.primaryDeathYear());
             outcome.detailCandidate().ifPresent(candidate -> retainDetail(retainedDetails, candidate,
                     request.detailRetentionCount(), request.rankingMeasure()));
@@ -126,7 +142,11 @@ public final class IntegratedSocialSecurityCompleteStrategySearchCalculator {
             IntegratedSocialSecurityStrategyResult result = evaluator.evaluate(plan, strategy, primaryDeathYear);
             ProjectionMetrics differences = ProjectionMetricsDifferenceCalculator.subtract(
                     result.metrics(), baselineMetrics);
-            return Outcome.success(generationOrder, strategy, result, differences);
+            var outcome = Outcome.success(generationOrder, strategy, result, differences);
+            if (observer != null) observer.completed(result);
+            return outcome;
+        } catch (com.daviddunn.retirementplanner.domain.analysis.AnalysisCancelledException cancelled) {
+            throw cancelled;
         } catch (RuntimeException exception) {
             String message = exception.getMessage() == null || exception.getMessage().isBlank()
                     ? "Unable to evaluate the complete Social Security strategy."
@@ -135,11 +155,9 @@ public final class IntegratedSocialSecurityCompleteStrategySearchCalculator {
                     exception instanceof IllegalArgumentException
                             ? IntegratedSocialSecurityStrategyEvaluationFailure.Category.VALIDATION
                             : IntegratedSocialSecurityStrategyEvaluationFailure.Category.EVALUATION;
-            return Outcome.failure(
-                    generationOrder,
-                    strategy,
-                    new IntegratedSocialSecurityStrategyEvaluationFailure(
-                            strategy, message, category));
+            var failure = new IntegratedSocialSecurityStrategyEvaluationFailure(strategy, message, category);
+            if (observer != null) observer.failed(exception, failure);
+            return Outcome.failure(generationOrder, strategy, failure);
         }
     }
 

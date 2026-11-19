@@ -128,12 +128,24 @@ public final class IntegratedSocialSecurityStrategyEvaluator {
             ProjectionEvaluationContext evaluationContext) {
         boolean advanced = new SocialSecurityProjectionIncomeProvider()
                 .supportsAdvancedPath(scenario);
-        Projection projection = engineFactory.get().project(
-                scenario, evaluationContext);
+        var projection = projectFinancial(engineFactory.get(), scenario, evaluationContext);
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(scenario, evaluationContext, projection.getYears());
         ProjectionMetrics metrics = metricsCalculator.calculate(scenario, projection);
         return new IntegratedSocialSecurityStrategyResult(
                 strategy, projection, metrics, advanced, warnings);
+    }
+
+    static Projection projectFinancial(ProjectionEngine engine, RetirementPlan scenario, ProjectionEvaluationContext evaluationContext) {
+        if (ProjectionEngine.selectsArkansas(scenario)) {
+            var execution = engine.projectWithOutcome(scenario, evaluationContext,
+                    com.daviddunn.retirementplanner.domain.projection.ProjectionEconomicPath.constant(
+                            scenario.getPlanningAssumptions().getExpectedAnnualInvestmentReturn()));
+            if (execution instanceof com.daviddunn.retirementplanner.domain.projection.ProjectionExecutionResult.InsufficientFunds shortage) {
+                throw new InsufficientAnalysisFundsException(shortage.fundingFailure());
+            }
+            return ((com.daviddunn.retirementplanner.domain.projection.ProjectionExecutionResult.Completed) execution).projection();
+        }
+        return engine.project(scenario, evaluationContext);
     }
 
     static void requireAdvancedPlan(RetirementPlan plan) {

@@ -35,7 +35,7 @@ class PennsylvaniaParticipantFactsAuditTest {
             assertNotNull(facts.separationStatusOn(LocalDate.of(2026, 12, 31)));
             assertNotNull(facts.retirementConditionsStatusOn(LocalDate.of(2026, 12, 31)));
         }
-        assertEquals(List.of("AL", "AK", "AZ", "FL", "GA", "IL", "IA", "KY", "MI", "MS", "NV", "NH", "NC", "OK", "PA", "SD", "TN", "TX", "VA", "WY"),
+        assertEquals(List.of("AL", "AK", "AZ", "AR", "FL", "GA", "IL", "IA", "KY", "MI", "MS", "NV", "NH", "NC", "OK", "PA", "SD", "TN", "TX", "VA", "WY"),
                 StateTaxJurisdiction.alphabeticalChoices().stream().map(Enum::name).toList());
     }
 }

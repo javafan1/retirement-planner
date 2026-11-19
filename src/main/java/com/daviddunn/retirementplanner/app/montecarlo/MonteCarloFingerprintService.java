@@ -217,6 +217,10 @@ public final class MonteCarloFingerprintService {
 
     /** Verify the stored contract, then assess legacy numeric V2, standalone V3 or paired V4. Never migrate disk data. */
     public AnalysisCompatibilityPolicy.Assessment compatibility(AnalysisSnapshot saved, Inputs current) {
+        return compatibility(saved, current, false);
+    }
+
+    public AnalysisCompatibilityPolicy.Assessment compatibility(AnalysisSnapshot saved, Inputs current, boolean currentArkansasDependencies) {
         var policy = new AnalysisCompatibilityPolicy();
         if (current == null) return new AnalysisCompatibilityPolicy.Assessment(AnalysisCompatibilityPolicy.State.INPUTS_NEED_ATTENTION, "Correct the pending analyzer inputs.");
         if (!(saved.payload() instanceof MonteCarloSnapshot frozen) || saved.fingerprintVersion() != frozen.fingerprintVersion()
@@ -228,7 +232,12 @@ public final class MonteCarloFingerprintService {
         if (!original.valid() || !saved.inputFingerprint().equals(original.fingerprint())
                 || !saved.contextFingerprint().equals(original.contextFingerprint()))
             return policy.unavailable("The original Monte Carlo input fingerprint cannot be verified.");
-        var provenance = policy.assess(saved, original, AnalysisVersions.algorithms(saved.kind(), frozen), AnalysisVersions.references(saved.kind()));
+        var algorithms = AnalysisVersions.algorithms(saved.kind(), frozen);
+        var references = AnalysisVersions.references(saved.kind());
+        var provenance = currentArkansasDependencies
+                ? policy.assessArkansas(saved, original, algorithms, references,
+                        com.daviddunn.retirementplanner.domain.projection.ArkansasValidationTax.reviewedVersions())
+                : policy.assess(saved, original, algorithms, references);
         if (provenance.state() != AnalysisCompatibilityPolicy.State.CURRENT) return provenance;
         var next = assess(current);
         if (!next.valid()) return new AnalysisCompatibilityPolicy.Assessment(AnalysisCompatibilityPolicy.State.INPUTS_NEED_ATTENTION, "Correct the pending analyzer inputs.");

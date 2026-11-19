@@ -5,7 +5,7 @@ import com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction;
 import java.util.Map;
 import java.util.Objects;
 
-/** The single production routing boundary; the eight-state research catalog is not an activation registry. */
+/** Registry for states that can be priced from an ordinary annual tax request. */
 public final class ProductionStateTaxService {
     private final Map<StateTaxJurisdiction, StateIncomeTaxCalculator> calculators;
 
@@ -38,6 +38,9 @@ public final class ProductionStateTaxService {
 
     /** Immutable calculator configuration, useful for bounded evaluation and contract tests. */
     public ProductionStateTaxService(Map<StateTaxJurisdiction, StateIncomeTaxCalculator> calculators) {
+        if (calculators.containsKey(StateTaxJurisdiction.AR)) {
+            throw new IllegalArgumentException("Arkansas requires the annual projection and funding proof.");
+        }
         if (calculators.keySet().stream().anyMatch(state -> !state.productionAdmitted())) {
             throw new IllegalArgumentException("Unsupported production state tax jurisdiction.");
         }
@@ -50,7 +53,7 @@ public final class ProductionStateTaxService {
             throw new IllegalArgumentException("Unsupported production state tax calculation method.");
         }
         var calculator = calculators.get(request.assumptions().jurisdiction());
-        if (!request.assumptions().jurisdiction().productionAdmitted() || calculator == null) {
+        if (calculator == null) {
             throw new IllegalArgumentException("Unsupported production state tax jurisdiction.");
         }
         var result = Objects.requireNonNull(calculator.calculate(request));

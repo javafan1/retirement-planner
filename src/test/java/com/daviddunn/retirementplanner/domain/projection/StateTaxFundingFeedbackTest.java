@@ -71,7 +71,7 @@ class StateTaxFundingFeedbackTest {
                 new ProjectedAccountBalance(account, account.getCurrentBalance()))), new BigDecimal("80000"), strategy);
         var context = TaxHouseholdContext.capture(household, LocalDate.of(2026, 1, 1), null);
         var outcomes = new EnumMap<StateTaxJurisdiction, TaxFundingResult>(StateTaxJurisdiction.class);
-        for (var state : StateTaxJurisdiction.productionChoices()) {
+        for (var state : StateTaxJurisdiction.productionChoices().stream().filter(choice -> choice != StateTaxJurisdiction.AR).toList()) {
             var outcome = new TaxFundingCalculator().calculate(household, context.distributionDate(), spending.getPortfolio(),
                     spending.getWithdrawalBreakdown(), strategy, FilingStatus.SINGLE, rules, BigDecimal.ZERO,
                     BigDecimal.ZERO, null, null, BigDecimal.ZERO, null, BigDecimal.ZERO, Optional.empty(), List.of(),

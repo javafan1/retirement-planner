@@ -340,10 +340,9 @@ public class ArkansasProjectionIntegrationTest {
     }
 
     @Test
-    void productionPlansCannotSelectOrPersistArkansasThroughInputs(@TempDir Path folder) throws Exception {
-        assertEquals(20, StateTaxJurisdiction.productionChoices().size());
+    void productionInputsPersistArkansasAndRequireItsProjectionScope(@TempDir Path folder) throws Exception {
+        assertEquals(21, StateTaxJurisdiction.productionChoices().size());
         assertEquals(StateTaxJurisdiction.AR, StateTaxJurisdiction.fromCode("AR"));
-        assertThrows(IllegalArgumentException.class, () -> StateTaxAssumptions.simplified(StateTaxJurisdiction.AR));
         assertThrows(IllegalArgumentException.class, () -> StateTaxJurisdiction.valueOf("CO"));
         var plan = surplusPlan("1000000", 1);
         var inputs = CompleteProjectionSnapshot.freeze(plan);
@@ -359,7 +358,27 @@ public class ArkansasProjectionIntegrationTest {
         var changed = original.replaceFirst("\"jurisdiction\"\\s*:\\s*\"MI\"", "\"jurisdiction\":\"AR\"");
         assertNotEquals(original, changed);
         Files.writeString(file, changed);
-        assertThrows(java.io.IOException.class, () -> repo.load(file));
+        var loaded = repo.load(file);
+        assertEquals(StateTaxAssumptions.simplified(StateTaxJurisdiction.AR), loaded.getPlanningAssumptions().getStateTaxAssumptions());
+        assertThrows(ArkansasProjectionUnavailableException.class, () -> new ProjectionEngine().project(loaded));
+        var engine = ProjectionEngine.forArkansasProduction();
+        assertThrows(IllegalStateException.class, () -> engine.project(loaded));
+        var completed = assertInstanceOf(ProjectionExecutionResult.Completed.class, engine.projectArkansasWithOutcome(loaded,
+                com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken.none(), ignored -> { }));
+        assertEquals(StateTaxJurisdiction.AR, completed.projection().getFirstYear().getStateTaxJurisdiction());
+        assertEquals(ArkansasValidationTax.reviewedVersions(), completed.projection().getFirstYear().arkansasValidationTax().orElseThrow().versions());
+        var report = com.daviddunn.retirementplanner.app.export.ArkansasValidationReport.captureAccepted(completed.projection(), true);
+        var csv = folder.resolve("arkansas.csv");
+        report.writeCsv(csv);
+        assertTrue(Files.readString(csv).contains("Arkansas planning estimate"));
+        assertTrue(Files.readString(csv).contains("Arkansas income tax,Gross tax funding,Taxable funding income"));
+        var pdf = folder.resolve("arkansas.pdf");
+        report.writePdf(pdf);
+        try (var document = org.apache.pdfbox.Loader.loadPDF(pdf.toFile())) {
+            var text = new org.apache.pdfbox.text.PDFTextStripper().getText(document);
+            assertTrue(text.contains("Arkansas planning estimate"));
+            assertTrue(text.contains("Arkansas income tax:"));
+        }
     }
 
     public static ProjectionEngine validationEngine() {
@@ -398,6 +417,12 @@ public class ArkansasProjectionIntegrationTest {
             plan.getHousehold().addExpense(new Expense("Following-year retained spending", b("1.39"), GrowthCategory.NONE,
                     OPENING.plusYears(1), null, ExpenseType.RECURRING));
         }
+        return plan;
+    }
+
+    public static RetirementPlan selectArkansas(RetirementPlan plan) {
+        plan.setPlanningAssumptions(plan.getPlanningAssumptions()
+                .withStateTaxAssumptions(StateTaxAssumptions.simplified(StateTaxJurisdiction.AR)));
         return plan;
     }
 

@@ -481,7 +481,7 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
             StateTaxCalculationStatus status, BigDecimal incomeTax, List<String> limitations, Michigan michigan,
             List<StateTaxUnavailableReason> unavailableReasons) {
         public State {
-            if (!jurisdiction.productionAdmitted()) {
+            if (!jurisdiction.productionAdmitted() || jurisdiction == StateTaxJurisdiction.AR) {
                 throw new IllegalArgumentException("Historical-only jurisdiction requires its own retained state component.");
             }
             limitations = List.copyOf(limitations); unavailableReasons = List.copyOf(unavailableReasons);

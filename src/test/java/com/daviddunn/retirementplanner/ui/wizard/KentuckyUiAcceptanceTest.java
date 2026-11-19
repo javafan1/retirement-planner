@@ -26,7 +26,7 @@ class KentuckyUiAcceptanceTest {
             ComboBox<StateTaxJurisdiction> input = field(editor, "stateJurisdictionComboBox");
             assertEquals(StateTaxJurisdiction.KY, input.getValue());
             assertEquals(StateTaxJurisdiction.alphabeticalChoices(), input.getItems());
-            assertEquals(20, input.getItems().size());
+            assertEquals(21, input.getItems().size());
             assertTrue(input.getTooltip().getText().contains("Kentucky"));
 
             var details = new ProjectionYearDetailsPane(projection.getYearAt(0), null, BigDecimal.ZERO, null);

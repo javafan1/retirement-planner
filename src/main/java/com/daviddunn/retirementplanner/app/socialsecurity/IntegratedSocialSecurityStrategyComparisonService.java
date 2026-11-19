@@ -30,7 +30,7 @@ public final class IntegratedSocialSecurityStrategyComparisonService {
         this(new IntegratedSocialSecurityStrategyEvaluator());
     }
 
-    IntegratedSocialSecurityStrategyComparisonService(
+    public IntegratedSocialSecurityStrategyComparisonService(
             IntegratedSocialSecurityStrategyEvaluator evaluator) {
         this.evaluator = Objects.requireNonNull(evaluator);
     }

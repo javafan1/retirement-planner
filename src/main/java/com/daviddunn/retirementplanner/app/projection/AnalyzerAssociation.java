@@ -42,6 +42,7 @@ public record AnalyzerAssociation(int version, UUID owner, UUID projectionId, St
             snapshot.arkansasExecution().validateAssociation(projectionId, projectionInputDigest);
             var dependencies = snapshot.arkansasExecution().dependencies();
             var alternative = dependencies.size() == 2 ? dependencies.get(1).projectionId() : null;
+            if (snapshot.arkansasExecution().version() == 2 && projectionId.equals(alternative)) alternative = null;
             if (!Objects.equals(alternative, alternativeProjectionId)) {
                 throw new IllegalArgumentException("Arkansas analysis alternative projection association mismatch.");
             }

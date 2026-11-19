@@ -71,6 +71,11 @@ public final class MonteCarloStrategyComparisonSession implements AutoCloseable 
     }
 
     public boolean start(Work work, Consumer<MonteCarloStrategyComparisonRun> accepted, Runnable unsuccessful) {
+        return start(work, accepted, unsuccessful, () -> true);
+    }
+
+    public boolean start(Work work, Consumer<MonteCarloStrategyComparisonRun> accepted, Runnable unsuccessful,
+            java.util.function.BooleanSupplier requestIsCurrent) {
         if (busy() || state == State.CLOSED) {
             return false;
         }
@@ -88,29 +93,30 @@ public final class MonteCarloStrategyComparisonSession implements AutoCloseable 
                     AnalysisCancellationToken cancellationToken = token::get;
                     cancellationToken.throwIfCancellationRequested();
                     var completed = work.run(update -> dispatcher.accept(() -> {
-                        if (generation == id && state == State.RUNNING && revision == capturedRevision
+                        if (generation == id && state == State.RUNNING && revision == capturedRevision && requestIsCurrent.getAsBoolean()
                                 && (progress == null || update.completedWork() >= progress.completedWork())) {
                             progress = update;
                             changed.run();
                         }
                     }), cancellationToken);
                     cancellationToken.throwIfCancellationRequested();
-                    dispatcher.accept(() -> finish(id, capturedRevision, completed, null, token, accepted, unsuccessful));
+                    dispatcher.accept(() -> finish(id, capturedRevision, completed, null, token, accepted, unsuccessful, requestIsCurrent));
                 } catch (Throwable exception) {
-                    dispatcher.accept(() -> finish(id, capturedRevision, null, exception, token, accepted, unsuccessful));
+                    dispatcher.accept(() -> finish(id, capturedRevision, null, exception, token, accepted, unsuccessful, requestIsCurrent));
                 }
             });
         } catch (RuntimeException exception) {
-            finish(id, capturedRevision, null, exception, token, accepted, unsuccessful);
+            finish(id, capturedRevision, null, exception, token, accepted, unsuccessful, requestIsCurrent);
         }
         return true;
     }
 
-    private void finish(long id, long capturedRevision, MonteCarloStrategyComparisonRun completed, Throwable error, AtomicBoolean token, Consumer<MonteCarloStrategyComparisonRun> accepted, Runnable unsuccessful) {
+    private void finish(long id, long capturedRevision, MonteCarloStrategyComparisonRun completed, Throwable error, AtomicBoolean token,
+            Consumer<MonteCarloStrategyComparisonRun> accepted, Runnable unsuccessful, java.util.function.BooleanSupplier requestIsCurrent) {
         if (id != generation || state == State.CLOSED) {
             return;
         }
-        if (token.get() || error instanceof AnalysisCancelledException || revision != capturedRevision) {
+        if (token.get() || error instanceof AnalysisCancelledException || revision != capturedRevision || !requestIsCurrent.getAsBoolean()) {
             state = State.CANCELLED;
         } else if (error != null) {
             failure = error;

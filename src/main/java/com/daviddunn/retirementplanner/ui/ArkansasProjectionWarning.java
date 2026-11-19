@@ -23,8 +23,10 @@ final class ArkansasProjectionWarning {
         if (owner != null) alert.initOwner(owner);
         alert.setTitle("State Tax Unavailable");
         alert.setHeaderText("Arkansas state income tax could not be estimated.");
-        var message = new Label(ProjectionFailureMessages.stateTaxUnavailableMessage(failure).orElseThrow());
+        var message = new Label(ProjectionFailureMessages.arkansasUnavailableMessage(failure)
+                + "\n\nYour plan edits and previous results are preserved.");
         message.setWrapText(true);
+        message.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         var contents = new VBox(10, message);
         alert.getButtonTypes().setAll(ButtonType.CLOSE);
         if (!available.isEmpty()) {

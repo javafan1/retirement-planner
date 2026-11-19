@@ -21,6 +21,15 @@ public final class MonteCarloStrategyCandidate {
     public String label() {
         return label;
     }
+
+    public com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction jurisdiction() {
+        return frozenPlan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction();
+    }
+
+    public String projectionInputDigest() {
+        var document = com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot.freeze(frozenPlan);
+        return com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot.digest(document);
+    }
     /** Immutable effective election provenance for accepted analyzer parameters. */
     public Integer survivorClaimingAge() {
         return frozenPlan.getPlanningAssumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge();

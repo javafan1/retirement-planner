@@ -27,6 +27,11 @@ public final class LongevityWeightedIntegratedStrategyEvaluator {
 
     LongevityWeightedIntegratedStrategyResult evaluate(LongevityWeightedIntegratedStrategyRequest request,
             java.util.function.Consumer<LongevityWeightedEvaluationWork> workObserver) {
+        return evaluate(request, workObserver, null);
+    }
+
+    LongevityWeightedIntegratedStrategyResult evaluate(LongevityWeightedIntegratedStrategyRequest request,
+            java.util.function.Consumer<LongevityWeightedEvaluationWork> workObserver, LongevityFinancialObservation financialObservation) {
         Objects.requireNonNull(request, "Evaluation request is required.");
         Objects.requireNonNull(workObserver, "Work observer is required.");
         request.cancellationToken().throwIfCancellationRequested();
@@ -81,11 +86,14 @@ public final class LongevityWeightedIntegratedStrategyEvaluator {
                     if (engine == null) engine = new ProjectionEngine();
                     workObserver.accept(LongevityWeightedEvaluationWork.PROJECTION_STARTED);
                     projectionRuns++;
-                    var projection = engine.project(isolated, context);
+                    var projection = financialObservation == null ? engine.project(isolated, context)
+                            : IntegratedSocialSecurityStrategyEvaluator.projectFinancial(engine, isolated, context);
                     com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(isolated, context, projection.getYears());
                     workObserver.accept(LongevityWeightedEvaluationWork.PROJECTION_COMPLETED);
                     snapshot = estateCalculator.calculate(isolated, projection, death);
                 }
+            } catch (AnalysisCancelledException cancelled) {
+                throw cancelled;
             } catch (RuntimeException failure) {
                 throw new IllegalStateException("Lifetime scenario failed: primary death year " + primaryYear
                         + ", spouse death year " + spouseYear + ", probability " + mortality.jointProbability()
@@ -100,7 +108,10 @@ public final class LongevityWeightedIntegratedStrategyEvaluator {
             expectedPv = expectedPv.add(weight.multiply(pv));
             minimum = minimum == null ? snapshot.nominalAfterTaxEstate() : minimum.min(snapshot.nominalAfterTaxEstate());
             maximum = maximum == null ? snapshot.nominalAfterTaxEstate() : maximum.max(snapshot.nominalAfterTaxEstate());
-            outcomes.add(new LongevityWeightedIntegratedScenarioOutcome(primaryYear, spouseYear, weight, snapshot, pv));
+            var outcome = new LongevityWeightedIntegratedScenarioOutcome(primaryYear, spouseYear, weight, snapshot, pv);
+            if (financialObservation != null) financialObservation.scenario(outcome,
+                    death.equals(baseline.getPlanningAssumptions().getProjectionStartDate()) ? null : lifetime);
+            outcomes.add(outcome);
             workObserver.accept(LongevityWeightedEvaluationWork.SCENARIO_COMPLETED);
             request.progressListener().onProgress(new AnalysisProgress(
                     AnalysisPhase.LONGEVITY_INTEGRATED_SCENARIOS, outcomes.size(), total));

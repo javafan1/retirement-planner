@@ -151,6 +151,7 @@ public class MainWindow {
         workspace = createWorkspace();
 
         wireEvents();
+        controller.addSourcePlanRevisionListener(this::dismissArkansasProgress);
 
         root.setTop(createApplicationMenuRow());
         root.setCenter(workspace);
@@ -1024,6 +1025,8 @@ public class MainWindow {
     /** Preserve the existing plan-departure decision, then drain accepted result I/O off FX. */
     private void finishExitAfterResultWrites(Runnable closeWindow) {
         if (drainingAnalysisResults) return;
+        controller.cancelControlledProjection();
+        dismissArkansasProgress();
         var store = controller.getAnalysisResults();
         var parameters = controller.getAnalysisParameters();
         if (!store.needsDrain() && !parameters.needsDrain()) { parameters.shutdown(); closeWindow.run(); return; }
@@ -1099,12 +1102,72 @@ public class MainWindow {
     private boolean planOperationActive;
     private Runnable releaseSwapFeedback;
     private PlanOperationFeedback swapFeedback;
+    private PlanOperationFeedback arkansasProgress;
+
+    private void dismissArkansasProgress() {
+        if (arkansasProgress == null) return;
+        arkansasProgress.close();
+        arkansasProgress = null;
+    }
+
+    private void runArkansasProjection() {
+        dismissArkansasProgress();
+        var feedback = new PlanOperationFeedback(stage, "Preparing Arkansas projection…");
+        arkansasProgress = feedback;
+        int totalYears = controller.getCurrentPlan().getPlanningAssumptions().getProjectionLengthYears();
+        try {
+            var run = controller.beginArkansasProjection(completed -> javafx.application.Platform.runLater(() -> {
+                if (arkansasProgress == feedback && controller.isArkansasProjectionRunning()) {
+                    var message = "Arkansas projection running… " + completed + " of " + totalYears + " years completed.";
+                    statusLabel.setText(message);
+                    feedback.message(message);
+                }
+            }));
+            Runnable cancel = () -> {
+                controller.cancelControlledProjection();
+                dismissArkansasProgress();
+                statusLabel.setText("Arkansas projection cancelled.");
+            };
+            feedback.phase("Calculating Arkansas projection…", cancel);
+            statusLabel.setText("Calculating Arkansas projection…");
+            run.completion().whenComplete((ignored, failure) -> javafx.application.Platform.runLater(() -> {
+                if (arkansasProgress != feedback) return;
+                dismissArkansasProgress();
+                try {
+                    switch (controller.finishControlledArkansasProjection(run)) {
+                        case ACCEPTED -> refreshProjectionViews(false, true);
+                        case INSUFFICIENT_FUNDS -> {
+                            projectionFundingNotice.setText(ProjectionFailureMessages.insufficientFundingMessage(
+                                    controller.getCurrentFundingFailure().orElseThrow()));
+                            statusLabel.setText("Projection not completed: insufficient eligible funds.");
+                        }
+                        case OBSOLETE -> { }
+                    }
+                } catch (Exception error) {
+                    presentArkansasProjectionFailure(error);
+                }
+            }));
+        } catch (Exception error) {
+            dismissArkansasProgress();
+            presentArkansasProjectionFailure(error);
+        }
+    }
+
+    private void presentArkansasProjectionFailure(Exception error) {
+        if (ProjectionFailureMessages.arkansasFailure(error).isPresent()) {
+            handleProjectionFailure(error);
+        } else {
+            statusLabel.setText(error.getMessage() == null ? "Arkansas projection could not be completed." : error.getMessage());
+            System.getLogger(MainWindow.class.getName()).log(System.Logger.Level.WARNING, "Arkansas projection failed", error);
+        }
+    }
 
     /** Preserve synchronous departure decisions while the nested FX event loop keeps repainting.
      * Only the detached worker runs expensive file work. No blocking Future.get on FX. */
     private <T> T awaitPlanFile(java.util.concurrent.CompletionStage<T> work, String message) {
         if (!javafx.application.Platform.isFxApplicationThread()) throw new IllegalStateException("FX owner required.");
         if (planOperationActive) throw new IllegalStateException("Another plan operation is in progress.");
+        if (!controller.isArkansasProjectionRunning()) dismissArkansasProgress();
         planOperationActive = true;
         var feedback = new PlanOperationFeedback(stage, message);
 
@@ -1242,6 +1305,16 @@ public class MainWindow {
         var pensions = pensionsToReview(controller.getCurrentPlan());
         projectionPensionNotice.update(pensions);
 
+        if (runProjection && !restored && !preparedStartup
+                && com.daviddunn.retirementplanner.domain.projection.ProjectionEngine.selectsArkansas(controller.getCurrentPlan())
+                && controller.isCurrentPlanReadyForProjection()) {
+            assumptionsView.refresh(controller.getCurrentPlan());
+            resultsSummaryView.refreshProjectionActions();
+            projectionFundingNotice.setText("");
+            runArkansasProjection();
+            return;
+        }
+
         resultsView.setBreakEvenAnalysis(null);
         resultsSummaryView.setBreakEvenAnalysis(null);
 
@@ -1301,15 +1374,23 @@ public class MainWindow {
         this.stage = stage;
         com.daviddunn.retirementplanner.ui.pdf.PdfExportDirectoryContext.attach(
                 stage, controller.getSettingsService());
-        stage.setOnHidden(event -> closeYearlyDetailsWindow());
+        stage.setOnHidden(event -> {
+            controller.cancelControlledProjection();
+            dismissArkansasProgress();
+            closeYearlyDetailsWindow();
+        });
         stage.setOnCloseRequest(event -> {
             if (planOperationActive || swappingProjections) {
                 event.consume();
             } else if (!confirmPlanDeparture()) {
                 event.consume();
-            } else if (controller.getAnalysisResults().needsDrain()) {
-                event.consume();
-                finishExitAfterResultWrites(stage::hide);
+            } else {
+                controller.cancelControlledProjection();
+                dismissArkansasProgress();
+                if (controller.getAnalysisResults().needsDrain()) {
+                    event.consume();
+                    finishExitAfterResultWrites(stage::hide);
+                }
             }
         });
 
@@ -1399,6 +1480,7 @@ public class MainWindow {
                         refreshProjectionViews();
                     }
                     selectWorkspace("results-summary");
+                    if (controller.isArkansasProjectionRunning()) return;
                     if (controller.getCurrentFundingFailure().isPresent()) {
                         projectionFundingNotice.setText("Plan created successfully. " + projectionFundingNotice.getText());
                         statusLabel.setText("New plan created; projection not completed. Continue editing using View.");
@@ -1515,7 +1597,7 @@ public class MainWindow {
                         incomeSourcesView.editSelectedPension(pension, () -> {
                             controller.markModified();
                             updateWindowTitle();
-                            statusLabel.setText("Pension updated. Request a new projection to check the current inputs.");
+                            refreshProjectionViews();
                         });
                     });
             return;

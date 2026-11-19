@@ -17,14 +17,29 @@ import java.util.function.IntFunction;
 
 /** Sequential common-random-number execution. No random generator is reachable from evaluation. */
 public final class MonteCarloStrategyComparisonAnalyzer {
-    private final ProjectionEngine engine;
+    private final ProjectionEngine engineA;
+    private final ProjectionEngine engineB;
+    private final FinancialObservation observation;
+
+    @FunctionalInterface
+    public interface FinancialObservation {
+        void accept(Stage side, MonteCarloComparisonWorld world, ProjectionExecutionResult execution,
+                MonteCarloStrategyOutcome outcome);
+    }
 
     public MonteCarloStrategyComparisonAnalyzer() {
         this(new ProjectionEngine());
     }
 
     public MonteCarloStrategyComparisonAnalyzer(ProjectionEngine engine) {
-        this.engine = Objects.requireNonNull(engine);
+        this(engine, engine, null);
+    }
+
+    public MonteCarloStrategyComparisonAnalyzer(ProjectionEngine engineA, ProjectionEngine engineB,
+            FinancialObservation observation) {
+        this.engineA = Objects.requireNonNull(engineA);
+        this.engineB = Objects.requireNonNull(engineB);
+        this.observation = observation;
     }
 
     /** Internal override oracles remain separate from supported configured-result provenance. */
@@ -139,7 +154,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
     private MonteCarloStrategyOutcome evaluateSide(RetirementPlan plan, MonteCarloComparisonWorld world,
             MonteCarloStrategyComparisonRequest request, Stage stage, InternalExpenseRun expenses) {
         try {
-            return evaluate(plan, world, request.assumptions(), expenses);
+            return evaluate(plan, world, request.assumptions(), expenses, stage);
         } catch (AnalysisCancelledException exception) {
             throw exception;
         } catch (RuntimeException exception) {
@@ -149,7 +164,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
 
     /** Reduces engine output immediately. Neither the source plan nor world is changed. */
     private MonteCarloStrategyOutcome evaluate(RetirementPlan plan, MonteCarloComparisonWorld world,
-            MonteCarloStrategyComparisonRequest.Assumptions assumptions, InternalExpenseRun expenses) {
+            MonteCarloStrategyComparisonRequest.Assumptions assumptions, InternalExpenseRun expenses, Stage stage) {
         int last = endingYear(world, assumptions);
         var context = ProjectionEvaluationContext.empty().withExactEndingYear(last);
         if (assumptions instanceof MonteCarloStrategyComparisonRequest.Longevity) {
@@ -160,10 +175,12 @@ public final class MonteCarloStrategyComparisonAnalyzer {
                 var opening = estate.calculateOpening(plan, deathDate);
                 var nonInvestable = new NonInvestableAssetProjectionService().project(
                         plan.getNonInvestableAssets(), deathDate.getYear(), deathDate.getYear()).getFirst().getTotalValue();
-                return new MonteCarloStrategyOutcome(Map.of(), Optional.of(new TerminalOutcome(
+                var outcome = new MonteCarloStrategyOutcome(Map.of(), Optional.of(new TerminalOutcome(
                         opening.balanceDate(), opening.nominalInvestableAssets(),
                         opening.nominalInvestableAssets().add(nonInvestable), opening.nominalAfterTaxEstate(),
                         BigDecimal.ZERO)), Optional.empty());
+                if (observation != null) observation.accept(stage, world, null, outcome);
+                return outcome;
             }
             context = ProjectionEvaluationContext.withLifetimeScenario(world.lifetimeScenario()).withExactEndingYear(last);
             if (world.lifetime().hasSpouse()) context = context.withSurvivorClaimingAge(
@@ -174,6 +191,7 @@ public final class MonteCarloStrategyComparisonAnalyzer {
         }
         if (expenses != null) context = expenses.apply(plan, context, assumptions.settings().seed(),
                 world.scenarioIndex(), assumptions.start().getYear(), last);
+        var engine = stage == Stage.STRATEGY_A ? engineA : engineB;
         var execution = engine.projectWithOutcome(plan, context, world.economicPath());
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(plan, context, execution.completedYears());
         var annual = new TreeMap<Integer, BigDecimal>();
@@ -188,16 +206,20 @@ public final class MonteCarloStrategyComparisonAnalyzer {
             if (failed.fundingFailure().calendarYear() != expected || expected > last) {
                 throw new IllegalArgumentException("Funding failure must follow the completed prefix within the horizon.");
             }
-            return new MonteCarloStrategyOutcome(annual, Optional.empty(), Optional.of(failed.fundingFailure()));
+            var outcome = new MonteCarloStrategyOutcome(annual, Optional.empty(), Optional.of(failed.fundingFailure()));
+            if (observation != null) observation.accept(stage, world, execution, outcome);
+            return outcome;
         }
         if (expected != last + 1) {
             throw new IllegalArgumentException("Completed projection does not match the comparison horizon.");
         }
         var projection = ((ProjectionExecutionResult.Completed) execution).projection();
         var metrics = new ProjectionMetricsCalculator().calculate(plan, projection);
-        return new MonteCarloStrategyOutcome(annual, Optional.of(new TerminalOutcome(
+        var outcome = new MonteCarloStrategyOutcome(annual, Optional.of(new TerminalOutcome(
                 LocalDate.of(last, 12, 31), metrics.endingInvestableAssets(), metrics.endingNetWorth(),
                 metrics.afterTaxEstate(), metrics.totalTaxes())), Optional.empty());
+        if (observation != null) observation.accept(stage, world, execution, outcome);
+        return outcome;
     }
 
     private static int endingYear(MonteCarloComparisonWorld world,

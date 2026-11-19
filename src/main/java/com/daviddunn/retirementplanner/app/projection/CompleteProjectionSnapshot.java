@@ -6,6 +6,8 @@ import com.daviddunn.retirementplanner.domain.breakeven.BreakEvenPlanSummary;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.noninvestable.*;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
+import com.daviddunn.retirementplanner.domain.projection.ArkansasValidationTax;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import com.daviddunn.retirementplanner.domain.projection.summary.*;
 import com.daviddunn.retirementplanner.domain.projection.statistics.ProjectionStatistics;
 import com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec;
@@ -40,7 +42,14 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
         if (!digest(inputsDocument).equals(inputDigest)) throw new IllegalArgumentException("Projection input digest mismatch.");
         ConditionalBenefitExecutionSemantics.validate(inputsDocument,annual,provenance);
         ContractualPremiumExecutionSemantics.validate(inputsDocument,annual,provenance);
-        if (annual.arkansas() != null) validateArkansasInputs(restoreInputs(inputsDocument), annual);
+        if (annual.arkansas() != null) {
+            var frozen = restoreInputs(inputsDocument);
+            validateArkansasInputs(frozen, annual);
+            if (hasArkansasProductionStamp(provenance) && frozen.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                    != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AR) {
+                throw new IllegalArgumentException("Arkansas production provenance requires Arkansas inputs.");
+            }
+        }
         for (int i = 0; i < annual.years().size(); i++) {
             if (nonInvestable.get(i).year() != annual.years().get(i).year()
                     || (i > 0 && annual.years().get(i).year() != annual.years().get(i - 1).year() + 1))
@@ -50,6 +59,13 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
 
     public boolean arkansasHistory() {
         return annual.arkansas() != null;
+    }
+
+    private static final String ARKANSAS_PRODUCTION = "Arkansas production projection v1";
+
+    private static boolean hasArkansasProductionStamp(String provenance) {
+        String stamp = PensionSelectionSemantics.PROVENANCE + ARKANSAS_PRODUCTION;
+        return provenance.endsWith(stamp) || provenance.contains(stamp + ContractualPremiumExecutionSemantics.KEY);
     }
 
     /** Controlled acceptance of an already completed gated projection. Ordinary projection capture remains separate. */
@@ -64,7 +80,8 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
                 new IncomeSummaryService()).summarize(frozenPlan, projection);
         return new CompleteProjectionSnapshot(VERSION, UUID.randomUUID(), owner, owner, acceptedAt, inputs, digest(inputs),
                 ConditionalBenefitExecutionSemantics.completed(frozenPlan, inputs, retained,
-                        PensionSelectionSemantics.PROVENANCE + "Controlled Arkansas projection"),
+                        PensionSelectionSemantics.PROVENANCE + (ProjectionEngine.selectsArkansas(frozenPlan)
+                                ? ARKANSAS_PRODUCTION : "Controlled Arkansas projection")),
                 retained, nonInvestable.stream().map(NonInvestableYear::capture).toList(),
                 Summary.capture(summary), BreakEvenPlanSummary.from(frozenPlan));
     }
@@ -154,7 +171,11 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
     public boolean matches(RetirementPlan plan) { return inputDigest.equals(digest(freeze(plan))); }
     /** Separate from exact configured-input identity, which still permits historical swaps. */
     public boolean calculationSemanticsCurrent() {
-        if (arkansasHistory()) return false;
+        if (arkansasHistory()) {
+            return hasArkansasProductionStamp(provenance)
+                    && annual.arkansas().projectionAlgorithm().equals(ProjectionEngine.ALGORITHM_VERSION)
+                    && annual.arkansas().versions().equals(ArkansasValidationTax.reviewedVersions());
+        }
         // A pension-selection stamp cannot attest to an unimplemented benefit capability.
         // Decode property names rather than searching raw JSON (which may escape them).
         try { if (restoreInputs().getFinancialCalculationMode() != null || !restoreInputs().getConditionalBenefits().isEmpty())

@@ -53,10 +53,14 @@ final class PlanOperationFeedback implements AutoCloseable {
     Stage dialog() { return dialog; }
 
     void phase(String message, Runnable cancellation) {
-        label.setText(message);
-        view.setAccessibleText(message);
+        message(message);
         cancel.setVisible(cancellation != null);
         cancel.setOnAction(cancellation == null ? null : event -> cancellation.run());
+    }
+
+    void message(String message) {
+        label.setText(message);
+        view.setAccessibleText(message);
         if (dialog != null) dialog.setTitle(message);
     }
 

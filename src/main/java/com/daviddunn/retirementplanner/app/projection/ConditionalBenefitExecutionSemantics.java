@@ -109,8 +109,12 @@ public final class ConditionalBenefitExecutionSemantics {
                         || year.medicare() == null || evidence.filingStatus() != year.medicare().bracket().filingStatus())
                     throw new IllegalArgumentException("Annual NIIT evidence does not match the saved financial facts.");
             }
-            if (year.state() == null || year.state().jurisdiction() != assumptions.getStateTaxAssumptions().jurisdiction()
-                    || year.state().status() != com.daviddunn.retirementplanner.domain.tax.state.StateTaxCalculationStatus.CALCULATED
+            var jurisdiction = assumptions.getStateTaxAssumptions().jurisdiction();
+            boolean stateEvidence = jurisdiction == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AR
+                    ? annual.arkansas() != null
+                    : year.state() != null && year.state().jurisdiction() == jurisdiction
+                            && year.state().status() == com.daviddunn.retirementplanner.domain.tax.state.StateTaxCalculationStatus.CALCULATED;
+            if (!stateEvidence
                     || year.settlement().guaranteedIncome().compareTo(year.income()) != 0
                     || year.settlement().incomeTaxes().compareTo(year.federalTax().add(year.stateTax())) != 0)
                 throw new IllegalArgumentException("Conditional result lacks reconciled cash/tax state evidence.");

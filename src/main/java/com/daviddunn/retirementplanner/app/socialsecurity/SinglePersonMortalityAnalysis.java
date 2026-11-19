@@ -15,6 +15,12 @@ import java.util.*;
 public final class SinglePersonMortalityAnalysis {
     public enum Mode { SOCIAL_SECURITY_ONLY, INTEGRATED }
 
+    @FunctionalInterface
+    public interface FinancialObservation {
+        void accept(SocialSecurityHouseholdClaimingStrategy strategy, Projection projection,
+                EstateAtSecondDeathSnapshot snapshot, Outcome reduced);
+    }
+
     public record Outcome(int deathYear, BigDecimal probability, BigDecimal nominalEstate,
             BigDecimal investableAssets, BigDecimal presentValue) { }
 
@@ -50,6 +56,14 @@ public final class SinglePersonMortalityAnalysis {
     public Result calculate(RetirementPlan source, IndividualLongevityScenarios mortality,
             LocalDate valuationDate, BigDecimal realDiscountRate, Mode mode,
             AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
+        return calculate(source, mortality, valuationDate, realDiscountRate, mode, progress, cancellation,
+                mode == Mode.INTEGRATED ? new ProjectionEngine() : null, null);
+    }
+
+    public Result calculate(RetirementPlan source, IndividualLongevityScenarios mortality,
+            LocalDate valuationDate, BigDecimal realDiscountRate, Mode mode,
+            AnalysisProgressListener progress, AnalysisCancellationToken cancellation,
+            ProjectionEngine engine, FinancialObservation observer) {
         Objects.requireNonNull(mode);
         Objects.requireNonNull(progress);
         Objects.requireNonNull(cancellation);
@@ -82,7 +96,7 @@ public final class SinglePersonMortalityAnalysis {
         var ssPv = new SocialSecurityPresentValueCalculator();
         var estatePv = new EstatePresentValueCalculator();
         var snapshots = new EstateAtSecondDeathCalculator(); // cardinality-independent balance snapshot selection
-        var engine = mode == Mode.INTEGRATED ? new ProjectionEngine() : null;
+        if (mode == Mode.INTEGRATED) Objects.requireNonNull(engine);
         int projections = 0;
         var phase = AnalysisPhase.LONGEVITY_INTEGRATED_SCENARIOS;
         int positiveScenarios = (int) mortality.scenarios().stream().filter(s -> s.probability().signum() > 0).count();
@@ -127,6 +141,7 @@ public final class SinglePersonMortalityAnalysis {
                     }
                     snapshots.validateCoverageStart(plan, death);
                     EstateAtSecondDeathSnapshot snapshot;
+                    Projection projection = null;
                     if (death.equals(plan.getPlanningAssumptions().getProjectionStartDate())) {
                         snapshot = snapshots.calculateOpening(plan, death);
                     } else {
@@ -134,15 +149,17 @@ public final class SinglePersonMortalityAnalysis {
                         var context = ProjectionEvaluationContext.withSocialSecurityStrategy(strategy,
                                 HouseholdLifetimeScenario.primaryOnly(Optional.of(Year.from(death))))
                                 .withExactEndingYear(death.getYear() - 1);
-                        var projection = engine.project(isolated, context);
+                        projection = IntegratedSocialSecurityStrategyEvaluator.projectFinancial(engine, isolated, context);
                         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitExecutionVerification.verify(isolated, context, projection.getYears());
                         projections++;
                         snapshot = snapshots.calculate(isolated, projection, death);
                     }
                     var value = snapshot.nominalAfterTaxEstate().multiply(
                             estatePv.discountFactor(valuationDate, death, inflation, realDiscountRate));
-                    outcomes.add(new Outcome(death.getYear(), scenario.probability(), snapshot.nominalAfterTaxEstate(),
-                            snapshot.nominalInvestableAssets(), value));
+                    var outcome = new Outcome(death.getYear(), scenario.probability(), snapshot.nominalAfterTaxEstate(),
+                            snapshot.nominalInvestableAssets(), value);
+                    if (observer != null) observer.accept(strategy, projection, snapshot, outcome);
+                    outcomes.add(outcome);
                     nominal = nominal.add(snapshot.nominalAfterTaxEstate().multiply(scenario.probability()));
                     assets = assets.add(snapshot.nominalInvestableAssets().multiply(scenario.probability()));
                     pv = pv.add(value.multiply(scenario.probability()));

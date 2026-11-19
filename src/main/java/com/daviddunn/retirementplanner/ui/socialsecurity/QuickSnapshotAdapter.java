@@ -7,10 +7,22 @@ import java.util.*;
 /** Pure historical adapter. No plan, controls or financial factories. */
 final class QuickSnapshotAdapter {
     static QuickComparisonSnapshot capture(IntegratedSocialSecurityComparisonPresentation model, QuickReportSession report) {
+        return capture(model, report, false);
+    }
+    static QuickComparisonSnapshot captureArkansas(IntegratedSocialSecurityComparisonPresentation model, QuickReportSession report) {
+        return capture(model, report, true);
+    }
+    private static QuickComparisonSnapshot capture(IntegratedSocialSecurityComparisonPresentation model, QuickReportSession report,
+            boolean arkansas) {
         var prepared = report.prepared();
-        return QuickComparisonSnapshot.capture(model.comparison(), model.rows().stream().map(IntegratedSocialSecurityComparisonPresentation.Row::socialSecurityRank).toList(),
-                prepared.candidates().stream().map(c -> new QuickComparisonSnapshot.Candidate(c.rank(), WeightedSnapshots.Strategy.from(c.strategy()), c.value())).toList(),
-                prepared.prerequisiteFingerprint(), prepared.prerequisiteRunId(), prepared.requestedCount(), prepared.financial().baseline());
+        var ranks = model.rows().stream().map(IntegratedSocialSecurityComparisonPresentation.Row::socialSecurityRank).toList();
+        var candidates = prepared.candidates().stream().map(c -> new QuickComparisonSnapshot.Candidate(
+                c.rank(), WeightedSnapshots.Strategy.from(c.strategy()), c.value())).toList();
+        return arkansas
+                ? QuickComparisonSnapshot.captureArkansas(model.comparison(), ranks, candidates, prepared.prerequisiteFingerprint(),
+                        prepared.prerequisiteRunId(), prepared.requestedCount(), prepared.financial().baseline())
+                : QuickComparisonSnapshot.capture(model.comparison(), ranks, candidates, prepared.prerequisiteFingerprint(),
+                        prepared.prerequisiteRunId(), prepared.requestedCount(), prepared.financial().baseline());
     }
     static IntegratedSocialSecurityComparisonPresentation presentation(QuickComparisonSnapshot payload) {
         var result = payload.restore();

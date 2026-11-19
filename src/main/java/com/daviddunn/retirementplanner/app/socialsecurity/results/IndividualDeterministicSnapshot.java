@@ -19,7 +19,7 @@ public record IndividualDeterministicSnapshot(int version, RetainedProjectionSna
     }
     public static IndividualDeterministicSnapshot capture(SinglePersonIntegratedAnalysis result) {
         var search = result.result();
-        return new IndividualDeterministicSnapshot(1, RetainedProjectionSnapshot.capture(search.currentPlanBaseline()),
+        return new IndividualDeterministicSnapshot(1, ExhaustiveSnapshot.retain(search.currentPlanBaseline()),
                 search.rankingMeasure(), search.entries().stream().map(ExhaustiveSnapshot.Entry::capture).toList(),
                 search.rankedSuccessfulEntries().stream().map(e -> e.generationOrder()).toList(),
                 search.currentPlanRank().isPresent() ? search.currentPlanRank().getAsInt() : null,

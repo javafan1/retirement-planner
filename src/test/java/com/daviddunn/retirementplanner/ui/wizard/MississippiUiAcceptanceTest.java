@@ -26,7 +26,7 @@ class MississippiUiAcceptanceTest {
             ComboBox<StateTaxJurisdiction> input = field(editor, "stateJurisdictionComboBox");
             assertEquals(StateTaxJurisdiction.MS, input.getValue());
             assertEquals(StateTaxJurisdiction.alphabeticalChoices(), input.getItems());
-            assertEquals(20, input.getItems().size());
+            assertEquals(21, input.getItems().size());
             assertTrue(input.getTooltip().getText().contains("Mississippi"));
 
             var details = new ProjectionYearDetailsPane(projection.getYearAt(0), null, BigDecimal.ZERO, null);

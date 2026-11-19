@@ -6,7 +6,15 @@ final class SocialSecurityAnalysisFailurePresentation {
     private SocialSecurityAnalysisFailurePresentation() { }
 
     static String message(Throwable failure) {
+        var arkansas = com.daviddunn.retirementplanner.ui.ProjectionFailureMessages.arkansasFailure(failure);
+        if (arkansas.isPresent()) {
+            return com.daviddunn.retirementplanner.ui.ProjectionFailureMessages.arkansasUnavailableMessage(arkansas.orElseThrow())
+                    + " Previous successful results were retained.";
+        }
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof com.daviddunn.retirementplanner.app.socialsecurity.InsufficientAnalysisFundsException shortage) {
+                return shortage.getMessage() + " Previous successful results were retained.";
+            }
             if (cause instanceof com.daviddunn.retirementplanner.domain.tax.state.StateTaxUnavailableException unavailable) {
                 return unavailable.getMessage() + " No completed state-tax-dependent analysis is available. "
                         + "The previous result has been preserved.";

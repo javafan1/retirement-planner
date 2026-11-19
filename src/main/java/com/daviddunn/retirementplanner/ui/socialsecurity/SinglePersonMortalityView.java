@@ -30,6 +30,10 @@ final class SinglePersonMortalityView extends VBox {
             IndividualLongevityScenarios mortality, java.time.LocalDate valuation, BigDecimal rate) { }
     java.util.function.Function<CompletionInput, java.util.function.Consumer<SinglePersonMortalityAnalysis.Result>>
             acceptedCompletion = input -> result -> { };
+    record ArkansasWork(SocialSecurityAnalyzerJobController.Work<SinglePersonMortalityAnalysis.Result> calculate,
+            java.util.function.Consumer<SinglePersonMortalityAnalysis.Result> accept,
+            java.util.function.BooleanSupplier isCurrent) { }
+    Function<CompletionInput, ArkansasWork> prepareArkansas;
     java.util.function.Function<CompletionInput, SocialSecurityAnalyzerJobController.Work<SinglePersonMortalityAnalysis.Result>> calculation;
     boolean displays(SinglePersonMortalityAnalysis.Result result) { return completed == result; }
     final TextArea details = new TextArea();
@@ -213,7 +217,11 @@ final class SinglePersonMortalityView extends VBox {
                     SocialSecurityMortalityAdjustment.of(new BigDecimal(factor.getText().trim())), conditioning.getValue());
             var date = valuation.getValue();
             var rate = new BigDecimal(discount.getText().trim()).movePointLeft(2);
-            var accepted = acceptedCompletion.apply(new CompletionInput(frozen, captured, mortality, date, rate));
+            var input = new CompletionInput(frozen, captured, mortality, date, rate);
+            boolean arkansas = integrated() && com.daviddunn.retirementplanner.domain.projection.ProjectionEngine.selectsArkansas(frozen);
+            if (arkansas && prepareArkansas == null) throw new IllegalArgumentException("Open the analyzer from an accepted Arkansas projection.");
+            var arkansasWork = arkansas ? prepareArkansas.apply(input) : null;
+            var accepted = arkansas ? arkansasWork.accept() : acceptedCompletion.apply(input);
             var parameterRun = parameters == null ? null : parameters.begin(SocialSecurityParameterMapping.individual(
                     new CompletionInput(frozen, captured, mortality, date, rate), mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED));
             String capturedFingerprint = parameters == null ? null : inputFingerprint(frozen,
@@ -222,15 +230,19 @@ final class SinglePersonMortalityView extends VBox {
             if (persistence != null) persistence.beginReplacement();
             boolean admitted = jobs.start(mode == SinglePersonMortalityAnalysis.Mode.INTEGRATED
                             ? SocialSecurityAnalyzerJobController.Mode.WEIGHTED : SocialSecurityAnalyzerJobController.Mode.SOCIAL_SECURITY,
-                    calculation.apply(new CompletionInput(frozen, captured, mortality, date, rate)),
+                    arkansas ? arkansasWork.calculate() : calculation.apply(input),
                     result -> {
                         // This callback is reached only after the original generation/revision/cancellation gates.
                         try { accepted.accept(result); }
-                        catch (RuntimeException persistenceFailure) { persistenceNotice.setText("Analysis completed, but result saving could not start. The previous saved result was retained."); }
+                        catch (RuntimeException persistenceFailure) {
+                            persistenceNotice.setText("Analysis completed, but the previous successful result was retained. " + persistenceFailure.getMessage());
+                            if (arkansas) return;
+                        }
                         reportContext = captured; acceptedInputFingerprint = capturedFingerprint; render(result);
                         if (parameterRun != null && com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSuccessPolicy.accepted(result)) parameters.accept(parameterRun);
-                    }, failure -> status.setText("Analysis failed: " + failure.getMessage()),
-                    () -> { if (parameterRun != null) parameters.rollback(parameterRun); });
+                    }, failure -> status.setText(SocialSecurityAnalysisFailurePresentation.message(failure)),
+                    () -> { if (parameterRun != null) parameters.rollback(parameterRun); },
+                    arkansas ? arkansasWork.isCurrent() : () -> true);
             if (!admitted) { if (persistence != null) persistence.finishReplacement(); status.setText("Another analysis is running."); }
         } catch (RuntimeException invalid) { current = false; status.setText("Check inputs: " + invalid.getMessage()); }
         refresh();

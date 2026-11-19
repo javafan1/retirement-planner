@@ -191,10 +191,15 @@ public final class MonteCarloStrategyComparisonRunService {
 
     public MonteCarloStrategyComparisonRun run(Prepared prepared, AnalysisProgressListener progress,
             AnalysisCancellationToken cancellation) {
+        return run(prepared, progress, cancellation, new MonteCarloStrategyComparisonAnalyzer());
+    }
+
+    MonteCarloStrategyComparisonRun run(Prepared prepared, AnalysisProgressListener progress,
+            AnalysisCancellationToken cancellation, MonteCarloStrategyComparisonAnalyzer analyzer) {
         long start = System.nanoTime();
         cancellation.throwIfCancellationRequested();
         ExpenseVolatilityAdmission.requireComparisonSupported(prepared.request());
-        var result = new MonteCarloStrategyComparisonAnalyzer().analyzeComparison(prepared.request(), progress, cancellation);
+        var result = analyzer.analyzeComparison(prepared.request(), progress, cancellation);
         cancellation.throwIfCancellationRequested();
         return new MonteCarloStrategyComparisonRun(result, prepared.mode(), prepared.details(), System.nanoTime() - start);
     }

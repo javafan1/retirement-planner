@@ -67,6 +67,7 @@ public class ApplicationController {
 
     private void sourcePlanChanged() {
         sourcePlanRevision++;
+        cancelControlledProjection();
         java.util.List.copyOf(sourcePlanListeners).forEach(Runnable::run);
     }
 
@@ -108,13 +109,20 @@ public class ApplicationController {
         a.setFinancialCalculationMode(mode); b.setFinancialCalculationMode(mode);
         var frozenBaseline = b;
         return analysisResults.background(() -> {
-            var pb = projectionEngine.project(frozenBaseline);
-            var pa = projectionEngine.project(a);
+            var pb = projectComparisonSide(frozenBaseline);
+            var pa = projectComparisonSide(a);
             return new CommonModeComparison(owner,baseline,originalCurrent,revision,pb,pa,mode,
                     nonInvestableAssetProjectionService.project(frozenBaseline.getNonInvestableAssets(),pb.getStartYear(),pb.getEndYear()),
                     nonInvestableAssetProjectionService.project(a.getNonInvestableAssets(),pa.getStartYear(),pa.getEndYear()),
                     BreakEvenPlanSummary.from(frozenBaseline),BreakEvenPlanSummary.from(a),currentDigest,baselineDigest);
         });
+    }
+
+    private Projection projectComparisonSide(RetirementPlan frozenPlan) {
+        if (!ProjectionEngine.selectsArkansas(frozenPlan)) return projectionEngine.project(frozenPlan);
+        var engine = ProjectionEngine.forArkansasProduction();
+        return engine.runArkansasAnalysis(com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken.none(),
+                () -> engine.project(frozenPlan));
     }
 
     public boolean acceptCommonModeComparison(CommonModeComparison completed) {
@@ -152,8 +160,12 @@ public class ApplicationController {
     public boolean isRestoredProjectionMode() { return restoredProjectionMode; }
     public String getProjectionSnapshotNotice() {
         var accepted = getAcceptedProjectionSnapshot();
-        if (accepted != null && accepted.arkansasHistory()) {
+        if (accepted != null && accepted.arkansasHistory() && !accepted.calculationSemanticsCurrent()) {
             return "Historical Arkansas projection restored with its original inputs and policies. " + projectionSnapshotNotice;
+        }
+        if (accepted != null && accepted.arkansasHistory()) {
+            return currentProjectionDeterministicallyApplicable() ? projectionSnapshotNotice
+                    : "Previous Arkansas projection retained. Run a new projection for the current inputs.";
         }
         if (currentPlan != null && com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(currentPlan)) {
             try { com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(currentPlan); }
@@ -189,7 +201,11 @@ public class ApplicationController {
         return prepareAnalyzerAssociation(kind, null);
     }
     public synchronized AnalyzerAdmission prepareAnalyzerAssociation(com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind kind, String requestFingerprint) {
-        return prepareAnalyzerAssociation(kind, requestFingerprint, false);
+        var snapshot = getAcceptedProjectionSnapshot();
+        boolean arkansas = snapshot != null && snapshot.arkansasHistory() && snapshot.calculationSemanticsCurrent()
+                && kind != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.COUPLE_SOCIAL_SECURITY
+                && kind != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY;
+        return prepareAnalyzerAssociation(kind, requestFingerprint, arkansas);
     }
 
     synchronized AnalyzerAdmission prepareControlledArkansasAnalyzerAssociation(
@@ -208,7 +224,9 @@ public class ApplicationController {
     }
     /** Called only at an eligible result acceptance, never passive restoration. Save commits the immutable pin. */
     public synchronized boolean associateAnalyzer(AnalyzerAdmission admission, com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion completion) {
-        return associateAnalyzer(admission, completion, false);
+        var projection = getAcceptedProjectionSnapshot();
+        boolean arkansas = completion.arkansasExecution() != null && projection != null && projection.calculationSemanticsCurrent();
+        return associateAnalyzer(admission, completion, arkansas);
     }
 
     synchronized boolean associateControlledArkansasAnalyzer(AnalyzerAdmission admission,
@@ -218,8 +236,35 @@ public class ApplicationController {
 
     private boolean canAssociateProjection(CompleteProjectionSnapshot projection, boolean controlledArkansas) {
         return controlledArkansas
-                ? projection.arkansasHistory() && projection.id().equals(controlledArkansasProjectionId)
-                : projection.calculationSemanticsCurrent();
+                ? projection.arkansasHistory() && (projection.calculationSemanticsCurrent()
+                        || projection.id().equals(controlledArkansasProjectionId))
+                : !projection.arkansasHistory() && projection.calculationSemanticsCurrent();
+    }
+
+    /** Captured on the owner thread before admitting Arkansas financial analysis. */
+    public CompleteProjectionSnapshot requireArkansasProjectionForAnalysis() {
+        var accepted = getAcceptedProjectionSnapshot();
+        if (accepted == null || !accepted.arkansasHistory() || !accepted.calculationSemanticsCurrent()
+                || !currentProjectionInputsMatch()) {
+            throw new IllegalArgumentException("Run and accept an Arkansas projection for the current plan inputs before starting this analysis.");
+        }
+        return accepted;
+    }
+
+    /** Lightweight owner-thread guard for progress and publication from the controlled worker. */
+    public synchronized boolean analyzerRequestIsCurrent(AnalyzerAdmission admission) {
+        var current = getAcceptedProjectionSnapshot();
+        return admission != null && current != null && admission.planId().equals(getAnalysisSessionId())
+                && admission.sourceRevision() == sourcePlanRevision && admission.projectionGeneration() == projectionEpoch.get()
+                && admission.ticket().equals(analyzerAdmissions.get(admission.kind()))
+                && admission.projectionId().equals(current.id()) && admission.projectionInputDigest().equals(current.inputDigest());
+    }
+
+    public synchronized boolean pairedAnalyzerRequestIsCurrent(AnalyzerAdmission admission, CompleteProjectionSnapshot baseline) {
+        if (!analyzerRequestIsCurrent(admission)) return false;
+        var state = currentPlan.getProjectionState();
+        return state.baseline() != null && state.baseline().id().equals(baseline.id())
+                && currentPlan.getProjectionComponents().get(baseline.id()) == baseline;
     }
 
     private boolean associateAnalyzer(AnalyzerAdmission admission,
@@ -242,7 +287,11 @@ public class ApplicationController {
                 || !admission.planId().equals(getAnalysisSessionId()) || admission.projectionGeneration() != projectionEpoch.get()
                 || admission.sourceRevision() != sourcePlanRevision || !admission.ticket().equals(analyzerAdmissions.get(admission.kind()))
                 || !currentProjectionInputsMatch() || !admission.projectionId().equals(getAcceptedProjectionSnapshot().id())
-                || !canAssociateProjection(getAcceptedProjectionSnapshot(), controlledArkansas)
+                || !(canAssociateProjection(getAcceptedProjectionSnapshot(), controlledArkansas)
+                    || controlledArkansas && completion.arkansasExecution() != null
+                        && completion.arkansasExecution().version() == 2
+                        && completion.arkansasExecution().executionEvidence().paired() != null
+                        && getAcceptedProjectionSnapshot().calculationSemanticsCurrent())
                 || !admission.projectionInputDigest().equals(getAcceptedProjectionSnapshot().inputDigest())) return false;
         UUID alternative = null;
         var original = getAcceptedProjectionSnapshot();
@@ -252,11 +301,23 @@ public class ApplicationController {
                             com.daviddunn.retirementplanner.domain.projection.ArkansasValidationTax.reviewedVersions())) return false;
             var provenance = completion.arkansasExecution();
             try {
-                var presentation = completion.presentationSnapshot(new com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec());
-                new com.daviddunn.retirementplanner.persistence.ProjectionSnapshotComponents().validateArkansasAnalyzer(
-                        presentation, original, currentPlan.getProjectionComponents());
+                if (original.calculationSemanticsCurrent()) {
+                    // Workers verified annual digests and the exact payload. Only the original
+                    // immutable objects can redeem that proof on the owner thread.
+                    provenance.validateAssociation(original.id(), original.inputDigest());
+                    if (completion.observedArkansas() == null
+                            || !completion.observedArkansas().dependenciesStillInstalled(currentPlan.getProjectionComponents())) return false;
+                } else {
+                    var presentation = completion.presentationSnapshot(new com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec());
+                    new com.daviddunn.retirementplanner.persistence.ProjectionSnapshotComponents().validateArkansasAnalyzer(
+                            presentation, original, currentPlan.getProjectionComponents());
+                }
                 alternative = provenance.dependencies().stream().map(d -> d.projectionId())
                         .filter(id -> !id.equals(original.id())).findFirst().orElse(null);
+                if (provenance.dependencies().size() == 2) {
+                    var baseline = currentPlan.getProjectionState().baseline();
+                    if (baseline == null || !baseline.id().equals(provenance.dependencies().get(1).projectionId())) return false;
+                }
             } catch (IOException | IllegalArgumentException invalid) {
                 return false;
             }
@@ -334,9 +395,56 @@ public class ApplicationController {
         }
         store.validateArkansasAnalyzer(analysis, original, verified);
     }
+
+    /** Freeze the component lookup on the owner thread. Restoring a v2 last-success result verifies it on the I/O worker. */
+    public java.util.function.Consumer<com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot>
+            captureAnalyzerDependencyVerification() {
+        var state = currentPlan.getProjectionState();
+        var file = currentPlan.getProjectionComponentSource();
+        var components = new java.util.HashMap<>(currentPlan.getProjectionComponents());
+        components.putAll(currentPlan.getPendingPinnedProjections());
+        return analysis -> {
+            var provenance = analysis.arkansasExecution();
+            if (provenance == null || provenance.version() != 2) return;
+            if (state == null || !state.owner().equals(analysis.planId())) {
+                throw new IllegalArgumentException("Original Arkansas analyzer source projections are unavailable.");
+            }
+            var id = provenance.dependencies().getFirst().projectionId();
+            var store = new com.daviddunn.retirementplanner.persistence.ProjectionSnapshotComponents();
+            var original = components.get(id);
+            try {
+                if (original == null) {
+                    var refs = new java.util.ArrayList<>(state.pinnedProjections());
+                    if (state.current() != null) refs.add(state.current());
+                    if (state.baseline() != null) refs.add(state.baseline());
+                    var reference = refs.stream().filter(value -> value.id().equals(id)).findFirst()
+                            .orElseThrow(() -> new IOException("Original accepted projection is unavailable."));
+                    original = store.read(file, state.owner(), reference);
+                }
+                verifyArkansasAnalyzer(store, file, state, original, analysis, components);
+            } catch (IOException invalid) {
+                throw new IllegalArgumentException("Original Arkansas analyzer dependencies could not be verified.", invalid);
+            }
+        };
+    }
     public boolean currentProjectionInputsMatch() {
         var snapshot = getAcceptedProjectionSnapshot();
         return snapshot != null && currentProjection != null && snapshot.matches(currentPlan);
+    }
+
+    public boolean hasCurrentArkansasAnalysisDependencies(com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot saved) {
+        var execution = saved.arkansasExecution();
+        var current = getAcceptedProjectionSnapshot();
+        if (execution == null || current == null || !current.calculationSemanticsCurrent()
+                || analysisAssociation(saved) != com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultFreshness.Association.CURRENT_PROJECTION) {
+            return false;
+        }
+        if (execution.dependencies().size() == 1) return true;
+        var baseline = currentPlan.getProjectionState().baseline();
+        var dependency = execution.dependencies().get(1);
+        var installed = baseline == null ? null : currentPlan.getProjectionComponents().get(baseline.id());
+        return installed != null && dependency.projectionId().equals(installed.id())
+                && dependency.inputDigest().equals(installed.inputDigest()) && installed.calculationSemanticsCurrent();
     }
 
     /** Read-only presentation of recorded provenance, independent of execution revisions and durability. */
@@ -344,6 +452,20 @@ public class ApplicationController {
             com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisSnapshot saved) {
         var projection = getAcceptedProjectionSnapshot();
         var manifest = currentPlan.getProjectionState();
+        if (saved != null && saved.arkansasExecution() != null && saved.arkansasExecution().version() == 2 && manifest != null) {
+            var pending = currentPlan.getPendingAnalyzerAssociations().get(saved.runId());
+            if (pending != null && pending.planId().equals(getAnalysisSessionId()) && pending.planId().equals(saved.planId())
+                    && pending.kind() == saved.kind() && pending.payload() == saved.payload()
+                    && pending.context() == saved.context() && pending.arkansasExecution() == saved.arkansasExecution()
+                    && pending.inputFingerprint().equals(saved.inputFingerprint())) {
+                var dependency = pending.arkansasExecution().dependencies().getFirst();
+                if (projection == null || !projection.id().equals(dependency.projectionId()))
+                    return com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultFreshness.Association.HISTORICAL_PROJECTION;
+                return currentProjectionInputsMatch()
+                        ? com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultFreshness.Association.CURRENT_PROJECTION
+                        : com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultFreshness.Association.INPUTS_EDITED;
+            }
+        }
         return com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisResultFreshness.association(saved,
                 getAnalysisSessionId(), projection == null ? null : projection.id(),
                 projection == null ? null : projection.inputDigest(), currentProjectionInputsMatch(),
@@ -407,6 +529,7 @@ public class ApplicationController {
         var owner = currentPlan; var manifest = owner.getProjectionState(); var baseline = owner.getBaseline();
         var file = currentFile; long epoch = projectionEpoch.get(), revision = sourcePlanRevision, sequence = ++swapSequence;
         var components = owner.getProjectionComponents();
+        cancelControlledProjection();
         swapPreparing = true;
         return analysisResults.background(() -> {
             var store = new com.daviddunn.retirementplanner.persistence.ProjectionSnapshotComponents();
@@ -436,7 +559,7 @@ public class ApplicationController {
                     throw new IllegalStateException("Historical analyzer projection binding is inconsistent.");
                 var pending = owner.getPendingAnalyzerAssociations().get(association.runId());
                 var memory = owner.getAssociatedAnalyzerResults().get(association.runId());
-                if (original.arkansasHistory()) {
+                if (original.arkansasHistory() || association.alternativeProjectionId() != null) {
                     var analysis = store.resolveAnalyzer(association, pending, memory, owner.getProjectionComponentSource());
                     verifyArkansasAnalyzer(store, owner.getProjectionComponentSource(), manifest, original, analysis, verified);
                 } else {
@@ -481,6 +604,7 @@ public class ApplicationController {
     }
     private synchronized void beginPlanFile() {
         if (planFileBusy || swapPreparing) throw new IllegalStateException("Another plan operation is in progress.");
+        cancelControlledProjection();
         planFileBusy = true;
         ++planFileSequence;
         planFiles.allowCoreThreadTimeOut(true);
@@ -915,14 +1039,15 @@ public class ApplicationController {
     private ControlledPensionReview controlledReview;
     private UUID controlledArkansasProjectionId;
 
-    private record ControlledProjectionBinding(RetirementPlan owner, UUID ownerId, long epoch, long revision, String inputs) { }
+    private record ControlledProjectionBinding(Thread ownerThread, RetirementPlan owner, UUID ownerId, long epoch,
+            long revision, String inputs) { }
     private record ControlledPensionReview(ControlledProjectionBinding binding, ArkansasProjectionUnavailableException failure) { }
     private record ControlledProjectionWork(RestoredProjection accepted, FundingFailure shortfall) { }
 
-    enum ControlledProjectionStatus { ACCEPTED, INSUFFICIENT_FUNDS, OBSOLETE }
+    public enum ControlledProjectionStatus { ACCEPTED, INSUFFICIENT_FUNDS, OBSOLETE }
 
     /** Owner-thread ticket. The worker receives the captured input document, never the editable plan. */
-    static final class ControlledProjectionRun {
+    public static final class ControlledProjectionRun {
         private final ControlledProjectionBinding binding;
         private final AtomicBoolean cancelled;
         private final CompletionStage<ControlledProjectionWork> work;
@@ -934,11 +1059,17 @@ public class ApplicationController {
             this.work = work;
         }
 
-        void cancel() { cancelled.set(true); }
-        CompletionStage<Void> completion() { return work.thenAccept(ignored -> { }); }
+        public void cancel() { cancelled.set(true); }
+        public CompletionStage<Void> completion() { return work.thenAccept(ignored -> { }); }
     }
 
-    /** Package-internal workflow; the caller must already possess a genuinely gated engine. */
+    public synchronized ControlledProjectionRun beginArkansasProjection(IntConsumer completedYears) {
+        if (!ProjectionEngine.selectsArkansas(currentPlan)) {
+            throw new IllegalStateException("Select Arkansas as the plan's state of residence first.");
+        }
+        return beginControlledArkansasProjection(ProjectionEngine.forArkansasProduction(), completedYears);
+    }
+
     synchronized ControlledProjectionRun beginControlledArkansasProjection(ProjectionEngine engine, IntConsumer completedYears) {
         java.util.Objects.requireNonNull(engine);
         java.util.Objects.requireNonNull(completedYears);
@@ -949,8 +1080,9 @@ public class ApplicationController {
         cancelControlledProjection();
         var inputs = CompleteProjectionSnapshot.freeze(currentPlan);
         var ownerId = getAnalysisSessionId();
-        var binding = new ControlledProjectionBinding(currentPlan, ownerId, projectionEpoch.incrementAndGet(),
+        var binding = new ControlledProjectionBinding(Thread.currentThread(), currentPlan, ownerId, projectionEpoch.incrementAndGet(),
                 sourcePlanRevision, inputs);
+        currentFundingFailure = null;
         var cancelled = new AtomicBoolean();
         var work = analysisResults.background(() -> calculateControlledArkansas(engine, ownerId, inputs, cancelled, completedYears));
         controlledRun = new ControlledProjectionRun(binding, cancelled, work);
@@ -975,11 +1107,19 @@ public class ApplicationController {
             throw new IllegalStateException("Controlled projection inputs changed during evaluation.");
         }
         cancellation.throwIfCancellationRequested();
-        return new ControlledProjectionWork(RestoredProjection.prepare(snapshot), null);
+        var prepared = RestoredProjection.prepare(snapshot);
+        if (ProjectionEngine.selectsArkansas(plan)) {
+            prepared = new RestoredProjection(snapshot, projection, snapshot.summary().restore(projection),
+                    prepared.nonInvestable(), prepared.chart(), prepared.inputs(), prepared.assumptions());
+        }
+        return new ControlledProjectionWork(prepared, null);
     }
 
     /** Owner-thread completion. A cancelled, superseded, edited or replaced request cannot publish. */
-    synchronized ControlledProjectionStatus finishControlledArkansasProjection(ControlledProjectionRun run) {
+    public synchronized ControlledProjectionStatus finishControlledArkansasProjection(ControlledProjectionRun run) {
+        if (Thread.currentThread() != run.binding.ownerThread()) {
+            throw new IllegalStateException("The projection must be accepted on its owner thread.");
+        }
         if (run != controlledRun) return ControlledProjectionStatus.OBSOLETE;
         var future = run.work.toCompletableFuture();
         if (!future.isDone() && !run.cancelled.get()) throw new IllegalStateException("Projection is still running.");
@@ -1012,7 +1152,7 @@ public class ApplicationController {
         currentDetailsChart = accepted.chart();
         currentProjection = accepted.projection();
         restoredProjectionMode = true;
-        projectionSnapshotNotice = "Arkansas projection accepted in the controlled workflow.";
+        projectionSnapshotNotice = "Arkansas projection updated.";
         return ControlledProjectionStatus.ACCEPTED;
     }
 
@@ -1022,10 +1162,14 @@ public class ApplicationController {
                 && binding.inputs().equals(CompleteProjectionSnapshot.freeze(currentPlan));
     }
 
-    private void cancelControlledProjection() {
+    public synchronized void cancelControlledProjection() {
         if (controlledRun != null) controlledRun.cancel();
         controlledRun = null;
         controlledReview = null;
+    }
+
+    public synchronized boolean isArkansasProjectionRunning() {
+        return controlledRun != null && !controlledRun.cancelled.get();
     }
 
     /** Resolves presentation data on the owner thread only while the failed request still identifies the active inputs. */
@@ -1258,7 +1402,7 @@ public class ApplicationController {
      */
     public Projection getCurrentProjection() {
 
-        if (restoredProjectionMode) return currentProjection;
+        if (restoredProjectionMode || ProjectionEngine.selectsArkansas(currentPlan)) return currentProjection;
 
         if (!isCurrentPlanReadyForProjection()) {
             return null;
@@ -1370,6 +1514,8 @@ public class ApplicationController {
                 return baselineProjection;
             }
             if (restoredProjectionMode) return null; // Legacy results cannot be recovered by an implicit run.
+            if (selectedBaseline.getSnapshot().getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                    == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AR) return null;
 
             var owner = currentPlan;
             var inputs = com.daviddunn.retirementplanner.app.baseline.ProjectionInputs.capture(selectedBaseline.getSnapshot());
@@ -1921,6 +2067,13 @@ public class ApplicationController {
         insightBaselineProjection = null;
         insightBaselineIdentity = null;
         projectionEpoch.incrementAndGet();
+        var accepted = getAcceptedProjectionSnapshot();
+        if (ProjectionEngine.selectsArkansas(currentPlan) && accepted != null && accepted.arkansasHistory()
+                && currentDetailsContext != null && accepted.id().equals(currentDetailsContext.runId())) {
+            currentFundingFailure = null;
+            projectionSnapshotNotice = "Previous Arkansas projection retained. Run a new projection for the current inputs.";
+            return;
+        }
         restoredProjectionMode = false;
         currentDetailsChart = null;
         projectionSnapshotNotice = "";

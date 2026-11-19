@@ -933,6 +933,7 @@ public class ResultsSummaryView extends BorderPane {
         Button recalculateButton =
                 new Button(
                         "⟳  Recalculate Projection");
+        recalculateButton.setId("recalculate-projection");
 
         recalculateButton.getStyleClass().add(
                 "results-action-button");
@@ -2608,7 +2609,7 @@ public class ResultsSummaryView extends BorderPane {
             var arkansas = first.arkansasValidationTax().orElseThrow();
             projectionRangeLabel.setText("Projection: " + first.getCalendarYear() + " - " + last.getCalendarYear()
                     + "  |  " + years.size() + " years | "
-                    + (arkansas.restoredHistory() ? "Arkansas retained history" : "Arkansas validation"));
+                    + (arkansas.restoredHistory() ? "Arkansas retained history" : "Arkansas planning estimate"));
             var tooltip = new Tooltip("Arkansas statutory-cent retirement planning estimate. "
                     + "Future estimates hold reviewed parameters constant. Some low-income, early-distribution and special sources require additional evidence.\n\n"
                     + String.join("\n", arkansas.calculation().limitations()));
@@ -3397,10 +3398,13 @@ public class ResultsSummaryView extends BorderPane {
 
         try {
 
-            projectionCsvExporter.export(
-                    currentProjection,
-                    this.nonInvestableAssetProjections,
-                    file);
+            var original = controller.getAcceptedProjectionSnapshot();
+            if (original != null && original.arkansasHistory() && currentProjection == controller.peekCurrentProjection()) {
+                com.daviddunn.retirementplanner.app.export.ArkansasValidationReport.captureAccepted(currentProjection,
+                        isLiveArkansasEstimate(currentProjection)).writeCsv(file);
+            } else {
+                projectionCsvExporter.export(currentProjection, nonInvestableAssetProjections, file);
+            }
 
             showInformation(
                     "Projection exported successfully.",
@@ -3507,18 +3511,26 @@ public class ResultsSummaryView extends BorderPane {
                         && selectedProjection != null && !selectedProjection.isEmpty(),
                 () -> {
                     // Freeze all renderer inputs before dispatching background PDF I/O.
-                    RetirementPlan isolatedPlan = new RetirementPlanScenarioCopyService().copy(selectedPlan);
                     var original = controller.getAcceptedProjectionSnapshot();
-                    boolean arkansas = original != null && original.arkansasHistory()
-                            && selectedProjection == controller.peekCurrentProjection();
-                    Projection isolatedProjection = (arkansas ? original.annual()
-                            : RetainedProjectionSnapshot.capture(selectedProjection)).restoreProjection();
                     capturedProjection.set(selectedProjection);
+                    if (original != null && original.arkansasHistory() && selectedProjection == controller.peekCurrentProjection()) {
+                        return new ProjectionPdfExportCapture(null, null, List.of(), null, original.annual(),
+                                isLiveArkansasEstimate(selectedProjection));
+                    }
+                    RetirementPlan isolatedPlan = new RetirementPlanScenarioCopyService().copy(selectedPlan);
+                    Projection isolatedProjection = RetainedProjectionSnapshot.capture(selectedProjection).restoreProjection();
                     return new ProjectionPdfExportCapture(isolatedPlan, isolatedProjection,
-                            List.copyOf(nonInvestableAssetProjections), arkansas ? null : prepareProjectionPdfReport());
+                            List.copyOf(nonInvestableAssetProjections), prepareProjectionPdfReport(), null, false);
                 },
-                (capture, destination) -> new ProjectionPdfExporter().export(capture.plan(),
-                        capture.projection(), capture.nonInvestableAssets(), capture.report(), destination),
+                (capture, destination) -> {
+                    if (capture.arkansas() != null) {
+                        com.daviddunn.retirementplanner.app.export.ArkansasValidationReport
+                                .captureAccepted(capture.arkansas().restoreProjection(), capture.currentArkansas()).writePdf(destination);
+                    } else {
+                        new ProjectionPdfExporter().export(capture.plan(), capture.projection(),
+                                capture.nonInvestableAssets(), capture.report(), destination);
+                    }
+                },
                 () -> capturedProjection.get() != null,
                 (choice, path) -> {
                     // A completed file belongs to its frozen projection. Only claim success as current
@@ -3546,7 +3558,13 @@ public class ResultsSummaryView extends BorderPane {
     }
 
     private record ProjectionPdfExportCapture(RetirementPlan plan, Projection projection,
-            List<NonInvestableAssetProjection> nonInvestableAssets, ProjectionPdfReport report) { }
+            List<NonInvestableAssetProjection> nonInvestableAssets, ProjectionPdfReport report,
+            RetainedProjectionSnapshot arkansas, boolean currentArkansas) { }
+
+    private boolean isLiveArkansasEstimate(Projection projection) {
+        return projection.getFirstYear().arkansasValidationTax().filter(tax -> !tax.restoredHistory()).isPresent()
+                && controller.currentProjectionDeterministicallyApplicable();
+    }
 
     private static PdfExportWorkflowCoordinator<ProjectionPdfExportCapture> createProjectionPdfWorkflow() {
         PdfExportWorkflowCoordinator.DestinationChooser chooser = (owner, suggested) -> {

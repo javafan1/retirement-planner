@@ -24,6 +24,9 @@ public enum StateTaxJurisdiction {
     AL("Alabama"),
     AR("Arkansas");
 
+    private static final java.util.List<StateTaxJurisdiction> PRODUCTION_CHOICES = java.util.List.of(
+            MI, FL, IL, PA, AK, NV, NH, SD, TN, TX, WY, IA, AZ, NC, KY, GA, VA, OK, MS, AL, AR);
+
     private final String displayName;
     private final boolean noGeneralIndividualIncomeTax;
 
@@ -52,11 +55,11 @@ public enum StateTaxJurisdiction {
     }
 
     public static java.util.List<StateTaxJurisdiction> productionChoices() {
-        return java.util.Arrays.stream(values()).filter(StateTaxJurisdiction::productionAdmitted).toList();
+        return PRODUCTION_CHOICES;
     }
 
     public boolean productionAdmitted() {
-        return this != AR;
+        return PRODUCTION_CHOICES.contains(this);
     }
 
     /** Persist stable jurisdiction codes; numeric enum ordinals are not jurisdictions. */

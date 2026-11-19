@@ -56,7 +56,7 @@ class ArkansasWorksheetTest {
         assertThrows(IllegalArgumentException.class,()->worksheet.grossTax(2026,b("5599.99"),OFFICIAL_2026_ESTIMATED_TABLE));
         assertThrows(IllegalArgumentException.class,()->worksheet.grossTax(2027,b("50000"),P_STATUTORY_CENTS));
         assertFalse(ArkansasTaxRules.productionAdmitted());
-        assertFalse(com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.fromCode("AR").productionAdmitted());
+        assertTrue(com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.fromCode("AR").productionAdmitted());
     }
 
     @ParameterizedTest

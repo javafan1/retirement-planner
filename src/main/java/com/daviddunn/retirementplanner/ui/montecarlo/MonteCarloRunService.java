@@ -16,13 +16,23 @@ import java.util.List;
  * Worker-only adapter: one normal reference and one sequential analysis of a captured plan.
  */
 public final class MonteCarloRunService {
+    private final ProjectionEngine engine;
+
+    public MonteCarloRunService() {
+        this(new ProjectionEngine());
+    }
+
+    MonteCarloRunService(ProjectionEngine engine) {
+        this.engine = java.util.Objects.requireNonNull(engine);
+    }
+
     public MonteCarloRun runMortality(RetirementPlan frozenPlan, MonteCarloMortalityRequest request,
                                      AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(frozenPlan);
         long started = System.nanoTime();
         cancellation.throwIfCancellationRequested();
         com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireStandaloneSupported(frozenPlan);
-        var result = new MonteCarloAnalyzer().analyzeMortality(frozenPlan, request, progress, cancellation);
+        var result = new MonteCarloAnalyzer(engine).analyzeMortality(frozenPlan, request, progress, cancellation);
         cancellation.throwIfCancellationRequested();
         var people = BreakEvenPlanSummary.from(frozenPlan.getHousehold());
         return new MonteCarloRun(new MonteCarloRun.Mortality(result),
@@ -36,7 +46,6 @@ public final class MonteCarloRunService {
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(frozenPlan);
         long started = System.nanoTime();
         cancellation.throwIfCancellationRequested();
-        ProjectionEngine engine = new ProjectionEngine();
         com.daviddunn.retirementplanner.app.montecarlo.ExpenseVolatilityAdmission.requireStandaloneSupported(frozenPlan);
         ProjectionExecutionResult reference = cachedReference == null
                 ? engine.projectWithOutcome(frozenPlan)

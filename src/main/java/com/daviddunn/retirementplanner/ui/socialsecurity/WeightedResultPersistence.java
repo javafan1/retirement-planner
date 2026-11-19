@@ -108,11 +108,13 @@ final class WeightedResultPersistence implements AutoCloseable {
                 : kind == AnalysisKind.COUPLE_SOCIAL_SECURITY || kind == AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY
                 ? "Loading previous Social Security results…" : "Loading previous longevity-weighted results…");
         var file = source.getCurrentFile();
+        var verifyDependencies = source.captureAnalyzerDependencyVerification();
         var read = source.canPersistAnalysisResults() ? store.load(slot, file)
                 : store.background(() -> Optional.of(memory.orElseThrow().presentationSnapshot(new com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec())));
         read.thenCompose(found -> store.background(() -> {
             var saved = found.orElse(null);
             if (saved == null) return new Restored(null, null, Map.of());
+            verifyDependencies.accept(saved);
             var refs = AnalysisVersions.references(kind);
             var compatibility = new AnalysisCompatibilityPolicy().assess(saved,
                     new AnalysisFingerprintService.Assessment(saved.inputFingerprint(), saved.contextFingerprint(), null),
@@ -150,6 +152,14 @@ final class WeightedResultPersistence implements AutoCloseable {
 
     /** Called only inside the existing eligible, accepted financial completion callback. */
     void accept(AcceptedAnalysisCompletion completion) {
+        accept(completion, completion.association());
+    }
+
+    void accept(AcceptedAnalysisCompletion completion, com.daviddunn.retirementplanner.app.projection.AnalyzerAdmission admission) {
+        boolean versionTwo = completion.arkansasExecution() != null && completion.arkansasExecution().version() == 2;
+        if (versionTwo && !source.associateAnalyzer(admission, completion)) {
+            throw new IllegalArgumentException("Arkansas analyzer request is no longer eligible for its accepted projection.");
+        }
         replacing = false;
         generation++;
         loading = false;
@@ -158,7 +168,7 @@ final class WeightedResultPersistence implements AutoCloseable {
         assessment = null;
         metadataPending = false;
         source.getAnalysisResults().accept(completion);
-        source.associateAnalyzer(completion.association(), completion);
+        if (!versionTwo) source.associateAnalyzer(admission, completion);
         observeSave(generation);
         // Build integrity metadata off FX, including for a memory-only accepted result.
         metadata(completion, generation);
@@ -194,9 +204,12 @@ final class WeightedResultPersistence implements AutoCloseable {
         if (snapshot != null) {
             try {
                 var next = inputs.get();
-                assessment = new AnalysisCompatibilityPolicy().assess(snapshot,
-                        new AnalysisFingerprintService().assess(kind, source.getCurrentPlan(), next, null),
-                        AnalysisVersions.algorithms(kind), references);
+                var inputAssessment = new AnalysisFingerprintService().assess(kind, source.getCurrentPlan(), next, null);
+                var policy = new AnalysisCompatibilityPolicy();
+                assessment = source.hasCurrentArkansasAnalysisDependencies(snapshot)
+                        ? policy.assessArkansas(snapshot, inputAssessment, AnalysisVersions.algorithms(kind), references,
+                                com.daviddunn.retirementplanner.domain.projection.ArkansasValidationTax.reviewedVersions())
+                        : policy.assess(snapshot, inputAssessment, AnalysisVersions.algorithms(kind), references);
             } catch (RuntimeException invalid) {
                 assessment = new AnalysisCompatibilityPolicy.Assessment(AnalysisCompatibilityPolicy.State.INPUTS_NEED_ATTENTION,
                         "Inputs need attention. Previous results remain available; correct the pending analysis inputs.");

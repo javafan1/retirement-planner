@@ -20,9 +20,15 @@ public record SinglePersonIntegratedAnalysis(
 
     public static SinglePersonIntegratedAnalysis calculate(IntegratedSocialSecurityCompleteStrategySearchRequest request,
             AnalysisProgressListener progress, AnalysisCancellationToken cancellation) {
+        return calculate(request, progress, cancellation, new IntegratedSocialSecurityCompleteStrategySearchCalculator());
+    }
+
+    public static SinglePersonIntegratedAnalysis calculate(IntegratedSocialSecurityCompleteStrategySearchRequest request,
+            AnalysisProgressListener progress, AnalysisCancellationToken cancellation,
+            IntegratedSocialSecurityCompleteStrategySearchCalculator calculator) {
         var plan = request.plan();
         if (plan.getHousehold().hasSpouse()) throw new IllegalArgumentException("Single-person presentation requires one person.");
-        var result = new IntegratedSocialSecurityCompleteStrategySearchCalculator().calculate(request, progress, cancellation);
+        var result = calculator.calculate(request, progress, cancellation);
         var baseline = result.currentPlanBaseline();
         int start = baseline.projection().getYears().getFirst().getCalendarYear();
         int end = baseline.projection().getYears().getLast().getCalendarYear();

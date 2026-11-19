@@ -128,6 +128,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                 MonteCarloSnapshotPresentationMapper::restoreRun, restored -> session.restore(restored, true),
                 session::clearResult, this::refreshPersistence, session::busy);
         persistence.associationResolver(controller::analysisAssociation);
+        persistence.currentArkansasDependencies(controller::hasCurrentArkansasAnalysisDependencies);
         pdf = new MonteCarloPdfExportAction("mc-export-pdf", this::canExportPdf, this::preparePdfReport,
                 session::result, identity -> !session.busy() && session.result() == identity,
                 identity -> ((MonteCarloRun) identity).mode() == MonteCarloMode.LONGEVITY_ADJUSTED
@@ -382,7 +383,9 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
 
     private void startPersisted(RetirementPlan frozenPlan,
             com.daviddunn.retirementplanner.app.analysis.parameters.AnalysisParameterConfiguration.MonteCarlo inputs,
-            MonteCarloSession.Work task) {
+            MonteCarloSession.Work task, MonteCarloSettings settings, MonteCarloMortalityRequest mortality) {
+        var arkansas = com.daviddunn.retirementplanner.domain.projection.ProjectionEngine.selectsArkansas(frozenPlan)
+                ? controller.requireArkansasProjectionForAnalysis() : null;
         syncPersistence();
         var binding = persistence.binding();
         var parameterRun = parameters.begin(inputs, new com.daviddunn.retirementplanner.app.montecarlo.MonteCarloFingerprintService().forAcceptance(currencyInputs().get()).fingerprint());
@@ -390,6 +393,19 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
         var completion = new java.util.concurrent.atomic.AtomicReference<com.daviddunn.retirementplanner.app.socialsecurity.results.AcceptedAnalysisCompletion>();
         persistence.beginReplacement();
         session.start((updates, token) -> {
+            if (arkansas != null) {
+                var admission = java.util.Objects.requireNonNull(parameterRun.association(), "Arkansas analysis admission was lost.");
+                var run = com.daviddunn.retirementplanner.app.socialsecurity.results.ArkansasAnalysisProvenance.runProduction(
+                        admission.kind(), java.util.List.of(arkansas), token, engine -> {
+                            var service = new MonteCarloRunService(engine);
+                            return mortality == null ? service.run(frozenPlan, settings, null, updates, token)
+                                    : service.runMortality(frozenPlan, mortality, updates, token);
+                        }, result -> MonteCarloSnapshotPresentationMapper.capture(result, frozenPlan, started, java.time.Instant.now()));
+                var completed = MonteCarloResultLifecycle.completion(binding,
+                        (com.daviddunn.retirementplanner.app.montecarlo.MonteCarloSnapshot) run.payload());
+                completion.set(completed.forRun(admission.ticket()).withArkansasExecution(run.evidence()));
+                return run.result();
+            }
             var result = task.run(updates, token);
             token.throwIfCancellationRequested();
             var payload = MonteCarloSnapshotPresentationMapper.capture(result, frozenPlan, started, java.time.Instant.now());
@@ -438,7 +454,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
                 if (!admit(snapshot)) return;
                 category = MonteCarloRunDiagnostics.Category.PREPARATION;
                 startPersisted(snapshot, MonteCarloParameterMapping.capture(settings, request, null),
-                        (updates, cancellation) -> mortalityWork.run(snapshot, request, updates, cancellation));
+                        (updates, cancellation) -> mortalityWork.run(snapshot, request, updates, cancellation), settings, request);
                 return;
             }
             if (!admit(snapshot)) return;
@@ -451,7 +467,7 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             final Projection frozenReference = reference;
             validation.setText("");
             startPersisted(snapshot, MonteCarloParameterMapping.capture(settings, null, null),
-                    (updates, cancellation) -> work.run(snapshot, settings, frozenReference, updates, cancellation));
+                    (updates, cancellation) -> work.run(snapshot, settings, frozenReference, updates, cancellation), settings, null);
         } catch (RuntimeException exception) {
             validation.setText(messageOrFallback(exception,
                     "The analysis could not start. Review the inputs and try again."));
@@ -478,6 +494,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
     }
 
     private static String messageOrFallback(Throwable failure, String fallback) {
+        var arkansas = com.daviddunn.retirementplanner.ui.ProjectionFailureMessages.arkansasFailure(failure);
+        if (arkansas.isPresent()) return com.daviddunn.retirementplanner.ui.ProjectionFailureMessages.arkansasUnavailableMessage(arkansas.orElseThrow());
         return failure.getMessage() == null || failure.getMessage().isBlank() ? fallback : failure.getMessage();
     }
 

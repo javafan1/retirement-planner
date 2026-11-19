@@ -54,7 +54,10 @@ public class MainApplication extends Application {
         if (firstPulse != null) firstPulse.stop();
         if (startup != null) startup.close();
         if (splash != null) { splash.hide(); splash.setScene(null); splash = null; }
-        if (controller != null) controller.getAnalysisParameters().shutdown();
+        if (controller != null) {
+            controller.cancelControlledProjection();
+            controller.getAnalysisParameters().shutdown();
+        }
         if (settings != null) settings.close();
         if (themes != null) themes.close();
         ANALYSIS_JOBS.close();

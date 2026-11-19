@@ -27,6 +27,11 @@ public final class LongevityWeightedContinuationEvaluator {
 
     public LongevityWeightedIntegratedStrategyResult evaluate(LongevityWeightedIntegratedStrategyRequest request,
             java.util.function.Consumer<LongevityContinuationWork> workObserver) {
+        return evaluate(request, workObserver, null);
+    }
+
+    LongevityWeightedIntegratedStrategyResult evaluate(LongevityWeightedIntegratedStrategyRequest request,
+            java.util.function.Consumer<LongevityContinuationWork> workObserver, LongevityFinancialObservation financialObservation) {
         Objects.requireNonNull(request, "Evaluation request is required.");
         Objects.requireNonNull(workObserver, "Work observer is required.");
         request.cancellationToken().throwIfCancellationRequested();
@@ -46,7 +51,7 @@ public final class LongevityWeightedContinuationEvaluator {
                 }
                 workObserver.accept(new LongevityContinuationWork(positive, 0, 0, 0, 0, counts[2], counts[2], counts[3],
                         counts[0], counts[1], 0, 0));
-            });
+            }, financialObservation);
         }
         IntegratedSocialSecurityStrategyEvaluator.requireAdvancedPlan(baseline);
         IntegratedSocialSecurityStrategyEvaluator.validateStrategy(baseline, request.strategy());
@@ -64,7 +69,7 @@ public final class LongevityWeightedContinuationEvaluator {
         if (total == 0 || scenarios.stream().anyMatch(s -> s.jointProbability().signum() < 0)) {
             throw new IllegalArgumentException("Mortality scenarios require positive total mass and nonnegative probabilities.");
         }
-        var session = new LongevityContinuationSession(baseline, request, total, workObserver, injectedEngine);
+        var session = new LongevityContinuationSession(baseline, request, total, workObserver, injectedEngine, financialObservation != null);
         Map<LocalDate, BigDecimal> discountFactors = new HashMap<>();
         List<LongevityWeightedIntegratedScenarioOutcome> outcomes = new ArrayList<>();
         BigDecimal probability = BigDecimal.ZERO;
@@ -84,10 +89,10 @@ public final class LongevityWeightedContinuationEvaluator {
             int primaryYear = lifetime.primaryDeathYear().orElseThrow().getValue();
             int spouseYear = lifetime.spouseDeathYear().orElseThrow().getValue();
             LocalDate death = LocalDate.of(Math.max(primaryYear, spouseYear), 1, 1);
-            EstateAtSecondDeathSnapshot snapshot;
+            LongevityContinuationSession.SnapshotSource valued;
             try {
                 estateCalculator.validateCoverageStart(baseline, death);
-                snapshot = session.snapshot(mortality);
+                valued = session.snapshotWithSource(mortality);
             } catch (AnalysisCancelledException cancelled) {
                 throw cancelled;
             } catch (RuntimeException failure) {
@@ -95,6 +100,7 @@ public final class LongevityWeightedContinuationEvaluator {
                         + ", spouse death year " + spouseYear + ", probability " + mortality.jointProbability()
                         + ". No completed expected value is available.", failure);
             }
+            var snapshot = valued.snapshot();
             var factor = discountFactors.computeIfAbsent(death, date -> pvCalculator.discountFactor(
                     request.valuationDate(), date, inflation, request.realDiscountRate()));
             var pv = snapshot.nominalAfterTaxEstate().multiply(factor);
@@ -104,7 +110,9 @@ public final class LongevityWeightedContinuationEvaluator {
             expectedPv = expectedPv.add(weight.multiply(pv));
             minimum = minimum == null ? snapshot.nominalAfterTaxEstate() : minimum.min(snapshot.nominalAfterTaxEstate());
             maximum = maximum == null ? snapshot.nominalAfterTaxEstate() : maximum.max(snapshot.nominalAfterTaxEstate());
-            outcomes.add(new LongevityWeightedIntegratedScenarioOutcome(primaryYear, spouseYear, weight, snapshot, pv));
+            var outcome = new LongevityWeightedIntegratedScenarioOutcome(primaryYear, spouseYear, weight, snapshot, pv);
+            if (financialObservation != null) financialObservation.scenario(outcome, valued.execution());
+            outcomes.add(outcome);
             session.scenarioCompleted();
             request.progressListener().onProgress(new AnalysisProgress(
                     AnalysisPhase.LONGEVITY_INTEGRATED_SCENARIOS, outcomes.size(), total));

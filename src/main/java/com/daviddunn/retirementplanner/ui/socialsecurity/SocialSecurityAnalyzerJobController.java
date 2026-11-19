@@ -10,6 +10,7 @@ import javafx.application.Platform;
 import java.util.EnumMap;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /** One dialog session. Public lifecycle methods and dispatched callbacks run on the UI thread. */
@@ -67,6 +68,11 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
 
     /** Terminal rollback hook; never invoked for admission rejection, closed views or obsolete revisions. */
     public <T> boolean start(Mode mode, Work<T> work, Consumer<T> success, Consumer<Throwable> failure, Runnable unsuccessful) {
+        return start(mode, work, success, failure, unsuccessful, () -> true);
+    }
+
+    public <T> boolean start(Mode mode, Work<T> work, Consumer<T> success, Consumer<Throwable> failure,
+            Runnable unsuccessful, BooleanSupplier requestIsCurrent) {
         Objects.requireNonNull(mode);
         Objects.requireNonNull(work);
         Objects.requireNonNull(success);
@@ -78,7 +84,7 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
         if (lease == null) {
             return false;
         }
-        Job<T> job = new Job<>(++generation, mode, revisions.get(mode), lease, success, failure, unsuccessful);
+        Job<T> job = new Job<>(++generation, mode, revisions.get(mode), lease, success, failure, unsuccessful, requestIsCurrent);
         current = job;
         state = State.RUNNING;
         progress = new SocialSecurityAnalysisProgressModel();
@@ -140,7 +146,7 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
 
     private boolean eligible(Job<?> job) {
         return owns(job) && !job.lease.isCancelled()
-                && revisions.get(job.mode) == job.revision;
+                && revisions.get(job.mode) == job.revision && job.requestIsCurrent.getAsBoolean();
     }
 
     private void report(Job<?> job, AnalysisProgress update) {
@@ -219,13 +225,14 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
         final Consumer<T> success;
         final Consumer<Throwable> onFailure;
         final Runnable unsuccessful;
+        final BooleanSupplier requestIsCurrent;
         T result;
         Throwable failure;
         AnalysisProgress pending;
         boolean progressQueued;
 
         Job(long generation, Mode mode, long revision, SocialSecurityAnalysisJobCoordinator.Lease lease,
-                Consumer<T> success, Consumer<Throwable> onFailure, Runnable unsuccessful) {
+                Consumer<T> success, Consumer<Throwable> onFailure, Runnable unsuccessful, BooleanSupplier requestIsCurrent) {
             this.generation = generation;
             this.mode = mode;
             this.revision = revision;
@@ -233,6 +240,7 @@ public final class SocialSecurityAnalyzerJobController implements AutoCloseable 
             this.success = success;
             this.onFailure = onFailure;
             this.unsuccessful = Objects.requireNonNull(unsuccessful);
+            this.requestIsCurrent = Objects.requireNonNull(requestIsCurrent);
         }
     }
 }

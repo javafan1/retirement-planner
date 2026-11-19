@@ -57,12 +57,22 @@ public record AnalysisSnapshot(int schemaVersion, int fingerprintVersion, UUID p
                 inputFingerprint, contextFingerprint);
         if (arkansasExecution != null) {
             arkansasExecution.validatePayload(kind, payload);
-        } else if (payload instanceof QuickComparisonSnapshot quick
-                && (quick.baseline().arkansas() != null
-                        || quick.entries().stream().anyMatch(e -> e.detail() != null && e.detail().arkansas() != null))) {
+            arkansasExecution.validateRequest(runId, inputFingerprint);
+        } else if (hasArkansasDetails(payload)) {
             throw new IllegalArgumentException("Arkansas integrated results require execution provenance.");
         }
         if (!payload.successful()) throw new IllegalArgumentException("A last-success snapshot requires a successful candidate.");
+    }
+    private static boolean hasArkansasDetails(AnalysisPayload payload) {
+        return switch (payload) {
+            case QuickComparisonSnapshot quick -> quick.baseline().arkansas() != null
+                    || quick.entries().stream().anyMatch(e -> e.detail() != null && e.detail().arkansas() != null);
+            case ExhaustiveSnapshot exhaustive -> exhaustive.baseline().arkansas() != null
+                    || exhaustive.entries().stream().anyMatch(e -> e.detail() != null && e.detail().arkansas() != null);
+            case IndividualDeterministicSnapshot individual -> individual.baseline().arkansas() != null
+                    || individual.entries().stream().anyMatch(e -> e.detail() != null && e.detail().arkansas() != null);
+            default -> false;
+        };
     }
     public AnalysisSnapshot clonedTo(UUID target) {
         return new AnalysisSnapshot(schemaVersion, fingerprintVersion, target, kind, shape, runId,

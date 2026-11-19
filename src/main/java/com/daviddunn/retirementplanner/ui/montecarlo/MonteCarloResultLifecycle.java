@@ -35,6 +35,8 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
     private AcceptedAnalysisCompletion unqueued;
     private AcceptedAnalysisCompletion displayedCompletion;
     private Function<AnalysisSnapshot, AnalysisResultFreshness.Association> association = saved -> AnalysisResultFreshness.Association.UNRECORDED;
+    private Predicate<AnalysisSnapshot> currentArkansasDependencies = saved -> false;
+    private Supplier<Consumer<AnalysisSnapshot>> dependencyVerification = () -> saved -> { };
 
     public MonteCarloResultLifecycle(AnalysisResultStore store, Consumer<Runnable> dispatch,
             Function<MonteCarloSnapshot, R> reconstruct, Consumer<R> attach, Runnable clear, Runnable changed) {
@@ -49,6 +51,12 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
     public Binding binding() { return binding; }
     public void associationResolver(Function<AnalysisSnapshot, AnalysisResultFreshness.Association> resolver) {
         association = Objects.requireNonNull(resolver);
+    }
+    public void currentArkansasDependencies(Predicate<AnalysisSnapshot> resolver) {
+        currentArkansasDependencies = Objects.requireNonNull(resolver);
+    }
+    public void dependencyVerification(Supplier<Consumer<AnalysisSnapshot>> capture) {
+        dependencyVerification = Objects.requireNonNull(capture);
     }
     public AnalysisResultFreshness freshness() {
         return new AnalysisResultFreshness(assessment, snapshot == null
@@ -73,6 +81,7 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
     public void load() {
         if (closed || binding == null || loading || replacing || snapshot != null) return;
         var captured = binding; long id = generation;
+        var verifyDependencies = dependencyVerification.get();
         var memory = store.inMemory(slot());
         if (captured.file() == null && memory.isEmpty()) { changed.run(); return; }
         loading = true; changed.run();
@@ -82,6 +91,7 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
         read.thenCompose(found -> store.background(() -> {
             if (found.isEmpty()) return new Loaded<R>(null, null);
             var saved = found.orElseThrow();
+            verifyDependencies.accept(saved);
             var compatibility = new AnalysisCompatibilityPolicy().assess(saved,
                     new AnalysisFingerprintService.Assessment(saved.inputFingerprint(), saved.contextFingerprint(), null),
                     AnalysisVersions.algorithms(captured.kind(), saved.payload()), AnalysisVersions.references(captured.kind()));
@@ -176,7 +186,8 @@ public final class MonteCarloResultLifecycle<R> implements AutoCloseable {
             changed.run(); return;
         }
         assessing = true;
-        store.background(() -> new MonteCarloFingerprintService().compatibility(saved, inputs.get()))
+        boolean admittedArkansas = currentArkansasDependencies.test(saved);
+        store.background(() -> new MonteCarloFingerprintService().compatibility(saved, inputs.get(), admittedArkansas))
                 .whenComplete((next, error) -> dispatch.accept(() -> {
                     assessing = false;
                     if (valid(id) && edit == assessmentGeneration && snapshot == saved) {

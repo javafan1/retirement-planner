@@ -571,6 +571,7 @@ public class IncomeSourcesView extends BorderPane {
     }
 
     public void selectPension(Pension pension) {
+        if (table.getItems().stream().noneMatch(source -> source == pension)) refreshTable();
         for (int index = 0; index < table.getItems().size(); index++) {
             if (table.getItems().get(index) == pension) {
                 ((ScrollPane) getCenter()).setVvalue(0);
