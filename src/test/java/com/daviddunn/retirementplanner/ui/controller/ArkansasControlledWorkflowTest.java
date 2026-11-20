@@ -14,6 +14,8 @@ import com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisVersio
 import com.daviddunn.retirementplanner.app.socialsecurity.results.ArkansasAnalysisProvenance;
 import com.daviddunn.retirementplanner.app.socialsecurity.results.SnapshotContext;
 import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancelledException;
+import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission;
+import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin;
 import com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionUnavailableException;
@@ -39,6 +41,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import static com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.*;
 import static com.daviddunn.retirementplanner.domain.model.AccountOwnership.PRIMARY;
 import static com.daviddunn.retirementplanner.domain.model.WithdrawalStrategyType.TAXABLE_FIRST;
 import static com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.*;
@@ -220,18 +223,35 @@ class ArkansasControlledWorkflowTest {
     }
 
     @Test void associatesObservedAnalysisOnlyWithTheExactControlledProjectionAndRetainsItOnCancellation() throws Exception {
+        verifyAssociationPreservation(false);
+    }
+
+    @Test void unsupportedConditionalIncomeRetainsTheAcceptedArkansasProjectionAndAnalyzerArchive() throws Exception {
+        verifyAssociationPreservation(true);
+    }
+
+    private void verifyAssociationPreservation(boolean production) throws Exception {
         var c = controller();
-        c.newPlan(surplusPlan("1000000", 1));
+        var plan = surplusPlan("1000000", 1);
+        c.newPlan(production ? selectArkansas(plan) : plan);
         c.saveAs(folder.resolve("associated.json"));
-        var projection = accept(c);
-        var engine = validationEngine();
+        var acceptedRun = production ? c.beginArkansasProjection(ignored -> { })
+                : c.beginControlledArkansasProjection(validationEngine(), ignored -> { });
+        awaitWork(acceptedRun);
+        assertEquals(ACCEPTED, c.finishControlledArkansasProjection(acceptedRun));
+        var projection = c.getAcceptedProjectionSnapshot();
+        assertTrue(projection.arkansasHistory());
+        assertEquals(projection.id(), c.getCurrentPlan().getProjectionState().current().id());
+        assertTrue(projection.matches(c.getCurrentPlan()));
+        var engine = production ? ProjectionEngine.forArkansasProduction() : validationEngine();
         var frozen = new RetirementPlanScenarioCopyService().copy(c.getCurrentPlan());
         var settings = new MonteCarloSettings(2, 42L, BigDecimal.ZERO, BigDecimal.ZERO);
         var kind = AnalysisKind.INDIVIDUAL_MONTE_CARLO_FIXED;
         var start = Instant.parse("2026-11-19T12:00:00Z");
         var finish = start.plusSeconds(1);
         long started = System.nanoTime();
-        var captured = ArkansasAnalysisProvenance.capture(engine, kind, List.of(projection), () -> {
+        java.util.function.Supplier<ArkansasAnalysisProvenance.Captured> capture =
+                () -> ArkansasAnalysisProvenance.capture(engine, kind, List.of(projection), () -> {
             var run = new MonteCarloAnalyzer(engine).analyze(frozen, settings, c.peekCurrentProjection(),
                     i -> ProjectionEconomicPath.constant(new BigDecimal(i == 0 ? ".04" : "-.02")));
             return MonteCarloSnapshotMapping.fixed(run, frozen,
@@ -240,18 +260,19 @@ class ArkansasControlledWorkflowTest {
                             new MonteCarloSnapshot.Chart(List.of(), List.of(), List.of(), List.of()), 2026, 2026, false, 0, "Two matched paths."),
                     start, finish, "a".repeat(64));
         });
+        var captured = production ? engine.runArkansasAnalysis(() -> false, capture) : capture.get();
         System.out.println("Arkansas controlled two-path analysis and provenance us=" + (System.nanoTime() - started) / 1000);
         var payload = (MonteCarloSnapshot) captured.payload();
         var fingerprints = new MonteCarloFingerprintService().storedFingerprint(payload);
-        assertNull(c.prepareAnalyzerAssociation(kind, fingerprints.fingerprint()));
+        if (!production) assertNull(c.prepareAnalyzerAssociation(kind, fingerprints.fingerprint()));
         var admission = c.prepareControlledArkansasAnalyzerAssociation(kind, fingerprints.fingerprint());
         assertNotNull(admission);
-        var completion = new AcceptedAnalysisCompletion(c.getAnalysisSessionId(), c.getCurrentFile(), kind,
+        var unverified = new AcceptedAnalysisCompletion(c.getAnalysisSessionId(), c.getCurrentFile(), kind,
                 admission.ticket(), finish, fingerprints.fingerprint(), fingerprints.contextFingerprint(),
                 AnalysisVersions.calculatedAlgorithms(kind, payload), AnalysisVersions.references(kind), payload,
-                new SnapshotContext("Single", "Primary", null, start, List.of(), List.of(), List.of(), Map.of()))
-                .withArkansasExecution(captured);
-        assertFalse(c.associateAnalyzer(admission, completion));
+                new SnapshotContext("Single", "Primary", null, start, List.of(), List.of(), List.of(), Map.of()));
+        var completion = unverified.withArkansasExecution(captured);
+        assertFalse(c.associateAnalyzer(admission, production ? unverified : completion));
         assertFalse(c.associateControlledArkansasAnalyzer(admission, completion.forRun(UUID.randomUUID())));
         assertTrue(c.associateControlledArkansasAnalyzer(admission, completion));
         var association = c.getAnalyzerAssociations(projection.id()).getFirst();
@@ -259,9 +280,11 @@ class ArkansasControlledWorkflowTest {
         assertEquals(projection.inputDigest(), association.projectionInputDigest());
 
         var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
-        assertThrows(AnalysisCancelledException.class, () -> new MonteCarloAnalyzer(engine).analyze(frozen, settings,
+        java.util.function.Supplier<?> cancelAnalysis = () -> new MonteCarloAnalyzer(engine).analyze(frozen, settings,
                 c.peekCurrentProjection(), i -> ProjectionEconomicPath.constant(BigDecimal.ZERO),
-                progress -> { if (progress.completedWork() == 1) cancelled.set(true); }, cancelled::get));
+                progress -> { if (progress.completedWork() == 1) cancelled.set(true); }, cancelled::get);
+        assertThrows(AnalysisCancelledException.class,
+                () -> { if (production) engine.runArkansasAnalysis(cancelled::get, cancelAnalysis); else cancelAnalysis.get(); });
         assertEquals(List.of(association), c.getAnalyzerAssociations(projection.id()));
         c.save();
         var saved = c.getAnalyzerAssociations(projection.id()).getFirst();
@@ -269,6 +292,24 @@ class ArkansasControlledWorkflowTest {
         assertEquals(completion.runId(), restored.runId());
         assertEquals(payload, restored.payload());
         restored.arkansasExecution().validateDependency(projection);
+
+        if (!production) return;
+        var definition = new ConditionalBenefitDefinition(
+                UUID.randomUUID(), "Synthetic unsupported income", Category.CONDITIONAL_INCOME,
+                new Trigger(TriggerType.FIXED_DATE, LocalDate.of(2026, 1, 1), null, null),
+                PersonReference.PRIMARY, PaymentPattern.MONTHLY_RECURRING, BigDecimal.ONE,
+                null, null, null, null, BigDecimal.ZERO, EscalationOrigin.FIRST_ELIGIBLE_PAYMENT_YEAR,
+                TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION, ReceiptDestination.HOUSEHOLD_RETAINED_NON_QUALIFIED_CASH);
+        c.getCurrentPlan().setConditionalBenefits(List.of(definition));
+        c.markModified();
+        var failed = c.beginArkansasProjection(ignored -> fail("Rejected inputs cannot produce an annual row."));
+        awaitFailure(failed);
+        var failure = assertThrows(java.util.concurrent.CompletionException.class,
+                () -> c.finishControlledArkansasProjection(failed));
+        assertInstanceOf(ConditionalBenefitAdmission.UnsupportedExecutionException.class, failure.getCause());
+        assertEquals(projection, c.getAcceptedProjectionSnapshot());
+        assertEquals(List.of(saved), c.getAnalyzerAssociations(projection.id()));
+        assertEquals(restored, c.loadAssociatedAnalyzer(saved).toCompletableFuture().get(15, TimeUnit.SECONDS));
     }
 
     private static CompleteProjectionSnapshot accept(ApplicationController c) throws Exception {

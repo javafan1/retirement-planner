@@ -72,7 +72,9 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
                 || weightedPensions.size() > 10_000
                 || ((executionEvidence == null || executionEvidence.paired() == null)
                         && dependencies.stream().map(Dependency::projectionId).distinct().count() != dependencies.size())
-                || !policies.equals(applicable(RetainedProjectionSnapshot.Arkansas.V1, targeted))
+                || !(policies.equals(applicable(RetainedProjectionSnapshot.Arkansas.V1, targeted))
+                        || policies.equals(applicable(RetainedProjectionSnapshot.Arkansas.CAPPED_FUNDING, targeted))
+                        || policies.equals(applicable(RetainedProjectionSnapshot.Arkansas.REACHABLE_TARGET, targeted)))
                 || (version == 1 && executionEvidence != null)
                 || (version == 1 && dependencies.stream().anyMatch(d -> d.completedRuns() == 0 && d.insufficientFundsRuns() == 0))
                 || (version == 2 && (executionEvidence == null || !weightedPensions.isEmpty()))
@@ -502,6 +504,9 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
     }
 
     public void validateDependency(CompleteProjectionSnapshot projection) {
+        if (projection.arkansasHistory() && !policiesMatch(projection.annual().arkansas().versions())) {
+            throw new IllegalArgumentException("Arkansas analysis policy differs from its original retained projection.");
+        }
         if (version == 2 && executionEvidence.paired() != null) {
             var pair = executionEvidence.paired();
             boolean matched = false;

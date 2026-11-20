@@ -1,6 +1,8 @@
 package com.daviddunn.retirementplanner.domain.tax;
 
+import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken;
 import com.daviddunn.retirementplanner.domain.financial.Account;
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.AccountReference;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.model.AccountType;
 import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
@@ -41,14 +43,16 @@ final class ArkansasTargetBounds {
     private enum Eligibility { CERTAIN, POSSIBLE, NONE }
 
     private record Source(BigDecimal balance, ConversionSlice conversion, AccountOwnership owner,
-                          Eligibility eligibility) { }
+                          Eligibility eligibility, boolean fundingPrefix) { }
 
     private final ArkansasAnnualFunding.Facts facts;
     private final List<Source> deferredSources;
     private final BigDecimal nonDeferredPrefix;
     private final BigDecimal deferredTotal;
     private final BigDecimal portfolioTotal;
-    private final Optional<TargetTaxFloor> stateFloor;
+    private final boolean ordinaryStateSources;
+    private final BigDecimal beforeInheritedFunding;
+    private Optional<TargetTaxFloor> stateFloor = Optional.empty();
     private final Optional<NetInvestmentIncomeTaxCalculation> investment;
     private final SocialSecurityTaxCalculator socialSecurity = new SocialSecurityTaxCalculator();
     private final FederalTaxableIncomeCalculator taxableIncome = new FederalTaxableIncomeCalculator();
@@ -77,6 +81,7 @@ final class ArkansasTargetBounds {
         }
         var prefix = base.getRetainedNonQualifiedAssets();
         var deferred = ZERO;
+        BigDecimal inheritedBoundary = null;
         var sources = new ArrayList<Source>();
         for (var projected : order.orderAccounts(base)) {
             if (projected.getBalance().signum() == 0) continue;
@@ -87,29 +92,51 @@ final class ArkansasTargetBounds {
                 if (slice.amount().compareTo(projected.getBalance()) > 0) {
                     throw new ArkansasAnnualFunding.Unavailable("Conversion prefix exceeds its frozen source balance.");
                 }
-                sources.add(new Source(projected.getBalance(), slice, account.getOwnership(), qualification(account)));
+                boolean inherited = AccountReference.capture(account).inheritedInformation().isPresent();
+                if (type == AccountType.INHERITED_TRADITIONAL_IRA && inherited && slice.amount().signum() == 0) {
+                    if (inheritedBoundary == null) inheritedBoundary = deferred;
+                } else {
+                    boolean ordinaryFunding = !inherited && (ownIra(type)
+                            || type == AccountType.TRADITIONAL_401K || type == AccountType.TRADITIONAL_403B);
+                    ordinaryState &= ordinaryFunding;
+                    if (ordinaryFunding && (inheritedBoundary == null || slice.amount().signum() > 0)) {
+                        sources.add(new Source(projected.getBalance(), slice, account.getOwnership(),
+                                qualification(account), inheritedBoundary == null));
+                    }
+                }
                 deferred = deferred.add(projected.getBalance());
-                ordinaryState &= (ownIra(type) || type == AccountType.TRADITIONAL_401K || type == AccountType.TRADITIONAL_403B)
-                        && com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.AccountReference.capture(account)
-                                .inheritedInformation().isEmpty();
-            } else if (sources.isEmpty() && type.getTaxTreatment() != TaxTreatment.ROTH) {
+            } else if (deferred.signum() == 0 && type.getTaxTreatment() != TaxTreatment.ROTH) {
                 prefix = prefix.add(projected.getBalance());
             }
         }
         deferredSources = List.copyOf(sources);
         deferredTotal = deferred;
         nonDeferredPrefix = prefix;
+        ordinaryStateSources = ordinaryState;
+        beforeInheritedFunding = inheritedBoundary;
         var seed = facts.seed();
         federalProbes++;
         investment = new FederalTaxCalculator().calculate(seed.income(), seed.filingStatus(), seed.projectedRules()).niit();
-        if (ordinaryState) {
-            var unconverted = new ProjectedRothConversionResult(base, List.of());
-            federalProbes++;
-            stateFloor = new ArkansasProductionTaxCalculator().prepareTargetTaxFloor(seed,
-                    new ArkansasAnnualFunding.Evaluator(facts, unconverted, order).evidence(List.of()));
-        } else {
-            stateFloor = Optional.empty();
+        if (ordinaryStateSources && beforeInheritedFunding == null) {
+            prepareStateFloor(base, order);
         }
+    }
+
+    void prepareReachableStateFloor(ProjectedPortfolio base, WithdrawalStrategy order, BigDecimal upper,
+            AnalysisCancellationToken cancellation) {
+        // Prefix conversion dollars and the remaining pretax prefix debited for funding sum
+        // to the original balance. Equality does not certify the inherited source unreachable.
+        if (ordinaryStateSources && beforeInheritedFunding != null && beforeInheritedFunding.compareTo(upper) > 0) {
+            cancellation.throwIfCancellationRequested();
+            prepareStateFloor(base, order);
+        }
+    }
+
+    private void prepareStateFloor(ProjectedPortfolio base, WithdrawalStrategy order) {
+        var unconverted = new ProjectedRothConversionResult(base, List.of());
+        federalProbes++;
+        stateFloor = new ArkansasProductionTaxCalculator().prepareTargetTaxFloor(facts.seed(),
+                new ArkansasAnnualFunding.Evaluator(facts, unconverted, order).evidence(List.of()));
     }
 
     /** Upper envelope, rounded outward. Taxable income is monotone in aggregate pretax inclusion. */
@@ -185,18 +212,23 @@ final class ArkansasTargetBounds {
         for (var source : deferredSources) {
             var convertedLow = source.conversion().debit(conversion.low());
             var convertedHigh = source.conversion().debit(conversion.high());
-            var remainingLow = source.balance().subtract(convertedHigh);
-            var remainingHigh = source.balance().subtract(convertedLow);
-            var fundLow = fundingLow.subtract(priorRemainingHigh).max(ZERO).min(remainingLow);
-            var fundHigh = fundingHigh.subtract(priorRemainingLow).max(ZERO).min(remainingHigh);
+            var fundLow = ZERO;
+            var fundHigh = ZERO;
+            // A later own IRA may convert in a different order, but funding cannot cross the certified boundary.
+            if (source.fundingPrefix()) {
+                var remainingLow = source.balance().subtract(convertedHigh);
+                var remainingHigh = source.balance().subtract(convertedLow);
+                fundLow = fundingLow.subtract(priorRemainingHigh).max(ZERO).min(remainingLow);
+                fundHigh = fundingHigh.subtract(priorRemainingLow).max(ZERO).min(remainingHigh);
+                priorRemainingLow = priorRemainingLow.add(remainingLow);
+                priorRemainingHigh = priorRemainingHigh.add(remainingHigh);
+            }
             if (source.eligibility() == Eligibility.CERTAIN) {
                 eligibleLow.merge(source.owner(), convertedLow.add(fundLow), BigDecimal::add);
             }
             if (source.eligibility() != Eligibility.NONE) {
                 eligibleHigh.merge(source.owner(), convertedHigh.add(fundHigh).min(source.balance()), BigDecimal::add);
             }
-            priorRemainingLow = priorRemainingLow.add(remainingLow);
-            priorRemainingHigh = priorRemainingHigh.add(remainingHigh);
         }
         stateProbes++;
         return federal.add(stateFloor.orElseThrow().lowerBound(low, high, eligibleLow, eligibleHigh));

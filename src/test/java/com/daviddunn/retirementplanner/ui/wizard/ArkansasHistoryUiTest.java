@@ -85,7 +85,7 @@ class ArkansasHistoryUiTest {
                     assertTrue(labels.contains("Arkansas Retirement Exclusion"));
                     assertTrue(labels.contains("Taxable Funding Income"));
                     assertTrue(labels.contains("AR-2026-P2-1"));
-                    assertTrue(labels.contains("AR-FUNDING-P2-1"));
+                    assertTrue(labels.contains(com.daviddunn.retirementplanner.domain.tax.ArkansasMinimumFundingSolver.POLICY_VERSION));
                     assertFalse(labels.contains("Arkansas Roth Target Policy"));
                     assertEquals(1, labels.stream().filter("Retained from Tax-Funding Surplus"::equalsIgnoreCase).count());
                     var reversed = new ProjectionYearDetailsPane(ordinary, historical, ZERO, ZERO);

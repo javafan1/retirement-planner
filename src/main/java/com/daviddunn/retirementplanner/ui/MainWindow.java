@@ -151,7 +151,10 @@ public class MainWindow {
         workspace = createWorkspace();
 
         wireEvents();
-        controller.addSourcePlanRevisionListener(this::dismissArkansasProgress);
+        controller.addSourcePlanRevisionListener(() -> {
+            dismissArkansasProgress();
+            dismissProjectionFailureWarning();
+        });
 
         root.setTop(createApplicationMenuRow());
         root.setCenter(workspace);
@@ -1027,6 +1030,7 @@ public class MainWindow {
         if (drainingAnalysisResults) return;
         controller.cancelControlledProjection();
         dismissArkansasProgress();
+        dismissProjectionFailureWarning();
         var store = controller.getAnalysisResults();
         var parameters = controller.getAnalysisParameters();
         if (!store.needsDrain() && !parameters.needsDrain()) { parameters.shutdown(); closeWindow.run(); return; }
@@ -1103,6 +1107,7 @@ public class MainWindow {
     private Runnable releaseSwapFeedback;
     private PlanOperationFeedback swapFeedback;
     private PlanOperationFeedback arkansasProgress;
+    private ProjectionFailureWarning projectionFailureWarning;
 
     private void dismissArkansasProgress() {
         if (arkansasProgress == null) return;
@@ -1110,8 +1115,15 @@ public class MainWindow {
         arkansasProgress = null;
     }
 
+    private void dismissProjectionFailureWarning() {
+        if (projectionFailureWarning == null) return;
+        projectionFailureWarning.close();
+        projectionFailureWarning = null;
+    }
+
     private void runArkansasProjection() {
         dismissArkansasProgress();
+        dismissProjectionFailureWarning();
         var feedback = new PlanOperationFeedback(stage, "Preparing Arkansas projection…");
         arkansasProgress = feedback;
         int totalYears = controller.getCurrentPlan().getPlanningAssumptions().getProjectionLengthYears();
@@ -1133,33 +1145,56 @@ public class MainWindow {
             run.completion().whenComplete((ignored, failure) -> javafx.application.Platform.runLater(() -> {
                 if (arkansasProgress != feedback) return;
                 dismissArkansasProgress();
+                ApplicationController.ControlledProjectionStatus outcome;
                 try {
-                    switch (controller.finishControlledArkansasProjection(run)) {
-                        case ACCEPTED -> refreshProjectionViews(false, true);
-                        case INSUFFICIENT_FUNDS -> {
-                            projectionFundingNotice.setText(ProjectionFailureMessages.insufficientFundingMessage(
-                                    controller.getCurrentFundingFailure().orElseThrow()));
-                            statusLabel.setText("Projection not completed: insufficient eligible funds.");
-                        }
-                        case OBSOLETE -> { }
-                    }
+                    outcome = controller.finishControlledArkansasProjection(run);
                 } catch (Exception error) {
-                    presentArkansasProjectionFailure(error);
+                    presentArkansasProjectionFailure(error, run);
+                    return;
+                }
+                switch (outcome) {
+                    case ACCEPTED -> refreshProjectionViews(false, true);
+                    case INSUFFICIENT_FUNDS -> {
+                        projectionFundingNotice.setText(ProjectionFailureMessages.insufficientFundingMessage(
+                                controller.getCurrentFundingFailure().orElseThrow()));
+                        statusLabel.setText("Projection not completed: insufficient eligible funds.");
+                    }
+                    case OBSOLETE -> { }
                 }
             }));
         } catch (Exception error) {
             dismissArkansasProgress();
-            presentArkansasProjectionFailure(error);
+            presentArkansasProjectionFailure(error, null);
         }
     }
 
-    private void presentArkansasProjectionFailure(Exception error) {
+    private void presentArkansasProjectionFailure(Exception error, ApplicationController.ControlledProjectionRun run) {
+        if (ProjectionFailureMessages.isCancelled(error)) return;
+        System.getLogger(MainWindow.class.getName()).log(System.Logger.Level.WARNING, "Arkansas projection failed", error);
         if (ProjectionFailureMessages.arkansasFailure(error).isPresent()) {
             handleProjectionFailure(error);
-        } else {
-            statusLabel.setText(error.getMessage() == null ? "Arkansas projection could not be completed." : error.getMessage());
-            System.getLogger(MainWindow.class.getName()).log(System.Logger.Level.WARNING, "Arkansas projection failed", error);
+            return;
         }
+
+        boolean conditionalIncome = ProjectionFailureMessages.isArkansasConditionalIncomeRefusal(error);
+        statusLabel.setText(conditionalIncome ? "Projection unavailable: Arkansas conditional income."
+                : "Arkansas projection could not be completed.");
+        if (controller.getAcceptedProjectionSnapshot() != null) {
+            projectionFundingNotice.setText("Previous results retained. The projection for your current inputs was not completed.");
+        }
+        var owner = stage;
+        if (owner == null || !owner.isShowing() || drainingAnalysisResults) return;
+        var plan = controller.getCurrentPlan();
+        long revision = controller.getSourcePlanRevision();
+        dismissProjectionFailureWarning();
+        projectionFailureWarning = new ProjectionFailureWarning(owner, conditionalIncome
+                ? ProjectionFailureMessages.ARKANSAS_CONDITIONAL_INCOME
+                : ProjectionFailureMessages.ARKANSAS_UNEXPECTED_FAILURE,
+                () -> stage == owner && !drainingAnalysisResults && !planOperationActive && !swappingProjections
+                        && controller.getCurrentPlan() == plan && controller.getSourcePlanRevision() == revision
+                        && (run == null || controller.canPresentControlledArkansasFailure(run)),
+                () -> firstFocusable(workspaceViews.get(selectedWorkspaceId)));
+        projectionFailureWarning.show();
     }
 
     /** Preserve synchronous departure decisions while the nested FX event loop keeps repainting.
@@ -1168,6 +1203,7 @@ public class MainWindow {
         if (!javafx.application.Platform.isFxApplicationThread()) throw new IllegalStateException("FX owner required.");
         if (planOperationActive) throw new IllegalStateException("Another plan operation is in progress.");
         if (!controller.isArkansasProjectionRunning()) dismissArkansasProgress();
+        dismissProjectionFailureWarning();
         planOperationActive = true;
         var feedback = new PlanOperationFeedback(stage, message);
 
@@ -1230,6 +1266,7 @@ public class MainWindow {
     }
 
     private void prepareProjectionSwap(RetirementPlan owner) {
+        dismissProjectionFailureWarning();
         runSwapBackground(controller.prepareProjectionSwap(), owner, true, prepared -> {
             boolean changed = controller.commitProjectionSwap(prepared);
             if (changed) loadCurrentPlan(false); // Accepted caches only; no invalidate/reproject path.
@@ -1377,6 +1414,7 @@ public class MainWindow {
         stage.setOnHidden(event -> {
             controller.cancelControlledProjection();
             dismissArkansasProgress();
+            dismissProjectionFailureWarning();
             closeYearlyDetailsWindow();
         });
         stage.setOnCloseRequest(event -> {
@@ -1600,6 +1638,10 @@ public class MainWindow {
                             refreshProjectionViews();
                         });
                     });
+            return;
+        }
+        if (ProjectionFailureMessages.isArkansasConditionalIncomeRefusal(exception)) {
+            presentArkansasProjectionFailure(exception, null);
             return;
         }
         resultsView.load(null, List.of());

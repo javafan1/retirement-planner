@@ -147,11 +147,20 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
                 "arkansas-income-tax-rules", "AR-2026-P2-1",
                 "arkansas-tax-funding", "AR-FUNDING-P2-1",
                 "arkansas-roth-target", "AR-TARGET-P3A-1");
+        static final Map<String, String> CAPPED_FUNDING = Map.of(
+                "arkansas-income-tax-rules", "AR-2026-P2-1",
+                "arkansas-tax-funding", "AR-FUNDING-P3D2E-1",
+                "arkansas-roth-target", "AR-TARGET-P3A-1");
+        static final Map<String, String> REACHABLE_TARGET = Map.of(
+                "arkansas-income-tax-rules", "AR-2026-P2-1",
+                "arkansas-tax-funding", "AR-FUNDING-P3D2E-1",
+                "arkansas-roth-target", "AR-TARGET-P3D2G-1");
 
         public Arkansas {
             versions = Map.copyOf(versions);
             years = List.copyOf(years);
-            if (version != 1 || jurisdiction != StateTaxJurisdiction.AR || !"v1".equals(projectionAlgorithm) || !versions.equals(V1)) {
+            if (version != 1 || jurisdiction != StateTaxJurisdiction.AR || !"v1".equals(projectionAlgorithm)
+                    || !(versions.equals(V1) || versions.equals(CAPPED_FUNDING) || versions.equals(REACHABLE_TARGET))) {
                 throw new IllegalArgumentException("Unsupported Arkansas retained jurisdiction, schema or policy.");
             }
         }

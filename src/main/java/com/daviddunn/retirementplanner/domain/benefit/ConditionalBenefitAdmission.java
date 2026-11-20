@@ -1,15 +1,27 @@
 package com.daviddunn.retirementplanner.domain.benefit;
 
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Separate verified deterministic execution from analyzer capabilities not yet implemented. */
 public final class ConditionalBenefitAdmission {
     public static final String MESSAGE = "Conditional benefits are not supported yet by this analysis workflow. Definitions are preserved; use a supported deterministic projection. No simulation was run with benefits ignored.";
     private ConditionalBenefitAdmission() { }
     public static final class UnsupportedExecutionException extends UnsupportedOperationException {
-        public UnsupportedExecutionException() { super(MESSAGE); }
-        private UnsupportedExecutionException(String message) { super(message); }
+        private final StateTaxJurisdiction unsupportedState;
+
+        public UnsupportedExecutionException() { this(MESSAGE, null); }
+        private UnsupportedExecutionException(String message) { this(message, null); }
+        private UnsupportedExecutionException(String message, StateTaxJurisdiction unsupportedState) {
+            super(message);
+            this.unsupportedState = unsupportedState;
+        }
+
+        public Optional<StateTaxJurisdiction> unsupportedState() {
+            return Optional.ofNullable(unsupportedState);
+        }
     }
     public static void requireSupported(RetirementPlan plan) {
         if (com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.requiresCapability(Objects.requireNonNull(plan))) throw new UnsupportedExecutionException();
@@ -48,6 +60,6 @@ public final class ConditionalBenefitAdmission {
                 && state != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AL
                 && !state.usesNoGeneralIndividualIncomeTaxModel())
             throw new UnsupportedExecutionException("Conditional non-pension income has no validated " + state.displayName()
-                    + " tax classification in this release. The plan and historical results are preserved; no incomplete projection was accepted.");
+                    + " tax classification in this release. The plan and historical results are preserved; no incomplete projection was accepted.", state);
     }
 }

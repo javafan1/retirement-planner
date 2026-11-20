@@ -23,7 +23,7 @@ import static java.math.BigDecimal.ZERO;
 
 /** Arkansas-only targeted proof. The production bracket-fill calculator remains separate. */
 public final class ArkansasRothFunding {
-    public static final String TARGET_POLICY_VERSION = "AR-TARGET-P3A-1";
+    public static final String TARGET_POLICY_VERSION = "AR-TARGET-P3D2G-1";
     private static final BigDecimal MAX_CAPACITY = new BigDecimal("1000000000000");
     private static final int MAX_OUTER_INTERVALS = 512;
     private static final int MAX_INNER_EVALUATIONS = 4096;
@@ -148,6 +148,7 @@ public final class ArkansasRothFunding {
                             "Federal taxable income already exceeds the target without conversion or tax funding.");
                 }
                 upper = bounds.federalUpper(target);
+                bounds.prepareReachableStateFloor(base, order, upper, cancellation);
                 var gridTop = floorCents(capacity.min(upper));
 
                 // One authoritative probe at the highest feasible no-funding point often closes cash-funded runs.

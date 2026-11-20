@@ -117,7 +117,8 @@ public class ArkansasProjectionIntegrationTest {
         differentTarget.put("arkansas-roth-target", "future-target");
         assertTrue(captured.arkansas().dependencies().containsKey("arkansas-roth-target"));
         assertFalse(restored.arkansasValidationTax().orElseThrow().currentFor(differentTarget));
-        assertEquals("AR-TARGET-P3A-1", restored.arkansasValidationTax().orElseThrow().versions().get("arkansas-roth-target"));
+        assertEquals(com.daviddunn.retirementplanner.domain.tax.ArkansasRothFunding.TARGET_POLICY_VERSION,
+                restored.arkansasValidationTax().orElseThrow().versions().get("arkansas-roth-target"));
         cashBalances(year);
     }
 

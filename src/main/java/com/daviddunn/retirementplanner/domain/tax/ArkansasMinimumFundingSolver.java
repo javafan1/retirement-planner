@@ -21,7 +21,7 @@ import static java.math.BigDecimal.ZERO;
 
 /** Ascending interval proof on the cent grid, followed by the exact fractional terminal capacity. */
 public final class ArkansasMinimumFundingSolver {
-    public static final String POLICY_VERSION = "AR-FUNDING-P2-1";
+    public static final String POLICY_VERSION = "AR-FUNDING-P3D2E-1";
     private static final int MAX_SOURCES = 64;
     private static final int DEFAULT_EVALUATIONS = 512;
     private static final BigDecimal MAX_CAPACITY = new BigDecimal("1000000000000");

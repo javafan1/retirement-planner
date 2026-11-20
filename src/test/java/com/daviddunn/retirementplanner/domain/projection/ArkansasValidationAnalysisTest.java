@@ -286,8 +286,8 @@ class ArkansasValidationAnalysisTest {
         var invalid = List.of(
                 raw.replace("\"jurisdiction\":\"AR\"", "\"jurisdiction\":\"MI\""),
                 raw.replace("AR-2026-P2-1", "AR-UNREVIEWED"),
-                raw.replace("\"arkansas-tax-funding\":\"AR-FUNDING-P2-1\"", "\"unknown-funding\":\"AR-FUNDING-P2-1\""),
-                raw.replace("AR-TARGET-P3A-1", "AR-TARGET-UNKNOWN"),
+                raw.replace("\"arkansas-tax-funding\"", "\"unknown-funding\""),
+                raw.replace(com.daviddunn.retirementplanner.domain.tax.ArkansasRothFunding.TARGET_POLICY_VERSION, "AR-TARGET-UNKNOWN"),
                 raw.replace("\"schemaVersion\":3", "\"schemaVersion\":99"),
                 raw.replace("\"schemaVersion\":3", "\"schemaVersion\":3,\"schemaVersion\":3"),
                 raw.replace("\"retainedFromTaxFundingSurplus\":1.3400", "\"retainedFromTaxFundingSurplus\":1.3500"),

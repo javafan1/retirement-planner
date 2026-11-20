@@ -1162,6 +1162,12 @@ public class ApplicationController {
                 && binding.inputs().equals(CompleteProjectionSnapshot.freeze(currentPlan));
     }
 
+    /** A completed failure may wait for another modal to close before showing on its owner thread. */
+    public synchronized boolean canPresentControlledArkansasFailure(ControlledProjectionRun run) {
+        return Thread.currentThread() == run.binding.ownerThread() && !run.cancelled.get()
+                && !planFileBusy && !swapPreparing && matchesControlledBinding(run.binding);
+    }
+
     public synchronized void cancelControlledProjection() {
         if (controlledRun != null) controlledRun.cancel();
         controlledRun = null;

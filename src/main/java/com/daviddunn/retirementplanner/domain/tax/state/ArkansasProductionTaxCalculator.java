@@ -93,7 +93,11 @@ public final class ArkansasProductionTaxCalculator {
                 var age = ageCredit(atStart, evidence, filer);
                 var certain = income.certain().getOrDefault(filer, ZERO);
                 var possible = income.possible().getOrDefault(filer, ZERO);
-                if (age == AgeCredit.UNCERTAIN || certain.compareTo(possible) != 0) return Optional.empty();
+                // A filled pool cannot gain more exclusion anywhere in this funding segment.
+                var limit = ArkansasTaxRules.RETIREMENT_LIMIT;
+                if (age == AgeCredit.UNCERTAIN || certain.min(limit).compareTo(possible.min(limit)) != 0) {
+                    return Optional.empty();
+                }
                 recipients.add(new RecipientBounds(filer, certain, certain, age == AgeCredit.ELIGIBLE));
             }
             var bounds = worksheet.boundStatutoryChoices(income.ordinary(), recipients, maximumOrdinaryIncrease);
