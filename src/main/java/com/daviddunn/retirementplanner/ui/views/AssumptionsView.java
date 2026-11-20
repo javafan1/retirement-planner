@@ -16,6 +16,7 @@ import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitStartDateCalculator;
+import com.daviddunn.retirementplanner.domain.income.SurvivorBenefitClaimingPolicy;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.ui.help.HelpText;
 import com.daviddunn.retirementplanner.ui.rmd.OpeningRmdWorkflowService;
@@ -1483,9 +1484,16 @@ public class AssumptionsView extends VBox {
             if (value == null) {
                 throw new IllegalArgumentException("An age is required.");
             }
-            if (!com.daviddunn.retirementplanner.domain.income.SurvivorBenefitClaimingPolicy
-                    .choices(currentPlan.getHousehold(), scenario, year).ages().contains(value)) {
+            var choices = SurvivorBenefitClaimingPolicy.choices(currentPlan.getHousehold(), scenario, year);
+            if (!choices.ages().contains(value)) {
                 throw new IllegalArgumentException("Choose a valid age for the selected death scenario and year.");
+            }
+            // Immediate-at-death display uses the survivor's attained age. Keep the stored
+            // election for the same scenario so ordinary Save preserves the projection inputs.
+            Integer storedAge = appliedDeath.getSurvivorClaimingAge();
+            if (choices.immediateAtDeath() && storedAge != null && scenario == appliedDeath.getDeathScenario()
+                    && Objects.equals(year, appliedDeath.getDeathYear())) {
+                return storedAge;
             }
             return value;
         });

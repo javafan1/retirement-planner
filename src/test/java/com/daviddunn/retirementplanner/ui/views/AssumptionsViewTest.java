@@ -4,6 +4,8 @@ import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.model.StateTaxAssumptions;
+import com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
@@ -796,6 +798,42 @@ class AssumptionsViewTest {
             assertTrue(view.save(controller.getCurrentPlan()));
             assertEquals(68, controller.getCurrentPlan().getPlanningAssumptions()
                     .getDeathScenarioAssumptions().getSurvivorClaimingAge());
+        });
+    }
+
+    @ParameterizedTest
+    @CsvSource({"PRIMARY_DIES, AR", "SPOUSE_DIES, MI"})
+    void immediateSurvivorDisplayPreservesTheStoredElectionOnSaveAndUnrelatedApply(
+            DeathScenario scenario, StateTaxJurisdiction jurisdiction) throws Exception {
+        fx(() -> {
+            Fixture f = new Fixture();
+            PlanningAssumptions original = f.assumptions();
+            f.plan().setPlanningAssumptions(new PlanningAssumptions(
+                    original.getEconomicAssumptions(), original.getTaxAssumptions(),
+                    original.getWithdrawalAssumptions(),
+                    new DeathScenarioAssumptions(scenario, 2050, 65, BigDecimal.ONE),
+                    original.getProjectionLengthYears(), original.getProjectionStartDate(),
+                    StateTaxAssumptions.simplified(jurisdiction)));
+            f.view.load(f.plan());
+
+            ComboBox<Integer> displayedAge = control(f.view, "survivorClaimingAgeComboBox");
+            assertTrue(displayedAge.isDisabled());
+            assertTrue(displayedAge.getValue() > 65);
+            clean(f.view);
+            assertTrue(f.view.save(f.plan()));
+            assertEquals(0, f.notifications.get());
+            assertEquals(65, f.assumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge());
+
+            field(f.view, "inflationRateField").setText("3.75");
+            assertTrue(f.view.applyChanges());
+            assertEquals(1, f.notifications.get());
+            assertEquals(65, f.assumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge());
+
+            field(f.view, "deathYearField").setText("2051");
+            int newScenarioAge = displayedAge.getValue();
+            assertTrue(f.view.applyChanges());
+            assertEquals(2051, f.assumptions().getDeathScenarioAssumptions().getDeathYear());
+            assertEquals(newScenarioAge, f.assumptions().getDeathScenarioAssumptions().getSurvivorClaimingAge());
         });
     }
 

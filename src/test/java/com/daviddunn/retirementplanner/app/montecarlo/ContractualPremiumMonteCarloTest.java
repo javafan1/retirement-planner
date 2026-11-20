@@ -155,7 +155,9 @@ class ContractualPremiumMonteCarloTest {
         long elapsed=System.nanoTime()-start;
         long bytes=allocation==null?-1:allocation.getThreadAllocatedBytes(Thread.currentThread().threadId())-before;
         assertEquals(64,result.result().outcomes().size());
-        java.nio.file.Files.writeString(java.nio.file.Path.of("target/phase23c/bounded-performance.json"),
+        var report = java.nio.file.Path.of("target/phase23c/bounded-performance.json");
+        java.nio.file.Files.createDirectories(report.getParent());
+        java.nio.file.Files.writeString(report,
                 "{\"trials\":64,\"years\":10,\"elapsedNanos\":"+elapsed+",\"currentThreadAllocatedBytes\":"+bytes+"}");
         assertThrows(com.daviddunn.retirementplanner.domain.analysis.AnalysisCancelledException.class,()->new MonteCarloRunService().run(plan,settings,null,PROGRESS,()->true));
     }

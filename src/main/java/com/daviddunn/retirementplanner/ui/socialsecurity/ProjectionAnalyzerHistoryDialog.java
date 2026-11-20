@@ -113,9 +113,15 @@ public final class ProjectionAnalyzerHistoryDialog extends Dialog<Void> {
                 ? "Accepted in memory. Historical association is pending ordinary plan Save; no durable pin is claimed."
                 : "Verified committed immutable historical analyzer component.";
         source.loadAssociatedAnalyzer(ref).thenCompose(saved -> source.getAnalysisResults().background(() -> {
-            var assessment = new AnalysisCompatibilityPolicy().assess(saved,
-                    new AnalysisFingerprintService.Assessment(saved.inputFingerprint(), saved.contextFingerprint(), null),
-                    AnalysisVersions.algorithms(saved.kind(), saved.payload()), AnalysisVersions.references(saved.kind()));
+            var policy = new AnalysisCompatibilityPolicy();
+            var inputs = new AnalysisFingerprintService.Assessment(saved.inputFingerprint(), saved.contextFingerprint(), null);
+            var algorithms = AnalysisVersions.algorithms(saved.kind(), saved.payload());
+            var references = AnalysisVersions.references(saved.kind());
+            var arkansas = saved.arkansasExecution();
+            // The load already validated the original projection dependencies. Assess the
+            // read-only archive under its recorded Arkansas policies, without claiming live freshness.
+            var assessment = arkansas == null ? policy.assess(saved, inputs, algorithms, references)
+                    : policy.assessArkansas(saved, inputs, algorithms, references, arkansas.policies());
             if (assessment.state() != AnalysisCompatibilityPolicy.State.CURRENT)
                 throw new IllegalArgumentException("Saved analyzer algorithm/reference context is incompatible.");
             return prepare(saved, durability);
