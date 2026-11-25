@@ -78,9 +78,13 @@ final class ArkansasIncomeReconciliation {
     private BigDecimal explicitInterest = ZERO;
     private BigDecimal interestPlaceholder;
 
-    ArkansasIncomeReconciliation(AnnualIncomeTaxFacts request, ArkansasTaxEvidence evidence) {
+    private final ArkansasRecipientDiagnostic.Stage diagnosticStage;
+
+    ArkansasIncomeReconciliation(AnnualIncomeTaxFacts request, ArkansasTaxEvidence evidence,
+            ArkansasRecipientDiagnostic.Stage diagnosticStage) {
         this.request = request;
         this.evidence = evidence;
+        this.diagnosticStage = diagnosticStage;
         first = LocalDate.of(request.taxYear(), 1, 1);
         last = LocalDate.of(request.taxYear(), 12, 31);
     }
@@ -88,6 +92,7 @@ final class ArkansasIncomeReconciliation {
     Income reconcile() {
         var income = request.income();
         var sources = income.getIncomeSources();
+        validateLifePrincipal();
         require(sources.containsAll(evidence.receipts().keySet()), "Arkansas receipt evidence references an absent payment.");
         var seen = new HashSet<IncomeSourceAttribution>();
         for (var source : sources) {
@@ -244,6 +249,10 @@ final class ArkansasIncomeReconciliation {
         activeRecipient(source);
         var receipt = source.conditionalBenefit().orElseThrow();
         require(conditionalIds.add(receipt.benefitId()), "Duplicate Arkansas conditional benefit receipt.");
+        if (receipt.taxCharacter() == TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED) {
+            // The exact receipt set was authenticated before source reconciliation.
+            return;
+        }
         if (receipt.taxCharacter() != TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION && receipt.annuityBasis() == null)
             throw new Rejected(UNSUPPORTED_TRANSACTION_TYPE, "This conditional benefit exclusion is outside ordinary Arkansas coverage.");
         if (receipt.annuityBasis() != null && FinancialCalculationPolicy.modelsNiit(request.income().getIncomeSources())
@@ -252,6 +261,24 @@ final class ArkansasIncomeReconciliation {
                     "Advanced NIIT requires the existing verified domestic annuity qualification.",
                     ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.NIIT));
         add(Kind.CONDITIONAL_RECURRING, taxable(source));
+    }
+
+    private void validateLifePrincipal() {
+        var sources = request.income().getIncomeSources();
+        var conditional = sources.stream().filter(source -> source.conditionalBenefit().isPresent()).toList();
+        if (evidence.lifePrincipal().isPresent()) {
+            if (!FinancialCalculationPolicy.modelsNiit(sources)
+                    && conditional.stream().noneMatch(evidence.receipts()::containsKey)
+                    && evidence.lifePrincipal().orElseThrow().matches(request, evidence.modeledDeaths(), conditional)) {
+                return;
+            }
+        } else if (conditional.stream().noneMatch(source -> source.conditionalBenefit().orElseThrow().taxCharacter()
+                == TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED)) {
+            return;
+        }
+        throw new Rejected(UNSUPPORTED_MODEL_RULE, FailureCategory.ATTRIBUTION,
+                "Arkansas life insurance receipts do not match the qualified definitions and modeled death evidence.",
+                ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.LIFE_PRINCIPAL_EVIDENCE));
     }
 
     private void investment(IncomeSourceAttribution source) {
@@ -318,7 +345,11 @@ final class ArkansasIncomeReconciliation {
     private AccountOwnership activeRecipient(IncomeSourceAttribution source) {
         var owner = source.owner().orElseThrow(() -> new Rejected(
                 MISSING_RETIREMENT_QUALIFICATION, "Arkansas taxable receipt requires its actual recipient."));
-        require(request.household().activeOwners().contains(owner), "Arkansas taxable receipt requires an active individual recipient.");
+        if (!request.household().activeOwners().contains(owner)) {
+            ArkansasRecipientDiagnostic.rejected(request, source, diagnosticStage);
+            throw new Rejected(UNSUPPORTED_MODEL_RULE, FailureCategory.ATTRIBUTION,
+                    "Arkansas taxable receipt requires an active individual recipient.");
+        }
         return owner;
     }
 

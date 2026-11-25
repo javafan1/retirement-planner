@@ -143,7 +143,8 @@ public class ProjectionPdfExporter {
         }
 
         if (projection.getYears().getFirst().arkansasValidationTax().isPresent()) {
-            ArkansasValidationReport.capture(projection).writePdf(file);
+            ArkansasValidationReport.capture(projection).writePdf(file,
+                    report == null ? "" : report.inheritancePlanningDisclosure());
             return;
         }
         if (nonInvestableProjections == null) {
@@ -176,6 +177,9 @@ public class ProjectionPdfExporter {
             finishPage();
             startPage();
             writeKeyAssumptions(plan, projection.getYears().getFirst().getStateTaxJurisdiction());
+            if (!report.inheritancePlanningDisclosure().isEmpty()) {
+                writeKeyValue("Inheritance planning", report.inheritancePlanningDisclosure(), GRAY);
+            }
             writeConditionalBenefits(plan,projection);
             finishPage();
             addPageNumbers();

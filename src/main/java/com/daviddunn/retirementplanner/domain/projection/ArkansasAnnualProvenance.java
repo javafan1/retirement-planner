@@ -107,6 +107,9 @@ public record ArkansasAnnualProvenance(
         for (var receipt : receipts) {
             var source = source(sources, receipt.sourceIndex());
             if (facts.put(receipt.sourceIndex(), receipt) != null
+                    || source.conditionalBenefit().filter(benefit -> benefit.taxCharacter()
+                            == com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.TaxCharacter
+                                    .QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED).isPresent()
                     || receipt.qualification() == SourceQualification.OUTSIDE_ORDINARY_SCOPE
                     || receipt.additionalTax() == Form5329Status.APPLICABLE_ADDITIONAL_TAX
                     || (receipt.window() != null && (receipt.window().first().getYear() != year

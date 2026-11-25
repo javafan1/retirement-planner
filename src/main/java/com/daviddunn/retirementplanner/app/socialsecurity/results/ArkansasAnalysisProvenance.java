@@ -139,6 +139,7 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
             String fingerprint, com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken cancellation,
             java.util.function.Function<com.daviddunn.retirementplanner.app.montecarlo.MonteCarloStrategyComparisonAnalyzer, T> work,
             java.util.function.Function<? super T, ? extends AnalysisPayload> payloadFactory) {
+        sources.forEach(ArkansasAnalysisProvenance::requireAnalyzerSource);
         if (sources.size() != 2 || sources.stream().anyMatch(source -> !source.calculationSemanticsCurrent()
                 || !source.owner().equals(sources.getFirst().owner())) || sources.stream().noneMatch(CompleteProjectionSnapshot::arkansasHistory)) {
             throw new IllegalArgumentException("Arkansas paired analysis requires accepted Current and Baseline projections.");
@@ -176,6 +177,16 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
         var captured = new Captured(payload, provenance, sources);
         cancellation.throwIfCancellationRequested();
         return new ObservedRun<>(result, payload, captured);
+    }
+
+    private static void requireAnalyzerSource(CompleteProjectionSnapshot source) {
+        if (source.arkansasHistory() && source.annual().arkansas().hasRegularTaxOnlyPolicy()) {
+            throw new UnsupportedOperationException("Arkansas Regular Tax Only is available only for Basic deterministic projections.");
+        }
+        if (source.arkansasHistory() && source.annual().arkansas().hasLifePrincipalPolicy()) {
+            throw new UnsupportedOperationException(
+                    "Arkansas life insurance death principal is available only in deterministic projections.");
+        }
     }
 
     public static <T> ObservedRun<T> runDeterministicProductionV2(AnalysisKind kind, CompleteProjectionSnapshot source,
@@ -356,7 +367,10 @@ public record ArkansasAnalysisProvenance(int version, StateTaxJurisdiction juris
         private boolean target;
         private Map<String, String> versions;
 
-        private Observation(CompleteProjectionSnapshot projection) { this.projection = projection; }
+        private Observation(CompleteProjectionSnapshot projection) {
+            requireAnalyzerSource(projection);
+            this.projection = projection;
+        }
 
         void accept(ProjectionExecutionResult execution) {
             if (execution.status() == ProjectionExecutionResult.Status.COMPLETED) completed++;

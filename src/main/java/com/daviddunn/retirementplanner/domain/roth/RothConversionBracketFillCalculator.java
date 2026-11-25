@@ -317,6 +317,22 @@ public final class RothConversionBracketFillCalculator {
             TaxHouseholdContext taxContext,
             java.util.Set<com.daviddunn.retirementplanner.domain.model.AccountOwnership> conversionOwners,
             StateTaxAssumptions stateTaxAssumptions) {
+        return calculateConversion(household, projectionDate, portfolio, existingWithdrawals, withdrawalStrategy,
+                filingStatus, projectedGovernmentRules, targetTaxableIncome, taxableInterestIncome, socialSecurityColaRate,
+                deathAssumptions, openingTaxDeferredDistribution, socialSecurityResult, availableHouseholdCash,
+                authoritativePensionIncome, supplementalSources, taxContext, conversionOwners, stateTaxAssumptions, false);
+    }
+
+    public BigDecimal calculateConversion(
+            Household household, LocalDate projectionDate, ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals, WithdrawalStrategy withdrawalStrategy, FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules, BigDecimal targetTaxableIncome, BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate, DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution, HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal availableHouseholdCash, Optional<BigDecimal> authoritativePensionIncome,
+            List<IncomeSourceAttribution> supplementalSources, TaxHouseholdContext taxContext,
+            java.util.Set<com.daviddunn.retirementplanner.domain.model.AccountOwnership> conversionOwners,
+            StateTaxAssumptions stateTaxAssumptions, boolean priceExecutableFunding) {
         supplementalSources = List.copyOf(Objects.requireNonNull(supplementalSources));
         conversionOwners = java.util.Set.copyOf(Objects.requireNonNull(conversionOwners));
         Objects.requireNonNull(taxContext, "Tax household context is required.");
@@ -444,7 +460,7 @@ public final class RothConversionBracketFillCalculator {
         // KY/GA/OK/AL recipient exclusions and MS source qualification require executable
         // trial attribution. Preserve every other jurisdiction's established path.
         // Phase 6E-L reproduced the unowned residual separately for OK and MS.
-        BigDecimal attributedCapacity = stateTaxAssumptions.jurisdiction()
+        BigDecimal attributedCapacity = priceExecutableFunding || stateTaxAssumptions.jurisdiction()
                 == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.KY
                 || stateTaxAssumptions.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.GA
                 || stateTaxAssumptions.jurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.OK
@@ -459,16 +475,16 @@ public final class RothConversionBracketFillCalculator {
 
             if (attributedCapacity != null) rothConversion = rothConversion.min(attributedCapacity);
 
+            var trial = conversionAttribution.convertHousehold(portfolio, rothConversion, conversionOwners, projectionDate.getYear());
+            if (priceExecutableFunding) rothConversion = trial.getTotalConversion();
             List<IncomeSourceAttribution> trialSources = new ArrayList<>(supplementalSources);
-            trialSources.addAll(conversionAttribution
-                    .convertHousehold(portfolio, rothConversion, conversionOwners, projectionDate.getYear())
-                    .getIncomeSources(projectionDate.getYear()));
+            trialSources.addAll(trial.getIncomeSources(projectionDate.getYear()));
 
             TaxFundingResult taxFundingResult =
                     taxFundingCalculator.calculate(
                             household,
                             projectionDate,
-                            portfolio,
+                            priceExecutableFunding ? trial.getPortfolio() : portfolio,
                             existingWithdrawals,
                             withdrawalStrategy,
                             filingStatus,

@@ -82,6 +82,16 @@ public final class HouseholdRmdCalculator {
             int projectionYear,
             GovernmentRules governmentRules,
             Set<AccountOwnership> eligibleOwners) {
+        return calculate(plan, balanceSnapshot, projectionYear, governmentRules, eligibleOwners, null);
+    }
+
+    public HouseholdRmdResult calculate(
+            RetirementPlan plan,
+            RmdBalanceSnapshot balanceSnapshot,
+            int projectionYear,
+            GovernmentRules governmentRules,
+            Set<AccountOwnership> eligibleOwners,
+            SpousalIraRmdMembership membership) {
         eligibleOwners = Set.copyOf(Objects.requireNonNull(eligibleOwners));
         Objects.requireNonNull(
                 plan,
@@ -105,10 +115,11 @@ public final class HouseholdRmdCalculator {
         for (var entry : household.peopleByOwner().entrySet()) {
             var owner = entry.getKey();
             results.put(owner, eligibleOwners.contains(owner)
-                    ? calculateOwnerRmd(portfolio, balanceSnapshot, entry.getValue(), owner, projectionYear, governmentRules)
+                    ? calculateOwnerRmd(portfolio, balanceSnapshot, entry.getValue(), owner, projectionYear, governmentRules, membership)
                     : OwnerRmdResult.zero());
         }
-        return new HouseholdRmdResult(results);
+        return membership == null ? new HouseholdRmdResult(results)
+                : new HouseholdRmdResult(results, membership.beneficiaryObligation(), membership.beneficiaryEmployerObligations());
     }
 
     /*
@@ -146,7 +157,8 @@ public final class HouseholdRmdCalculator {
             Person person,
             AccountOwnership ownership,
             int projectionYear,
-            GovernmentRules governmentRules) {
+            GovernmentRules governmentRules,
+            SpousalIraRmdMembership membership) {
 
         /*
          * A newly created plan may not yet have
@@ -162,6 +174,7 @@ public final class HouseholdRmdCalculator {
                 ownership,
                 person.getBirthDate(),
                 projectionYear,
-                governmentRules);
+                governmentRules,
+                membership);
     }
 }

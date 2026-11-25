@@ -72,11 +72,7 @@ public final class OwnerRmdService {
                         ownership,
                         RmdAccountCategory.IRA);
 
-        return rmdService.calculateRmd(
-                dateOfBirth,
-                projectionYear,
-                iraBalance,
-                governmentRules);
+        return calculateIraRmd(iraBalance, dateOfBirth, projectionYear, governmentRules);
     }
 
     /*
@@ -135,10 +131,10 @@ public final class OwnerRmdService {
                                 BigDecimal.ZERO,
                                 BigDecimal::add);
 
-        return rmdService.calculateRmd(
-                dateOfBirth,
-                projectionYear,
-                iraBalance,
-                governmentRules);
+        return calculateIraRmd(iraBalance, dateOfBirth, projectionYear, governmentRules);
+    }
+
+    BigDecimal calculateIraRmd(BigDecimal priorIraBalance, LocalDate dateOfBirth, int year, GovernmentRules rules) {
+        return rmdService.calculateRmd(dateOfBirth, year, priorIraBalance, rules);
     }
 }

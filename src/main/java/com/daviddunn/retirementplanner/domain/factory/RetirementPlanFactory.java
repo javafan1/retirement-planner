@@ -5,6 +5,7 @@ import com.daviddunn.retirementplanner.domain.model.Household;
 import com.daviddunn.retirementplanner.domain.model.Person;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.model.SpousalInheritanceAssumption;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -58,6 +59,10 @@ public final class RetirementPlanFactory {
                         DEFAULT_INFLATION_RATE,
                         INITIAL_DEFAULT_PROJECTION_LENGTH_YEARS,
                         LocalDate.now());
+
+        assumptions = assumptions.withEconomicAssumptions(assumptions.getEconomicAssumptions()
+                .withSpousalInheritance(new SpousalInheritanceAssumption(
+                        SpousalInheritanceAssumption.Treatment.SPOUSE_AS_OWNER)));
 
         AccountPortfolio accountPortfolio =
                 new AccountPortfolio();

@@ -200,6 +200,11 @@ public final class PlanningAssumptions {
                 java.util.Objects.requireNonNull(state));
     }
 
+    public PlanningAssumptions withEconomicAssumptions(EconomicAssumptions economic) {
+        return new PlanningAssumptions(java.util.Objects.requireNonNull(economic), taxAssumptions, withdrawalAssumptions,
+                deathScenarioAssumptions, projectionLengthYears, projectionStartDate, stateTaxAssumptions);
+    }
+
     public PlanningAssumptions(
             EconomicAssumptions economicAssumptions,
             TaxAssumptions taxAssumptions,

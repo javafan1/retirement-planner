@@ -36,9 +36,10 @@ public final class RmdCalculator {
                         .getRmdRules()
                         .getLifeExpectancyFactor(age);
 
-        return priorYearEndBalance.divide(
-                factor.getDistributionPeriod(),
-                2,
-                RoundingMode.HALF_UP);
+        return divideByDistributionPeriod(priorYearEndBalance, factor.getDistributionPeriod());
+    }
+
+    static BigDecimal divideByDistributionPeriod(BigDecimal priorBalance, BigDecimal divisor) {
+        return priorBalance.divide(divisor, 2, RoundingMode.HALF_UP);
     }
 }

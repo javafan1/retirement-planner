@@ -19,6 +19,9 @@ public final class ConditionalBenefitAnalyzerValidation {
             return;
         }
         var retained = retained(payload);
+        if (retained.stream().anyMatch(p -> p.arkansas() != null && p.arkansas().hasRegularTaxOnlyPolicy())) {
+            throw new IllegalArgumentException("Arkansas Regular Tax Only does not support retained analyzer results.");
+        }
         if (capability == null) {
             if (algorithms.containsKey(ConditionalBenefitAnalysisExecution.KEY)
                     || retained.stream().flatMap(p -> p.years().stream()).flatMap(y -> y.sources().stream())

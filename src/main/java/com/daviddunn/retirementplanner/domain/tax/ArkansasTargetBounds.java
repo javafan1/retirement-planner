@@ -136,7 +136,7 @@ final class ArkansasTargetBounds {
         var unconverted = new ProjectedRothConversionResult(base, List.of());
         federalProbes++;
         stateFloor = new ArkansasProductionTaxCalculator().prepareTargetTaxFloor(facts.seed(),
-                new ArkansasAnnualFunding.Evaluator(facts, unconverted, order).evidence(List.of()));
+                new ArkansasAnnualFunding.Evaluator(facts, unconverted, order).evidence(List.of()), facts.lowIncomePolicy());
     }
 
     /** Upper envelope, rounded outward. Taxable income is monotone in aggregate pretax inclusion. */

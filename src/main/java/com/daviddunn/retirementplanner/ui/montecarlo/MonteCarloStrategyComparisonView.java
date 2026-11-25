@@ -303,6 +303,9 @@ public final class MonteCarloStrategyComparisonView extends VBox implements Auto
     private void start() {
         if (session.busy()) return;
         try {
+            if (controller.hasAppliedSpousalIraComparisonSide()) {
+                throw new UnsupportedOperationException("Strategy comparison cannot apply the Florida spousal IRA RMD policy.");
+            }
             var settings = new MonteCarloInputs(count.getValue(), expected.getText(), volatility.getText(), seed.getText())
                     .settings("Stochastic".equals(inflation.getValue()), inflationMean.getText(), inflationVolatility.getText(), inflationFloor.getText());
             var captured = MonteCarloStrategyComparisonRunService.capture(controller.getCurrentPlan(), settings, mode.getValue(),

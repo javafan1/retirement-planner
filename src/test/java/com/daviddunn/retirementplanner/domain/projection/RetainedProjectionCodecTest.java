@@ -266,13 +266,16 @@ class RetainedProjectionCodecTest {
                 + "federalTaxableIncome,federalStandardDeduction,federalIncomeTax,michiganIncomeTax,primaryPersonAge,michiganRetirementIncome,michiganRetirementDeduction,"
                 + "michiganTaxableIncome,medicarePremiumCalculation,requestedRothConversion,rothConversion,primaryRothConversion,spouseRothConversion,"
                 + "beginningRetainedNonQualifiedAssets,retainedNonQualifiedAssetGrowth,endingRetainedNonQualifiedAssets,householdCashSettlement,combinedEffectiveTaxRate,"
-                + "estimatedHeirTax,afterTaxEstateValue";
+                + "estimatedHeirTax,afterTaxEstateValue,spousal401kRollovers,beneficiaryIraRmd,beneficiary401kRmds";
         assertEquals(new HashSet<>(Arrays.asList(fields.split(","))), Arrays.stream(ProjectionYear.class.getDeclaredFields())
                 .filter(f -> !Modifier.isStatic(f.getModifiers())).map(Field::getName).collect(java.util.stream.Collectors.toSet()));
         Map.of(HouseholdSocialSecurityResult.class, "primaryOwnBenefit,spouseOwnBenefit,primarySpousalExcessBenefit,spouseSpousalExcessBenefit,primarySurvivorCandidate,spouseSurvivorCandidate,primarySelection,spouseSelection,householdBenefit",
                 HouseholdCashSettlement.class, "guaranteedIncome,projectedPeriodRmdCash,spendingWithdrawal,taxFundingWithdrawal,ordinaryExpenses,medicarePremiums,incomeTaxes,retainedHouseholdSurplus,retainedFromExcessRmd,retainedFromGuaranteedIncome,retainedFromTaxFundingSurplus",
                 ProjectionMetrics.class, "totalInvestmentGrowth,totalIncome,totalTaxes,peakAnnualTax,endingInvestableAssets,endingNetWorth,afterTaxEstate,lifetimePortfolioWithdrawals,lifetimeRothConversions,lifetimeRequiredMinimumDistributions,lifetimeMedicarePremiums,lifetimeHouseholdSocialSecurity,lifetimePrimarySocialSecurity,lifetimeSpouseSocialSecurity",
-                RetirementParticipantFacts.class, "separationStatus,separationDate,retirementConditionsStatus,retirementConditionsMetDate")
+                RetirementParticipantFacts.class, "separationStatus,separationDate,retirementConditionsStatus,retirementConditionsMetDate",
+                RetainedProjectionSnapshot.Rollover.class, "source,survivor,effectiveDate,eligibleTransferredBalance",
+                com.daviddunn.retirementplanner.domain.rmd.BeneficiaryIraRmd.class,
+                "year,firstDistributionYear,decedent,beneficiary,priorBalance,divisor,requiredAmount")
                 .forEach((type, names) -> assertEquals(names, String.join(",", Arrays.stream(type.getRecordComponents()).map(RecordComponent::getName).toList()), "Explicitly revise the snapshot schema if a shared leaf changes."));
     }
 

@@ -1,6 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax.state.arkansas;
 
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
@@ -131,6 +132,11 @@ public final class ArkansasJointWorksheet {
 
     public BigDecimal targetTaxFloor(int year, BigDecimal ordinary, BigDecimal increaseLow,
                                     BigDecimal increaseHigh, List<TargetReceipts> receipts) {
+        return targetTaxFloor(year, ordinary, increaseLow, increaseHigh, receipts, ArkansasLowIncomePolicy.STRICT);
+    }
+
+    public BigDecimal targetTaxFloor(int year, BigDecimal ordinary, BigDecimal increaseLow,
+                                    BigDecimal increaseHigh, List<TargetReceipts> receipts, ArkansasLowIncomePolicy lowIncomePolicy) {
         var deduction = ArkansasTaxRules.STANDARD_DEDUCTION.multiply(BigDecimal.valueOf(receipts.size()));
         int seniors = (int) receipts.stream().filter(r -> r.existing().senior()).count();
         BigDecimal floor = null;
@@ -155,9 +161,9 @@ public final class ArkansasJointWorksheet {
             }
             var first = ordinary.add(increaseLow.subtract(maximumAddedRelief.min(increaseLow)))
                     .subtract(maximumBaseRelief).subtract(deduction).max(BigDecimal.ZERO);
-            if (!ArkansasTaxRules.supportsLowIncomeProof(year)
+            if (lowIncomePolicy == ArkansasLowIncomePolicy.STRICT && (!ArkansasTaxRules.supportsLowIncomeProof(year)
                     || ordinary.add(increaseLow).compareTo(ArkansasTaxRules.lowIncomeGrossCeiling(year, receipts.size() == 2)) <= 0
-                    || first.compareTo(ArkansasTaxRules.additionalCreditNetCeiling(year)) <= 0) {
+                    || first.compareTo(ArkansasTaxRules.additionalCreditNetCeiling(year)) <= 0)) {
                 return BigDecimal.ZERO;
             }
             var last = ordinary.add(increaseHigh).subtract(minimumRelief).subtract(deduction).max(first);

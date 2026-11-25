@@ -56,6 +56,122 @@ class AssumptionsViewTest {
     }
 
     @Test
+    void spousalInheritanceIsAReversibleTwoChoicePlanningDraftUnderBothThemes() throws Exception {
+        fx(() -> {
+            var f = new Fixture();
+            var assumptions = f.assumptions();
+            assertEquals("SPOUSE_AS_OWNER", assumptions.getEconomicAssumptions().getSpousalInheritance().treatment().name());
+            f.plan().setPlanningAssumptions(assumptions.withEconomicAssumptions(
+                    assumptions.getEconomicAssumptions().withSpousalInheritance(null)));
+            f.view.load(f.plan());
+            var themes = ApplicationThemeManager.start(ApplicationTheme.LIGHT);
+            var stage = new Stage();
+            try {
+                stage.setScene(new Scene(f.view, 700, 650));
+                stage.show();
+                var owner = (RadioButton) f.view.lookup("#spousal-inheritance-owner");
+                var beneficiary = (RadioButton) f.view.lookup("#spousal-inheritance-beneficiary");
+                var notice = (Label) f.view.lookup("#spousal-inheritance-pending");
+                assertEquals(2, owner.getToggleGroup().getToggles().size());
+                assertSame(owner.getToggleGroup(), beneficiary.getToggleGroup());
+                assertNull(owner.getToggleGroup().getSelectedToggle());
+                assertTrue(notice.getText().contains("legacy"));
+                assertTrue(owner.getTooltip().getText().contains("401(k)"));
+                assertTrue(beneficiary.getTooltip().getText().contains("Roth"));
+
+                beneficiary.fire();
+                assertTrue(f.view.isDirty());
+                assertNull(f.assumptions().getEconomicAssumptions().getSpousalInheritance());
+                f.view.cancelChanges();
+                assertNull(owner.getToggleGroup().getSelectedToggle());
+                assertFalse(f.view.isDirty());
+                owner.fire();
+                assertTrue(f.view.applyChanges());
+                assertTrue(owner.isSelected());
+                assertEquals("SPOUSE_AS_OWNER", f.assumptions().getEconomicAssumptions()
+                        .getSpousalInheritance().treatment().name());
+                beneficiary.fire();
+                assertTrue(f.view.applyChanges());
+                field(f.view, "investmentReturnField").setText("6");
+                assertTrue(f.view.applyChanges());
+                assertTrue(beneficiary.isSelected());
+                assertEquals("SPOUSE_AS_BENEFICIARY", f.assumptions().getEconomicAssumptions()
+                        .getSpousalInheritance().treatment().name());
+
+                for (var theme : ApplicationTheme.values()) {
+                    themes.apply(theme);
+                    f.view.applyCss();
+                    f.view.layout();
+                    assertTrue(owner.isFocusTraversable());
+                    assertTrue(beneficiary.isFocusTraversable());
+                    assertTrue(notice.isWrapText());
+                    assertTrue(notice.getHeight() > 0 && notice.getHeight() >= notice.prefHeight(notice.getWidth()) - 1);
+                    assertTrue(notice.getWidth() > 0 && notice.getWidth() <= stage.getWidth());
+                }
+            } finally {
+                stage.hide();
+                themes.close();
+                f.view.dispose();
+            }
+        });
+    }
+
+    @Test
+    void arkansasPolicyIsAReversibleDraftAndSurvivesStateAndOtherEdits() throws Exception {
+        fx(() -> {
+            var f = new Fixture();
+            ComboBox<StateTaxJurisdiction> state = control(f.view, "stateJurisdictionComboBox");
+            ComboBox<com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy> selector =
+                    control(f.view, "arkansasLowIncomePolicy");
+            var strict = com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy.STRICT;
+            var regular = com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy.REGULAR_TAX_ONLY_LOW_INCOME_RELIEF_NOT_MODELED;
+            assertFalse(selector.getParent().isVisible());
+            state.setValue(StateTaxJurisdiction.AR);
+            assertTrue(selector.getParent().isVisible());
+            assertEquals(strict, selector.getValue());
+            selector.setValue(regular);
+            assertEquals(strict, f.assumptions().getStateTaxAssumptions().arkansasLowIncomePolicy());
+            button(f.view, "cancelButton").fire();
+            assertEquals(strict, selector.getValue());
+            assertFalse(selector.getParent().isVisible());
+
+            state.setValue(StateTaxJurisdiction.AR);
+            selector.setValue(regular);
+            assertTrue(f.view.applyChanges());
+            assertEquals(regular, f.assumptions().getStateTaxAssumptions().arkansasLowIncomePolicy());
+            field(f.view, "investmentReturnField").setText("6");
+            assertTrue(f.view.applyChanges());
+            assertEquals(regular, selector.getValue());
+            state.setValue(StateTaxJurisdiction.FL);
+            assertTrue(f.view.applyChanges());
+            assertFalse(f.assumptions().getStateTaxAssumptions().usesArkansasRegularTaxOnly());
+            state.setValue(StateTaxJurisdiction.AR);
+            assertTrue(f.view.applyChanges());
+            assertTrue(f.assumptions().getStateTaxAssumptions().usesArkansasRegularTaxOnly());
+
+            var themes = ApplicationThemeManager.start(ApplicationTheme.LIGHT);
+            var stage = new Stage();
+            try {
+                stage.setScene(new Scene(f.view, 700, 650));
+                stage.show();
+                for (var theme : ApplicationTheme.values()) {
+                    themes.apply(theme);
+                    f.view.applyCss();
+                    f.view.layout();
+                    assertTrue(selector.isFocusTraversable());
+                    assertTrue(selector.getWidth() > 320);
+                    var help = (Label) ((VBox) selector.getParent()).getChildren().getLast();
+                    assertTrue(help.getHeight() > 20);
+                }
+            } finally {
+                stage.hide();
+                themes.close();
+                f.view.dispose();
+            }
+        });
+    }
+
+    @Test
     void requiredIndicatorsMirrorAssumptionsApplyConditionsAndPreserveText() throws Exception {
         fx(() -> {
             Fixture f = new Fixture();

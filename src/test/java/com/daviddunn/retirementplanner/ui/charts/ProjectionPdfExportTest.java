@@ -21,6 +21,81 @@ import static org.junit.jupiter.api.Assertions.*;
 class ProjectionPdfExportTest {
     @BeforeAll static void startFx() throws Exception { ProjectionChartViewTest.startFx(); }
 
+    @Test void employerRolloverPdfRetainsFrozenScopeAfterLiveAssumptionEdits(@org.junit.jupiter.api.io.TempDir Path folder) throws Exception {
+        ProjectionChartViewTest.fx(() -> {
+            var controller = new ApplicationController();
+            var plan = Spousal401kRolloverExecutionTest.fixture(
+                    com.daviddunn.retirementplanner.domain.model.DeathScenario.PRIMARY_DIES, 2034);
+            controller.newPlan(plan);
+            var projection = controller.getCurrentProjection();
+            var accepted = controller.getAcceptedProjectionSnapshot();
+            var assumptions = plan.getPlanningAssumptions();
+            plan.setPlanningAssumptions(assumptions.withEconomicAssumptions(
+                    assumptions.getEconomicAssumptions().withSpousalInheritance(null)));
+            var summary = new ResultsSummaryView(controller);
+            summary.load(plan, projection, List.of());
+            var report = summary.prepareProjectionPdfReport();
+            assertEquals(accepted.inheritancePlanningDisclosure(), report.inheritancePlanningDisclosure());
+            var file = folder.resolve("accepted-employer-rollover.pdf");
+            try {
+                new ProjectionPdfExporter().export(accepted.restoreExecutionPlan(), accepted.restoreProjection(),
+                        accepted.restoreNonInvestable(), report, file);
+                try (var pdf = Loader.loadPDF(file.toFile())) {
+                    var text = new PDFTextStripper().getText(pdf).replaceAll("\\s+", " ");
+                    assertTrue(text.contains("traditional 401(k) direct rollover to own-IRA treatment"));
+                    assertTrue(text.contains("employer-plan terms may restrict rollovers"));
+                }
+            } catch (java.io.IOException failure) {
+                throw new java.io.UncheckedIOException(failure);
+            }
+        });
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"owner", "ira beneficiary", "401(k) beneficiary"})
+    void appliedIraPdfUsesAcceptedDisclosureAfterLiveChoiceChanges(String treatment,
+            @org.junit.jupiter.api.io.TempDir Path folder) throws Exception {
+        ProjectionChartViewTest.fx(() -> {
+            var controller = new ApplicationController();
+            boolean beneficiary = !treatment.equals("owner");
+            var plan = switch (treatment) {
+                case "ira beneficiary" -> SpousalBeneficiaryIraRmdExecutionTest.fixture("246000");
+                case "401(k) beneficiary" -> SpousalBeneficiary401kRmdExecutionTest.fixture("246000");
+                default -> SpousalIraRmdExecutionTest.fixture(
+                        com.daviddunn.retirementplanner.domain.model.DeathScenario.PRIMARY_DIES, 2034, "246000", "123000", false);
+            };
+            controller.newPlan(plan);
+            var projection = controller.getCurrentProjection();
+            var frozen = controller.getAcceptedProjectionSnapshot();
+            var assumptions = plan.getPlanningAssumptions();
+            plan.setPlanningAssumptions(assumptions.withEconomicAssumptions(assumptions.getEconomicAssumptions()
+                    .withSpousalInheritance(new com.daviddunn.retirementplanner.domain.model.SpousalInheritanceAssumption(
+                            beneficiary ? com.daviddunn.retirementplanner.domain.model.SpousalInheritanceAssumption.Treatment.SPOUSE_AS_OWNER
+                                    : com.daviddunn.retirementplanner.domain.model.SpousalInheritanceAssumption.Treatment.SPOUSE_AS_BENEFICIARY))));
+            var summary = new ResultsSummaryView(controller);
+            summary.load(plan, projection, List.of());
+            var report = summary.prepareProjectionPdfReport();
+            assertEquals(frozen.inheritancePlanningDisclosure(), report.inheritancePlanningDisclosure());
+            var document = folder.resolve("applied-ira.pdf");
+            try {
+                new ProjectionPdfExporter().export(frozen.restoreExecutionPlan(), frozen.restoreProjection(),
+                        frozen.restoreNonInvestable(), report, document);
+                try (var pdf = Loader.loadPDF(document.toFile())) {
+                    String text = new PDFTextStripper().getText(pdf).replaceAll("\\s+", " ");
+                    assertTrue(text.contains(beneficiary ? "SPOUSE AS BENEFICIARY applied in Florida Basic"
+                            : "SPOUSE AS OWNER applied to qualifying traditional IRA required distributions in Florida Basic"));
+                    assertFalse(text.contains(beneficiary ? "SPOUSE AS OWNER" : "SPOUSE AS BENEFICIARY"));
+                    if (treatment.equals("401(k) beneficiary")) {
+                        assertTrue(text.contains("Qualifying traditional 401(k) distributions use recalculated Single Life expectancy"));
+                        assertTrue(text.contains("employer-plan terms may restrict payout options"));
+                    }
+                }
+            } catch (java.io.IOException failure) {
+                throw new java.io.UncheckedIOException(failure);
+            }
+        });
+    }
+
     @Test void allChartsUsePreparedDataAndExportIgnoresMetricSelectionWithoutChangingCsv() throws Exception {
         ProjectionChartViewTest.fx(() -> {
             try {
@@ -129,6 +204,24 @@ class ProjectionPdfExportTest {
             String text = new PDFTextStripper().getText(document);
             assertTrue(text.contains("Social Security benefit reduction"));
             assertTrue(text.contains("22% beginning 2032"));
+        }
+    }
+
+    @Test void projectionPdfLabelsFrozenInheritanceChoiceAsPlanningOnly() throws Exception {
+        var plan = ProjectionChartReconciliationTest.roundingPlan();
+        var projection = new ProjectionEngine().project(plan);
+        var charts = ProjectionChartModel.from(projection.getYears(), List.of(),
+                com.daviddunn.retirementplanner.domain.breakeven.BreakEvenPlanSummary.from(plan.getHousehold()),
+                plan.getAccountPortfolio().getAccounts());
+        var report = new ProjectionPdfReport("Synthetic planning disclosure", charts, BigDecimal.ZERO, BigDecimal.ZERO, null,
+                "SPOUSE AS BENEFICIARY. Saved for future use. Current projections use legacy inheritance calculations.");
+        Path file = Path.of("target", "projection-inheritance-planning-disclosure.pdf");
+        new ProjectionPdfExporter().export(plan, projection, List.of(), report, file);
+        try (var document = Loader.loadPDF(file.toFile())) {
+            String text = new PDFTextStripper().getText(document);
+            assertTrue(text.contains("SPOUSE AS BENEFICIARY"));
+            assertTrue(text.contains("Saved for future use"));
+            assertTrue(text.replaceAll("\\s+", " ").contains("legacy inheritance calculations"));
         }
     }
     @Test void materialCompositionFailureKeepsTotalAndExistingBaselineValues() throws Exception {

@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.ui.views;
 
+import com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy;
+
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
 import com.daviddunn.retirementplanner.ui.help.PlanningInputHelp;
@@ -143,6 +145,7 @@ public class ResultsSummaryView extends BorderPane {
 
     private final TextField projectionLengthField = new TextField();
     private final Label calculationModeDisclosure = new Label();
+    private final Label inheritancePlanningNotice = new Label();
     private final Label planningHorizonValue = new Label();
     private final Label socialSecurityReductionDisclosure = new Label();
 
@@ -160,6 +163,7 @@ public class ResultsSummaryView extends BorderPane {
 
     private final Label projectionRangeLabel =
             new Label();
+    private final Label arkansasPolicyNotice = new Label();
 
     private final Label endingAssetsValue =
             createMetricValueLabel();
@@ -239,7 +243,8 @@ public class ResultsSummaryView extends BorderPane {
         String name = controller.getCurrentFile() == null ? "Unsaved retirement plan"
                 : controller.getCurrentFile().getFileName().toString();
         return new com.daviddunn.retirementplanner.app.export.ProjectionPdfReport(
-                name, pdfChartModel, pdfAverageTaxRate, pdfHeirValue, pdfBaselineComparison);
+                name, pdfChartModel, pdfAverageTaxRate, pdfHeirValue, pdfBaselineComparison,
+                frozenInheritanceDisclosure(currentProjection));
     }
 
     private final PdfExportWorkflowCoordinator<ProjectionPdfExportCapture> projectionPdfWorkflow =
@@ -923,12 +928,20 @@ public class ResultsSummaryView extends BorderPane {
 
         projectionRangeLabel.getStyleClass().add(
                 "results-subtitle");
+        arkansasPolicyNotice.setId("results-arkansas-low-income-policy");
+        arkansasPolicyNotice.getStyleClass().add("results-subtitle");
+        arkansasPolicyNotice.setWrapText(true);
+        arkansasPolicyNotice.setMinWidth(0);
+        arkansasPolicyNotice.setMinHeight(Region.USE_PREF_SIZE);
+        arkansasPolicyNotice.setVisible(false);
+        arkansasPolicyNotice.managedProperty().bind(arkansasPolicyNotice.visibleProperty());
 
         VBox titleBox =
                 new VBox(
                         3,
                         title,
-                        projectionRangeLabel);
+                        projectionRangeLabel,
+                        arkansasPolicyNotice);
 
         Button recalculateButton =
                 new Button(
@@ -1458,6 +1471,8 @@ public class ResultsSummaryView extends BorderPane {
         assumptionContent.setMinWidth(0);
         calculationModeDisclosure.setWrapText(true);
         calculationModeDisclosure.setId("summary-financial-calculation-mode");
+        inheritancePlanningNotice.setWrapText(true);
+        inheritancePlanningNotice.setId("summary-spousal-inheritance-planning");
 
         assumptionContent.getChildren().addAll(
                 createDeathPanel(),
@@ -1514,6 +1529,7 @@ public class ResultsSummaryView extends BorderPane {
         panel.getChildren().addAll(
                 heading,
                 calculationModeDisclosure,
+                inheritancePlanningNotice,
                 scrollPane);
 
         VBox.setVgrow(
@@ -2545,6 +2561,15 @@ public class ResultsSummaryView extends BorderPane {
                 : "A completed projection is required to view yearly details."));
         exportButton.setTooltip(new Tooltip(projectionAvailable ? "Export the completed projection." : "A completed projection is required to export results."));
         currentProjection = projection;
+        String inheritanceDisclosure = frozenInheritanceDisclosure(projection);
+        if (inheritanceDisclosure.isEmpty() && couple
+                && plan.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance() != null) {
+            inheritanceDisclosure = "Spousal retirement account inheritance. "
+                    + com.daviddunn.retirementplanner.app.projection.SpousalInheritancePlanningEvidence.NOTICE;
+        }
+        inheritancePlanningNotice.setText(inheritanceDisclosure);
+        inheritancePlanningNotice.setVisible(!inheritanceDisclosure.isEmpty());
+        inheritancePlanningNotice.setManaged(!inheritanceDisclosure.isEmpty());
         calculationModeDisclosure.setText(projection == null || projection.isEmpty() ? ""
                 : com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.disclosure(projection.getYearAt(0).getIncomeSources()));
 
@@ -2562,6 +2587,7 @@ public class ResultsSummaryView extends BorderPane {
                         : List.of();
 
 
+        arkansasPolicyNotice.setVisible(false);
         if (projection == null
                 || projection.getYears().isEmpty()) {
 
@@ -2607,11 +2633,15 @@ public class ResultsSummaryView extends BorderPane {
                         + (first.getStateTaxJurisdiction() == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.FL ? ": $0" : ""));
         if (first.arkansasValidationTax().isPresent()) {
             var arkansas = first.arkansasValidationTax().orElseThrow();
+            var policy = arkansas.lowIncomePolicy();
+            arkansasPolicyNotice.setText(policy == ArkansasLowIncomePolicy.STRICT
+                    ? policy.label() : ArkansasLowIncomePolicy.REGULAR_TAX_DISCLOSURE);
+            arkansasPolicyNotice.setVisible(true);
             projectionRangeLabel.setText("Projection: " + first.getCalendarYear() + " - " + last.getCalendarYear()
                     + "  |  " + years.size() + " years | "
                     + (arkansas.restoredHistory() ? "Arkansas retained history" : "Arkansas planning estimate"));
             var tooltip = new Tooltip("Arkansas statutory-cent retirement planning estimate. "
-                    + "Future estimates hold reviewed parameters constant. Some low-income, early-distribution and special sources require additional evidence.\n\n"
+                    + "Future estimates hold reviewed parameters constant. " + policy.label() + ".\n\n"
                     + String.join("\n", arkansas.calculation().limitations()));
             tooltip.setWrapText(true);
             tooltip.setMaxWidth(650);
@@ -3011,7 +3041,8 @@ public class ResultsSummaryView extends BorderPane {
                             existingEconomic
                                     .getSocialSecurityColaRate(),
                             existingEconomic.getSocialSecurityBenefitReductionPercent(),
-                            existingEconomic.getSocialSecurityBenefitReductionEffectiveYear());
+                            existingEconomic.getSocialSecurityBenefitReductionEffectiveYear())
+                            .withSpousalInheritance(existingEconomic.getSpousalInheritance());
 
             PlanningAssumptions updated =
                     new PlanningAssumptions(
@@ -3515,17 +3546,22 @@ public class ResultsSummaryView extends BorderPane {
                     capturedProjection.set(selectedProjection);
                     if (original != null && original.arkansasHistory() && selectedProjection == controller.peekCurrentProjection()) {
                         return new ProjectionPdfExportCapture(null, null, List.of(), null, original.annual(),
-                                isLiveArkansasEstimate(selectedProjection));
+                                isLiveArkansasEstimate(selectedProjection), original.inheritancePlanningDisclosure());
                     }
-                    RetirementPlan isolatedPlan = new RetirementPlanScenarioCopyService().copy(selectedPlan);
-                    Projection isolatedProjection = RetainedProjectionSnapshot.capture(selectedProjection).restoreProjection();
+                    boolean appliedIra = original != null && original.spousalIraRmdApplied()
+                            && selectedProjection == controller.peekCurrentProjection();
+                    RetirementPlan isolatedPlan = appliedIra ? original.restoreExecutionPlan()
+                            : new RetirementPlanScenarioCopyService().copy(selectedPlan);
+                    Projection isolatedProjection = appliedIra ? original.restoreProjection()
+                            : RetainedProjectionSnapshot.capture(selectedProjection).restoreProjection();
                     return new ProjectionPdfExportCapture(isolatedPlan, isolatedProjection,
-                            List.copyOf(nonInvestableAssetProjections), prepareProjectionPdfReport(), null, false);
+                            List.copyOf(nonInvestableAssetProjections), prepareProjectionPdfReport(), null, false, "");
                 },
                 (capture, destination) -> {
                     if (capture.arkansas() != null) {
                         com.daviddunn.retirementplanner.app.export.ArkansasValidationReport
-                                .captureAccepted(capture.arkansas().restoreProjection(), capture.currentArkansas()).writePdf(destination);
+                                .captureAccepted(capture.arkansas().restoreProjection(), capture.currentArkansas())
+                                .writePdf(destination, capture.inheritanceDisclosure());
                     } else {
                         new ProjectionPdfExporter().export(capture.plan(), capture.projection(),
                                 capture.nonInvestableAssets(), capture.report(), destination);
@@ -3559,7 +3595,13 @@ public class ResultsSummaryView extends BorderPane {
 
     private record ProjectionPdfExportCapture(RetirementPlan plan, Projection projection,
             List<NonInvestableAssetProjection> nonInvestableAssets, ProjectionPdfReport report,
-            RetainedProjectionSnapshot arkansas, boolean currentArkansas) { }
+            RetainedProjectionSnapshot arkansas, boolean currentArkansas, String inheritanceDisclosure) { }
+
+    private String frozenInheritanceDisclosure(Projection projection) {
+        var accepted = controller.getAcceptedProjectionSnapshot();
+        return accepted != null && projection != null && projection == controller.peekCurrentProjection()
+                ? accepted.inheritancePlanningDisclosure() : "";
+    }
 
     private boolean isLiveArkansasEstimate(Projection projection) {
         return projection.getFirstYear().arkansasValidationTax().filter(tax -> !tax.restoredHistory()).isPresent()

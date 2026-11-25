@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.rmd.RmdAccountCategory;
 import com.daviddunn.retirementplanner.domain.rmd.HouseholdRmdResult;
 import com.daviddunn.retirementplanner.domain.rmd.OwnerRmdResult;
+import com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdMembership;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalStrategy;
 import com.daviddunn.retirementplanner.domain.model.TaxTreatment;
 import com.daviddunn.retirementplanner.domain.withdrawal.WithdrawalBreakdown;
@@ -34,37 +35,42 @@ public final class ProjectedWithdrawalAllocator {
                 portfolio;
 
         for (AccountRmd accountRmd : accountRmds) {
-
-            BigDecimal amount =
-                    accountRmd.getAmount();
-
-            if (amount.signum() == 0) {
-                continue;
-            }
-
-            BigDecimal available = updatedPortfolio.getBalance(accountRmd.getAccount());
-            if (amount.compareTo(available) > 0) {
-                throw new IllegalArgumentException(
-                        "Withdrawal cannot exceed projected account balance.",
-                        new FundingConstraint(
-                                FundingFailure.Stage.ACCOUNT_RMD, amount, available,
-                                accountRmd.getAccount().getOwnership()));
-            }
-
-            updatedPortfolio =
-                    updatedPortfolio.withWithdrawal(
-                            accountRmd.getAccount(),
-                            amount);
+            updatedPortfolio = applyAccountRmd(updatedPortfolio, accountRmd.getAccount(), accountRmd.getAmount(),
+                    accountRmd.getAccount().getOwnership());
         }
 
         return updatedPortfolio;
+    }
+
+    private ProjectedPortfolio applyAccountRmd(ProjectedPortfolio portfolio, Account account, BigDecimal amount,
+            AccountOwnership recipient) {
+        if (amount.signum() == 0) return portfolio;
+        BigDecimal available = portfolio.getBalance(account);
+        if (amount.compareTo(available) > 0) {
+            throw new IllegalArgumentException("Withdrawal cannot exceed projected account balance.",
+                    new FundingConstraint(FundingFailure.Stage.ACCOUNT_RMD, amount, available, recipient));
+        }
+        return portfolio.withWithdrawal(account, amount);
     }
 
     public ProjectedPortfolio applyIraRmd(
             ProjectedPortfolio portfolio,
             AccountOwnership ownership,
             BigDecimal iraRmd) {
+        return applyOwnerIraRmd(portfolio, ownership, iraRmd, null);
+    }
 
+    private ProjectedPortfolio applyOwnerIraRmd(
+            ProjectedPortfolio portfolio, AccountOwnership ownership, BigDecimal iraRmd,
+            SpousalIraRmdMembership membership) {
+        return applyIraRmd(portfolio, ownership, iraRmd, account -> membership == null
+                ? account.getOwnership() == ownership && account.getType().isSubjectToOwnerRmd()
+                    && account.getType().getRmdAccountCategory() == RmdAccountCategory.IRA
+                : membership.includes(account, ownership));
+    }
+
+    private ProjectedPortfolio applyIraRmd(ProjectedPortfolio portfolio, AccountOwnership ownership,
+            BigDecimal iraRmd, java.util.function.Predicate<Account> sourceEligible) {
         Objects.requireNonNull(
                 portfolio,
                 "Projected portfolio is required.");
@@ -98,16 +104,7 @@ public final class ProjectedWithdrawalAllocator {
             Account account =
                     projected.getAccount();
 
-            if (account.getOwnership() != ownership) {
-                continue;
-            }
-
-            if (!account.getType().isSubjectToOwnerRmd()) {
-                continue;
-            }
-
-            if (account.getType().getRmdAccountCategory()
-                    != RmdAccountCategory.IRA) {
+            if (!sourceEligible.test(account)) {
                 continue;
             }
 
@@ -145,7 +142,11 @@ public final class ProjectedWithdrawalAllocator {
     public ProjectedPortfolio applyHouseholdRmds(
             ProjectedPortfolio portfolio,
             HouseholdRmdResult householdRmdResult) {
+        return applyHouseholdRmds(portfolio, householdRmdResult, null);
+    }
 
+    private ProjectedPortfolio applyHouseholdRmds(
+            ProjectedPortfolio portfolio, HouseholdRmdResult householdRmdResult, SpousalIraRmdMembership membership) {
         Objects.requireNonNull(
                 portfolio,
                 "Projected portfolio is required.");
@@ -158,7 +159,25 @@ public final class ProjectedWithdrawalAllocator {
                 portfolio;
 
         for (var entry : householdRmdResult.ownerResults().entrySet()) {
-            updatedPortfolio = applyOwnerRmds(updatedPortfolio, entry.getKey(), entry.getValue());
+            updatedPortfolio = applyOwnerRmds(updatedPortfolio, entry.getKey(), entry.getValue(), membership);
+        }
+        var beneficiary = householdRmdResult.beneficiaryIraRmd();
+        if (beneficiary != null) {
+            if (membership == null || beneficiary != membership.beneficiaryObligation()) {
+                throw new IllegalArgumentException("The beneficiary RMD requires the same verified source membership for allocation.");
+            }
+            updatedPortfolio = applyIraRmd(updatedPortfolio, beneficiary.beneficiary(),
+                    beneficiary.requiredAmount(), membership::includesBeneficiary);
+        }
+        var employerObligations = householdRmdResult.employerBeneficiaryRmds();
+        if (!employerObligations.isEmpty()) {
+            if (membership == null || !employerObligations.equals(membership.beneficiaryEmployerObligations())) {
+                throw new IllegalArgumentException("Employer beneficiary RMDs require their verified plan membership.");
+            }
+            for (var obligation : employerObligations) {
+                updatedPortfolio = applyAccountRmd(updatedPortfolio, membership.employerDebitPosition(obligation),
+                        obligation.requiredAmount(), obligation.beneficiary());
+            }
         }
         return updatedPortfolio;
     }
@@ -166,7 +185,8 @@ public final class ProjectedWithdrawalAllocator {
     private ProjectedPortfolio applyOwnerRmds(
             ProjectedPortfolio portfolio,
             AccountOwnership ownership,
-            OwnerRmdResult ownerRmdResult) {
+            OwnerRmdResult ownerRmdResult,
+            SpousalIraRmdMembership membership) {
 
         ProjectedPortfolio updatedPortfolio =
                 portfolio;
@@ -176,10 +196,11 @@ public final class ProjectedWithdrawalAllocator {
          * owner's eligible IRA accounts.
          */
         updatedPortfolio =
-                applyIraRmd(
+                applyOwnerIraRmd(
                         updatedPortfolio,
                         ownership,
-                        ownerRmdResult.getIraRmd());
+                        ownerRmdResult.getIraRmd(),
+                        membership);
 
         /*
          * Employer-plan RMDs remain tied to their
@@ -471,7 +492,11 @@ public final class ProjectedWithdrawalAllocator {
     public ProjectedWithdrawalAllocation allocateHouseholdRmds(
             ProjectedPortfolio portfolio,
             HouseholdRmdResult householdRmdResult) {
+        return allocateHouseholdRmds(portfolio, householdRmdResult, null);
+    }
 
+    public ProjectedWithdrawalAllocation allocateHouseholdRmds(
+            ProjectedPortfolio portfolio, HouseholdRmdResult householdRmdResult, SpousalIraRmdMembership membership) {
         Objects.requireNonNull(
                 portfolio,
                 "Projected portfolio is required.");
@@ -483,12 +508,12 @@ public final class ProjectedWithdrawalAllocator {
         ProjectedPortfolio updatedPortfolio =
                 applyHouseholdRmds(
                         portfolio,
-                        householdRmdResult);
+                        householdRmdResult, membership);
 
         WithdrawalBreakdown withdrawalBreakdown =
                 calculateWithdrawalBreakdown(
                         portfolio,
-                        updatedPortfolio);
+                        updatedPortfolio, membership);
 
         return new ProjectedWithdrawalAllocation(
                 updatedPortfolio,
@@ -497,7 +522,8 @@ public final class ProjectedWithdrawalAllocator {
 
     private WithdrawalBreakdown calculateWithdrawalBreakdown(
             ProjectedPortfolio beginningPortfolio,
-            ProjectedPortfolio endingPortfolio) {
+            ProjectedPortfolio endingPortfolio,
+            SpousalIraRmdMembership membership) {
 
         List<IncomeSourceAttribution> sources = new ArrayList<>();
 
@@ -535,9 +561,10 @@ public final class ProjectedWithdrawalAllocator {
                 continue;
             }
 
-            sources.add(IncomeSourceAttribution.withdrawal(account, withdrawal,
+            var debit = IncomeSourceAttribution.withdrawal(account, withdrawal,
                     IncomeSourceAttribution.Kind.RMD,
-                    IncomeSourceAttribution.Purpose.CASH_FLOW));
+                    IncomeSourceAttribution.Purpose.CASH_FLOW);
+            sources.add(membership == null ? debit : membership.attributeActualDebit(debit));
 
             TaxTreatment taxTreatment =
                     account

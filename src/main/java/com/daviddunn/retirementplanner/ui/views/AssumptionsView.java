@@ -1,5 +1,9 @@
 package com.daviddunn.retirementplanner.ui.views;
 
+import com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy;
+import com.daviddunn.retirementplanner.domain.model.StateTaxAssumptions;
+import com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction;
+
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.tax.state.AlabamaPensionPreflight;
 import com.daviddunn.retirementplanner.ui.controls.AlabamaPensionNotice;
@@ -13,6 +17,9 @@ import com.daviddunn.retirementplanner.domain.model.DeathScenarioAssumptions;
 import com.daviddunn.retirementplanner.domain.model.EconomicAssumptions;
 import com.daviddunn.retirementplanner.domain.model.PlanningAssumptions;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.model.SpousalInheritanceAssumption;
+import com.daviddunn.retirementplanner.domain.model.SpousalInheritanceAssumption.Treatment;
+import com.daviddunn.retirementplanner.app.projection.SpousalInheritancePlanningEvidence;
 import com.daviddunn.retirementplanner.domain.model.TaxAssumptions;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityIncome;
 import com.daviddunn.retirementplanner.domain.income.SocialSecurityBenefitStartDateCalculator;
@@ -30,10 +37,12 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Control;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -91,6 +100,7 @@ public class AssumptionsView extends VBox {
      */
     private final ComboBox<com.daviddunn.retirementplanner.domain.rules.FilingStatus> filingStatusComboBox = new ComboBox<>();
     private final ComboBox<com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction> stateJurisdictionComboBox = new ComboBox<>();
+    private final ComboBox<ArkansasLowIncomePolicy> arkansasLowIncomePolicy = new ComboBox<>();
     private final AlabamaPensionNotice alabamaPensionNotice = new AlabamaPensionNotice("assumptions-alabama-pension-notice");
     private final Label horizonLabel = new Label();
     private final TextField federalBracketGrowthField;
@@ -113,6 +123,8 @@ public class AssumptionsView extends VBox {
 
     private final Button applyButton = new Button("Apply");
     private final Button cancelButton = new Button("Cancel");
+    private final ToggleGroup inheritanceChoices = new ToggleGroup();
+    private final VBox inheritanceControls = createInheritanceControls();
     private final ReadOnlyBooleanWrapper dirty = new ReadOnlyBooleanWrapper();
     private boolean loading;
     private final boolean guidedCreation;
@@ -372,6 +384,9 @@ public class AssumptionsView extends VBox {
                 1,
                 row++);
 
+        if (guidedCreation) {
+            grid.add(inheritanceControls, 0, row++, 2, 1);
+        }
 
         /*
          * =================================================
@@ -637,6 +652,7 @@ public class AssumptionsView extends VBox {
         });
         projectionStartDatePicker.getEditor().textProperty().addListener((observable, oldValue, newValue) -> updateDirty());
         deathScenarioComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        inheritanceChoices.selectedToggleProperty().addListener((observable, oldValue, newValue) -> updateDirty());
         deathYearField.textProperty().addListener((observable, oldValue, newValue) -> {
             updateDeathScenarioFields();
             updateDirty();
@@ -681,6 +697,7 @@ public class AssumptionsView extends VBox {
         timeline.getChildren().add(openingRmdButton);
         VBox survivor = section(original, "Household & Survivor Planning", deathScenarioComboBox, deathYearField,
                 survivorClaimingAgeComboBox, postDeathExpenseFactorField);
+        survivor.getChildren().add(inheritanceControls);
         VBox economic = section(original, "Economic & Investment Assumptions", investmentReturnField,
                 inflationRateField, healthcareInflationField, socialSecurityColaField);
         socialSecurityBenefitsCard = new VBox(
@@ -710,6 +727,7 @@ public class AssumptionsView extends VBox {
         tax.getChildren().add(3,establishCalculationMode);
         int stateRow = tax.getChildren().indexOf(stateJurisdictionComboBox.getParent());
         tax.getChildren().add(stateRow + 1, alabamaPensionNotice);
+        tax.getChildren().add(stateRow + 1, arkansasLowIncomeSettings());
         VBox adjustment = new VBox(8, inputRow(original, futureFederalMarginalRateAdjustmentField),
                 inputRow(original, futureFederalMarginalRateEffectiveYearField));
         adjustment.getStyleClass().add("assumptions-rate-adjustment");
@@ -774,6 +792,69 @@ public class AssumptionsView extends VBox {
         card.setMaxHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         for (Control input : inputs) card.getChildren().add(inputRow(original, input));
         return card;
+    }
+
+    private VBox createInheritanceControls() {
+        var owner = new RadioButton(Treatment.SPOUSE_AS_OWNER.label());
+        owner.setId("spousal-inheritance-owner");
+        owner.setUserData(Treatment.SPOUSE_AS_OWNER);
+        owner.setToggleGroup(inheritanceChoices);
+        InputHelp.install(owner, "Model a qualifying traditional IRA as the survivor's own IRA. "
+                + "Assume eligible traditional 401(k) assets roll into the survivor's own traditional IRA.");
+
+        var beneficiary = new RadioButton(Treatment.SPOUSE_AS_BENEFICIARY.label());
+        beneficiary.setId("spousal-inheritance-beneficiary");
+        beneficiary.setUserData(Treatment.SPOUSE_AS_BENEFICIARY);
+        beneficiary.setToggleGroup(inheritanceChoices);
+        InputHelp.install(beneficiary, "Use spousal beneficiary distribution rules. Required distributions may begin "
+                + "later, depending on the deceased spouse's age and the account type. Inherited beneficiary "
+                + "accounts are excluded from ordinary Roth conversion sources.");
+
+        var help = new Label("Both choices keep the assets in the surviving household. Employer plans may restrict "
+                + "payouts and rollovers. The proposed treatments use supported planning assumptions.");
+        var notice = new Label(SpousalInheritancePlanningEvidence.EDITOR_NOTICE);
+        notice.setId("spousal-inheritance-pending");
+        for (var label : List.of(help, notice)) {
+            label.setWrapText(true);
+            label.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+            label.getStyleClass().add("assumptions-optional-help");
+        }
+        var controls = new VBox(6, sectionHeading("Spousal Retirement Account Inheritance"), owner, beneficiary, help, notice);
+        controls.setId("spousal-inheritance-settings");
+        controls.setMinWidth(0);
+        return controls;
+    }
+
+    private VBox arkansasLowIncomeSettings() {
+        var label = new Label("Arkansas Low-Income Tax Treatment");
+        label.setLabelFor(arkansasLowIncomePolicy);
+        label.setWrapText(true);
+        arkansasLowIncomePolicy.setId("arkansas-low-income-policy");
+        arkansasLowIncomePolicy.getItems().setAll(ArkansasLowIncomePolicy.values());
+        arkansasLowIncomePolicy.setValue(ArkansasLowIncomePolicy.STRICT);
+        arkansasLowIncomePolicy.setMaxWidth(Double.MAX_VALUE);
+        arkansasLowIncomePolicy.setMinWidth(0);
+        arkansasLowIncomePolicy.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(ArkansasLowIncomePolicy policy) { return policy == null ? "" : policy.label(); }
+            @Override public ArkansasLowIncomePolicy fromString(String label) {
+                return Arrays.stream(ArkansasLowIncomePolicy.values()).filter(policy -> policy.label().equals(label))
+                        .findFirst().orElseThrow(() -> new IllegalArgumentException("Select Arkansas low-income tax treatment."));
+            }
+        });
+        var explanation = "Regular Tax Only excludes Arkansas's low-income exemption/schedule and additional low-income "
+                + "credit. Arkansas taxes may be overstated. This may affect projected withdrawals, Roth conversions and ending "
+                + "assets. Other unsupported tax situations may still prevent a projection.";
+        InputHelp.install(arkansasLowIncomePolicy, explanation);
+        var help = new Label(explanation);
+        help.setWrapText(true);
+        help.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        help.getStyleClass().add("assumptions-optional-help");
+        var row = new VBox(5, label, arkansasLowIncomePolicy, help);
+        row.visibleProperty().bind(stateJurisdictionComboBox.valueProperty().isEqualTo(StateTaxJurisdiction.AR));
+        row.managedProperty().bind(row.visibleProperty());
+        requiredFieldAttachments.add(RequiredFieldSupport.attach(label, arkansasLowIncomePolicy));
+        arkansasLowIncomePolicy.valueProperty().addListener((obs, previous, next) -> updateDirty());
+        return row;
     }
 
     private void attachRequired(GridPane grid, Control input) {
@@ -1130,6 +1211,9 @@ public class AssumptionsView extends VBox {
         EconomicAssumptions economicAssumptions =
                 assumptions
                         .getEconomicAssumptions();
+        var inheritance = economicAssumptions.getSpousalInheritance();
+        inheritanceChoices.selectToggle(inheritance == null ? null : inheritanceChoices.getToggles().stream()
+                .filter(toggle -> toggle.getUserData() == inheritance.treatment()).findFirst().orElseThrow());
 
         TaxAssumptions taxAssumptions =
                 assumptions
@@ -1221,6 +1305,7 @@ public class AssumptionsView extends VBox {
          */
         filingStatusComboBox.setValue(taxAssumptions.getFilingStatus());
         stateJurisdictionComboBox.setValue(plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
+        arkansasLowIncomePolicy.setValue(plan.getPlanningAssumptions().getStateTaxAssumptions().arkansasLowIncomePolicy());
         federalBracketGrowthField.setText(
                 toPercent(
                         taxAssumptions
@@ -1276,6 +1361,8 @@ public class AssumptionsView extends VBox {
     private void updateHouseholdPresentation() {
         boolean couple = currentPlan.getHousehold().hasSpouse();
         coupleHousehold.set(couple);
+        inheritanceControls.setVisible(couple);
+        inheritanceControls.setManaged(couple);
         if (guidedCreation) {
             GridPane inputGrid = (GridPane) deathScenarioComboBox.getParent();
             int firstCoupleRow = GridPane.getRowIndex(deathScenarioComboBox);
@@ -1437,16 +1524,20 @@ public class AssumptionsView extends VBox {
             return value;
         });
         SocialSecurityReductionDraft reduction = readSocialSecurityReduction();
+        PlanningAssumptions applied = currentPlan.getPlanningAssumptions();
+        var chosen = inheritanceChoices.getSelectedToggle();
+        var inheritance = !currentPlan.getHousehold().hasSpouse()
+                ? applied.getEconomicAssumptions().getSpousalInheritance()
+                : chosen == null ? null : new SpousalInheritanceAssumption((Treatment) chosen.getUserData());
         EconomicAssumptions economic = new EconomicAssumptions(
                 percent(investmentReturnField, "Annual investment return"),
                 percent(inflationRateField, "General inflation"),
                 percent(healthcareInflationField, "Healthcare inflation"),
                 percent(socialSecurityColaField, "Social Security COLA"),
                 reduction.percent(),
-                reduction.effectiveYear());
+                reduction.effectiveYear()).withSpousalInheritance(inheritance);
         BigDecimal bracket = percent(federalBracketGrowthField, "Federal tax bracket growth");
         BigDecimal deduction = percent(standardDeductionGrowthField, "Standard deduction growth");
-        PlanningAssumptions applied = currentPlan.getPlanningAssumptions();
         FutureFederalTaxRateChangeInput future =
                 readFutureFederalRateChange(applied.getTaxAssumptions());
         BigDecimal state = percent(stateIncomeTaxRateField, "State income tax rate");
@@ -1502,8 +1593,12 @@ public class AssumptionsView extends VBox {
                 new DeathScenarioAssumptions(scenario, year, age, factor));
         var jurisdiction = read(stateJurisdictionComboBox, "State of Residence", () ->
                 Objects.requireNonNull(stateJurisdictionComboBox.getValue(), "A selection is required."));
+        var lowIncomePolicy = guidedCreation ? applied.getStateTaxAssumptions().arkansasLowIncomePolicy()
+                : read(arkansasLowIncomePolicy, "Arkansas Low-Income Tax Treatment", () ->
+                        Objects.requireNonNull(arkansasLowIncomePolicy.getValue(), "A selection is required."));
         return new PlanningAssumptions(economic, tax, applied.getWithdrawalAssumptions(), death, length, start,
-                com.daviddunn.retirementplanner.domain.model.StateTaxAssumptions.simplified(jurisdiction));
+                new StateTaxAssumptions(jurisdiction, StateTaxAssumptions.CalculationMethod.SIMPLIFIED_STATE_ESTIMATE,
+                        null, lowIncomePolicy));
     }
 
     private FutureFederalTaxRateChangeInput readFutureFederalRateChange(TaxAssumptions applied) {
@@ -1546,6 +1641,7 @@ public class AssumptionsView extends VBox {
                 economic.getHealthcareInflationRate(), economic.getSocialSecurityColaRate(),
                 economic.getSocialSecurityBenefitReductionPercent(),
                 economic.getSocialSecurityBenefitReductionEffectiveYear(),
+                economic.getSpousalInheritance(),
                 tax.getFilingStatus(), tax.getFederalTaxBracketGrowthRate(), tax.getStandardDeductionGrowthRate(),
                 tax.getFutureFederalMarginalRateAdjustment(), tax.getFutureFederalMarginalRateEffectiveYear(),
                 assumptions.getStateTaxAssumptions(), tax.getStateIncomeTaxRate(), tax.getLocalIncomeTaxRate(), tax.getEstimatedHeirTaxRateOnTaxDeferredAssets(),

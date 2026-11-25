@@ -2,6 +2,11 @@ package com.daviddunn.retirementplanner.domain.benefit;
 
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction;
+import com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode;
+import com.daviddunn.retirementplanner.domain.model.Household;
+import com.daviddunn.retirementplanner.domain.tax.NiitUnsupportedInputException;
+
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -28,16 +33,59 @@ public final class ConditionalBenefitAdmission {
     }
 
     public static void requireDeterministicSupported(RetirementPlan plan) {
-        NonqualifiedAnnuityAdmission.requireSupported(Objects.requireNonNull(plan));
-        if (Objects.requireNonNull(plan).getConditionalBenefits().isEmpty()) return;
+        Objects.requireNonNull(plan);
+        if (usesArkansasRegularTaxOnly(plan) && plan.getFinancialCalculationMode() == FinancialCalculationMode.ADVANCED) {
+            throw new NiitUnsupportedInputException("Arkansas Regular Tax Only is available only in Basic mode.");
+        }
+        boolean arkansas = hasArkansasConditionalBenefits(plan);
+        if (arkansas) {
+            requireArkansasLifePrincipal(plan.getHousehold(), plan.getConditionalBenefits(),
+                    plan.getFinancialCalculationMode());
+        }
+        NonqualifiedAnnuityAdmission.requireSupported(plan);
+        if (plan.getConditionalBenefits().isEmpty() || arkansas) return;
         plan.validateHouseholdReferences();
         var state = plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction();
         requireDeterministicState(state);
     }
 
-    /** Approved B3 full-plan analyzers share the exact B2 payment/tax subset. */
+    public static boolean hasArkansasConditionalBenefits(RetirementPlan plan) {
+        return plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction() == StateTaxJurisdiction.AR
+                && !plan.getConditionalBenefits().isEmpty();
+    }
+
+    /** The definition constructor enforces the death, lump sum, recipient and personal qualification invariants. */
+    public static void requireArkansasLifePrincipal(Household household, List<ConditionalBenefitDefinition> definitions,
+            FinancialCalculationMode mode) {
+        if (mode == FinancialCalculationMode.ADVANCED) {
+            throw new NiitUnsupportedInputException(
+                    "Arkansas conditional benefits require Basic mode. Advanced NIIT treatment is unavailable for these inputs.");
+        }
+        for (var definition : ConditionalBenefits.validatedCopy(definitions, household)) {
+            if (!definition.excludesLifePrincipal()
+                    || definition.destination() != ConditionalBenefitDefinition.ReceiptDestination.HOUSEHOLD_RETAINED_NON_QUALIFIED_CASH) {
+                throw new UnsupportedExecutionException("Arkansas supports only explicitly qualified personal life insurance "
+                        + "death principal paid as a lump sum to the other modeled household member.", StateTaxJurisdiction.AR);
+            }
+        }
+    }
+
+    /** Arkansas life principal is approved for deterministic projection only. */
     public static void requireAnalyzerSupported(RetirementPlan plan) {
+        if (usesArkansasRegularTaxOnly(plan)) {
+            throw new UnsupportedExecutionException(
+                    "Arkansas Regular Tax Only is available only for Basic deterministic projections.", null);
+        }
+        if (hasArkansasConditionalBenefits(plan)) {
+            NonqualifiedAnnuityAdmission.requireSupported(plan);
+            throw new UnsupportedExecutionException(
+                    "Arkansas conditional benefits are available only in supported deterministic projections.", StateTaxJurisdiction.AR);
+        }
         requireDeterministicSupported(plan);
+    }
+
+    public static boolean usesArkansasRegularTaxOnly(RetirementPlan plan) {
+        return plan.getPlanningAssumptions().getStateTaxAssumptions().usesArkansasRegularTaxOnly();
     }
 
     public static void requireOptimizationSupported(RetirementPlan plan) {

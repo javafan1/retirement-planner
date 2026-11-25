@@ -28,6 +28,8 @@ public final class ProjectionFailureMessages {
     static final String ARKANSAS_CONDITIONAL_INCOME = """
             This Arkansas projection includes conditional income that Aledrix cannot yet calculate.
 
+            Arkansas supports qualifying personal life insurance death principal as a one-time lump sum to the other modeled household member in Basic mode. The benefit requires a personal-policy qualification confirmation.
+
             Your plan and any previously accepted results have been preserved.
 
             Review the entries under View → Income → Conditional Benefits.
@@ -123,6 +125,7 @@ public final class ProjectionFailureMessages {
             case LOW_INCOME -> "Arkansas low-income rules could change this year's estimate. The available rules cannot establish the amount.";
             case BASIS -> "The taxable portion cannot be established without sufficient basis evidence.";
             case NIIT -> "The available investment-income evidence is incomplete for the net investment income tax.";
+            case LIFE_PRINCIPAL_EVIDENCE -> "The life insurance payment could not be verified against the original benefit and modeled death.";
             case POLICY -> "The year or filing scope is outside the reviewed Arkansas planning policy.";
             case FUNDING_BUDGET -> "The funding calculation reached its proof limit before it could establish a withdrawal amount.";
             case FUNDING_PROOF -> "The funding calculation could not establish a supported withdrawal amount.";

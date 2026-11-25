@@ -117,13 +117,22 @@ public final class ConditionalBenefitsPane extends VBox {
         table.getItems().setAll(value == null ? List.of() : value.getConditionalBenefits());
         if (previous != null) table.getItems().stream().filter(item -> item.id().equals(previous.id()))
                 .findFirst().ifPresent(item -> table.getSelectionModel().select(item));
+        boolean arkansas = value != null && value.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                == com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AR;
+        add.setText(arkansas ? "Add Life Insurance Death Benefit" : "Add Conditional Benefit");
+        addAnnuity.setVisible(!arkansas);
+        addAnnuity.setManaged(!arkansas);
         boolean full = value != null && value.getConditionalBenefits().size() >= ConditionalBenefits.MAX_DEFINITIONS;
-        add.setDisable(value == null || full);
+        add.setDisable(value == null || full || arkansas && !value.getHousehold().hasSpouse());
         duplicate.disableProperty().unbind();
-        duplicate.disableProperty().bind(table.getSelectionModel().selectedItemProperty().isNull().or(add.disableProperty()));
+        duplicate.disableProperty().bind(javafx.beans.binding.Bindings.createBooleanBinding(() -> {
+            var selected = selected();
+            return selected == null || add.isDisabled() || arkansas && !selected.excludesLifePrincipal();
+        }, table.getSelectionModel().selectedItemProperty(), add.disableProperty()));
         count.setText(value == null ? "" : value.getConditionalBenefits().size() + " of " + ConditionalBenefits.MAX_DEFINITIONS
                 + " benefits configured." + (full ? " Remove a benefit before adding another." : ""));
-        notice.setText("");
+        notice.setText(arkansas && !value.getHousehold().hasSpouse()
+                ? "An Arkansas life insurance death benefit requires another modeled household member as beneficiary." : "");
         if (value != null && !value.getConditionalBenefits().isEmpty()) {
             try { ConditionalBenefitAdmission.requireDeterministicSupported(value); }
             catch (UnsupportedOperationException unsupported) {

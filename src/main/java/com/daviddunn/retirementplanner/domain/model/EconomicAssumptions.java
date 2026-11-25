@@ -32,6 +32,7 @@ public final class EconomicAssumptions {
     private final BigDecimal socialSecurityBenefitReductionPercent;
 
     private final int socialSecurityBenefitReductionEffectiveYear;
+    private final SpousalInheritanceAssumption spousalInheritance;
 
     @JsonCreator
     public EconomicAssumptions(
@@ -59,7 +60,10 @@ public final class EconomicAssumptions {
             BigDecimal socialSecurityBenefitReductionPercent,
 
             @JsonProperty("socialSecurityBenefitReductionEffectiveYear")
-            Integer socialSecurityBenefitReductionEffectiveYear) {
+            Integer socialSecurityBenefitReductionEffectiveYear,
+
+            @JsonProperty("spousalInheritance")
+            SpousalInheritanceAssumption spousalInheritance) {
 
         this.expectedAnnualInvestmentReturn =
                 Objects.requireNonNull(
@@ -119,6 +123,16 @@ public final class EconomicAssumptions {
             throw new IllegalArgumentException(
                     "Social Security benefit reduction effective year must be a four-digit calendar year.");
         }
+        this.spousalInheritance = spousalInheritance;
+    }
+
+    public EconomicAssumptions(
+            BigDecimal expectedAnnualInvestmentReturn, BigDecimal legacyInflationRate,
+            BigDecimal generalInflationRate, BigDecimal healthcareInflationRate,
+            BigDecimal socialSecurityColaRate, BigDecimal socialSecurityBenefitReductionPercent,
+            Integer socialSecurityBenefitReductionEffectiveYear) {
+        this(expectedAnnualInvestmentReturn, legacyInflationRate, generalInflationRate, healthcareInflationRate,
+                socialSecurityColaRate, socialSecurityBenefitReductionPercent, socialSecurityBenefitReductionEffectiveYear, null);
     }
 
     /** Compatibility constructor retaining the pre-reduction JSON/value shape. */
@@ -216,6 +230,17 @@ public final class EconomicAssumptions {
         return socialSecurityBenefitReductionEffectiveYear;
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public SpousalInheritanceAssumption getSpousalInheritance() {
+        return spousalInheritance;
+    }
+
+    public EconomicAssumptions withSpousalInheritance(SpousalInheritanceAssumption assumption) {
+        return new EconomicAssumptions(expectedAnnualInvestmentReturn, null, generalInflationRate,
+                healthcareInflationRate, socialSecurityColaRate, socialSecurityBenefitReductionPercent,
+                socialSecurityBenefitReductionEffectiveYear, assumption);
+    }
+
     /** Omits the new default value from serialized legacy-shaped plans and fingerprints. */
     public static final class ZeroPercentFilter {
         @Override
@@ -251,7 +276,8 @@ public final class EconomicAssumptions {
                 && generalInflationRate.equals(that.generalInflationRate)
                 && healthcareInflationRate.equals(that.healthcareInflationRate)
                 && socialSecurityColaRate.equals(that.socialSecurityColaRate)
-                && socialSecurityBenefitReductionPercent.equals(that.socialSecurityBenefitReductionPercent);
+                && socialSecurityBenefitReductionPercent.equals(that.socialSecurityBenefitReductionPercent)
+                && Objects.equals(spousalInheritance, that.spousalInheritance);
     }
 
     @Override
@@ -259,7 +285,7 @@ public final class EconomicAssumptions {
         return Objects.hash(expectedAnnualInvestmentReturn, generalInflationRate,
                 healthcareInflationRate, socialSecurityColaRate,
                 socialSecurityBenefitReductionPercent,
-                socialSecurityBenefitReductionEffectiveYear);
+                socialSecurityBenefitReductionEffectiveYear, spousalInheritance);
     }
 
     @Override

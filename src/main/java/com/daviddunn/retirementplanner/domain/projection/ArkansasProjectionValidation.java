@@ -4,7 +4,9 @@ import com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken
 import com.daviddunn.retirementplanner.domain.income.HouseholdSocialSecurityResult;
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy;
 import com.daviddunn.retirementplanner.domain.model.Household;
+import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.tax.ArkansasAnnualFunding;
@@ -64,13 +66,14 @@ final class ArkansasProjectionValidation {
         this.evidence = java.util.Objects.requireNonNull(evidence);
     }
 
-    Execution execute(Household household, TaxHouseholdContext context, LocalDate firstReceipt,
+    Execution execute(RetirementPlan plan, TaxHouseholdContext context, LocalDate firstReceipt,
             EffectiveHouseholdDeathView death, FilingStatus filing, GovernmentRules rules,
             HouseholdSocialSecurityResult socialSecurity, WithdrawalBreakdown withdrawals,
             BigDecimal openingRmd, List<IncomeSourceAttribution> supplemental, ArkansasAnnualFunding.Cash cash,
             ProjectedPortfolio portfolio, WithdrawalStrategy strategy, BigDecimal fixed, BigDecimal target,
-            AnalysisCancellationToken cancellation) {
+            AnalysisCancellationToken cancellation, boolean captureLowIncomeEvidence) {
         int year = rules.getTaxYear();
+        var household = plan.getHousehold();
         try {
             var currentOwners = context.householdOwners().stream().filter(owner -> death.isAlive(owner, year))
                     .collect(java.util.stream.Collectors.toUnmodifiableSet());
@@ -86,14 +89,21 @@ final class ArkansasProjectionValidation {
             sources.addAll(dated.investments());
             var annual = ArkansasAnnualFunding.captureIncome(taxContext, filing, rules, household, socialSecurity,
                     withdrawals, openingRmd, dated.taxableInvestments(), sources);
-            var taxEvidence = new ArkansasTaxEvidence(dated.receipts(), deaths);
+            var lifePrincipal = ArkansasTaxEvidence.LifePrincipal.capture(plan, death, year);
+            var taxEvidence = new ArkansasTaxEvidence(dated.receipts(), deaths, lifePrincipal);
+            var state = plan.getPlanningAssumptions().getStateTaxAssumptions();
+            var lowIncomePolicy = state.usesArkansasRegularTaxOnly()
+                    ? state.arkansasLowIncomePolicy() : ArkansasLowIncomePolicy.STRICT;
             var facts = new ArkansasAnnualFunding.Facts(annual, taxEvidence,
-                    Optional.empty(), dated.additionalTax(), cash);
+                    Optional.empty(), dated.additionalTax(), cash, captureLowIncomeEvidence, lowIncomePolicy);
 
             var targeted = target == null ? null : roth.targeted(facts, portfolio, strategy, target, cancellation);
             if (targeted != null && targeted.status() == ArkansasRothFunding.TargetStatus.UNSUPPORTED) {
                 var issue = targeted.issue().orElseGet(() -> ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.TARGET_PROOF));
-                throw unavailableForTrial(year, ArkansasProjectionUnavailableException.Reason.TARGET_PROOF, targeted.detail(), issue,
+                var reason = issue.kind() == ArkansasTaxIssue.Kind.LIFE_PRINCIPAL_EVIDENCE
+                        ? ArkansasProjectionUnavailableException.Reason.SOURCE_OR_TAX
+                        : ArkansasProjectionUnavailableException.Reason.TARGET_PROOF;
+                throw unavailableForTrial(year, reason, targeted.detail(), issue,
                         household, firstReceipt, death, pensions, taxEvidence);
             }
             // An exhausted target room preserves the established engine's no-conversion policy.
@@ -119,9 +129,12 @@ final class ArkansasProjectionValidation {
                 throw unavailableForTrial(year, reason, funded.detail(), issue, household, firstReceipt, death, pensions, taxEvidence);
             }
             var candidate = funded.candidate().orElseThrow();
+            var versions = ArkansasValidationTax.reviewedVersions();
+            if (lifePrincipal.isPresent()) versions = ArkansasValidationTax.withLifePrincipalPolicy(versions);
+            if (state.usesArkansasRegularTaxOnly()) versions = ArkansasValidationTax.withRegularTaxOnlyPolicy(versions);
             var disclosure = new ArkansasValidationTax(candidate.stateTax(), filing, candidate.taxableFundingIncome(),
                     funded.metrics(), Optional.ofNullable(targeted).map(ArkansasRothFunding.TargetResult::metrics),
-                    ArkansasValidationTax.reviewedVersions(),
+                    versions,
                     ArkansasAnnualProvenance.capture(candidate, taxEvidence, dated.additionalTax(), target));
             return new Execution(trial, candidate, disclosure);
         } catch (NiitUnsupportedInputException ex) {

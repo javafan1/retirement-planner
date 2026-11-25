@@ -1,24 +1,78 @@
 package com.daviddunn.retirementplanner.domain.tax.state;
 
+import com.daviddunn.retirementplanner.domain.benefit.BenefitEvaluationContext;
+import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission;
+import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitEvaluator;
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
 import com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.projection.EffectiveHouseholdDeathView;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /** Run-only evidence supplied to the isolated Arkansas calculation. */
 public record ArkansasTaxEvidence(
         Map<IncomeSourceAttribution, ReceiptFacts> receipts,
-        Map<AccountOwnership, LocalDate> modeledDeaths) {
+        Map<AccountOwnership, LocalDate> modeledDeaths,
+        Optional<LifePrincipal> lifePrincipal) {
 
     public static final ArkansasTaxEvidence NONE = new ArkansasTaxEvidence(Map.of(), Map.of());
+
+    public ArkansasTaxEvidence(Map<IncomeSourceAttribution, ReceiptFacts> receipts,
+            Map<AccountOwnership, LocalDate> modeledDeaths) {
+        this(receipts, modeledDeaths, Optional.empty());
+    }
 
     public ArkansasTaxEvidence {
         receipts = Map.copyOf(receipts);
         modeledDeaths = Map.copyOf(modeledDeaths);
+        Objects.requireNonNull(lifePrincipal);
+    }
+
+    /** A run-only expectation constructed from admitted definitions and the effective annual death view. */
+    public static final class LifePrincipal {
+        private final BenefitEvaluationContext context;
+        private final List<IncomeSourceAttribution> expected;
+
+        private LifePrincipal(RetirementPlan plan, EffectiveHouseholdDeathView deaths, int year) {
+            var definitions = plan.getConditionalBenefits();
+            ConditionalBenefitAdmission.requireArkansasLifePrincipal(
+                    plan.getHousehold(), definitions, plan.getFinancialCalculationMode());
+            context = BenefitEvaluationContext.capture(plan.getHousehold(), deaths,
+                    plan.getPlanningAssumptions().getProjectionStartDate(), year);
+            expected = new ConditionalBenefitEvaluator().evaluate(definitions, context).receipts().stream()
+                    .map(IncomeSourceAttribution::conditional).toList();
+        }
+
+        public static Optional<LifePrincipal> capture(RetirementPlan plan, EffectiveHouseholdDeathView deaths, int year) {
+            return ConditionalBenefitAdmission.hasArkansasConditionalBenefits(plan)
+                    ? Optional.of(new LifePrincipal(plan, deaths, year))
+                    : Optional.empty();
+        }
+
+        boolean matches(AnnualIncomeTaxFacts annual, Map<AccountOwnership, LocalDate> recordedDeaths,
+                List<IncomeSourceAttribution> actual) {
+            var household = annual.household();
+            var opening = context.opening().getYear() == context.year()
+                    ? context.opening() : LocalDate.of(context.year(), 1, 1);
+            return annual.taxYear() == context.year()
+                    && household.distributionDate().equals(opening)
+                    && household.birthDates().equals(Map.of(AccountOwnership.PRIMARY, context.primaryBirthDate(),
+                            AccountOwnership.SPOUSE, context.spouseBirthDate().orElseThrow()))
+                    && household.householdOwners().equals(Set.of(AccountOwnership.PRIMARY, AccountOwnership.SPOUSE))
+                    && household.householdOwners().containsAll(recordedDeaths.keySet())
+                    && household.householdOwners().stream().allMatch(owner ->
+                            context.deaths().deathDate(owner).filter(date -> date.getYear() <= context.year())
+                                    .equals(Optional.ofNullable(recordedDeaths.get(owner)))
+                            && context.deaths().isAlive(owner, context.year()) == household.activeOwners().contains(owner))
+                    && expected.equals(actual);
+        }
     }
 
     public record ReceiptWindow(LocalDate first, LocalDate last) {

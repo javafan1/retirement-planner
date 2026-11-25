@@ -2,7 +2,9 @@ package com.daviddunn.retirementplanner.app.socialsecurity.results;
 
 import com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot;
 import com.daviddunn.retirementplanner.domain.financial.RothIRA;
+import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition.PersonReference;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.model.DeathScenario;
 import com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction;
 import com.daviddunn.retirementplanner.domain.projection.ArkansasValidationTax;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
@@ -23,9 +25,45 @@ import java.util.UUID;
 
 import static com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.selectArkansas;
 import static com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.surplusPlan;
+import static com.daviddunn.retirementplanner.domain.projection.ArkansasLifePrincipalProjectionTest.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ArkansasFundingProvenanceTest {
+    @Test
+    void noPaymentStillRequiresTheScopedPolicyAndCannotSeedAnAnalyzer() throws Exception {
+        var plan = fixture(START, 1, DeathScenario.BOTH_SURVIVE, 0, "0");
+        plan.setConditionalBenefits(List.of(policy(PersonReference.PRIMARY, "100000", null, null)));
+        var current = CompleteProjectionSnapshot.captureArkansas(UUID.randomUUID(), plan, run(plan), Instant.EPOCH);
+        var annual = current.annual();
+        var scope = annual.arkansas();
+        assertTrue(scope.hasLifePrincipalPolicy());
+        assertTrue(annual.years().getFirst().sources().stream().noneMatch(s -> s.conditionalBenefit() != null));
+        var json = new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        var original = json.writeValueAsBytes(current);
+        var restored = json.readValue(original, CompleteProjectionSnapshot.class);
+        assertTrue(restored.calculationSemanticsCurrent());
+        assertEquals(current.id(), restored.id());
+        assertEquals(current.inputDigest(), restored.inputDigest());
+        assertEquals(ArkansasAnalysisProvenance.annualDigest(current), ArkansasAnalysisProvenance.annualDigest(restored));
+        var retainedCodec = new RetainedProjectionCodec();
+        assertArrayEquals(retainedCodec.encode(current.annual()).bytes(), retainedCodec.encode(restored.annual()).bytes());
+
+        var fakeScope = new RetainedProjectionSnapshot.Arkansas(scope.version(), scope.jurisdiction(),
+                scope.projectionAlgorithm(), ArkansasValidationTax.reviewedVersions(), scope.years());
+        var missing = new RetainedProjectionSnapshot(annual.schemaVersion(), annual.accounts(), annual.years(),
+                annual.metrics(), annual.strategy(), annual.advancedSocialSecurityPathUsed(), annual.warnings(), fakeScope);
+        assertThrows(IllegalArgumentException.class, () -> new CompleteProjectionSnapshot(current.version(), current.id(),
+                current.owner(), current.sourcePlanId(), current.acceptedAt(), current.inputsDocument(), current.inputDigest(),
+                current.provenance(), missing, current.nonInvestable(), current.summary(), current.people()));
+        var unknown = new java.util.HashMap<>(scope.versions());
+        unknown.put(ArkansasValidationTax.LIFE_PRINCIPAL_POLICY_KEY, "unreviewed");
+        assertThrows(IllegalArgumentException.class, () -> new RetainedProjectionSnapshot.Arkansas(scope.version(),
+                scope.jurisdiction(), scope.projectionAlgorithm(), unknown, scope.years()));
+        assertThrows(UnsupportedOperationException.class, () -> ArkansasAnalysisProvenance.runProduction(
+                AnalysisKind.COUPLE_QUICK, List.of(current), () -> false,
+                engine -> fail("Scoped projection entered analysis."), result -> fail("No payload expected.")));
+    }
+
     @Test
     void oldTargetProofTuplesRoundTripWithTheirOwnDependencyAndAreHistorical() throws Exception {
         var plan = selectArkansas(surplusPlan("1000000", 1));

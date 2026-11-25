@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.domain.tax.state;
 
+import com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy;
+
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
 import com.daviddunn.retirementplanner.domain.rules.FilingStatus;
 import com.daviddunn.retirementplanner.domain.tax.NiitUnsupportedInputException;
@@ -82,12 +84,18 @@ public final class ArkansasProductionTaxCalculator {
     /** A continuous lower envelope over a homogeneous funding source, including the statutory jumps. */
     public Optional<BigDecimal> fundingTaxFloor(AnnualIncomeTaxFacts atStart, ArkansasTaxEvidence evidence,
             BigDecimal maximumOrdinaryIncrease) {
+        return fundingTaxFloor(atStart, evidence, maximumOrdinaryIncrease, ArkansasLowIncomePolicy.STRICT);
+    }
+
+    public Optional<BigDecimal> fundingTaxFloor(AnnualIncomeTaxFacts atStart, ArkansasTaxEvidence evidence,
+            BigDecimal maximumOrdinaryIncrease, ArkansasLowIncomePolicy lowIncomePolicy) {
         if (maximumOrdinaryIncrease.signum() < 0) throw new IllegalArgumentException("Negative funding interval.");
         try {
             boolean joint = atStart.filingStatus() == FilingStatus.MARRIED_FILING_JOINTLY;
             var household = atStart.household();
             var filers = (joint ? household.householdOwners() : household.activeOwners()).stream().sorted().toList();
-            var income = new ArkansasIncomeReconciliation(atStart, evidence).reconcile();
+            var income = new ArkansasIncomeReconciliation(atStart, evidence,
+                    ArkansasRecipientDiagnostic.Stage.FUNDING_INTERVAL).reconcile();
             var recipients = new ArrayList<RecipientBounds>();
             for (var filer : filers) {
                 var age = ageCredit(atStart, evidence, filer);
@@ -101,7 +109,8 @@ public final class ArkansasProductionTaxCalculator {
                 recipients.add(new RecipientBounds(filer, certain, certain, age == AgeCredit.ELIGIBLE));
             }
             var bounds = worksheet.boundStatutoryChoices(income.ordinary(), recipients, maximumOrdinaryIncrease);
-            if (bounds.maximum().signum() == 0 || outsideLowIncome(atStart.taxYear(), joint, filers.size(), income)) {
+            if (lowIncomePolicy == ArkansasLowIncomePolicy.REGULAR_TAX_ONLY_LOW_INCOME_RELIEF_NOT_MODELED
+                    || bounds.maximum().signum() == 0 || outsideLowIncome(atStart.taxYear(), joint, filers.size(), income)) {
                 return Optional.of(bounds.minimum());
             }
             return Optional.empty();
@@ -120,15 +129,23 @@ public final class ArkansasProductionTaxCalculator {
 
     /** Exclusion-only envelope. Unknown policy or base evidence supplies no positive lower bound. */
     public Optional<TargetTaxFloor> prepareTargetTaxFloor(AnnualIncomeTaxFacts base, ArkansasTaxEvidence evidence) {
+        return prepareTargetTaxFloor(base, evidence, ArkansasLowIncomePolicy.STRICT);
+    }
+
+    public Optional<TargetTaxFloor> prepareTargetTaxFloor(AnnualIncomeTaxFacts base, ArkansasTaxEvidence evidence,
+            ArkansasLowIncomePolicy lowIncomePolicy) {
         try {
             var household = base.household();
             boolean joint = base.filingStatus() == FilingStatus.MARRIED_FILING_JOINTLY;
             if (!joint && base.filingStatus() != FilingStatus.SINGLE
-                    || !ArkansasTaxRules.supportsLowIncomeProof(base.taxYear())) return Optional.empty();
+                    || base.taxYear() < ArkansasTaxRules.REVIEWED_YEAR
+                    || lowIncomePolicy == ArkansasLowIncomePolicy.STRICT
+                        && !ArkansasTaxRules.supportsLowIncomeProof(base.taxYear())) return Optional.empty();
             var filers = (joint ? household.householdOwners() : household.activeOwners()).stream().sorted().toList();
             if (filers.size() != (joint ? 2 : 1)) return Optional.empty();
             validateDeaths(base, evidence, joint);
-            var income = new ArkansasIncomeReconciliation(base, evidence).reconcile();
+            var income = new ArkansasIncomeReconciliation(base, evidence,
+                    ArkansasRecipientDiagnostic.Stage.TARGET_BOUND).reconcile();
             var recipients = new ArrayList<RecipientBounds>();
             for (var owner : filers) {
                 var age = ageCredit(base, evidence, owner);
@@ -138,7 +155,8 @@ public final class ArkansasProductionTaxCalculator {
             }
             return Optional.of((low, high, eligibleLow, eligibleHigh) -> worksheet.targetTaxFloor(base.taxYear(),
                     income.ordinary(), low, high, recipients.stream().map(r -> new ArkansasJointWorksheet.TargetReceipts(
-                            r, eligibleLow.getOrDefault(r.owner(), ZERO), eligibleHigh.getOrDefault(r.owner(), ZERO))).toList()));
+                            r, eligibleLow.getOrDefault(r.owner(), ZERO), eligibleHigh.getOrDefault(r.owner(), ZERO))).toList(),
+                    lowIncomePolicy));
         } catch (IllegalArgumentException | DateTimeException | NiitUnsupportedInputException unavailable) {
             return Optional.empty();
         }
@@ -150,8 +168,19 @@ public final class ArkansasProductionTaxCalculator {
     }
 
     public Result calculateUnregistered(AnnualIncomeTaxFacts request, ArkansasTaxEvidence evidence) {
+        return calculateUnregistered(request, evidence, false);
+    }
+
+    public Result calculateUnregistered(AnnualIncomeTaxFacts request, ArkansasTaxEvidence evidence,
+            boolean captureLowIncomeEvidence) {
+        return calculateUnregistered(request, evidence, captureLowIncomeEvidence, ArkansasLowIncomePolicy.STRICT);
+    }
+
+    public Result calculateUnregistered(AnnualIncomeTaxFacts request, ArkansasTaxEvidence evidence,
+            boolean captureLowIncomeEvidence, ArkansasLowIncomePolicy lowIncomePolicy) {
         Objects.requireNonNull(request);
         Objects.requireNonNull(evidence);
+        boolean strict = Objects.requireNonNull(lowIncomePolicy) == ArkansasLowIncomePolicy.STRICT;
         if (request.taxYear() < ArkansasTaxRules.REVIEWED_YEAR) {
             return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.OUTSIDE_REVIEWED_POLICY,
                     "Arkansas years before 2026 are outside the reviewed planning policy.",
@@ -172,7 +201,8 @@ public final class ArkansasProductionTaxCalculator {
             require(filers.size() == (joint ? 2 : 1) && !household.activeOwners().isEmpty(),
                     "Arkansas filing status requires the corresponding actual annual filers.");
             validateDeaths(request, evidence, joint);
-            var income = new ArkansasIncomeReconciliation(request, evidence).reconcile();
+            var income = new ArkansasIncomeReconciliation(request, evidence,
+                    ArkansasRecipientDiagnostic.Stage.EXACT_PRICING).reconcile();
 
             var ageCredits = new ArrayList<AgeCredit>();
             for (var filer : filers) ageCredits.add(ageCredit(request, evidence, filer));
@@ -198,18 +228,24 @@ public final class ArkansasProductionTaxCalculator {
             }
 
             var selected = firstChoice.atCertainReceipts();
-            if (selected.tax().signum() > 0 && !ArkansasTaxRules.supportsLowIncomeProof(request.taxYear())) {
+            if (strict && selected.tax().signum() > 0 && !ArkansasTaxRules.supportsLowIncomeProof(request.taxYear())) {
                 return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.OUTSIDE_REVIEWED_POLICY,
                         "Arkansas low-income admission proof is unavailable for this year.",
-                        ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.LOW_INCOME));
+                        captureLowIncomeEvidence
+                                ? ArkansasTaxIssue.lowIncome(ArkansasTaxIssue.Bound.NOT_EVALUATED,
+                                        ArkansasTaxIssue.Bound.NOT_EVALUATED)
+                                : ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.LOW_INCOME));
             }
-            if (selected.tax().signum() > 0 && !outsideLowIncome(request.taxYear(), joint, filers.size(), income)) {
+            if (strict && selected.tax().signum() > 0 && !outsideLowIncome(request.taxYear(), joint, filers.size(), income)) {
                 return unsupported(UNSUPPORTED_MODEL_RULE, FailureCategory.LEGAL_OR_SOURCE,
                         "Arkansas low-income qualification is unresolved. The §26-51-301 schedule or §26-51-501 additional credit could change this positive estimate.",
-                        ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.LOW_INCOME));
+                        captureLowIncomeEvidence ? ArkansasTaxIssue.lowIncome(
+                                bound(passesGrossBound(request.taxYear(), joint, income)),
+                                bound(passesNetBound(request.taxYear(), filers.size(), income)))
+                                : ArkansasTaxIssue.of(ArkansasTaxIssue.Kind.LOW_INCOME));
             }
 
-            var notes = new ArrayList<>(planningLimitations());
+            var notes = new ArrayList<>(planningLimitations(lowIncomePolicy));
             notes.add("Arkansas modeled ordinary income " + income.ordinary().toPlainString()
                     + ", representative retirement exclusion " + selected.retirementSubtraction().toPlainString()
                     + ", Arkansas standard deduction " + selected.standardDeduction().toPlainString()
@@ -218,7 +254,7 @@ public final class ArkansasProductionTaxCalculator {
                     + ". Verified annual outcome across represented eligibility bounds.");
             if (request.taxYear() != reviewedYear)
                 notes.add("Arkansas " + reviewedYear + " reviewed tax parameters held nominally for " + request.taxYear()
-                        + ". Statutory low-income admission ceilings are bounded separately for that year.");
+                        + (strict ? ". Statutory low-income admission ceilings are bounded separately for that year." : "."));
             var election = new Election(selected.retirementSubtraction(), selected.standardDeduction(),
                     selected.credits(), selected.netIncome(), firstChoice.selectedRecipients());
             return new Result(Optional.of(selected.tax()), Optional.empty(), notes, List.of(), Optional.of(election), Optional.empty());
@@ -254,8 +290,19 @@ public final class ArkansasProductionTaxCalculator {
     }
 
     private static boolean outsideLowIncome(int year, boolean joint, int filers, ArkansasIncomeReconciliation.Income income) {
-        return income.grossLowerBound().compareTo(ArkansasTaxRules.lowIncomeGrossCeiling(year, joint)) > 0
-                && lowestPossibleNet(income, filers).compareTo(ArkansasTaxRules.additionalCreditNetCeiling(year)) > 0;
+        return passesGrossBound(year, joint, income) && passesNetBound(year, filers, income);
+    }
+
+    private static boolean passesGrossBound(int year, boolean joint, ArkansasIncomeReconciliation.Income income) {
+        return income.grossLowerBound().compareTo(ArkansasTaxRules.lowIncomeGrossCeiling(year, joint)) > 0;
+    }
+
+    private static boolean passesNetBound(int year, int filers, ArkansasIncomeReconciliation.Income income) {
+        return lowestPossibleNet(income, filers).compareTo(ArkansasTaxRules.additionalCreditNetCeiling(year)) > 0;
+    }
+
+    private static ArkansasTaxIssue.Bound bound(boolean passes) {
+        return passes ? ArkansasTaxIssue.Bound.PASS : ArkansasTaxIssue.Bound.FAIL;
     }
 
     private static void validateDeaths(AnnualIncomeTaxFacts request, ArkansasTaxEvidence evidence, boolean joint) {
@@ -291,11 +338,18 @@ public final class ArkansasProductionTaxCalculator {
     }
 
     public static List<String> planningLimitations() {
+        return planningLimitations(ArkansasLowIncomePolicy.STRICT);
+    }
+
+    private static List<String> planningLimitations(ArkansasLowIncomePolicy policy) {
         return List.of(
                 ArkansasTaxRules.VERSION + " " + POLICY + " is a bounded plan estimate. Whole dollars choose the high schedule and adjustment. Fractional amounts feed the marginal slices and final liability rounds to cents. Final 2026 annual-return instructions are unverified. The dated estimated-payment worksheet is a separate comparison.",
                 "Reviewed 2026 values are held nominally in future years. Statutory indexing can change thresholds, deductions, credits and low-income eligibility. Actual joint filers use one combined schedule and may pay less under a separate filing method outside this model.",
                 "Ordinary Arkansas income excludes federally included Social Security once. One $6,000 retirement exclusion per eligible recipient. Own IRA age uses full possible receipt dates, and the completed own-IRA Roth transfer interpretation shares the same pool. A specific DFA conversion-exclusion ruling has not been verified.",
-                "Ordinary personal and senior credits are nonrefundable. The 65 Special alternative is compared with claiming the same recipient's retirement exclusion. Missing 2026 low-income schedules and additional-credit tables permit only tax-stable zero or an estimate proved outside both possible ranges.",
+                "Ordinary personal and senior credits are nonrefundable. The 65 Special alternative is compared with claiming the same recipient's retirement exclusion. "
+                        + (policy == ArkansasLowIncomePolicy.STRICT
+                        ? "Missing 2026 low-income schedules and additional-credit tables permit only tax-stable zero or an estimate proved outside both possible ranges."
+                        : "Regular Tax Only omits both Arkansas low-income relief provisions. Actual Arkansas income tax may be lower."),
                 "Ordinary documented employment and direct spouse-survivor pensions use the current recipient. Specialized plan, inherited, basis and employer-conversion treatments require separate evidence. Potentially early cash requires evidence of no applicable Form 5329-related additional tax. The calculator models no federal or Arkansas penalty ledger.",
                 "Admitted commercial nonqualified annuities and other supported conditional income enter once at their evidenced taxable amount. Recovered basis receives no new tax or retirement exclusion. Existing federal NIIT and Advanced evidence remain required.",
                 "Brokerage cash does not itself create gains. Modeled taxable investments enter once. Unmodeled realized gains may understate tax, and missing qualifying long-term capital-gain or special state-basis relief may overstate it."

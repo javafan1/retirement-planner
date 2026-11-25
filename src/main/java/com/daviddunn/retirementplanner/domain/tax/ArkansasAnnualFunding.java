@@ -3,13 +3,16 @@ package com.daviddunn.retirementplanner.domain.tax;
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution;
 import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.AccountReference;
 import com.daviddunn.retirementplanner.domain.model.Household;
+import com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy;
 import com.daviddunn.retirementplanner.domain.projection.HouseholdCashSettlement;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedPortfolio;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedWithdrawalAllocation;
 import com.daviddunn.retirementplanner.domain.projection.ProjectedWithdrawalAllocator;
 import com.daviddunn.retirementplanner.domain.roth.ProjectedRothConversionResult;
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasProductionTaxCalculator;
+import com.daviddunn.retirementplanner.domain.tax.state.ArkansasRecipientDiagnostic;
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxEvidence;
+import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue;
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxEvidence.Form5329Status;
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxEvidence.ReceiptFacts;
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxEvidence.ReceiptWindow;
@@ -56,7 +59,20 @@ public final class ArkansasAnnualFunding {
     /** The seed contains the annual attributed income after RMD/spending and before conversion. */
     public record Facts(AnnualIncomeTaxFacts seed, ArkansasTaxEvidence evidence,
                         Optional<ReceiptWindow> projectedReceipts, Map<AccountReference, Form5329Status> additionalTax,
-                        Cash cash) {
+                        Cash cash, boolean captureLowIncomeEvidence, ArkansasLowIncomePolicy lowIncomePolicy) {
+        public Facts(AnnualIncomeTaxFacts seed, ArkansasTaxEvidence evidence,
+                     Optional<ReceiptWindow> projectedReceipts, Map<AccountReference, Form5329Status> additionalTax,
+                     Cash cash, boolean captureLowIncomeEvidence) {
+            this(seed, evidence, projectedReceipts, additionalTax, cash, captureLowIncomeEvidence,
+                    ArkansasLowIncomePolicy.STRICT);
+        }
+
+        public Facts(AnnualIncomeTaxFacts seed, ArkansasTaxEvidence evidence,
+                     Optional<ReceiptWindow> projectedReceipts, Map<AccountReference, Form5329Status> additionalTax,
+                     Cash cash) {
+            this(seed, evidence, projectedReceipts, additionalTax, cash, false);
+        }
+
         public Facts(StateTaxCalculationRequest seed, ArkansasTaxEvidence evidence,
                      Optional<ReceiptWindow> projectedReceipts, Map<AccountReference, Form5329Status> additionalTax,
                      Cash cash) {
@@ -68,6 +84,7 @@ public final class ArkansasAnnualFunding {
             Objects.requireNonNull(projectedReceipts);
             additionalTax = Map.copyOf(additionalTax);
             Objects.requireNonNull(cash);
+            Objects.requireNonNull(lowIncomePolicy);
             if (seed.income().getRothConversion().signum() != 0
                     || seed.income().getIncomeSources().stream().anyMatch(source -> source.niit().isPresent()
                         || source.kind() == IncomeSourceAttribution.Kind.ROTH_CONVERSION
@@ -225,9 +242,21 @@ public final class ArkansasAnnualFunding {
             var input = new AnnualIncomeTaxFacts(seed.taxYear(), seed.filingStatus(), seed.household(), income,
                     federal.calculate(income, seed.filingStatus(), seed.projectedRules()), seed.projectedRules());
             var evidence = evidence(trace);
-            var result = state.calculateUnregistered(input, evidence);
+            ArkansasProductionTaxCalculator.Result result;
+            try (var ignored = ArkansasRecipientDiagnostic.exactFunding(withdrawal.signum() > 0)) {
+                result = state.calculateUnregistered(input, evidence, facts.captureLowIncomeEvidence(), facts.lowIncomePolicy());
+            }
             if (result.estimatedIncomeTax().isEmpty()) {
-                throw new Unavailable(result.limitations().getFirst(), result.issue().orElseThrow());
+                var issue = result.issue().orElseThrow();
+                if (issue.lowIncomeEvidence().isPresent()) {
+                    boolean belowFederal = facts.cash().otherTaxCash().add(allocation.getTotalWithdrawal())
+                            .compareTo(input.federal().getFederalIncomeTax()) < 0;
+                    issue = issue.withExactFundingProbe(new ArkansasTaxIssue.ExactFundingProbe(
+                            withdrawal.signum() == 0 ? ArkansasTaxIssue.Withdrawal.ZERO : ArkansasTaxIssue.Withdrawal.POSITIVE,
+                            belowFederal ? ArkansasTaxIssue.FederalCash.BELOW_FEDERAL_TAX
+                                    : ArkansasTaxIssue.FederalCash.COVERS_FEDERAL_TAX));
+                }
+                throw new Unavailable(result.limitations().getFirst(), issue);
             }
             return new Priced(new Candidate(withdrawal, allocation, executed.getPortfolio(), input, result,
                     facts.cash(), evidence), evidence);
@@ -235,7 +264,7 @@ public final class ArkansasAnnualFunding {
 
         Optional<BigDecimal> taxFloor(Priced left, BigDecimal maximumTaxableIncrease) {
             var candidate = left.candidate();
-            return state.fundingTaxFloor(candidate.annualTaxFacts(), left.evidence(), maximumTaxableIncrease)
+            return state.fundingTaxFloor(candidate.annualTaxFacts(), left.evidence(), maximumTaxableIncrease, facts.lowIncomePolicy())
                     .map(candidate.federalTax()::add);
         }
 
@@ -267,7 +296,7 @@ public final class ArkansasAnnualFunding {
                 if (!source.isRetirementDistribution()) continue;
                 receipts.put(source, distributionFacts(source, window));
             }
-            return new ArkansasTaxEvidence(receipts, facts.evidence().modeledDeaths());
+            return new ArkansasTaxEvidence(receipts, facts.evidence().modeledDeaths(), facts.evidence().lifePrincipal());
         }
 
         private ReceiptFacts distributionFacts(IncomeSourceAttribution source, ReceiptWindow window) {

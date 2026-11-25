@@ -6,6 +6,7 @@ import com.daviddunn.retirementplanner.domain.breakeven.*;
 import com.daviddunn.retirementplanner.domain.factory.RetirementPlanFactory;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
 import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.projection.ArkansasLowIncomeDiagnostic;
 import com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionUnavailableException;
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasPensionPreflight;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
@@ -34,6 +35,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import com.daviddunn.retirementplanner.app.projection.*;
 import com.daviddunn.retirementplanner.app.socialsecurity.results.RetainedProjectionSnapshot;
@@ -93,6 +95,9 @@ public class ApplicationController {
         var owner = currentPlan;
         if (owner == null || owner.getBaseline() == null || currentProjection == null || !currentProjectionDeterministicallyApplicable())
             throw new IllegalStateException("Run a current projection before calculating a common-mode comparison.");
+        if (hasAppliedSpousalIraComparisonSide()) {
+            throw new UnsupportedOperationException("Strategy comparison cannot apply the Florida spousal IRA RMD policy.");
+        }
         var baseline = owner.getBaseline();
         var originalCurrent = currentProjection;
         long revision = sourcePlanRevision;
@@ -167,6 +172,10 @@ public class ApplicationController {
             return currentProjectionDeterministicallyApplicable() ? projectionSnapshotNotice
                     : "Previous Arkansas projection retained. Run a new projection for the current inputs.";
         }
+        if (accepted != null && !accepted.spousalIraRmdApplied() && currentPlan != null
+                && ProjectionEngine.requestsAppliedSpousalIraRmd(currentPlan)) {
+            return "Previous projection retained. Run a new projection to request Florida Basic spousal retirement treatment.";
+        }
         if (currentPlan != null && com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.requiresResultCapability(currentPlan)) {
             try { com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(currentPlan); }
             catch (UnsupportedOperationException unsupported) {
@@ -186,6 +195,15 @@ public class ApplicationController {
     public CompleteProjectionSnapshot getAcceptedProjectionSnapshot() {
         var state = currentPlan == null ? null : currentPlan.getProjectionState();
         return state == null || state.current() == null ? null : currentPlan.getProjectionComponents().get(state.current().id());
+    }
+
+    public boolean hasAppliedSpousalIraComparisonSide() {
+        var current = getAcceptedProjectionSnapshot();
+        if (current != null && current.spousalIraRmdApplied()) return true;
+        var baseline = currentPlan == null ? null : currentPlan.getBaseline();
+        var id = baseline == null ? null : baseline.getProjectionSnapshotId();
+        var retained = id == null ? null : currentPlan.getProjectionComponents().get(id);
+        return retained != null && retained.spousalIraRmdApplied();
     }
     private final java.util.Map<com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind, java.util.UUID> analyzerAdmissions = new java.util.EnumMap<>(com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.class);
     private record AssociationNotice(java.util.UUID owner, String text) { }
@@ -217,6 +235,7 @@ public class ApplicationController {
             String requestFingerprint, boolean controlledArkansas) {
         var ticket = java.util.UUID.randomUUID(); analyzerAdmissions.put(kind, ticket);
         var projection = getAcceptedProjectionSnapshot();
+        if (projection != null && projection.spousalIraRmdApplied() && !isSocialSecurityOnly(kind)) return null;
         if (projection == null || !currentProjectionInputsMatch() || !canAssociateProjection(projection, controlledArkansas)
                 || (kind.shape() == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.Shape.COUPLE) != currentPlan.getHousehold().hasSpouse()) return null;
         return new AnalyzerAdmission(getAnalysisSessionId(), projection.id(), projection.inputDigest(), kind,
@@ -236,13 +255,23 @@ public class ApplicationController {
 
     private boolean canAssociateProjection(CompleteProjectionSnapshot projection, boolean controlledArkansas) {
         return controlledArkansas
-                ? projection.arkansasHistory() && (projection.calculationSemanticsCurrent()
+                ? projection.arkansasHistory() && !projection.annual().arkansas().hasLifePrincipalPolicy()
+                        && !projection.annual().arkansas().hasRegularTaxOnlyPolicy()
+                        && (projection.calculationSemanticsCurrent()
                         || projection.id().equals(controlledArkansasProjectionId))
                 : !projection.arkansasHistory() && projection.calculationSemanticsCurrent();
     }
 
+    private static boolean isSocialSecurityOnly(com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind kind) {
+        return kind == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.COUPLE_SOCIAL_SECURITY
+                || kind == com.daviddunn.retirementplanner.app.socialsecurity.results.AnalysisKind.INDIVIDUAL_SOCIAL_SECURITY;
+    }
+
     /** Captured on the owner thread before admitting Arkansas financial analysis. */
     public CompleteProjectionSnapshot requireArkansasProjectionForAnalysis() {
+        if (currentPlan != null) {
+            com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(currentPlan);
+        }
         var accepted = getAcceptedProjectionSnapshot();
         if (accepted == null || !accepted.arkansasHistory() || !accepted.calculationSemanticsCurrent()
                 || !currentProjectionInputsMatch()) {
@@ -281,6 +310,9 @@ public class ApplicationController {
                     "Last-success result has no unchanged accepted projection admission. Existing historical pins are retained independently."));
             return false;
         }
+        var original = getAcceptedProjectionSnapshot();
+        if (original == null || original.arkansasHistory() && original.annual().arkansas().hasRegularTaxOnlyPolicy()) return false;
+        if (original.spousalIraRmdApplied() && !isSocialSecurityOnly(completion.kind())) return false;
         if (admission.kind() != completion.kind() || !admission.planId().equals(completion.planId())
                 || !completion.inputFingerprint().equals(admission.requestFingerprint())
                 || !admission.ticket().equals(completion.runId())
@@ -294,7 +326,6 @@ public class ApplicationController {
                         && getAcceptedProjectionSnapshot().calculationSemanticsCurrent())
                 || !admission.projectionInputDigest().equals(getAcceptedProjectionSnapshot().inputDigest())) return false;
         UUID alternative = null;
-        var original = getAcceptedProjectionSnapshot();
         if (controlledArkansas) {
             if (completion.arkansasExecution() == null
                     || !completion.arkansasExecution().policiesMatch(
@@ -536,7 +567,14 @@ public class ApplicationController {
             var verified = new java.util.LinkedHashMap<java.util.UUID, CompleteProjectionSnapshot>();
             for (var reference : new ProjectionRoleManifest.Reference[]{manifest.current(), manifest.baseline()}) {
                 var memory = components.get(reference.id());
-                var snapshot = reference.digest().equals("0".repeat(64)) ? memory : store.read(owner.getProjectionComponentSource(), manifest.owner(), reference);
+                var snapshot = memory;
+                if (!reference.digest().equals("0".repeat(64))) {
+                    if (memory != null && memory.spousalIraRmdApplied()) {
+                        store.verifyAppliedProjectionForSwap(owner.getProjectionComponentSource(), manifest.owner(), reference, memory);
+                    } else {
+                        snapshot = store.read(owner.getProjectionComponentSource(), manifest.owner(), reference);
+                    }
+                }
                 if (snapshot == null || !snapshot.owner().equals(manifest.owner()) || !snapshot.id().equals(reference.id())
                         || memory != null && !memory.equals(snapshot)) throw new IllegalStateException("Projection component validation failed.");
                 if (memory != null) snapshot = memory; // Verified identical immutable data; do not retain another large DTO graph.
@@ -964,7 +1002,7 @@ public class ApplicationController {
             BreakEvenPlanSummary assumptions) {
         static RestoredProjection prepare(CompleteProjectionSnapshot snapshot) {
             if (snapshot == null) return null;
-            var projection = snapshot.annual().restoreProjection();
+            var projection = snapshot.restoreProjection();
             return new RestoredProjection(snapshot, projection, snapshot.summary().restore(projection),
                     snapshot.restoreNonInvestable(), snapshot.chart(),
                     com.daviddunn.retirementplanner.app.baseline.ProjectionInputs.capture(snapshot.restoreInputs()),
@@ -1071,6 +1109,11 @@ public class ApplicationController {
     }
 
     synchronized ControlledProjectionRun beginControlledArkansasProjection(ProjectionEngine engine, IntConsumer completedYears) {
+        return beginControlledArkansasProjection(engine, completedYears, ArkansasLowIncomeDiagnosticFile.forRun());
+    }
+
+    synchronized ControlledProjectionRun beginControlledArkansasProjection(ProjectionEngine engine, IntConsumer completedYears,
+            Optional<Consumer<ArkansasLowIncomeDiagnostic>> diagnostic) {
         java.util.Objects.requireNonNull(engine);
         java.util.Objects.requireNonNull(completedYears);
         if (!isCurrentPlanReadyForProjection() || planFileBusy || swapPreparing
@@ -1084,20 +1127,23 @@ public class ApplicationController {
                 sourcePlanRevision, inputs);
         currentFundingFailure = null;
         var cancelled = new AtomicBoolean();
-        var work = analysisResults.background(() -> calculateControlledArkansas(engine, ownerId, inputs, cancelled, completedYears));
+        var work = analysisResults.background(() -> calculateControlledArkansas(engine, ownerId, inputs, cancelled,
+                completedYears, diagnostic));
         controlledRun = new ControlledProjectionRun(binding, cancelled, work);
         return controlledRun;
     }
 
     private static ControlledProjectionWork calculateControlledArkansas(ProjectionEngine engine, UUID owner, String inputs,
-            AtomicBoolean cancelled, IntConsumer completedYears) {
+            AtomicBoolean cancelled, IntConsumer completedYears,
+            Optional<Consumer<ArkansasLowIncomeDiagnostic>> diagnostic) {
         var cancellation = (com.daviddunn.retirementplanner.domain.analysis.AnalysisCancellationToken) cancelled::get;
         cancellation.throwIfCancellationRequested();
         var frozen = CompleteProjectionSnapshot.restoreInputs(inputs);
         var plan = new RetirementPlan(frozen.getHousehold(), frozen.getAccountPortfolio(), frozen.getPlanningAssumptions(),
                 frozen.getRothConversionRequest(), frozen.getNonInvestableAssets(), owner.toString(), frozen.getConditionalBenefits());
         if (frozen.getFinancialCalculationMode() != null) plan.setFinancialCalculationMode(frozen.getFinancialCalculationMode());
-        var outcome = engine.projectArkansasWithOutcome(plan, cancellation, completedYears);
+        var outcome = ArkansasRecipientDiagnosticFile.evaluate(cancellation,
+                () -> engine.projectArkansasWithOutcome(plan, cancellation, completedYears, diagnostic));
         if (outcome instanceof ProjectionExecutionResult.InsufficientFunds insufficient) {
             return new ControlledProjectionWork(null, insufficient.fundingFailure());
         }
@@ -1433,7 +1479,15 @@ public class ApplicationController {
             // Preserve the established normal-result account identities. The synchronous engine
             // receives the same live graph as before; detached metadata and the post-run guards
             // prevent publishing a result whose effective input state changed during execution.
-            var outcome = projectionEngine.projectWithOutcome(runPlan);
+            boolean appliedRollover = ProjectionEngine.requestsSpousal401kRollover(executionPlan);
+            boolean appliedIra = !appliedRollover && ProjectionEngine.requestsSpousalIraRmd(executionPlan);
+            boolean appliedEmployerBeneficiary = ProjectionEngine.requestsSpousalBeneficiary401kRmd(executionPlan);
+            boolean appliedBeneficiary = !appliedEmployerBeneficiary && ProjectionEngine.requestsSpousalBeneficiaryIraRmd(executionPlan);
+            var outcome = appliedEmployerBeneficiary ? projectionEngine.projectSpousalBeneficiary401kRmd(executionPlan)
+                    : appliedBeneficiary ? projectionEngine.projectSpousalBeneficiaryIraRmd(executionPlan)
+                    : appliedRollover ? projectionEngine.projectSpousal401kRollover(executionPlan)
+                    : appliedIra ? projectionEngine.projectSpousalIraRmd(executionPlan)
+                    : projectionEngine.projectWithOutcome(runPlan);
             CompleteProjectionSnapshot complete = null;
             ProjectionSummary completedSummary = null;
             Projection completedProjection = null;
@@ -1443,12 +1497,18 @@ public class ApplicationController {
                 completedProjection = projection;
                 completedSummary = projectionSummaryService.summarize(executionPlan, projection);
                 var nonInvestable = nonInvestableAssetProjectionService.project(executionPlan.getNonInvestableAssets(), projection.getStartYear(), projection.getEndYear());
-                var retained = RetainedProjectionSnapshot.capture(projection);
+                var retained = appliedEmployerBeneficiary ? RetainedProjectionSnapshot.captureSpousalBeneficiary401kRmd(projection)
+                        : appliedBeneficiary ? RetainedProjectionSnapshot.captureSpousalBeneficiaryIraRmd(projection)
+                        : appliedRollover ? RetainedProjectionSnapshot.captureSpousal401kRollover(projection)
+                        : appliedIra ? RetainedProjectionSnapshot.captureSpousalIraRmd(projection)
+                        : RetainedProjectionSnapshot.capture(projection);
                 complete = new CompleteProjectionSnapshot(1, java.util.UUID.randomUUID(), ownerIdentity, ownerIdentity, java.time.Instant.now(),
                         inputDocument, CompleteProjectionSnapshot.digest(inputDocument),
-                        com.daviddunn.retirementplanner.app.projection.ConditionalBenefitExecutionSemantics.completed(executionPlan,inputDocument,retained,
+                        com.daviddunn.retirementplanner.app.projection.SpousalInheritancePlanningEvidence.completed(
+                                frozen.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance(), inputDocument, retained,
+                                com.daviddunn.retirementplanner.app.projection.ConditionalBenefitExecutionSemantics.completed(executionPlan,inputDocument,retained,
                                 com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.PROVENANCE
-                                + "Accepted normal projection; retained schema " + retained.schemaVersion() + "; original build version not recorded"),
+                                + "Accepted normal projection; retained schema " + retained.schemaVersion() + "; original build version not recorded")),
                         retained, nonInvestable.stream().map(CompleteProjectionSnapshot.NonInvestableYear::capture).toList(),
                         CompleteProjectionSnapshot.Summary.capture(completedSummary), BreakEvenPlanSummary.from(executionPlan));
                 completedChart = complete.chart(); // Validate/detach before publishing any accepted state.
@@ -1512,7 +1572,7 @@ public class ApplicationController {
             if (originalId != null) {
                 var original = currentPlan.getProjectionComponents().get(originalId);
                 if (original == null) return null;
-                baselineProjection = original.annual().restoreProjection();
+                baselineProjection = original.restoreProjection();
                 baselineNonInvestableAssetProjections = original.restoreNonInvestable();
                 baselineProjectionAssumptions = original.restoreBreakEvenAssumptions();
                 baselineDetailsInputs = com.daviddunn.retirementplanner.app.baseline.ProjectionInputs.capture(original.restoreInputs());

@@ -42,6 +42,57 @@ class LifeInsuranceDialogTest {
         assertEquals(0,year.getAdjustedGrossIncome().signum());
         assertEquals(new java.math.BigDecimal("400000.00"),year.getGuaranteedIncome());
     }
+
+    @Test
+    void arkansasEditorConstrainsClassificationAndPreservesTheSavedDraftOnCancel() throws Exception {
+        var plan = com.daviddunn.retirementplanner.domain.projection.ArkansasLifePrincipalProjectionTest.fixture(
+                java.time.LocalDate.of(2026, 1, 1), 1, DeathScenario.PRIMARY_DIES, 2026, "0");
+        var saved = fx(() -> {
+            var dialog = new ConditionalBenefitDialog(plan, null);
+            dialog.show();
+            try {
+                assertEquals("Add Life Insurance Death Benefit", dialog.getTitle());
+                assertEquals(Category.DEATH_BENEFIT, choice(dialog, "category").getValue());
+                assertEquals(TriggerType.DEATH, choice(dialog, "trigger").getValue());
+                assertEquals(PaymentPattern.ONE_TIME_LUMP_SUM, choice(dialog, "pattern").getValue());
+                var taxes = choice(dialog, "tax-character");
+                assertTrue(taxes.isDisabled());
+                assertEquals(List.of(TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED), taxes.getItems());
+                input(dialog, "name").setText("Synthetic personal insurance");
+                input(dialog, "amount").setText("100000");
+                choice(dialog, "trigger-person").setValue(PersonReference.PRIMARY);
+                choice(dialog, "recipient").setValue(PersonReference.SPOUSE);
+                var save = (Button) dialog.getDialogPane().lookupButton(ConditionalBenefitDialog.SAVE);
+                save.fire();
+                assertTrue(dialog.isShowing());
+                assertFalse(((Label) dialog.getDialogPane().lookup("#cb-life-qualification-error")).getText().isBlank());
+                acknowledgment(dialog).setSelected(true);
+                save.fire();
+                return Objects.requireNonNull(dialog.getResult());
+            } finally {
+                dialog.close();
+            }
+        });
+        assertTrue(plan.getConditionalBenefits().isEmpty());
+        plan.setConditionalBenefits(List.of(saved));
+        var projection = com.daviddunn.retirementplanner.domain.projection.ArkansasLifePrincipalProjectionTest.run(plan);
+        assertEquals(new java.math.BigDecimal("100000.00"), projection.getFirstYear().getEndingRetainedNonQualifiedAssets());
+        plan.setFinancialCalculationMode(FinancialCalculationMode.ADVANCED);
+        fx(() -> {
+            var dialog = new ConditionalBenefitDialog(plan, saved);
+            dialog.show();
+            try {
+                assertTrue(((Label) dialog.getDialogPane().lookup("#cb-state-warning")).getText().contains("Advanced NIIT"));
+                input(dialog, "amount").setText("123456");
+                ((Button) dialog.getDialogPane().lookupButton(ButtonType.CANCEL)).fire();
+                assertNull(dialog.getResult());
+            } finally {
+                dialog.close();
+            }
+            return null;
+        });
+        assertEquals(List.of(saved), plan.getConditionalBenefits());
+    }
     @Test void draftChangesNeverSilentlyCommitAnIncompatibleClassificationAndCancelPreservesOriginal() throws Exception {
         fx(()-> {
             var p=LifeInsuranceFinancialTest.fixture(StateTaxJurisdiction.FL); var original=p.getConditionalBenefits().getFirst();

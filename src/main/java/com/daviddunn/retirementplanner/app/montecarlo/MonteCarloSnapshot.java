@@ -195,12 +195,18 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
     }
 
     private void requireImplementedPlanInputs() {
-        boolean modes = MonteCarloPlanDocument.read(request.planA()).getFinancialCalculationMode() != null
-                || request.planB() != null && MonteCarloPlanDocument.read(request.planB()).getFinancialCalculationMode() != null;
+        var originalA = MonteCarloPlanDocument.read(request.planA());
+        var originalB = request.planB() == null ? null : MonteCarloPlanDocument.read(request.planB());
+        if (originalA.getPlanningAssumptions().getStateTaxAssumptions().usesArkansasRegularTaxOnly()
+                || originalB != null && originalB.getPlanningAssumptions().getStateTaxAssumptions().usesArkansasRegularTaxOnly()) {
+            throw invalid("Arkansas Regular Tax Only does not support Monte Carlo results.");
+        }
+        boolean modes = originalA.getFinancialCalculationMode() != null
+                || originalB != null && originalB.getFinancialCalculationMode() != null;
         if (modes && (benefitExecution == null || !benefitExecution.hasCalculationMode()))
             throw invalid("Explicit financial calculation modes require their authenticated execution capability.");
-        boolean premiums = com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(request.planA()))
-                || request.planB() != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(MonteCarloPlanDocument.read(request.planB()));
+        boolean premiums = com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(originalA)
+                || originalB != null && com.daviddunn.retirementplanner.domain.financial.ContractualPremiums.configured(originalB);
         if (premiums && (benefitExecution == null || !benefitExecution.includesPremiums()))
             throw invalid("Contractual premiums require their versioned execution capability.");
         if (benefitExecution != null) {
@@ -211,8 +217,8 @@ public record MonteCarloSnapshot(int version, Mode mode, boolean hasSpouse, Sett
                 com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireAnalyzerSupported(
                         executed);
             }
-            boolean positiveA = ExpenseExecution.configured(MonteCarloPlanDocument.read(request.planA()));
-            boolean positiveB = request.planB() != null && ExpenseExecution.configured(MonteCarloPlanDocument.read(request.planB()));
+            boolean positiveA = ExpenseExecution.configured(originalA);
+            boolean positiveB = originalB != null && ExpenseExecution.configured(originalB);
             if ((paired == null ? expenseExecution != null : pairedExpenseExecution != null) != (positiveA || positiveB))
                 throw invalid("Conditional-benefit result has incomplete stochastic expense provenance.");
         }

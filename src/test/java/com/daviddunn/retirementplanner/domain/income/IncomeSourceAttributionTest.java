@@ -5,6 +5,8 @@ import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.domain.projection.*;
 import com.daviddunn.retirementplanner.domain.roth.ProjectedPortfolioRothConverter;
 import com.daviddunn.retirementplanner.domain.rmd.*;
+import com.daviddunn.retirementplanner.domain.retirementownership.RetirementOwnershipResolver;
+import com.daviddunn.retirementplanner.persistence.GovernmentRulesRepository;
 import com.daviddunn.retirementplanner.domain.withdrawal.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -12,6 +14,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Year;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -102,6 +105,50 @@ class IncomeSourceAttributionTest {
         assertEquals(money("2000"), source.grossAmount());
         assertEquals(money("48000"), allocation.getPortfolio().getBalance(ira));
         assertEquals(money("50000"), ira.getCurrentBalance());
+    }
+
+    @Test
+    void successorPayeeReusesActualDebitAndCannotAuthorizeAnotherEvent() throws Exception {
+        var ira = new TraditionalIRA("Synthetic IRA", AccountOwnership.PRIMARY, money("50000"));
+        var result = new ProjectedWithdrawalAllocator().allocateHouseholdRmds(portfolio(ira),
+                new HouseholdRmdResult(new OwnerRmdResult(money("2000"), List.of(), List.of()), OwnerRmdResult.zero()));
+        var debit = result.getWithdrawalBreakdown().getIncomeSources().getFirst().inYear(2037);
+        var reference = debit.account().orElseThrow();
+        var primary = LocalDate.of(1960, 6, 15);
+        var spouse = LocalDate.of(1962, 6, 15);
+        var household = new Household(new Person("Synthetic", "Primary", primary), new Person("Synthetic", "Spouse", spouse));
+        var deaths = EffectiveHouseholdDeathView.resolve(household,
+                new DeathScenarioAssumptions(DeathScenario.PRIMARY_DIES, 2034), Optional.empty());
+        var rules = new GovernmentRulesRepository().load("/rules/government-rules-2026.json").getRmdRules();
+        var otherAccount = IncomeSourceAttribution.AccountReference.capture(
+                new TraditionalIRA("Synthetic IRA", AccountOwnership.PRIMARY, money("50000")));
+        var view = RetirementOwnershipResolver.resolveForPlanning(Year.of(2037), LocalDate.of(2033, 1, 1), deaths,
+                Map.of(AccountOwnership.PRIMARY, primary, AccountOwnership.SPOUSE, spouse), rules,
+                List.of(reference, otherAccount), new SpousalInheritanceAssumption(SpousalInheritanceAssumption.Treatment.SPOUSE_AS_OWNER),
+                Set.of(reference, otherAccount));
+        var successor = debit.forSuccessorRmd(view.accounts().get(reference));
+
+        assertEquals(AccountOwnership.SPOUSE, successor.owner().orElseThrow());
+        assertEquals(AccountOwnership.PRIMARY, successor.account().orElseThrow().owner());
+        assertSame(reference, successor.account().orElseThrow());
+        assertEquals(debit.grossAmount(), successor.grossAmount());
+        assertEquals(debit.modeledTaxableAmount(), successor.modeledTaxableAmount());
+        assertEquals(money("48000"), result.getPortfolio().getBalance(ira));
+        assertEquals(1, result.getWithdrawalBreakdown().getIncomeSources().size());
+        assertEquals(successor, successor.inYear(2037));
+        assertThrows(IllegalArgumentException.class, () -> successor.inYear(2038));
+        assertThrows(IllegalArgumentException.class, () -> debit.forSuccessorRmd(view.accounts().get(otherAccount)));
+        assertThrows(IllegalArgumentException.class, () -> successor.forSuccessorRmd(view.accounts().get(reference)));
+        assertThrows(IllegalArgumentException.class, () -> new IncomeSourceAttribution(debit.kind(), debit.purpose(),
+                successor.owner(), debit.account(), debit.destination(), debit.description(), debit.grossAmount(),
+                debit.modeledTaxableAmount(), debit.taxYear(), debit.pension()));
+        for (var attemptedKind : List.of(IncomeSourceAttribution.Kind.RMD, IncomeSourceAttribution.Kind.ROTH_CONVERSION)) {
+            var amount = attemptedKind == IncomeSourceAttribution.Kind.RMD ? money("2001") : debit.grossAmount();
+            assertThrows(IllegalArgumentException.class, () -> new IncomeSourceAttribution(attemptedKind, debit.purpose(),
+                    successor.owner(), debit.account(), debit.destination(), debit.description(), amount, Optional.of(amount),
+                    debit.taxYear(), debit.pension(), debit.conditionalBenefit(), debit.niit(), debit.calculationMode(),
+                    successor.successorRmd()));
+        }
     }
 
     @Test

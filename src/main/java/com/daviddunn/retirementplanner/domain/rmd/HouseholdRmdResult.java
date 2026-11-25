@@ -3,6 +3,7 @@ package com.daviddunn.retirementplanner.domain.rmd;
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.Map;
+import java.util.List;
 import java.util.EnumMap;
 import java.util.Collections;
 import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
@@ -27,11 +28,24 @@ public final class HouseholdRmdResult {
 
     private final OwnerRmdResult primaryRmd;
     private final OwnerRmdResult spouseRmd;
+    private final BeneficiaryIraRmd beneficiaryIraRmd;
+    private final List<Beneficiary401kRmd> employerBeneficiaryRmds;
 
     public HouseholdRmdResult(Map<AccountOwnership, OwnerRmdResult> owners) {
+        this(owners, null);
+    }
+
+    public HouseholdRmdResult(Map<AccountOwnership, OwnerRmdResult> owners, BeneficiaryIraRmd beneficiaryIraRmd) {
+        this(owners, beneficiaryIraRmd, List.of());
+    }
+
+    public HouseholdRmdResult(Map<AccountOwnership, OwnerRmdResult> owners, BeneficiaryIraRmd beneficiaryIraRmd,
+            List<Beneficiary401kRmd> employerBeneficiaryRmds) {
         owners = Map.copyOf(owners);
+        this.employerBeneficiaryRmds = List.copyOf(employerBeneficiaryRmds);
         this.primaryRmd = Objects.requireNonNull(owners.get(AccountOwnership.PRIMARY));
         this.spouseRmd = owners.get(AccountOwnership.SPOUSE);
+        this.beneficiaryIraRmd = beneficiaryIraRmd;
         if (owners.containsKey(AccountOwnership.JOINT)) {
             throw new IllegalArgumentException("Joint ownership has no owner RMD.");
         }
@@ -48,15 +62,7 @@ public final class HouseholdRmdResult {
             OwnerRmdResult primaryRmd,
             OwnerRmdResult spouseRmd) {
 
-        this.primaryRmd =
-                Objects.requireNonNull(
-                        primaryRmd,
-                        "Primary RMD result is required.");
-
-        this.spouseRmd =
-                Objects.requireNonNull(
-                        spouseRmd,
-                        "Spouse RMD result is required.");
+        this(Map.of(AccountOwnership.PRIMARY, primaryRmd, AccountOwnership.SPOUSE, spouseRmd));
     }
 
     public OwnerRmdResult getPrimaryRmd() {
@@ -70,11 +76,18 @@ public final class HouseholdRmdResult {
 
     public BigDecimal getTotalRmd() {
 
-        return primaryRmd
+        var ownerTotal = primaryRmd
                 .getTotalRmd()
                 .add(
                         spouseRmd == null ? BigDecimal.ZERO : spouseRmd.getTotalRmd());
+        var total = beneficiaryIraRmd == null ? ownerTotal : ownerTotal.add(beneficiaryIraRmd.requiredAmount());
+        for (var employer : employerBeneficiaryRmds) total = total.add(employer.requiredAmount());
+        return total;
     }
+
+    public BeneficiaryIraRmd beneficiaryIraRmd() { return beneficiaryIraRmd; }
+
+    public List<Beneficiary401kRmd> employerBeneficiaryRmds() { return employerBeneficiaryRmds; }
 
     public static HouseholdRmdResult zero() {
 

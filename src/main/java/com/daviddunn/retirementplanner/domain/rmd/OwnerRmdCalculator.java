@@ -100,7 +100,17 @@ public final class OwnerRmdCalculator {
             LocalDate dateOfBirth,
             int projectionYear,
             GovernmentRules governmentRules) {
+        return calculate(portfolio, balanceSnapshot, ownership, dateOfBirth, projectionYear, governmentRules, null);
+    }
 
+    OwnerRmdResult calculate(
+            AccountPortfolio portfolio,
+            RmdBalanceSnapshot balanceSnapshot,
+            AccountOwnership ownership,
+            LocalDate dateOfBirth,
+            int projectionYear,
+            GovernmentRules governmentRules,
+            SpousalIraRmdMembership membership) {
         validateArguments(
                 portfolio,
                 ownership,
@@ -111,8 +121,10 @@ public final class OwnerRmdCalculator {
                 balanceSnapshot,
                 "RMD balance snapshot is required.");
 
-        BigDecimal iraRmd =
-                ownerRmdService.calculateIraRmd(
+        BigDecimal iraRmd = membership != null
+                ? ownerRmdService.calculateIraRmd(membership.priorIraBalance(ownership), dateOfBirth,
+                        projectionYear, governmentRules)
+                : ownerRmdService.calculateIraRmd(
                         portfolio,
                         balanceSnapshot,
                         ownership,

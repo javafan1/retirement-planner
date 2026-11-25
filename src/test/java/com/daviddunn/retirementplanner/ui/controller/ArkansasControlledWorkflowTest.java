@@ -18,6 +18,9 @@ import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmissio
 import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition;
 import com.daviddunn.retirementplanner.domain.income.Pension;
 import com.daviddunn.retirementplanner.domain.income.RetirementIncomeSourceOrigin;
+import com.daviddunn.retirementplanner.domain.model.DeathScenario;
+import com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode;
+import com.daviddunn.retirementplanner.domain.projection.ArkansasValidationTax;
 import com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionUnavailableException;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEconomicPath;
@@ -25,6 +28,7 @@ import com.daviddunn.retirementplanner.domain.tax.state.ArkansasTaxIssue;
 import com.daviddunn.retirementplanner.persistence.JsonAnalysisSnapshotRepository;
 import com.daviddunn.retirementplanner.persistence.JsonApplicationSettingsRepository;
 import com.daviddunn.retirementplanner.persistence.JsonRetirementPlanRepository;
+import com.daviddunn.retirementplanner.persistence.RetainedProjectionCodec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -75,6 +79,182 @@ class ArkansasControlledWorkflowTest {
         assertNull(c.getAcceptedProjectionSnapshot());
         var failure = assertThrows(java.util.concurrent.CompletionException.class, () -> c.finishControlledArkansasProjection(run));
         assertInstanceOf(IllegalStateException.class, failure.getCause());
+    }
+
+    @Test void lowIncomeDiagnosticOnTheControlledWorkerPreservesTheAcceptedProjection() throws Exception {
+        var c = controller();
+        var date = LocalDate.of(2028, 1, 1);
+        var plan = com.daviddunn.retirementplanner.domain.projection.ArkansasLifePrincipalProjectionTest
+                .fixture(date, 1, DeathScenario.PRIMARY_DIES, 2028, "0");
+        var pension = new Pension("Synthetic employer pension", PRIMARY, date, null, new BigDecimal("5000"),
+                BigDecimal.ZERO, new BigDecimal("5000"));
+        pension.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        plan.getHousehold().getPrimaryPerson().addIncomeSource(pension);
+        plan.setConditionalBenefits(List.of(com.daviddunn.retirementplanner.domain.projection.ArkansasLifePrincipalProjectionTest
+                .policy(PersonReference.PRIMARY, "100000", null, null)));
+        c.newPlan(plan);
+        var accepted = c.beginArkansasProjection(ignored -> { });
+        awaitWork(accepted);
+        assertEquals(ACCEPTED, c.finishControlledArkansasProjection(accepted));
+        var before = c.getAcceptedProjectionSnapshot();
+
+        var smaller = new Pension("Synthetic employer pension", PRIMARY, date, null, new BigDecimal("5000"),
+                BigDecimal.ZERO, new BigDecimal("2500"));
+        smaller.setSourceOrigin(RetirementIncomeSourceOrigin.EMPLOYER_RETIREMENT_PLAN);
+        plan.getHousehold().getPrimaryPerson().setIncomeSources(List.of(smaller));
+        c.markModified();
+        var traces = new java.util.ArrayList<com.daviddunn.retirementplanner.domain.projection.ArkansasLowIncomeDiagnostic>();
+        var localFile = ArkansasLowIncomeDiagnosticFile.forRun();
+        var ownerThread = Thread.currentThread();
+        var failed = c.beginControlledArkansasProjection(ProjectionEngine.forArkansasProduction(),
+                count -> fail("No completed year"), java.util.Optional.of(trace -> {
+                    assertNotSame(ownerThread, Thread.currentThread());
+                    traces.add(trace);
+                    localFile.ifPresent(sink -> sink.accept(trace));
+                }));
+        awaitFailure(failed);
+        var refusal = assertThrows(ArkansasProjectionUnavailableException.class, () -> c.finishControlledArkansasProjection(failed));
+        assertEquals(ArkansasTaxIssue.Kind.LOW_INCOME, refusal.issue().kind());
+        assertEquals(1, traces.size());
+        assertTrue(traces.getFirst().lifePrincipalRecognized());
+        assertSame(before, c.getAcceptedProjectionSnapshot());
+        assertTrue(c.getCurrentFundingFailure().isEmpty());
+    }
+
+    @Test
+    void scopedBenefitSnapshotsSurviveSaveAsOpenSwapAndAnUnsupportedAttempt() throws Exception {
+        var c = controller();
+        var date = LocalDate.of(2026, 1, 1);
+        var plan = com.daviddunn.retirementplanner.domain.projection.ArkansasLifePrincipalProjectionTest
+                .fixture(date, 2, DeathScenario.PRIMARY_DIES, 2026, "0");
+        var original = com.daviddunn.retirementplanner.domain.projection.ArkansasLifePrincipalProjectionTest
+                .policy(PersonReference.PRIMARY, "100000", null, null);
+        plan.setConditionalBenefits(List.of(original));
+        c.newPlan(plan);
+        var run = c.beginArkansasProjection(ignored -> { });
+        awaitWork(run);
+        assertEquals(ACCEPTED, c.finishControlledArkansasProjection(run));
+        var first = c.getAcceptedProjectionSnapshot();
+        assertTrue(first.calculationSemanticsCurrent());
+        assertTrue(first.annual().arkansas().hasLifePrincipalPolicy());
+        assertThrows(ConditionalBenefitAdmission.UnsupportedExecutionException.class, c::requireArkansasProjectionForAnalysis);
+        assertNull(c.prepareAnalyzerAssociation(AnalysisKind.COUPLE_MONTE_CARLO_FIXED, "test fingerprint"));
+        c.saveAs(folder.resolve("life-original.json"));
+        c.getSnapshotCopyCompletion().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        c.saveCurrentAsBaseline("Original life projection");
+
+        var revised = com.daviddunn.retirementplanner.domain.projection.ArkansasLifePrincipalProjectionTest
+                .policy(PersonReference.PRIMARY, "90000", null, null);
+        c.getCurrentPlan().setConditionalBenefits(List.of(revised));
+        c.markModified();
+        var rerun = c.beginArkansasProjection(ignored -> { });
+        awaitWork(rerun);
+        assertEquals(ACCEPTED, c.finishControlledArkansasProjection(rerun));
+        var second = c.getAcceptedProjectionSnapshot();
+        c.save();
+        var copy = folder.resolve("life-copy.json");
+        c.saveAs(copy);
+        c.getSnapshotCopyCompletion().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        c.open(copy);
+        c.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertOriginalAnnualEvidence(second, c.getAcceptedProjectionSnapshot());
+        assertEquals(List.of(revised), c.getCurrentPlan().getConditionalBenefits());
+
+        assertTrue(c.commitProjectionSwap(c.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        var reopened = c.getAcceptedProjectionSnapshot();
+        assertOriginalAnnualEvidence(first, reopened);
+        assertEquals(List.of(original), c.getCurrentPlan().getConditionalBenefits());
+        assertEquals(second.id(), c.getCurrentPlan().getProjectionState().baseline().id());
+        assertTrue(reopened.annual().arkansas().hasLifePrincipalPolicy());
+
+        c.getCurrentPlan().setFinancialCalculationMode(FinancialCalculationMode.ADVANCED);
+        c.markModified();
+        var refused = c.beginArkansasProjection(ignored -> fail("Unsupported Advanced inputs produced an annual result."));
+        awaitFailure(refused);
+        var failure = assertThrows(ArkansasProjectionUnavailableException.class,
+                () -> c.finishControlledArkansasProjection(refused));
+        assertEquals(ArkansasTaxIssue.Kind.NIIT, failure.issue().kind());
+        assertSame(reopened, c.getAcceptedProjectionSnapshot());
+    }
+
+    private static void assertOriginalAnnualEvidence(CompleteProjectionSnapshot original, CompleteProjectionSnapshot read)
+            throws Exception {
+        assertEquals(original.id(), read.id());
+        assertEquals(original.inputDigest(), read.inputDigest());
+        assertEquals(original.inputsDocument(), read.inputsDocument());
+        assertEquals(original.provenance(), read.provenance());
+        assertEquals(ArkansasValidationTax.LIFE_PRINCIPAL_POLICY,
+                read.annual().arkansas().versions().get(ArkansasValidationTax.LIFE_PRINCIPAL_POLICY_KEY));
+        var codec = new RetainedProjectionCodec();
+        assertArrayEquals(codec.encode(original.annual()).bytes(), codec.encode(read.annual()).bytes());
+    }
+
+    @Test void regularTaxPolicyAndDisclosureBelongToTheFrozenRoles() throws Exception {
+        var c = controller();
+        var strictPolicy = com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy.STRICT;
+        var regularPolicy = com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy.REGULAR_TAX_ONLY_LOW_INCOME_RELIEF_NOT_MODELED;
+        var plan = com.daviddunn.retirementplanner.domain.projection.ArkansasRegularTaxOnlyTest.survivorPlan(false, false, "2500", "0", 1);
+        c.newPlan(plan);
+        var strictRun = c.beginArkansasProjection(ignored -> { });
+        awaitWork(strictRun);
+        assertEquals(ACCEPTED, c.finishControlledArkansasProjection(strictRun));
+        var strict = c.getAcceptedProjectionSnapshot();
+        assertFalse(strict.inputsDocument().contains("arkansasLowIncomePolicy"));
+        assertEquals(ArkansasValidationTax.reviewedVersions(), strict.annual().arkansas().versions());
+        c.saveAs(folder.resolve("strict-original.json"));
+        c.getSnapshotCopyCompletion().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        c.saveCurrentAsBaseline("Synthetic Strict projection");
+
+        com.daviddunn.retirementplanner.domain.projection.ArkansasRegularTaxOnlyTest.selectPolicy(c.getCurrentPlan(), regularPolicy);
+        c.markModified();
+        assertFalse(c.currentProjectionDeterministicallyApplicable());
+        assertEquals(strict.id(), c.getAcceptedProjectionSnapshot().id());
+        var regularRun = c.beginArkansasProjection(ignored -> { });
+        awaitWork(regularRun);
+        assertEquals(ACCEPTED, c.finishControlledArkansasProjection(regularRun));
+        var regular = c.getAcceptedProjectionSnapshot();
+        assertTrue(regular.calculationSemanticsCurrent());
+        assertTrue(regular.annual().arkansas().hasRegularTaxOnlyPolicy());
+        assertNotEquals(strict.inputDigest(), regular.inputDigest());
+        var pensionStamp = com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.PROVENANCE;
+        var rebound = com.daviddunn.retirementplanner.app.projection.ConditionalBenefitExecutionSemantics.completed(
+                c.getCurrentPlan(), strict.inputsDocument(), regular.annual(),
+                strict.provenance().substring(strict.provenance().indexOf(pensionStamp)));
+        var mismatch = assertThrows(IllegalArgumentException.class, () -> new CompleteProjectionSnapshot(regular.version(), regular.id(),
+                regular.owner(), regular.sourcePlanId(), regular.acceptedAt(), strict.inputsDocument(), strict.inputDigest(),
+                rebound, regular.annual(), regular.nonInvestable(), regular.summary(), regular.people()));
+        assertTrue(mismatch.getMessage().contains("low-income modeling policy"), mismatch::getMessage);
+        assertThrows(ConditionalBenefitAdmission.UnsupportedExecutionException.class, c::requireArkansasProjectionForAnalysis);
+        assertNull(c.prepareAnalyzerAssociation(AnalysisKind.COUPLE_MONTE_CARLO_FIXED, "synthetic fingerprint"));
+        c.save();
+
+        var copy = folder.resolve("regular-copy.json");
+        c.saveAs(copy);
+        c.getSnapshotCopyCompletion().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        c.open(copy);
+        c.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(regularPolicy, c.getCurrentPlan().getPlanningAssumptions().getStateTaxAssumptions().arkansasLowIncomePolicy());
+        var reopened = c.getAcceptedProjectionSnapshot();
+        assertEquals(regular.id(), reopened.id());
+        assertEquals(regular.inputDigest(), reopened.inputDigest());
+        var codec = new RetainedProjectionCodec();
+        assertArrayEquals(codec.encode(regular.annual()).bytes(), codec.encode(reopened.annual()).bytes());
+
+        assertTrue(c.commitProjectionSwap(c.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        var swapped = c.getAcceptedProjectionSnapshot();
+        assertEquals(strict.id(), swapped.id());
+        assertEquals(strictPolicy, c.getCurrentPlan().getPlanningAssumptions().getStateTaxAssumptions().arkansasLowIncomePolicy());
+        assertArrayEquals(codec.encode(strict.annual()).bytes(), codec.encode(swapped.annual()).bytes());
+        assertEquals(regular.id(), c.getCurrentPlan().getProjectionState().baseline().id());
+
+        var pdf = folder.resolve("synthetic-regular-history.pdf");
+        com.daviddunn.retirementplanner.app.export.ArkansasValidationReport.captureAccepted(reopened.annual().restoreProjection(), false)
+                .writePdf(pdf);
+        try (var document = org.apache.pdfbox.Loader.loadPDF(pdf.toFile())) {
+            var contents = new org.apache.pdfbox.text.PDFTextStripper().getText(document).replaceAll("\\s+", " ");
+            assertTrue(contents.contains("Arkansas retained history"), contents);
+            assertTrue(contents.contains(com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy.REGULAR_TAX_DISCLOSURE), contents);
+        }
     }
 
     @Test void cancellationBeforeExecutionAndDuringAnnualWorkPreservesAcceptedHistoryAcrossSaveAs() throws Exception {

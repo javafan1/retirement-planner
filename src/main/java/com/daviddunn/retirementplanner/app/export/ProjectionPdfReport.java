@@ -8,11 +8,16 @@ import java.util.Objects;
 /** PDF-only result-time presentation inputs; no JavaFX nodes or calculations. */
 public record ProjectionPdfReport(String planName, ProjectionChartModel charts,
         BigDecimal averageEffectiveTaxRate, BigDecimal afterTaxEstateHeirValue,
-        ProjectionComparison baselineComparison) {
+        ProjectionComparison baselineComparison, String inheritancePlanningDisclosure) {
+    public ProjectionPdfReport(String planName, ProjectionChartModel charts, BigDecimal averageEffectiveTaxRate,
+            BigDecimal afterTaxEstateHeirValue, ProjectionComparison baselineComparison) {
+        this(planName, charts, averageEffectiveTaxRate, afterTaxEstateHeirValue, baselineComparison, "");
+    }
     public ProjectionPdfReport {
         Objects.requireNonNull(planName);
         Objects.requireNonNull(charts);
         Objects.requireNonNull(averageEffectiveTaxRate);
         Objects.requireNonNull(afterTaxEstateHeirValue);
+        Objects.requireNonNull(inheritancePlanningDisclosure);
     }
 }

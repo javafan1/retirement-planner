@@ -42,6 +42,21 @@ public final class ProjectionSnapshotComponents {
         return target;
     }
     public CompleteProjectionSnapshot read(Path file, UUID owner, ProjectionRoleManifest.Reference ref) throws IOException {
+        byte[] bytes = verifiedProjectionBytes(file, owner, ref);
+        var result = documents.decodeDocument(bytes, CompleteProjectionSnapshot.class);
+        if (!result.id().equals(ref.id()) || !result.owner().equals(owner)) throw new IOException("Projection component ownership mismatch.");
+        result.restoreInputs(); result.summary().restore(result.restoreProjection());
+        return result;
+    }
+    /** Verifies an already certified in-memory applied projection for an engine-free role swap. */
+    public void verifyAppliedProjectionForSwap(Path file, UUID owner, ProjectionRoleManifest.Reference ref,
+            CompleteProjectionSnapshot snapshot) throws IOException {
+        if (!snapshot.spousalIraRmdApplied() || !owner.equals(snapshot.owner()) || !ref.id().equals(snapshot.id())
+                || !Arrays.equals(verifiedProjectionBytes(file, owner, ref), documents.encodeProjectionDocument(snapshot).bytes())) {
+            throw new IOException("Applied projection differs from its certified component.");
+        }
+    }
+    private byte[] verifiedProjectionBytes(Path file, UUID owner, ProjectionRoleManifest.Reference ref) throws IOException {
         Path source = path(file, owner, ref.id());
         verifyBinding(file, source.getParent());
         AtomicFileWriter.regularOrMissing(source);
@@ -49,10 +64,7 @@ public final class ProjectionSnapshotComponents {
         byte[] bytes;
         try (var input = Files.newInputStream(source)) { bytes = input.readNBytes(AnalysisSnapshotCodec.MAX_COMPRESSED_BYTES + 1); }
         if (!AnalysisSnapshotCodec.sha256(bytes).equals(ref.digest())) throw new IOException("Projection component checksum mismatch.");
-        var result = documents.decodeDocument(bytes, CompleteProjectionSnapshot.class);
-        if (!result.id().equals(ref.id()) || !result.owner().equals(owner)) throw new IOException("Projection component ownership mismatch.");
-        result.restoreInputs(); result.summary().restore(result.annual().restoreProjection());
-        return result;
+        return bytes;
     }
     public Map<UUID, CompleteProjectionSnapshot> load(Path file, ProjectionRoleManifest manifest) throws IOException {
         var result = new LinkedHashMap<UUID, CompleteProjectionSnapshot>();
@@ -119,7 +131,7 @@ public final class ProjectionSnapshotComponents {
                 writer.write(destination, bytes, candidate -> {
                     var decoded = documents.decodeDocument(Files.readAllBytes(candidate), CompleteProjectionSnapshot.class);
                     if (!decoded.equals(rebound)) throw new IOException("Projection verification failed.");
-                    decoded.annual().restoreProjection(); decoded.restoreInputs();
+                    decoded.restoreProjection(); decoded.restoreInputs();
                 }, false);
             }
             refs.put(ref.id(), ref); inputs.put(ref.id(), rebound.inputDigest());

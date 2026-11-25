@@ -1,5 +1,7 @@
 package com.daviddunn.retirementplanner.app.export;
 
+import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt;
+import com.daviddunn.retirementplanner.domain.model.ArkansasLowIncomePolicy;
 import com.daviddunn.retirementplanner.domain.projection.ArkansasValidationTax;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -17,7 +19,12 @@ import java.util.TreeMap;
 /** Detached export facts captured from an Arkansas execution or from its restored annual history. */
 public record ArkansasValidationReport(List<Year> years, String acceptedScope) {
     public record Year(int year, ArkansasValidationTax state, BigDecimal federalTax, BigDecimal funding,
-                       BigDecimal conversion, BigDecimal surplus, BigDecimal retained, BigDecimal assets, BigDecimal estate) { }
+                       BigDecimal conversion, BigDecimal surplus, BigDecimal retained, BigDecimal assets, BigDecimal estate,
+                       List<ConditionalBenefitReceipt> lifePrincipal) {
+        public Year {
+            lifePrincipal = List.copyOf(lifePrincipal);
+        }
+    }
 
     public ArkansasValidationReport {
         years = List.copyOf(years);
@@ -41,7 +48,11 @@ public record ArkansasValidationReport(List<Year> years, String acceptedScope) {
                 y.arkansasValidationTax().orElseThrow(() -> new IllegalArgumentException("Expected Arkansas validation years.")),
                 y.getFederalIncomeTax(), y.getTaxFundingWithdrawal(), y.getRothConversion(),
                 y.getRetainedFromTaxFundingSurplus(), y.getEndingRetainedNonQualifiedAssets(),
-                y.getEndingInvestableAssets(), y.getAfterTaxEstateValue())).toList(), scope);
+                y.getEndingInvestableAssets(), y.getAfterTaxEstateValue(), y.getIncomeSources().stream()
+                        .flatMap(source -> source.conditionalBenefit().stream())
+                        .filter(receipt -> receipt.taxCharacter() == com.daviddunn.retirementplanner.domain.benefit
+                                .ConditionalBenefitDefinition.TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED)
+                        .toList())).toList(), scope);
     }
 
     public void writeCsv(Path path) throws IOException {
@@ -55,7 +66,8 @@ public record ArkansasValidationReport(List<Year> years, String acceptedScope) {
                         y.federalTax().toPlainString(), y.state().calculation().incomeTax().toPlainString(), y.funding().toPlainString(),
                         y.state().taxableFundingIncome().toPlainString(), y.conversion().toPlainString(), y.surplus().toPlainString(),
                         y.retained().toPlainString(), y.assets().toPlainString(), y.estate().toPlainString(),
-                        csv(versions(y)), csv(String.join(" ", y.state().calculation().limitations())), "AR", "1",
+                        csv(versions(y)), csv(y.state().lowIncomePolicy().label() + ". "
+                                + String.join(" ", y.state().calculation().limitations())), "AR", "1",
                         y.state().provenance().election().retirementExclusion().toPlainString(), csv(elections(y))));
                 writer.newLine();
             }
@@ -63,6 +75,10 @@ public record ArkansasValidationReport(List<Year> years, String acceptedScope) {
     }
 
     public void writePdf(Path path) throws IOException {
+        writePdf(path, "");
+    }
+
+    public void writePdf(Path path, String inheritancePlanningDisclosure) throws IOException {
         try (var document = new PDDocument()) {
             for (var y : years) {
                 var lines = new ArrayList<>(List.of(
@@ -77,8 +93,25 @@ public record ArkansasValidationReport(List<Year> years, String acceptedScope) {
                         "Retained nonqualified assets: " + money(y.retained()),
                         "Ending investment assets: " + money(y.assets()),
                         "After-tax estate: " + money(y.estate())));
+                var policy = y.state().lowIncomePolicy();
+                lines.add(1, "Arkansas low-income tax treatment: " + policy.label());
+                if (policy != ArkansasLowIncomePolicy.STRICT) {
+                    lines.add(2, ArkansasLowIncomePolicy.REGULAR_TAX_DISCLOSURE);
+                }
+                if (y == years.getFirst() && !inheritancePlanningDisclosure.isEmpty()) {
+                    lines.add(1, inheritancePlanningDisclosure);
+                }
                 if (y.surplus().signum() > 0) {
                     lines.add("Retained from tax-funding surplus: " + money(y.surplus()));
+                }
+                if (y.state().versions().containsKey(ArkansasValidationTax.LIFE_PRINCIPAL_POLICY_KEY)) {
+                    if (y.lifePrincipal().isEmpty()) lines.add("No qualifying life insurance payment in this year.");
+                    for (var receipt : y.lifePrincipal()) {
+                        lines.add("Life insurance death benefit (" + receipt.year() + "), recipient " + receipt.recipient()
+                                + ": gross " + money(receipt.gross()) + ", taxable principal " + money(receipt.taxable())
+                                + ", Arkansas-excluded principal " + money(receipt.excluded()) + ".");
+                        lines.add("Household cash funds current obligations. Any unspent cash goes to retained nonqualified assets.");
+                    }
                 }
                 lines.add(versions(y));
                 lines.addAll(y.state().calculation().limitations());

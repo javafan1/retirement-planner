@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ArkansasLongevityValidationTest {
     @Test
-    void productionQuickAndWeightedRunsVerifyTheOrdinaryArkansasInputDocument() {
+    void productionQuickAndWeightedRunsVerifyTheOrdinaryArkansasInputDocument() throws Exception {
         var plan = com.daviddunn.retirementplanner.domain.projection.ArkansasProjectionIntegrationTest.selectArkansas(Stage4TestPlans.plan());
         var primary = plan.getHousehold().getPrimaryPerson();
         primary.getIncomeSources().stream().filter(Pension.class::isInstance).toList().forEach(primary::removeIncomeSource);
@@ -62,6 +62,34 @@ class ArkansasLongevityValidationTest {
                 result -> new WeightedSnapshots.Payload(WeightedSnapshots.Couple.from(result), null));
         assertNotNull(weighted.evidence());
         assertEquals(1, weighted.result().rankedSuccessfulEntries().size());
+
+        var kind = AnalysisKind.COUPLE_WEIGHTED;
+        var identity = UUID.randomUUID();
+        var started = Instant.now();
+        var mortality = weightedRequest.longevityScenarios().assumptions();
+        var baseline = new SnapshotContext.Baseline(List.of(), null, "No current strategy requested.");
+        var fingerprint = new AnalysisFingerprintService().assess(kind, plan, new AnalysisFingerprintService.Inputs(
+                mortality.primaryAdjustment().factor(), mortality.spouseAdjustment().factor(), mortality.mortalityBaseDate(),
+                weightedRequest.valuationDate(), weightedRequest.realDiscountRate(), null, null, List.of(),
+                baseline.fingerprintSections(), null), null);
+        assertTrue(fingerprint.valid());
+        var v2 = ArkansasAnalysisProvenance.runWeightedProductionV2(projection, identity, fingerprint.fingerprint(), cancellation,
+                comparison -> comparison.compare(weightedRequest),
+                result -> new WeightedSnapshots.Payload(WeightedSnapshots.Couple.from(result), null));
+        var completion = new AcceptedAnalysisCompletion(projection.owner(), null, kind, identity, started,
+                fingerprint.fingerprint(), fingerprint.contextFingerprint(), AnalysisVersions.calculatedAlgorithms(kind, v2.payload()),
+                AnalysisVersions.references(kind), v2.payload(),
+                new SnapshotContext("Synthetic couple", "Primary", "Spouse", started,
+                        List.of(), List.of(), List.of(), Map.of(), baseline))
+                .withArkansasExecution(v2.evidence());
+        var codec = new AnalysisSnapshotCodec();
+        var original = completion.presentationSnapshot(codec);
+        var bytes = codec.encode(original);
+        var restored = codec.decode(bytes);
+        assertEquals(2, restored.arkansasExecution().version());
+        restored.arkansasExecution().validateDependency(projection);
+        assertEquals(original, restored);
+        assertArrayEquals(bytes, codec.encode(restored));
     }
 
     @Test

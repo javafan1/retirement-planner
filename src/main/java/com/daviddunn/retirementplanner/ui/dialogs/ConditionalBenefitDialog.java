@@ -3,6 +3,8 @@ package com.daviddunn.retirementplanner.ui.dialogs;
 import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission;
 import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitDefinition;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction;
+import com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode;
 import com.daviddunn.retirementplanner.ui.benefits.ConditionalBenefitPresentation;
 import com.daviddunn.retirementplanner.ui.controls.InputHelp;
 import com.daviddunn.retirementplanner.ui.controls.RequiredFieldSupport;
@@ -35,6 +37,7 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
     public static final ButtonType SAVE = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
     private static final PseudoClass INVALID = PseudoClass.getPseudoClass("invalid");
     private final RetirementPlan plan;
+    private final boolean arkansasLifeForm;
     private final UUID identity;
     private final TextField name = new TextField();
     private final ComboBox<Category> category = new ComboBox<>();
@@ -72,8 +75,11 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
 
     public ConditionalBenefitDialog(RetirementPlan plan, ConditionalBenefitDefinition existing, boolean duplicate) {
         this.plan = Objects.requireNonNull(plan);
+        boolean arkansas = plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction() == StateTaxJurisdiction.AR;
+        arkansasLifeForm = arkansas && (existing == null || existing.excludesLifePrincipal());
         identity = existing == null || duplicate ? UUID.randomUUID() : existing.id();
-        setTitle(existing == null || duplicate ? "Add Conditional Benefit" : "Edit Conditional Benefit");
+        setTitle(arkansasLifeForm ? (existing == null || duplicate ? "Add Life Insurance Death Benefit"
+                : "Edit Life Insurance Death Benefit") : (existing == null || duplicate ? "Add Conditional Benefit" : "Edit Conditional Benefit"));
         setHeaderText(duplicate ? "Review the new, independent copy before saving." : "Configure a future payment to a living household member.");
         setResizable(true);
         getDialogPane().setId("conditional-benefit-dialog");
@@ -114,7 +120,9 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
         form.getChildren().add(text("Leave optional dates blank for no additional limit. One-time payments occur only once in the eligible trigger year; events before the projection opening are not replayed."));
         form.getChildren().add(heading("Financial Treatment"));
         choices(tax, List.of(TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION), ConditionalBenefitPresentation::tax);
-        field("Tax Treatment", tax, "tax-character", true, "Fully taxable by default. Excluded principal requires a qualifying personal death-benefit lump sum to the other living modeled person.");
+        field("Tax Treatment", tax, "tax-character", true, arkansasLifeForm
+                ? "A qualifying personal-policy lump sum to the other living household member is excluded from federal and Arkansas income."
+                : "Fully taxable by default. Excluded principal requires a qualifying personal death-benefit lump sum to the other living modeled person.");
         form.getChildren().add(taxHelp);
         qualification.setText(com.daviddunn.retirementplanner.app.projection.ConditionalBenefitDisclosures.LIFE_QUALIFICATION);
         qualification.setWrapText(true);
@@ -126,7 +134,15 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
         stateWarning.getStyleClass().add("analysis-stale");
         stateWarning.managedProperty().bind(stateWarning.textProperty().isNotEmpty());
         stateWarning.visibleProperty().bind(stateWarning.managedProperty());
-        try {
+        if (arkansas) {
+            if (plan.getFinancialCalculationMode() == FinancialCalculationMode.ADVANCED) {
+                stateWarning.setText("Arkansas life insurance benefits can be saved. To project them, select Basic mode. "
+                        + "Advanced NIIT treatment is unavailable.");
+            } else if (!arkansasLifeForm) {
+                stateWarning.setText("This definition can be saved. Arkansas projections require qualifying personal life "
+                        + "insurance death principal. This benefit is outside that scope.");
+            }
+        } else try {
             ConditionalBenefitAdmission.requireDeterministicState(plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
         } catch (ConditionalBenefitAdmission.UnsupportedExecutionException unsupported) {
             stateWarning.setText("This definition can be saved, but projections and integrated analyses using conditional benefits are not yet supported for "
@@ -149,9 +165,14 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
         body.setTop(new VBox(4, stateWarning, status));
         getDialogPane().setContent(body);
         getDialogPane().setPrefWidth(680);
-        category.setValue(existing == null ? Category.CONDITIONAL_INCOME : existing.category());
-        pattern.setValue(existing == null ? PaymentPattern.MONTHLY_RECURRING : existing.paymentPattern());
-        trigger.setValue(existing == null ? TriggerType.FIXED_DATE : existing.trigger().type());
+        category.setValue(arkansasLifeForm ? Category.DEATH_BENEFIT : existing == null ? Category.CONDITIONAL_INCOME : existing.category());
+        pattern.setValue(arkansasLifeForm ? PaymentPattern.ONE_TIME_LUMP_SUM : existing == null ? PaymentPattern.MONTHLY_RECURRING : existing.paymentPattern());
+        trigger.setValue(arkansasLifeForm ? TriggerType.DEATH : existing == null ? TriggerType.FIXED_DATE : existing.trigger().type());
+        if (arkansasLifeForm) {
+            category.setDisable(true);
+            pattern.setDisable(true);
+            tax.setDisable(true);
+        }
         previousIncomeTrigger = trigger.getValue();
         if (existing != null) {
             draftTax = existing.taxCharacter();
@@ -220,12 +241,14 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
         boolean eligiblePrincipal = death && !monthly && category.getValue() == Category.DEATH_BENEFIT
                 && plan.getHousehold().hasSpouse() && recipient.getValue() != null && triggerPerson.getValue() != null
                 && recipient.getValue() != triggerPerson.getValue();
-        var treatments = eligiblePrincipal ? List.of(TaxCharacter.values())
+        var treatments = arkansasLifeForm ? List.of(TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED)
+                : eligiblePrincipal ? List.of(TaxCharacter.values())
                 : List.of(TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION);
         updatingTax = true;
         try {
             if (!tax.getItems().equals(treatments)) tax.getItems().setAll(treatments);
-            tax.setValue(eligiblePrincipal ? draftTax : TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION);
+            tax.setValue(arkansasLifeForm ? TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED
+                    : eligiblePrincipal ? draftTax : TaxCharacter.FULLY_TAXABLE_ORDINARY_NON_PENSION);
         } finally { updatingTax = false; }
         boolean excluded = tax.getValue() == TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED;
         fields.get(qualification).show(excluded);
@@ -290,7 +313,9 @@ public final class ConditionalBenefitDialog extends Dialog<ConditionalBenefitDef
             var treatment = requiredChoice(tax);
             boolean excluded = treatment == TaxCharacter.QUALIFIED_LIFE_INSURANCE_DEATH_PRINCIPAL_EXCLUDED;
             if (excluded && !qualification.isSelected())
-                throw invalid(qualification, "Confirm the restricted personal-policy principal qualification, or keep the payment fully taxable.");
+                throw invalid(qualification, arkansasLifeForm
+                        ? "Confirm that the lump sum consists only of qualifying personal-policy death principal."
+                        : "Confirm the restricted personal-policy principal qualification, or keep the payment fully taxable.");
             var definition = new ConditionalBenefitDefinition(identity, label, selectedCategory, event, selectedRecipient,
                     selectedPattern, decimal(amount), monthly ? date(notBefore, false) : null,
                     monthly ? date(end, false) : null, date(coverageStart, false), date(coverageEnd, false),

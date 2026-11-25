@@ -2,11 +2,19 @@ package com.daviddunn.retirementplanner.app.projection;
 
 import com.daviddunn.retirementplanner.app.socialsecurity.results.RetainedProjectionSnapshot;
 import com.daviddunn.retirementplanner.domain.baseline.RetirementPlanSnapshot;
+import com.daviddunn.retirementplanner.domain.benefit.BenefitEvaluationContext;
+import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission;
+import com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitEvaluator;
 import com.daviddunn.retirementplanner.domain.breakeven.BreakEvenPlanSummary;
+import com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Kind;
+import com.daviddunn.retirementplanner.domain.model.AccountOwnership;
+import com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode;
 import com.daviddunn.retirementplanner.domain.model.RetirementPlan;
+import com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction;
 import com.daviddunn.retirementplanner.domain.noninvestable.*;
 import com.daviddunn.retirementplanner.domain.projection.Projection;
 import com.daviddunn.retirementplanner.domain.projection.ArkansasValidationTax;
+import com.daviddunn.retirementplanner.domain.projection.EffectiveHouseholdDeathView;
 import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import com.daviddunn.retirementplanner.domain.projection.summary.*;
 import com.daviddunn.retirementplanner.domain.projection.statistics.ProjectionStatistics;
@@ -16,9 +24,10 @@ import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.*;
 
-/** Immutable accepted data. Restoration constructs detached graphs and never invokes an engine. */
+/** Immutable accepted data. Display restoration constructs detached graphs from certified evidence. */
 public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID sourcePlanId, Instant acceptedAt,
         String inputsDocument, String inputDigest, String provenance, RetainedProjectionSnapshot annual,
         List<NonInvestableYear> nonInvestable, Summary summary, BreakEvenPlanSummary people) {
@@ -40,12 +49,21 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
                 || annual.accounts().size() > 1000 || nonInvestable.size() != annual.years().size())
             throw new IllegalArgumentException("Incomplete or oversized projection context.");
         if (!digest(inputsDocument).equals(inputDigest)) throw new IllegalArgumentException("Projection input digest mismatch.");
-        ConditionalBenefitExecutionSemantics.validate(inputsDocument,annual,provenance);
-        ContractualPremiumExecutionSemantics.validate(inputsDocument,annual,provenance);
+        SpousalInheritancePlanningEvidence.validate(inputsDocument, annual, provenance);
+        String calculationProvenance = SpousalInheritancePlanningEvidence.calculationProvenance(provenance);
+        ConditionalBenefitExecutionSemantics.validate(inputsDocument,annual,calculationProvenance);
+        ContractualPremiumExecutionSemantics.validate(inputsDocument,annual,calculationProvenance);
         if (annual.arkansas() != null) {
             var frozen = restoreInputs(inputsDocument);
             validateArkansasInputs(frozen, annual);
-            if (hasArkansasProductionStamp(provenance) && frozen.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+            validateArkansasLifePrincipal(frozen, annual, calculationProvenance);
+            boolean regularOnly = annual.arkansas().hasRegularTaxOnlyPolicy();
+            if (regularOnly != frozen.getPlanningAssumptions().getStateTaxAssumptions().usesArkansasRegularTaxOnly()
+                    || regularOnly && (!hasArkansasProductionStamp(calculationProvenance)
+                        || frozen.getFinancialCalculationMode() == FinancialCalculationMode.ADVANCED)) {
+                throw new IllegalArgumentException("Arkansas low-income modeling policy differs from the frozen inputs or route.");
+            }
+            if (hasArkansasProductionStamp(calculationProvenance) && frozen.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
                     != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.AR) {
                 throw new IllegalArgumentException("Arkansas production provenance requires Arkansas inputs.");
             }
@@ -54,6 +72,106 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
             if (nonInvestable.get(i).year() != annual.years().get(i).year()
                     || (i > 0 && annual.years().get(i).year() != annual.years().get(i - 1).year() + 1))
                 throw new IllegalArgumentException("Projection year mismatch.");
+        }
+        if (SpousalInheritancePlanningEvidence.applied(annual)) {
+            validateSpousalIraRmd(inputsDocument, annual);
+        }
+    }
+
+    private static void validateSpousalIraRmd(String inputsDocument, RetainedProjectionSnapshot annual) {
+        var frozen = executionPlan(restoreInputs(inputsDocument));
+        int year = annual.years().getFirst().year();
+        var mismatch = com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.Reason.HISTORICAL_EVIDENCE_MISMATCH;
+        try {
+            // The accepted rows cannot prove their own debits. Independently reproduce the scoped calculation
+            // from the frozen opening graph and compare every retained field, including years without a debit.
+            var engine = new ProjectionEngine();
+            var outcome = switch (annual.schemaVersion()) {
+                case RetainedProjectionSnapshot.SPOUSAL_401K_ROLLOVER_SCHEMA -> engine.projectSpousal401kRollover(frozen);
+                case RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_IRA_SCHEMA -> engine.projectSpousalBeneficiaryIraRmd(frozen);
+                case RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_401K_SCHEMA -> engine.projectSpousalBeneficiary401kRmd(frozen);
+                default -> engine.projectSpousalIraRmd(frozen);
+            };
+            if (outcome instanceof com.daviddunn.retirementplanner.domain.projection.ProjectionExecutionResult.Completed done
+                    && switch (annual.schemaVersion()) {
+                        case RetainedProjectionSnapshot.SPOUSAL_401K_ROLLOVER_SCHEMA ->
+                                RetainedProjectionSnapshot.captureSpousal401kRollover(done.projection()).equals(annual);
+                        case RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_IRA_SCHEMA ->
+                                RetainedProjectionSnapshot.captureSpousalBeneficiaryIraRmd(done.projection()).equals(annual);
+                        case RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_401K_SCHEMA ->
+                                RetainedProjectionSnapshot.captureSpousalBeneficiary401kRmd(done.projection()).equals(annual);
+                        default -> RetainedProjectionSnapshot.captureSpousalIraRmd(done.projection()).equals(annual);
+                    }) return;
+        } catch (java.util.concurrent.CancellationException canceled) {
+            throw canceled;
+        } catch (RuntimeException failure) {
+            var invalid = new com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable(year, mismatch,
+                    "Frozen inputs do not support the recorded applied IRA calculation.");
+            invalid.initCause(failure);
+            throw invalid;
+        }
+        throw new com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable(year, mismatch,
+                "Annual obligations, debits or financial totals differ from the frozen calculation.");
+    }
+
+    public RetirementPlan restoreExecutionPlan() {
+        return executionPlan(restoreInputs());
+    }
+
+    private static RetirementPlan executionPlan(RetirementPlanSnapshot input) {
+        var plan = new RetirementPlan(input.getHousehold(), input.getAccountPortfolio(), input.getPlanningAssumptions(),
+                input.getRothConversionRequest(), input.getNonInvestableAssets());
+        plan.setConditionalBenefits(input.getConditionalBenefits());
+        if (input.getFinancialCalculationMode() != null) plan.setFinancialCalculationMode(input.getFinancialCalculationMode());
+        return plan;
+    }
+
+    private static void validateArkansasLifePrincipal(RetirementPlanSnapshot inputs, RetainedProjectionSnapshot annual,
+            String provenance) {
+        var assumptions = inputs.getPlanningAssumptions();
+        var definitions = inputs.getConditionalBenefits();
+        boolean scoped = annual.arkansas().hasLifePrincipalPolicy();
+        if (scoped != (assumptions.getStateTaxAssumptions().jurisdiction() == StateTaxJurisdiction.AR
+                && !definitions.isEmpty())) {
+            throw new IllegalArgumentException("Arkansas life insurance policy does not match the original inputs.");
+        }
+        if (!scoped) return;
+        if (!hasArkansasProductionStamp(provenance) || !provenance.startsWith(ConditionalBenefitExecutionSemantics.KEY)) {
+            throw new IllegalArgumentException("Arkansas life insurance requires deterministic execution provenance.");
+        }
+        ConditionalBenefitAdmission.requireArkansasLifePrincipal(
+                inputs.getHousehold(), definitions, inputs.getFinancialCalculationMode());
+        var opening = assumptions.getProjectionStartDate();
+        if (annual.years().getFirst().year() != opening.getYear()
+                || annual.years().size() != assumptions.getProjectionLengthYears()) {
+            throw new IllegalArgumentException("Arkansas life insurance requires the original deterministic horizon.");
+        }
+        var deaths = EffectiveHouseholdDeathView.resolve(inputs.getHousehold(), assumptions.getDeathScenarioAssumptions(),
+                Optional.empty());
+        var evaluator = new ConditionalBenefitEvaluator();
+        for (int i = 0; i < annual.years().size(); i++) {
+            var year = annual.years().get(i);
+            var evidence = annual.arkansas().years().get(i).sourceEvidence();
+            var recordedDeaths = new EnumMap<AccountOwnership, LocalDate>(AccountOwnership.class);
+            for (var owner : inputs.getHousehold().peopleByOwner().keySet()) {
+                deaths.deathDate(owner).filter(date -> date.getYear() <= year.year())
+                        .ifPresent(date -> recordedDeaths.put(owner, date));
+            }
+            var expected = evaluator.evaluate(definitions,
+                    BenefitEvaluationContext.capture(inputs.getHousehold(), deaths, opening, year.year()));
+            var actual = year.sources().stream().map(RetainedProjectionSnapshot.Income::conditionalBenefit)
+                    .filter(Objects::nonNull).toList();
+            var firstReceipt = i == 0 ? opening : LocalDate.of(year.year(), 1, 1);
+            if (!expected.receipts().equals(actual) || !recordedDeaths.equals(evidence.modeledDeaths())
+                    || !firstReceipt.equals(evidence.firstProjectedReceipt())) {
+                throw new IllegalArgumentException("Arkansas life insurance evidence differs from original death or payment facts.");
+            }
+            var guaranteed = year.sources().stream().filter(source -> source.kind() == Kind.PENSION)
+                    .map(RetainedProjectionSnapshot.Income::gross)
+                    .reduce(year.socialSecurity().householdBenefit().add(expected.gross()), BigDecimal::add);
+            if (guaranteed.compareTo(year.settlement().guaranteedIncome()) != 0) {
+                throw new IllegalArgumentException("Arkansas life insurance is not reconciled to retained household cash sources.");
+            }
         }
     }
 
@@ -79,9 +197,10 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
                 new com.daviddunn.retirementplanner.domain.projection.statistics.ProjectionStatisticsService(),
                 new IncomeSummaryService()).summarize(frozenPlan, projection);
         return new CompleteProjectionSnapshot(VERSION, UUID.randomUUID(), owner, owner, acceptedAt, inputs, digest(inputs),
-                ConditionalBenefitExecutionSemantics.completed(frozenPlan, inputs, retained,
+                SpousalInheritancePlanningEvidence.completed(frozenPlan.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance(),
+                        inputs, retained, ConditionalBenefitExecutionSemantics.completed(frozenPlan, inputs, retained,
                         PensionSelectionSemantics.PROVENANCE + (ProjectionEngine.selectsArkansas(frozenPlan)
-                                ? ARKANSAS_PRODUCTION : "Controlled Arkansas projection")),
+                                ? ARKANSAS_PRODUCTION : "Controlled Arkansas projection"))),
                 retained, nonInvestable.stream().map(NonInvestableYear::capture).toList(),
                 Summary.capture(summary), BreakEvenPlanSummary.from(frozenPlan));
     }
@@ -169,20 +288,51 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
         catch (Exception failure) { throw new IllegalArgumentException("Invalid projection inputs.", failure); }
     }
     public boolean matches(RetirementPlan plan) { return inputDigest.equals(digest(freeze(plan))); }
+
+    public String inheritancePlanningDisclosure() {
+        return SpousalInheritancePlanningEvidence.disclosure(inputsDocument, annual);
+    }
+    public boolean spousalIraRmdApplied() {
+        return SpousalInheritancePlanningEvidence.applied(annual);
+    }
+    public com.daviddunn.retirementplanner.domain.projection.Projection restoreProjection() {
+        return spousalIraRmdApplied() ? annual.restoreSpousalIraRmd(this) : annual.restoreProjection();
+    }
     /** Separate from exact configured-input identity, which still permits historical swaps. */
     public boolean calculationSemanticsCurrent() {
+        String calculationProvenance = SpousalInheritancePlanningEvidence.calculationProvenance(provenance);
         if (arkansasHistory()) {
-            return hasArkansasProductionStamp(provenance)
+            var reviewed = ArkansasValidationTax.reviewedVersions();
+            if (annual.arkansas().hasLifePrincipalPolicy()) {
+                reviewed = ArkansasValidationTax.withLifePrincipalPolicy(reviewed);
+            }
+            if (annual.arkansas().hasRegularTaxOnlyPolicy()) {
+                reviewed = ArkansasValidationTax.withRegularTaxOnlyPolicy(reviewed);
+            }
+            return hasArkansasProductionStamp(calculationProvenance)
                     && annual.arkansas().projectionAlgorithm().equals(ProjectionEngine.ALGORITHM_VERSION)
-                    && annual.arkansas().versions().equals(ArkansasValidationTax.reviewedVersions());
+                    && annual.arkansas().versions().equals(reviewed);
         }
         // A pension-selection stamp cannot attest to an unimplemented benefit capability.
         // Decode property names rather than searching raw JSON (which may escape them).
-        try { if (restoreInputs().getFinancialCalculationMode() != null || !restoreInputs().getConditionalBenefits().isEmpty())
-            return ConditionalBenefitExecutionSemantics.current(inputsDocument,annual,provenance); }
+        try {
+            var original = restoreInputs();
+            if (original.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance() != null) {
+                var plan = executionPlan(original);
+                if (annual.schemaVersion() != RetainedProjectionSnapshot.SPOUSAL_401K_ROLLOVER_SCHEMA
+                        && ProjectionEngine.requestsSpousal401kRollover(plan)
+                        || annual.schemaVersion() != RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_401K_SCHEMA
+                            && ProjectionEngine.requestsSpousalBeneficiary401kRmd(plan)
+                        || !spousalIraRmdApplied() && ProjectionEngine.requestsAppliedSpousalIraRmd(plan)) return false;
+            }
+            if (original.getPlanningAssumptions().getStateTaxAssumptions().usesArkansasRegularTaxOnly()) return false;
+            if (original.getFinancialCalculationMode() != null || !original.getConditionalBenefits().isEmpty()) {
+                return ConditionalBenefitExecutionSemantics.current(inputsDocument,annual,calculationProvenance);
+            }
+        }
         catch (RuntimeException unavailable) { return false; }
-        if (provenance.startsWith(PensionSelectionSemantics.PROVENANCE)) return true;
-        if (provenance.startsWith(PensionSelectionSemantics.KEY + "=")) return false;
+        if (calculationProvenance.startsWith(PensionSelectionSemantics.PROVENANCE)) return true;
+        if (calculationProvenance.startsWith(PensionSelectionSemantics.KEY + "=")) return false;
         try {
             var original = restoreInputs();
             return !PensionSelectionSemantics.potentiallyAffected(original.getHousehold(), original.getPlanningAssumptions());
@@ -214,7 +364,7 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
         return nonInvestable.stream().map(NonInvestableYear::restore).toList();
     }
     public ProjectionChartModel chart() {
-        var projection = annual.restoreProjection();
+        var projection = restoreProjection();
         var accounts = projection.getYears().stream().flatMap(y -> y.getEndingAccountSnapshots().stream())
                 .map(s -> s.getAccount()).distinct().toList();
         return ProjectionChartModel.from(projection.getYears(), restoreNonInvestable(), people, accounts);

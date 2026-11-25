@@ -51,7 +51,11 @@ public final class ConditionalBenefitExecutionSemantics {
         var original = CompleteProjectionSnapshot.restoreInputs(inputs);
         if (original.getConditionalBenefits().isEmpty() && original.getFinancialCalculationMode() == null || !provenance.startsWith(prefix(inputs,annual) + PensionSelectionSemantics.PROVENANCE))
             throw new IllegalArgumentException("Unsupported or mismatched conditional execution capability.");
-        if (!original.getConditionalBenefits().isEmpty()) ConditionalBenefitAdmission.requireDeterministicState(original.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
+        if (!original.getConditionalBenefits().isEmpty()
+                && (annual.arkansas() == null || !annual.arkansas().hasLifePrincipalPolicy())) {
+            ConditionalBenefitAdmission.requireDeterministicState(
+                    original.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
+        }
         if (ConditionalBenefits.hasAnnuity(original.getConditionalBenefits())) NonqualifiedAnnuityAdmission.requireState(
                 original.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction());
         validateCashGrowthEvidence(original.getConditionalBenefits(), original.getAccountPortfolio(), annual, original.getFinancialCalculationMode());

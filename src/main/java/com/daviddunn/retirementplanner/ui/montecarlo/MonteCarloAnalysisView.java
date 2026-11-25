@@ -460,7 +460,8 @@ public final class MonteCarloAnalysisView extends VBox implements AutoCloseable 
             if (!admit(snapshot)) return;
             Projection cached = controller.peekCurrentProjection();
             Projection reference = null;
-            if (cached != null) {
+            var accepted = controller.getAcceptedProjectionSnapshot();
+            if (cached != null && (accepted == null || !accepted.spousalIraRmdApplied())) {
                 reference = new Projection();
                 cached.getYears().forEach(reference::addYear);
             }

@@ -25,6 +25,9 @@ public class ProjectionYear {
     private final MichiganTaxCalculation michiganTaxCalculation;
     private final ProductionStateTaxResult stateTaxCalculation;
     private final ArkansasValidationTax arkansasValidationTax;
+    private final List<com.daviddunn.retirementplanner.domain.retirementownership.Spousal401kRollover> spousal401kRollovers;
+    private final com.daviddunn.retirementplanner.domain.rmd.BeneficiaryIraRmd beneficiaryIraRmd;
+    private final List<com.daviddunn.retirementplanner.domain.rmd.Beneficiary401kRmd> beneficiary401kRmds;
 
     @JsonIgnore
     public java.util.Optional<MichiganTaxCalculation> michiganTaxCalculation() {
@@ -241,6 +244,9 @@ public class ProjectionYear {
         this.michiganTaxCalculation = null;
         this.stateTaxCalculation = null;
         this.arkansasValidationTax = null;
+        this.spousal401kRollovers = List.of();
+        this.beneficiaryIraRmd = null;
+        this.beneficiary401kRmds = List.of();
         this.primaryRothConversion = BigDecimal.ZERO;
         this.spouseRothConversion = BigDecimal.ZERO;
     }
@@ -388,6 +394,9 @@ public class ProjectionYear {
         this.michiganTaxCalculation = null;
         this.stateTaxCalculation = null;
         this.arkansasValidationTax = null;
+        this.spousal401kRollovers = List.of();
+        this.beneficiaryIraRmd = null;
+        this.beneficiary401kRmds = List.of();
         this.primaryRothConversion = BigDecimal.ZERO;
         this.spouseRothConversion = BigDecimal.ZERO;
     }
@@ -579,7 +588,55 @@ public class ProjectionYear {
             int primaryPersonAge,
             List<IncomeSourceAttribution> incomeSources,
             ArkansasValidationTax arkansasValidationTax) {
+        this(projectionYear, calendarYear, beginningInvestableAssets, investmentGrowth, guaranteedIncome,
+                socialSecurityResult, annualExpenses, cashFlowNeed, portfolioWithdrawal, requiredMinimumDistribution,
+                rmdDistributedBeforeProjection, rmdDistributedInProjection, excessRmd, beginningRetainedNonQualifiedAssets,
+                retainedNonQualifiedAssetGrowth, endingRetainedNonQualifiedAssets, householdCashSettlement, endingInvestableAssets,
+                endingAccountSnapshots, federalTaxCalculation, stateTaxCalculation, medicarePremiumCalculation, taxFundingWithdrawal,
+                requestedRothConversion, rothConversion, primaryRothConversion, spouseRothConversion, estimatedHeirTax,
+                afterTaxEstateValue, primaryPersonAge, incomeSources, arkansasValidationTax, List.of(), null, List.of());
+    }
+
+    public ProjectionYear(
+            int projectionYear, int calendarYear, BigDecimal beginningInvestableAssets, BigDecimal investmentGrowth,
+            BigDecimal guaranteedIncome, HouseholdSocialSecurityResult socialSecurityResult, BigDecimal annualExpenses,
+            BigDecimal cashFlowNeed, BigDecimal portfolioWithdrawal, BigDecimal requiredMinimumDistribution,
+            BigDecimal rmdDistributedBeforeProjection, BigDecimal rmdDistributedInProjection, BigDecimal excessRmd,
+            BigDecimal beginningRetainedNonQualifiedAssets, BigDecimal retainedNonQualifiedAssetGrowth,
+            BigDecimal endingRetainedNonQualifiedAssets, HouseholdCashSettlement householdCashSettlement,
+            BigDecimal endingInvestableAssets, List<ProjectedAccountSnapshot> endingAccountSnapshots,
+            FederalTaxCalculation federalTaxCalculation, ProductionStateTaxResult stateTaxCalculation,
+            MedicarePremiumCalculation medicarePremiumCalculation, BigDecimal taxFundingWithdrawal,
+            BigDecimal requestedRothConversion, BigDecimal rothConversion, BigDecimal primaryRothConversion,
+            BigDecimal spouseRothConversion, BigDecimal estimatedHeirTax, BigDecimal afterTaxEstateValue, int primaryPersonAge,
+            List<IncomeSourceAttribution> incomeSources, ArkansasValidationTax arkansasValidationTax,
+            List<com.daviddunn.retirementplanner.domain.retirementownership.Spousal401kRollover> spousal401kRollovers,
+            com.daviddunn.retirementplanner.domain.rmd.BeneficiaryIraRmd beneficiaryIraRmd,
+            List<com.daviddunn.retirementplanner.domain.rmd.Beneficiary401kRmd> beneficiary401kRmds) {
         this.incomeSources = List.copyOf(Objects.requireNonNull(incomeSources));
+        this.spousal401kRollovers = List.copyOf(spousal401kRollovers);
+        this.beneficiaryIraRmd = beneficiaryIraRmd;
+        this.beneficiary401kRmds = List.copyOf(beneficiary401kRmds);
+        if (!this.beneficiary401kRmds.isEmpty()) {
+            var sources = new java.util.HashSet<IncomeSourceAttribution.AccountReference>();
+            var payable = beneficiaryIraRmd == null ? BigDecimal.ZERO : beneficiaryIraRmd.requiredAmount();
+            for (var obligation : this.beneficiary401kRmds) {
+                if (obligation.year() != calendarYear || !sources.add(obligation.source())) {
+                    throw new IllegalArgumentException("Each beneficiary employer obligation must bind one original source and year.");
+                }
+                payable = payable.add(obligation.requiredAmount());
+            }
+            if (payable.compareTo(rmdDistributedInProjection) > 0) {
+                throw new IllegalArgumentException("Beneficiary obligations must agree with the annual RMD.");
+            }
+        }
+        if (beneficiaryIraRmd != null && (beneficiaryIraRmd.year() != calendarYear
+                || beneficiaryIraRmd.requiredAmount().compareTo(rmdDistributedInProjection) > 0)) {
+            throw new IllegalArgumentException("The beneficiary obligation must agree with the annual RMD.");
+        }
+        if (this.spousal401kRollovers.stream().anyMatch(event -> event.effectiveDate().getYear() != calendarYear)) {
+            throw new IllegalArgumentException("A rollover must belong to its effective projection year.");
+        }
         if ((stateTaxCalculation == null) == (arkansasValidationTax == null)) {
             throw new IllegalArgumentException("A projection year requires exactly one state tax result.");
         }
@@ -991,6 +1048,18 @@ public class ProjectionYear {
     @com.fasterxml.jackson.annotation.JsonIgnore
     public java.util.Optional<ArkansasValidationTax> arkansasValidationTax() {
         return java.util.Optional.ofNullable(arkansasValidationTax);
+    }
+
+    public List<com.daviddunn.retirementplanner.domain.retirementownership.Spousal401kRollover> spousal401kRollovers() {
+        return spousal401kRollovers;
+    }
+
+    public List<com.daviddunn.retirementplanner.domain.rmd.Beneficiary401kRmd> beneficiary401kRmds() {
+        return beneficiary401kRmds;
+    }
+
+    public com.daviddunn.retirementplanner.domain.rmd.BeneficiaryIraRmd beneficiaryIraRmd() {
+        return beneficiaryIraRmd;
     }
 
     public StateTaxJurisdiction getStateTaxJurisdiction() {

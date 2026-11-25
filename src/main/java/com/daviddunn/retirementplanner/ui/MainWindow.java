@@ -1363,6 +1363,14 @@ public class MainWindow {
             Projection projection =
                     restored || preparedStartup ? controller.peekCurrentProjection() : runProjection ? controller.getCurrentProjection() : null;
             evaluatingCurrent = false;
+            var retainedFundingFailure = controller.getCurrentFundingFailure();
+            if (projection == null && retainedFundingFailure.isPresent() && controller.getAcceptedProjectionSnapshot() != null
+                    && com.daviddunn.retirementplanner.domain.projection.ProjectionEngine.requestsAppliedSpousalIraRmd(controller.getCurrentPlan())) {
+                projectionFundingNotice.setText(ProjectionFailureMessages.insufficientFundingMessage(retainedFundingFailure.orElseThrow()));
+                statusLabel.setText("Projection not completed. Previous accepted result retained.");
+                assumptionsView.refresh(controller.getCurrentPlan());
+                return;
+            }
 
             ProjectionSummary summary =
                     (runProjection || (restored || preparedStartup) && projection != null) ? controller.getCurrentProjectionSummary() : null;
@@ -1642,6 +1650,15 @@ public class MainWindow {
         }
         if (ProjectionFailureMessages.isArkansasConditionalIncomeRefusal(exception)) {
             presentArkansasProjectionFailure(exception, null);
+            return;
+        }
+        if (exception instanceof com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable) {
+            projectionFundingNotice.setText(exception.getMessage());
+            statusLabel.setText(exception.getMessage());
+            return;
+        }
+        if (exception instanceof java.util.concurrent.CancellationException) {
+            statusLabel.setText("Projection canceled. Previous accepted result retained when available.");
             return;
         }
         resultsView.load(null, List.of());
