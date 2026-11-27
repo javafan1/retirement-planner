@@ -9,7 +9,7 @@
 Work began on `main` at `2bedb55e99fb48aa31225e9c5549c842d77ebb2d`, zero ahead or behind the local upstream reference. There were 54 tracked modifications and 52 untracked files, and the index was empty. Hashes checked against the opening worktree show all 106 paths present, with 88 byte-identical and 18 changed at the scoped source and test sites below. Existing Arkansas and survivor changes remain in place. All runs used synthetic inputs. Build logs, selectors, and probe transcripts are in ignored `target/phase6e-p3d3c4d-r2a3b/`. The user reported R2a3-A native acceptance. This phase used automated Windows and JavaFX tests, with separate interactive native acceptance still outstanding.
 
 ## 3. Exact modified files
-
+exio
 All Java paths below are relative to `src/main/java/com/daviddunn/retirementplanner/` or `src/test/java/com/daviddunn/retirementplanner/`.
 
 | Area | Files and sites |

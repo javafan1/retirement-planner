@@ -59,6 +59,35 @@ class TaxFundingCalculatorTest {
     }
 
     @Test
+    void scopedFundingRefusesWhenSyntheticGrossUpDoesNotConverge() {
+        var zero = BigDecimal.ZERO;
+        var date = LocalDate.of(2026, 1, 1);
+        var household = new Household(new Person("Synthetic", "Owner", LocalDate.of(1960, 1, 1)), null);
+        var balance = new BigDecimal("1000000");
+        var account = new TraditionalIRA("Synthetic IRA", AccountOwnership.PRIMARY, balance);
+        var portfolio = new ProjectedPortfolio(List.of(new ProjectedAccountBalance(account, balance)));
+        var tax = new com.daviddunn.retirementplanner.domain.rules.FederalTaxRules(FilingStatus.SINGLE, zero,
+                List.of(new com.daviddunn.retirementplanner.domain.rules.FederalTaxBracket(zero, null, BigDecimal.ONE)));
+        var synthetic = new GovernmentRules("nonconvergence fixture", 2026, date, List.of(tax),
+                rules.getMichiganTaxRules(), rules.getIrmaaRules(),
+                List.of(rules.getSocialSecurityTaxRules(FilingStatus.SINGLE)), rules.getRmdRules());
+        var state = com.daviddunn.retirementplanner.domain.model.StateTaxAssumptions.simplified(
+                com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.FL);
+        var context = com.daviddunn.retirementplanner.domain.tax.state.TaxHouseholdContext.capture(household, date, null);
+        // At a synthetic 100% rate each provisional withdrawal adds to tax dollar for dollar.
+        var failure = org.junit.jupiter.api.Assertions.assertThrows(
+                com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.class,
+                () -> calculator.calculate(household, date, portfolio,
+                        new WithdrawalBreakdown(zero, zero, new BigDecimal("1000"), zero),
+                        new TaxDeferredFirstWithdrawalStrategy(), FilingStatus.SINGLE, synthetic,
+                        zero, zero, zero, null, zero, null, zero, java.util.Optional.empty(), List.of(),
+                        context, state, java.util.function.UnaryOperator.identity()));
+        assertEquals(com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.Reason.TAX_FUNDING_NONCONVERGENCE,
+                failure.reason());
+        assertEquals(balance, portfolio.getBalance(account));
+    }
+
+    @Test
     void taxDeferredFundingAccountsForTaxCreatedByTaxWithdrawal() {
 
         Person primary =

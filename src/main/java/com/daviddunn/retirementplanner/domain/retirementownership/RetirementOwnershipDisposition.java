@@ -16,12 +16,15 @@ public final class RetirementOwnershipDisposition {
         SUPPORTED_ORIGINAL_OWNER,
         ELIGIBLE_SUCCESSOR_OWNERSHIP,
         ELIGIBLE_SPOUSAL_BENEFICIARY,
+        DEATH_YEAR_RECIPIENT,
         UNSUPPORTED_OR_UNRESOLVED,
         NOT_APPLICABLE
     }
 
     public enum Treatment {
         ORIGINAL_OWNER,
+        MODELED_SPOUSAL_DEATH_YEAR_IRA_V1,
+        MODELED_SPOUSAL_DEATH_YEAR_401K_V1,
         MODELED_SPOUSE_AS_OWNER_NEXT_YEAR_V1,
         MODELED_SPOUSAL_401K_DIRECT_ROLLOVER_V1,
         MODELED_SPOUSAL_BENEFICIARY_IRA_SINGLE_LIFE_V1,
@@ -89,6 +92,11 @@ public final class RetirementOwnershipDisposition {
                 Optional.of(survivor), Optional.empty(), Optional.empty());
     }
 
+    static RetirementOwnershipDisposition deathYearRecipient(Year year, AccountReference account, AccountOwnership survivor) {
+        return new RetirementOwnershipDisposition(year, account, Status.DEATH_YEAR_RECIPIENT,
+                Optional.of(survivor), Optional.empty(), Optional.empty());
+    }
+
     static RetirementOwnershipDisposition notApplicable(Year year, AccountReference account) {
         return new RetirementOwnershipDisposition(year, account, Status.NOT_APPLICABLE,
                 Optional.empty(), Optional.empty(), Optional.empty());
@@ -109,6 +117,8 @@ public final class RetirementOwnershipDisposition {
     public Treatment treatment() {
         return switch (status) {
             case SUPPORTED_ORIGINAL_OWNER -> Treatment.ORIGINAL_OWNER;
+            case DEATH_YEAR_RECIPIENT -> originalAccount.type() == AccountType.TRADITIONAL_401K
+                    ? Treatment.MODELED_SPOUSAL_DEATH_YEAR_401K_V1 : Treatment.MODELED_SPOUSAL_DEATH_YEAR_IRA_V1;
             case ELIGIBLE_SPOUSAL_BENEFICIARY -> originalAccount.type() == AccountType.TRADITIONAL_401K
                     ? Treatment.MODELED_SPOUSAL_BENEFICIARY_401K_SINGLE_LIFE_V1
                     : Treatment.MODELED_SPOUSAL_BENEFICIARY_IRA_SINGLE_LIFE_V1;
@@ -122,7 +132,8 @@ public final class RetirementOwnershipDisposition {
 
     /** Ownership grouping for this year. The applicable table, requirement, and any payment are separate. */
     public Optional<AccountOwnership> effectiveRmdOwner() {
-        return status == Status.ELIGIBLE_SPOUSAL_BENEFICIARY ? Optional.empty() : effectiveRmdOwner;
+        return status == Status.ELIGIBLE_SPOUSAL_BENEFICIARY || status == Status.DEATH_YEAR_RECIPIENT
+                ? Optional.empty() : effectiveRmdOwner;
     }
 
     public Optional<AccountOwnership> effectiveRmdRecipient() {

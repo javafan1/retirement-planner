@@ -22,6 +22,30 @@ class MichiganAttributedGoldenTest {
     static BigDecimal money(String text) { return new BigDecimal(text); }
     static final LocalDate DATE = LocalDate.of(2026, 1, 1);
 
+    @Test
+    void age67StandardDeductionGapIsVisibleInRmdAndConversionYear() throws Exception {
+        var primary = new Person("Primary", "Fixture", LocalDate.of(1953, 1, 1));
+        var household = new Household(primary);
+        var ira = new TraditionalIRA("Original IRA", AccountOwnership.PRIMARY, money("265000"));
+        var rmd = IncomeSourceAttribution.withdrawal(ira, money("10000"),
+                IncomeSourceAttribution.Kind.RMD, IncomeSourceAttribution.Purpose.CASH_FLOW).inYear(2026);
+        var conversion = IncomeSourceAttribution.withdrawal(ira, money("2000"),
+                IncomeSourceAttribution.Kind.ROTH_CONVERSION, IncomeSourceAttribution.Purpose.CONVERSION).inYear(2026);
+        var income = new TaxIncome(BigDecimal.ZERO, BigDecimal.ZERO, money("10000"),
+                money("2000"), money("10000"), List.of(rmd, conversion));
+        var result = new MichiganTaxCalculator().calculate(income, FilingStatus.SINGLE,
+                new GovernmentRulesRepository().load("/rules/government-rules-2026.json").getMichiganTaxRules(),
+                MichiganTaxContext.capture(household, DATE, null));
+
+        amount("12000", result.retirementDeduction());
+        amount("4100", result.taxableIncome());
+        amount("174.25", result.incomeTax());
+        // MCL 206.30(9)(e): the $20,000 standard deduction includes the $5,900 exemption.
+        BigDecimal taxWithStandardDeduction = money("22000").subtract(money("20000")).multiply(money("0.0425"));
+        amount("85.00", taxWithStandardDeduction);
+        amount("89.25", result.incomeTax().subtract(taxWithStandardDeduction));
+    }
+
     @ParameterizedTest(name = "{0}")
     @CsvSource({
             "S01,SINGLE,60,60,0,0,0,0,10000,0,0,4100,174.25",

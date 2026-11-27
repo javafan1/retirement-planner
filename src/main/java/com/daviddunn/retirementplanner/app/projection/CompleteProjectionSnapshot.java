@@ -49,6 +49,7 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
                 || annual.accounts().size() > 1000 || nonInvestable.size() != annual.years().size())
             throw new IllegalArgumentException("Incomplete or oversized projection context.");
         if (!digest(inputsDocument).equals(inputDigest)) throw new IllegalArgumentException("Projection input digest mismatch.");
+        boolean versionedRoth = validateRothScheduling(inputsDocument, annual, provenance);
         SpousalInheritancePlanningEvidence.validate(inputsDocument, annual, provenance);
         String calculationProvenance = SpousalInheritancePlanningEvidence.calculationProvenance(provenance);
         ConditionalBenefitExecutionSemantics.validate(inputsDocument,annual,calculationProvenance);
@@ -73,12 +74,39 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
                     || (i > 0 && annual.years().get(i).year() != annual.years().get(i - 1).year() + 1))
                 throw new IllegalArgumentException("Projection year mismatch.");
         }
-        if (SpousalInheritancePlanningEvidence.applied(annual)) {
-            validateSpousalIraRmd(inputsDocument, annual);
+        if (versionedRoth || SpousalInheritancePlanningEvidence.applied(annual)) {
+            validateSpousalIraRmd(inputsDocument, annual, versionedRoth);
         }
     }
 
-    private static void validateSpousalIraRmd(String inputsDocument, RetainedProjectionSnapshot annual) {
+    private static final String ROTH_POLICY = "; roth-scheduling=FL-BASIC-ROTH-SCHEDULING-V1/";
+
+    public static String rothSchedulingStamp(
+            com.daviddunn.retirementplanner.domain.roth.RothConversionRequest request,
+            String inputs, RetainedProjectionSnapshot annual) {
+        if (!com.daviddunn.retirementplanner.domain.roth.RothConversionRequest.usesVersionedExecution(request)) return "";
+        return ROTH_POLICY + request.getScheduling().rmdSchedulingPolicy() + "/"
+                + new com.daviddunn.retirementplanner.persistence.AnalysisSnapshotCodec()
+                        .executionDigest(java.util.List.of(digest(inputs), annual));
+    }
+
+    private static boolean validateRothScheduling(String inputsDocument, RetainedProjectionSnapshot annual, String provenance) {
+        try {
+            var request = JSON.readTree(inputsDocument).path("rothConversionRequest").has("scheduling")
+                    ? restoreInputs(inputsDocument).getRothConversionRequest() : null;
+            var stamp = rothSchedulingStamp(request, inputsDocument, annual);
+            int marker = provenance.indexOf(ROTH_POLICY);
+            if (stamp.isEmpty() ? marker >= 0 : marker < 0 || marker != provenance.lastIndexOf(ROTH_POLICY)
+                    || !provenance.substring(marker).startsWith(stamp)) {
+                throw new IllegalArgumentException("Missing or mismatched versioned Roth scheduling identity.");
+            }
+            return !stamp.isEmpty();
+        } catch (java.io.IOException invalid) {
+            throw new IllegalArgumentException("Invalid frozen projection inputs.", invalid);
+        }
+    }
+
+    private static void validateSpousalIraRmd(String inputsDocument, RetainedProjectionSnapshot annual, boolean versionedRoth) {
         var frozen = executionPlan(restoreInputs(inputsDocument));
         int year = annual.years().getFirst().year();
         var mismatch = com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.Reason.HISTORICAL_EVIDENCE_MISMATCH;
@@ -86,7 +114,14 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
             // The accepted rows cannot prove their own debits. Independently reproduce the scoped calculation
             // from the frozen opening graph and compare every retained field, including years without a debit.
             var engine = new ProjectionEngine();
-            var outcome = switch (annual.schemaVersion()) {
+            if (versionedRoth && !matchesVersionedRoute(frozen, annual)) {
+                throw new IllegalArgumentException("Retained inheritance policy differs from normal execution.");
+            }
+            var outcome = versionedRoth ? engine.projectNormalWithRothScheduling(frozen) : switch (annual.schemaVersion()) {
+                case RetainedProjectionSnapshot.SPOUSAL_POST_RBD_401K_OWNER_SCHEMA -> engine.projectSpousalPostRbd401kOwner(frozen);
+                case RetainedProjectionSnapshot.SPOUSAL_POST_RBD_401K_SCHEMA -> engine.projectSpousalPostRbd401k(frozen);
+                case RetainedProjectionSnapshot.SPOUSAL_DEATH_YEAR_IRA_SCHEMA -> engine.projectSpousalIraDeathYear(frozen);
+                case RetainedProjectionSnapshot.SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA -> engine.projectSpousalSuccessorOrdinary(frozen);
                 case RetainedProjectionSnapshot.SPOUSAL_401K_ROLLOVER_SCHEMA -> engine.projectSpousal401kRollover(frozen);
                 case RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_IRA_SCHEMA -> engine.projectSpousalBeneficiaryIraRmd(frozen);
                 case RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_401K_SCHEMA -> engine.projectSpousalBeneficiary401kRmd(frozen);
@@ -94,13 +129,22 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
             };
             if (outcome instanceof com.daviddunn.retirementplanner.domain.projection.ProjectionExecutionResult.Completed done
                     && switch (annual.schemaVersion()) {
+                        case RetainedProjectionSnapshot.SPOUSAL_POST_RBD_401K_OWNER_SCHEMA ->
+                                RetainedProjectionSnapshot.captureSpousalPostRbd401kOwner(done.projection()).equals(annual);
+                        case RetainedProjectionSnapshot.SPOUSAL_POST_RBD_401K_SCHEMA ->
+                                RetainedProjectionSnapshot.captureSpousalPostRbd401k(done.projection()).equals(annual);
+                        case RetainedProjectionSnapshot.SPOUSAL_DEATH_YEAR_IRA_SCHEMA ->
+                                RetainedProjectionSnapshot.captureSpousalIraDeathYear(done.projection()).equals(annual);
+                        case RetainedProjectionSnapshot.SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA ->
+                                RetainedProjectionSnapshot.captureSpousalSuccessorOrdinary(done.projection()).equals(annual);
                         case RetainedProjectionSnapshot.SPOUSAL_401K_ROLLOVER_SCHEMA ->
                                 RetainedProjectionSnapshot.captureSpousal401kRollover(done.projection()).equals(annual);
                         case RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_IRA_SCHEMA ->
                                 RetainedProjectionSnapshot.captureSpousalBeneficiaryIraRmd(done.projection()).equals(annual);
                         case RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_401K_SCHEMA ->
                                 RetainedProjectionSnapshot.captureSpousalBeneficiary401kRmd(done.projection()).equals(annual);
-                        default -> RetainedProjectionSnapshot.captureSpousalIraRmd(done.projection()).equals(annual);
+                        default -> (versionedRoth ? RetainedProjectionSnapshot.capture(done.projection())
+                                : RetainedProjectionSnapshot.captureSpousalIraRmd(done.projection())).equals(annual);
                     }) return;
         } catch (java.util.concurrent.CancellationException canceled) {
             throw canceled;
@@ -112,6 +156,19 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
         }
         throw new com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable(year, mismatch,
                 "Annual obligations, debits or financial totals differ from the frozen calculation.");
+    }
+
+    private static boolean matchesVersionedRoute(RetirementPlan plan, RetainedProjectionSnapshot annual) {
+        int schema = annual.schemaVersion();
+        if (ProjectionEngine.requestsSpousalPostRbd401kOwner(plan))
+            return schema == RetainedProjectionSnapshot.SPOUSAL_POST_RBD_401K_OWNER_SCHEMA;
+        if (ProjectionEngine.requestsSpousalPostRbd401k(plan))
+            return schema == RetainedProjectionSnapshot.SPOUSAL_POST_RBD_401K_SCHEMA;
+        if (ProjectionEngine.requestsSpousalIraDeathYear(plan))
+            return schema == RetainedProjectionSnapshot.SPOUSAL_DEATH_YEAR_IRA_SCHEMA;
+        if (ProjectionEngine.requestsAppliedSpousalIraRmd(plan))
+            return schema == RetainedProjectionSnapshot.SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA;
+        return schema == RetainedProjectionSnapshot.SCHEMA || schema == RetainedProjectionSnapshot.AVAILABILITY_SCHEMA;
     }
 
     public RetirementPlan restoreExecutionPlan() {
@@ -289,6 +346,20 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
     }
     public boolean matches(RetirementPlan plan) { return inputDigest.equals(digest(freeze(plan))); }
 
+    public String rothSchedulingDisclosure() {
+        if (!provenance.contains(ROTH_POLICY)) return "";
+        var request = restoreInputs().getRothConversionRequest();
+        var schedule = request.getScheduling();
+        String target = switch (request.getStrategy()) {
+            case FIXED_AMOUNT -> " $" + request.getAnnualAmount().toPlainString();
+            case CUSTOM_TAXABLE_INCOME_TARGET -> " $" + request.getCustomTargetTaxableIncome().toPlainString();
+            default -> "";
+        };
+        return "Applied Roth schedule " + request.getStartYear() + "–" + schedule.conversionEndYear()
+                + ". " + schedule.rmdSchedulingPolicy().label() + ". " + request.getFrequency()
+                + " " + request.getStrategy().name().replace('_', ' ') + target + ".";
+    }
+
     public String inheritancePlanningDisclosure() {
         return SpousalInheritancePlanningEvidence.disclosure(inputsDocument, annual);
     }
@@ -319,11 +390,14 @@ public record CompleteProjectionSnapshot(int version, UUID id, UUID owner, UUID 
             var original = restoreInputs();
             if (original.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance() != null) {
                 var plan = executionPlan(original);
-                if (annual.schemaVersion() != RetainedProjectionSnapshot.SPOUSAL_401K_ROLLOVER_SCHEMA
-                        && ProjectionEngine.requestsSpousal401kRollover(plan)
-                        || annual.schemaVersion() != RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_401K_SCHEMA
-                            && ProjectionEngine.requestsSpousalBeneficiary401kRmd(plan)
-                        || !spousalIraRmdApplied() && ProjectionEngine.requestsAppliedSpousalIraRmd(plan)) return false;
+                if (ProjectionEngine.requestsSpousalPostRbd401kOwner(plan)) {
+                    if (annual.schemaVersion() != RetainedProjectionSnapshot.SPOUSAL_POST_RBD_401K_OWNER_SCHEMA) return false;
+                } else if (ProjectionEngine.requestsSpousalPostRbd401k(plan)) {
+                    if (annual.schemaVersion() != RetainedProjectionSnapshot.SPOUSAL_POST_RBD_401K_SCHEMA) return false;
+                } else if (ProjectionEngine.requestsSpousalIraDeathYear(plan)) {
+                    if (annual.schemaVersion() != RetainedProjectionSnapshot.SPOUSAL_DEATH_YEAR_IRA_SCHEMA) return false;
+                } else if (annual.schemaVersion() != RetainedProjectionSnapshot.SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA
+                        && ProjectionEngine.requestsAppliedSpousalIraRmd(plan)) return false;
             }
             if (original.getPlanningAssumptions().getStateTaxAssumptions().usesArkansasRegularTaxOnly()) return false;
             if (original.getFinancialCalculationMode() != null || !original.getConditionalBenefits().isEmpty()) {

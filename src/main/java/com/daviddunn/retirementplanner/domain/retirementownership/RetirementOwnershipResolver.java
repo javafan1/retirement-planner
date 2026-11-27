@@ -84,6 +84,16 @@ public final class RetirementOwnershipResolver {
             Map<AccountOwnership, LocalDate> birthDates, RmdRules rules,
             List<AccountReference> originalAccounts, SpousalInheritanceAssumption selection,
             Set<AccountReference> clearedMandatoryHistory, Map<AccountReference, Spousal401kRollover> rollovers) {
+        return resolveForPlanning(year, opening, deaths, birthDates, rules, originalAccounts, selection,
+                clearedMandatoryHistory, rollovers, false);
+    }
+
+    public static AnnualRetirementOwnership resolveForPlanning(
+            Year year, LocalDate opening, EffectiveHouseholdDeathView deaths,
+            Map<AccountOwnership, LocalDate> birthDates, RmdRules rules,
+            List<AccountReference> originalAccounts, SpousalInheritanceAssumption selection,
+            Set<AccountReference> clearedMandatoryHistory, Map<AccountReference, Spousal401kRollover> rollovers,
+            boolean deathYearPolicy) {
         Objects.requireNonNull(selection, "Spousal inheritance selection is required.");
         var accounts = List.copyOf(originalAccounts);
         var roster = Map.copyOf(birthDates);
@@ -115,7 +125,9 @@ public final class RetirementOwnershipResolver {
         if (!rollovers.isEmpty() && selection.treatment() != SpousalInheritanceAssumption.Treatment.SPOUSE_AS_OWNER) {
             throw new IllegalArgumentException("A direct rollover requires selected spouse-as-owner treatment.");
         }
-        return resolve(year, opening, deaths, roster, rules, accounts, assumptions, Map.copyOf(rollovers), Set.of());
+        return resolve(year, opening, deaths, roster, rules, accounts, assumptions, Map.copyOf(rollovers),
+                selection.treatment() == SpousalInheritanceAssumption.Treatment.SPOUSE_AS_BENEFICIARY && deathYearPolicy
+                        ? cleared : Set.of(), deathYearPolicy ? cleared : Set.of());
     }
 
     /** Explicit no-election, sole-spouse life-expectancy method, with mandatory history already cleared. */
@@ -127,7 +139,7 @@ public final class RetirementOwnershipResolver {
             throw new IllegalArgumentException("The life-expectancy method requires retained spouse-as-beneficiary status.");
         }
         return resolve(year, opening, deaths, birthDates, rules, originalAccounts,
-                List.of(), Map.of(), Set.copyOf(clearedMandatoryHistory));
+                List.of(), Map.of(), Set.copyOf(clearedMandatoryHistory), Set.of());
     }
 
     /** Resolves membership using birth and account facts frozen with the existing death view and RMD rules. */
@@ -139,14 +151,14 @@ public final class RetirementOwnershipResolver {
             RmdRules rmdRules,
             List<AccountReference> originalAccounts,
             List<SpouseAsOwnerAssumption> assumptions) {
-        return resolve(year, projectionOpening, deathView, birthDates, rmdRules, originalAccounts, assumptions, Map.of(), Set.of());
+        return resolve(year, projectionOpening, deathView, birthDates, rmdRules, originalAccounts, assumptions, Map.of(), Set.of(), Set.of());
     }
 
     private static AnnualRetirementOwnership resolve(
             Year year, LocalDate projectionOpening, EffectiveHouseholdDeathView deathView,
             Map<AccountOwnership, LocalDate> birthDates, RmdRules rmdRules, List<AccountReference> originalAccounts,
             List<SpouseAsOwnerAssumption> assumptions, Map<AccountReference, Spousal401kRollover> rollovers,
-            Set<AccountReference> beneficiaryAccounts) {
+            Set<AccountReference> beneficiaryAccounts, Set<AccountReference> verifiedDeathYearSources) {
         Objects.requireNonNull(year, "Projection year is required.");
         Objects.requireNonNull(projectionOpening, "Projection opening is required.");
         Objects.requireNonNull(deathView, "Frozen household death view is required.");
@@ -185,7 +197,7 @@ public final class RetirementOwnershipResolver {
         for (AccountReference account : accounts) {
             dispositions.put(account, resolveAccount(
                     account, byAccount.get(account), year, projectionOpening, deathView, roster, living, rmdRules,
-                    rollovers.get(account), beneficiaryAccounts.contains(account)));
+                    rollovers.get(account), beneficiaryAccounts.contains(account), verifiedDeathYearSources.contains(account)));
         }
         return new AnnualRetirementOwnership(year, projectionOpening, deathView, living, roster, dispositions);
     }
@@ -241,7 +253,8 @@ public final class RetirementOwnershipResolver {
     private static RetirementOwnershipDisposition resolveAccount(
             AccountReference account, SpouseAsOwnerAssumption assumption, Year year, LocalDate opening,
             EffectiveHouseholdDeathView deathView, Map<AccountOwnership, LocalDate> roster,
-            Set<AccountOwnership> living, RmdRules rmdRules, Spousal401kRollover rollover, boolean beneficiary) {
+            Set<AccountOwnership> living, RmdRules rmdRules, Spousal401kRollover rollover, boolean beneficiary,
+            boolean deathYearPolicy) {
         if (!account.type().requiresIndividualOwnership()) {
             return assumption == null
                     ? RetirementOwnershipDisposition.notApplicable(year, account)
@@ -269,16 +282,27 @@ public final class RetirementOwnershipResolver {
             if (year.getValue() < rollover.effectiveDate().getYear()) {
                 return RetirementOwnershipDisposition.refused(year, account, BEFORE_EFFECTIVE_YEAR);
             }
-            if (rollover.effectiveDate().getYear() >= roster.get(account.owner()).getYear() + participantAge.getAsInt()) {
+            if (!deathYearPolicy && rollover.effectiveDate().getYear() >= roster.get(account.owner()).getYear() + participantAge.getAsInt()) {
                 return RetirementOwnershipDisposition.refused(year, account, MANDATORY_DISTRIBUTION_STATUS_UNRESOLVED);
             }
             return RetirementOwnershipDisposition.successor(year, account, rollover.survivor(), rollover.effectiveDate());
         }
-        boolean retainedEmployer = beneficiary && account.type() == AccountType.TRADITIONAL_401K;
+        boolean retainedEmployer = (beneficiary || deathYearPolicy && deathView.deathDate(account.owner())
+                .filter(date -> date.getYear() == year.getValue()).isPresent())
+                && account.type() == AccountType.TRADITIONAL_401K;
         if ((!retainedEmployer && account.type() != AccountType.TRADITIONAL_IRA)
                 || account.inheritedInformation().isPresent()
                 || (!retainedEmployer && !account.participantFacts().equals(RetirementParticipantFacts.UNKNOWN))) {
             return RetirementOwnershipDisposition.refused(year, account, UNSUPPORTED_SUCCESSOR_ACCOUNT);
+        }
+        var modeledDeath = deathView.deathDate(account.owner()).orElseThrow();
+        var originalBirthDate = roster.get(account.owner());
+        var startingAge = supportedStartingAge(originalBirthDate, rmdRules);
+        if (deathYearPolicy && (account.type() == AccountType.TRADITIONAL_IRA
+                || retainedEmployer) && startingAge.isPresent()
+                && year.getValue() == modeledDeath.getYear()
+                && !modeledDeath.isBefore(LocalDate.of(originalBirthDate.getYear() + startingAge.getAsInt() + 1, 4, 1))) {
+            return RetirementOwnershipDisposition.deathYearRecipient(year, account, living.iterator().next());
         }
         if (beneficiary) {
             var survivor = living.iterator().next();
@@ -291,7 +315,7 @@ public final class RetirementOwnershipResolver {
             if (originalAge.isEmpty() || supportedStartingAge(roster.get(survivor), rmdRules).isEmpty()) {
                 return RetirementOwnershipDisposition.refused(year, account, UNSUPPORTED_BIRTH_COHORT);
             }
-            if (death.getYear() >= originalBirth.getYear() + originalAge.getAsInt()) {
+            if (!deathYearPolicy && death.getYear() >= originalBirth.getYear() + originalAge.getAsInt()) {
                 return RetirementOwnershipDisposition.refused(year, account, DEATH_IN_OR_AFTER_FIRST_DISTRIBUTION_YEAR);
             }
             var facts = account.participantFacts();
@@ -304,12 +328,12 @@ public final class RetirementOwnershipResolver {
         if (assumption == null) {
             return RetirementOwnershipDisposition.refused(year, account, MISSING_SPOUSE_AS_OWNER_ASSUMPTION);
         }
-        return resolveSuccessor(account, assumption, year, opening, roster.get(account.owner()), rmdRules);
+        return resolveSuccessor(account, assumption, year, opening, roster.get(account.owner()), rmdRules, deathYearPolicy);
     }
 
     private static RetirementOwnershipDisposition resolveSuccessor(
             AccountReference account, SpouseAsOwnerAssumption assumption, Year year,
-            LocalDate opening, LocalDate originalBirthDate, RmdRules rmdRules) {
+            LocalDate opening, LocalDate originalBirthDate, RmdRules rmdRules, boolean deathYearPolicy) {
         LocalDate death = assumption.modeledDeathDate();
         LocalDate effective = assumption.modeledEffectiveDate();
         if (death.isBefore(opening)) {
@@ -325,7 +349,7 @@ public final class RetirementOwnershipResolver {
         if (originalStartingAge.isEmpty() || supportedStartingAge(assumption.survivorBirthDate(), rmdRules).isEmpty()) {
             return RetirementOwnershipDisposition.refused(year, account, UNSUPPORTED_BIRTH_COHORT);
         }
-        if (death.getYear() - originalBirthDate.getYear() >= originalStartingAge.getAsInt()) {
+        if (!deathYearPolicy && death.getYear() - originalBirthDate.getYear() >= originalStartingAge.getAsInt()) {
             return RetirementOwnershipDisposition.refused(year, account, DEATH_IN_OR_AFTER_FIRST_DISTRIBUTION_YEAR);
         }
         for (Affirmation fact : Affirmation.values()) {

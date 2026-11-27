@@ -272,7 +272,7 @@ class RetainedProjectionCodecTest {
         Map.of(HouseholdSocialSecurityResult.class, "primaryOwnBenefit,spouseOwnBenefit,primarySpousalExcessBenefit,spouseSpousalExcessBenefit,primarySurvivorCandidate,spouseSurvivorCandidate,primarySelection,spouseSelection,householdBenefit",
                 HouseholdCashSettlement.class, "guaranteedIncome,projectedPeriodRmdCash,spendingWithdrawal,taxFundingWithdrawal,ordinaryExpenses,medicarePremiums,incomeTaxes,retainedHouseholdSurplus,retainedFromExcessRmd,retainedFromGuaranteedIncome,retainedFromTaxFundingSurplus",
                 ProjectionMetrics.class, "totalInvestmentGrowth,totalIncome,totalTaxes,peakAnnualTax,endingInvestableAssets,endingNetWorth,afterTaxEstate,lifetimePortfolioWithdrawals,lifetimeRothConversions,lifetimeRequiredMinimumDistributions,lifetimeMedicarePremiums,lifetimeHouseholdSocialSecurity,lifetimePrimarySocialSecurity,lifetimeSpouseSocialSecurity",
-                RetirementParticipantFacts.class, "separationStatus,separationDate,retirementConditionsStatus,retirementConditionsMetDate",
+                RetirementParticipantFacts.class, "separationStatus,separationDate,retirementConditionsStatus,retirementConditionsMetDate,confirmedPostRbdBeneficiaryRequiredBeginningDate,confirmedPostRbdDirectRollover",
                 RetainedProjectionSnapshot.Rollover.class, "source,survivor,effectiveDate,eligibleTransferredBalance",
                 com.daviddunn.retirementplanner.domain.rmd.BeneficiaryIraRmd.class,
                 "year,firstDistributionYear,decedent,beneficiary,priorBalance,divisor,requiredAmount")

@@ -36,7 +36,19 @@ public record IncomeSourceAttribution(
         @com.fasterxml.jackson.annotation.JsonIgnore Optional<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt> conditionalBenefit,
         @com.fasterxml.jackson.annotation.JsonIgnore Optional<com.daviddunn.retirementplanner.domain.tax.NetInvestmentIncomeTaxCalculation> niit,
         @com.fasterxml.jackson.annotation.JsonIgnore Optional<com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode> calculationMode,
-        @com.fasterxml.jackson.annotation.JsonIgnore Optional<SuccessorRmd> successorRmd) {
+        @com.fasterxml.jackson.annotation.JsonIgnore Optional<SuccessorRmd> successorRmd,
+        @com.fasterxml.jackson.annotation.JsonIgnore Optional<SuccessorOrdinary> successorOrdinary) {
+
+    public IncomeSourceAttribution(Kind kind, Purpose purpose, Optional<AccountOwnership> owner,
+            Optional<AccountReference> account, Optional<AccountReference> destination, String description,
+            BigDecimal grossAmount, Optional<BigDecimal> modeledTaxableAmount, OptionalInt taxYear,
+            Optional<PensionFacts> pension, Optional<com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt> conditionalBenefit,
+            Optional<com.daviddunn.retirementplanner.domain.tax.NetInvestmentIncomeTaxCalculation> niit,
+            Optional<com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode> calculationMode,
+            Optional<SuccessorRmd> successorRmd) {
+        this(kind, purpose, owner, account, destination, description, grossAmount, modeledTaxableAmount,
+                taxYear, pension, conditionalBenefit, niit, calculationMode, successorRmd, Optional.empty());
+    }
 
     public IncomeSourceAttribution(Kind kind, Purpose purpose, Optional<AccountOwnership> owner,
             Optional<AccountReference> account, Optional<AccountReference> destination, String description,
@@ -156,8 +168,21 @@ public record IncomeSourceAttribution(
                 throw new IllegalArgumentException("Successor RMD evidence must match the authorized debit, account, recipient and year.");
             }
         });
+        Objects.requireNonNull(successorOrdinary).ifPresent(authorization -> {
+            if (kind != Kind.ORDINARY_RETIREMENT_WITHDRAWAL || purpose != authorization.purpose
+                    || destination.isPresent() || pension.isPresent() || conditionalBenefit.isPresent()
+                    || niit.isPresent() || calculationMode.isPresent() || successorRmd.isPresent()
+                    || !account.equals(Optional.of(authorization.account))
+                    || !owner.equals(Optional.of(authorization.recipient))
+                    || !taxYear.equals(OptionalInt.of(authorization.year))
+                    || !grossAmount.equals(authorization.debit)
+                    || !modeledTaxableAmount.equals(Optional.of(authorization.debit))
+                    || !account.orElseThrow().participantFacts().equals(authorization.account.participantFacts())) {
+                throw new IllegalArgumentException("Ordinary successor evidence differs from the authorized distribution.");
+            }
+        });
         account.ifPresent(reference -> {
-            if (owner.orElse(null) != reference.owner() && successorRmd.isEmpty()) {
+            if (owner.orElse(null) != reference.owner() && successorRmd.isEmpty() && successorOrdinary.isEmpty()) {
                 throw new IllegalArgumentException("Source account owner must match income owner.");
             }
         });
@@ -179,7 +204,52 @@ public record IncomeSourceAttribution(
     public IncomeSourceAttribution inYear(int year) {
         return new IncomeSourceAttribution(kind, purpose, owner, account, destination,
                 description, grossAmount, modeledTaxableAmount, OptionalInt.of(year), pension, conditionalBenefit, niit,
-                calculationMode, successorRmd);
+                calculationMode, successorRmd, successorOrdinary);
+    }
+
+    /** Reattributes one fully taxable ordinary debit using its resolved original position and recipient. */
+    public IncomeSourceAttribution forSuccessorOrdinary(RetirementOwnershipDisposition disposition) {
+        var reference = account.orElseThrow();
+        var recipient = disposition.effectiveRmdRecipient().orElseThrow();
+        if (successorOrdinary.isPresent() || successorRmd.isPresent()
+                || kind != Kind.ORDINARY_RETIREMENT_WITHDRAWAL
+                || (purpose != Purpose.CASH_FLOW && purpose != Purpose.TAX_FUNDING)
+                || disposition.status() == RetirementOwnershipDisposition.Status.DEATH_YEAR_RECIPIENT
+                || recipient == reference.owner() || recipient == AccountOwnership.JOINT
+                || !reference.equals(disposition.originalAccount())
+                || !reference.participantFacts().equals(disposition.originalAccount().participantFacts())
+                || !successorRmdSource(reference, disposition.treatment())
+                || !taxYear.equals(OptionalInt.of(disposition.year().getValue()))
+                || grossAmount.signum() <= 0 || !modeledTaxableAmount.equals(Optional.of(grossAmount))) {
+            throw new IllegalArgumentException("Ordinary successor distributions require a qualifying, fully taxable source debit.");
+        }
+        return new IncomeSourceAttribution(kind, purpose, Optional.of(recipient), account, destination,
+                description, grossAmount, modeledTaxableAmount, taxYear, pension, conditionalBenefit, niit,
+                calculationMode, Optional.empty(), Optional.of(new SuccessorOrdinary(reference, recipient,
+                        taxYear.getAsInt(), grossAmount, purpose, disposition.treatment())));
+    }
+
+    public static final class SuccessorOrdinary {
+        private final AccountReference account;
+        private final AccountOwnership recipient;
+        private final int year;
+        private final BigDecimal debit;
+        private final Purpose purpose;
+        private final RetirementOwnershipDisposition.Treatment treatment;
+
+        private SuccessorOrdinary(AccountReference account, AccountOwnership recipient, int year,
+                                  BigDecimal debit, Purpose purpose, RetirementOwnershipDisposition.Treatment treatment) {
+            this.account = account;
+            this.recipient = recipient;
+            this.year = year;
+            this.debit = debit;
+            this.purpose = purpose;
+            this.treatment = treatment;
+        }
+
+        public RetirementOwnershipDisposition.Treatment treatment() {
+            return treatment;
+        }
     }
 
     /** Reattributes an existing verified RMD debit. It does not move money or emit another debit. */
@@ -239,9 +309,11 @@ public record IncomeSourceAttribution(
 
     private static boolean successorRmdSource(AccountReference reference, RetirementOwnershipDisposition.Treatment treatment) {
         return switch (treatment) {
-            case MODELED_SPOUSE_AS_OWNER_NEXT_YEAR_V1, MODELED_SPOUSAL_BENEFICIARY_IRA_SINGLE_LIFE_V1 ->
+            case MODELED_SPOUSE_AS_OWNER_NEXT_YEAR_V1, MODELED_SPOUSAL_BENEFICIARY_IRA_SINGLE_LIFE_V1,
+                    MODELED_SPOUSAL_DEATH_YEAR_IRA_V1 ->
                     reference.type() == AccountType.TRADITIONAL_IRA;
-            case MODELED_SPOUSAL_401K_DIRECT_ROLLOVER_V1, MODELED_SPOUSAL_BENEFICIARY_401K_SINGLE_LIFE_V1 ->
+            case MODELED_SPOUSAL_401K_DIRECT_ROLLOVER_V1, MODELED_SPOUSAL_BENEFICIARY_401K_SINGLE_LIFE_V1,
+                    MODELED_SPOUSAL_DEATH_YEAR_401K_V1 ->
                     reference.type() == AccountType.TRADITIONAL_401K;
             default -> false;
         };

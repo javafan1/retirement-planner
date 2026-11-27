@@ -118,6 +118,23 @@ public class RetirementPlan {
 
     private RothConversionRequest rothConversionRequest;
 
+    private transient RothConversionRequest newPlanRothSchedulingDraft;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public RothConversionRequest getNewPlanRothSchedulingDraft() {
+        return newPlanRothSchedulingDraft;
+    }
+
+    public void initializeNewPlanRothSchedulingDraft() {
+        int openingYear = planningAssumptions.getProjectionStartDate().getYear();
+        int endingYear = Math.addExact(openingYear, planningAssumptions.getProjectionLengthYears() - 1);
+        newPlanRothSchedulingDraft = new RothConversionRequest(false, openingYear, java.math.BigDecimal.ZERO, null,
+                com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy.FIXED_AMOUNT,
+                com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency.ANNUAL, null,
+                new RothConversionRequest.Scheduling(1, endingYear,
+                        com.daviddunn.retirementplanner.domain.roth.RothRmdSchedulingPolicy.CONTINUE_THROUGH_END_YEAR));
+    }
+
     private ProjectionBaseline baseline;
 
     private final List<NonInvestableAsset>

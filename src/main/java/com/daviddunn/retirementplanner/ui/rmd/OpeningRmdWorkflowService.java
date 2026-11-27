@@ -170,7 +170,7 @@ public final class OpeningRmdWorkflowService {
             data.put(row.account(), new OpeningRmdAccountData(
                     distributionYear,
                     input.priorDecember31Balance(),
-                    input.rmdAlreadyDistributedBeforeProjection()));
+                    input.rmdAlreadyDistributedBeforeProjection(), input.precedingYearsSatisfied()));
         }
 
         return data;
@@ -220,7 +220,10 @@ public final class OpeningRmdWorkflowService {
 
     public record OpeningRmdInput(
             BigDecimal priorDecember31Balance,
-            BigDecimal rmdAlreadyDistributedBeforeProjection) {
+            BigDecimal rmdAlreadyDistributedBeforeProjection, Boolean precedingYearsSatisfied) {
+        public OpeningRmdInput(BigDecimal priorBalance, BigDecimal alreadyDistributed) {
+            this(priorBalance, alreadyDistributed, null);
+        }
 
         public OpeningRmdInput {
             Objects.requireNonNull(

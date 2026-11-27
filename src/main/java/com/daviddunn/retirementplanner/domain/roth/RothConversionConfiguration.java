@@ -60,7 +60,7 @@ public final class RothConversionConfiguration {
 
     public static RothConversionRequest disabled(RothConversionRequest saved) {
         return saved == null ? null : new RothConversionRequest(false, saved.getStartYear(), saved.getAnnualAmount(),
-                saved.getStopRule(), saved.getStrategy(), saved.getFrequency(), saved.getCustomTargetTaxableIncome());
+                saved.getStopRule(), saved.getStrategy(), saved.getFrequency(), saved.getCustomTargetTaxableIncome(), saved.getScheduling());
     }
 
     public static boolean same(RothConversionRequest a, RothConversionRequest b) {
@@ -68,7 +68,8 @@ public final class RothConversionConfiguration {
         return a.isEnabled() == b.isEnabled() && a.getStartYear() == b.getStartYear()
                 && decimalEquals(a.getAnnualAmount(), b.getAnnualAmount()) && a.getStopRule() == b.getStopRule()
                 && a.getStrategy() == b.getStrategy() && a.getFrequency() == b.getFrequency()
-                && decimalEquals(a.getCustomTargetTaxableIncome(), b.getCustomTargetTaxableIncome());
+                && decimalEquals(a.getCustomTargetTaxableIncome(), b.getCustomTargetTaxableIncome())
+                && Objects.equals(a.getScheduling(), b.getScheduling());
     }
 
     private static boolean decimalEquals(BigDecimal a, BigDecimal b) {

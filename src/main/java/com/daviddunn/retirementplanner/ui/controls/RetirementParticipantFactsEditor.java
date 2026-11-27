@@ -20,6 +20,9 @@ public final class RetirementParticipantFactsEditor extends TitledPane {
     private final DatePicker separationDate = new DatePicker();
     private final ComboBox<RetirementConditionsStatus> conditions = new ComboBox<>();
     private final DatePicker conditionsDate = new DatePicker();
+    private final DatePicker postRbd = new DatePicker();
+    private final javafx.scene.control.CheckBox directRollover = new javafx.scene.control.CheckBox("Plan permits direct rollover of the eligible remainder");
+    private final Label postRbdLabel = new Label("Plan-confirmed required beginning date:");
     private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
 
     public RetirementParticipantFactsEditor(RetirementParticipantFacts facts) {
@@ -62,6 +65,17 @@ public final class RetirementParticipantFactsEditor extends TitledPane {
         InputHelp.install(separationDate, "Actual or planned separation date. A future event does not apply to earlier projection dates. Without a date, affirmative timing remains unknown.");
         InputHelp.install(conditions, "Whether this participant has met the arrangement's retirement conditions. Do not infer this from age, Social Security, pension commencement or RMDs. Unknown is allowed.");
         InputHelp.install(conditionsDate, "Actual or planned date retirement conditions were met. Without a date, affirmative timing remains unknown. This is not a tax qualification election.");
+        postRbd.setValue(facts.confirmedPostRbdBeneficiaryRequiredBeginningDate());
+        grid.addRow(4, postRbdLabel, postRbd);
+        directRollover.setSelected(Boolean.TRUE.equals(facts.confirmedPostRbdDirectRollover()));
+        InputHelp.install(directRollover, "Confirm the plan permits the sole surviving spouse to take the required payment first and directly roll the entire remaining pretax balance into their own traditional IRA on the modeled date.");
+        grid.add(directRollover, 0, 5, 2, 1);
+        showPostRbdConfirmation(false);
+        postRbd.setId("participant-confirmed-beneficiary-rbd");
+        InputHelp.install(postRbd, "Enter the legal required beginning date confirmed by the plan administrator only "
+                + "for a fully pretax 401(k) with the modeled survivor as sole direct spouse beneficiary. Confirm the "
+                + "participant was retired by the applicable-age year, the plan permits the ordinary spouse life-expectancy "
+                + "method and additional distributions, and no other payout method, election or 5% owner exception applies.");
         InputHelp.linkGridLabels(grid);
         var statusesRequired = Bindings.createBooleanBinding(
                 () -> isVisible() && isManaged() && isExpanded(),
@@ -69,6 +83,15 @@ public final class RetirementParticipantFactsEditor extends TitledPane {
         requiredFieldAttachments.add(RequiredFieldSupport.attach(separationLabel, separation, statusesRequired));
         requiredFieldAttachments.add(RequiredFieldSupport.attach(conditionsLabel, conditions, statusesRequired));
         setContent(grid);
+    }
+
+    public void showPostRbdConfirmation(boolean shown) {
+        postRbdLabel.setVisible(shown);
+        postRbdLabel.setManaged(shown);
+        postRbd.setVisible(shown);
+        postRbd.setManaged(shown);
+        directRollover.setVisible(shown);
+        directRollover.setManaged(shown);
     }
 
     /** Releases indicator listeners with the containing editor. */
@@ -89,6 +112,7 @@ public final class RetirementParticipantFactsEditor extends TitledPane {
             throw new IllegalArgumentException("Choose Unknown when participant facts are unavailable.");
         }
         return new RetirementParticipantFacts(separation.getValue(), separationDate.getValue(),
-                conditions.getValue(), conditionsDate.getValue());
+                conditions.getValue(), conditionsDate.getValue(), postRbd.isVisible() ? postRbd.getValue() : null,
+                directRollover.isVisible() && directRollover.isSelected() ? Boolean.TRUE : null);
     }
 }

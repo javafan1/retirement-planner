@@ -23,6 +23,9 @@ import java.util.Set;
 public final class SpousalIraRmdMembership {
     private final AnnualRetirementOwnership ownership;
     private final AccountOwnership survivor;
+    private final Map<AccountReference, BigDecimal> deathYearBalances;
+    private final Map<Account, BigDecimal> deathYearEmployerBalances;
+    private final Integer postRbdDeathYear;
     private final Map<AccountReference, BigDecimal> priorBalances;
     private final List<Spousal401kRollover> openingRollovers;
     private final Set<AccountReference> beneficiaryAccounts;
@@ -45,6 +48,13 @@ public final class SpousalIraRmdMembership {
     public SpousalIraRmdMembership(AnnualRetirementOwnership ownership, AccountOwnership survivor,
                                   RmdBalanceSnapshot prior, ProjectedPortfolio opening,
                                   Map<AccountReference, Spousal401kRollover> rollovers, Integer firstBeneficiaryYear) {
+        this(ownership, survivor, prior, opening, rollovers, firstBeneficiaryYear, null);
+    }
+
+    public SpousalIraRmdMembership(AnnualRetirementOwnership ownership, AccountOwnership survivor,
+            RmdBalanceSnapshot prior, ProjectedPortfolio opening, Map<AccountReference, Spousal401kRollover> rollovers,
+            Integer firstBeneficiaryYear, Integer postRbdDeathYear) {
+        this.postRbdDeathYear = postRbdDeathYear;
         this.ownership = java.util.Objects.requireNonNull(ownership);
         this.survivor = java.util.Objects.requireNonNull(survivor);
         if (prior == null || !prior.getSnapshotDate().equals(LocalDate.of(year() - 1, 12, 31))) {
@@ -57,10 +67,16 @@ public final class SpousalIraRmdMembership {
             if (balances.putIfAbsent(reference, position.getBalance()) != null) throw invalidSource();
         }
         var members = new HashMap<AccountReference, BigDecimal>();
+        var deceasedMembers = new HashMap<AccountReference, BigDecimal>();
         var inherited = new HashMap<AccountReference, BigDecimal>();
         var employer = new LinkedHashMap<AccountReference, BigDecimal>();
         for (var disposition : ownership.accounts().values()) {
             var original = disposition.originalAccount();
+            if (disposition.status() == RetirementOwnershipDisposition.Status.DEATH_YEAR_RECIPIENT) {
+                var balance = balances.get(original);
+                if (balance == null || disposition.effectiveRmdRecipient().orElse(null) != survivor) throw invalidSource();
+                deceasedMembers.put(original, balance);
+            }
             if (disposition.status() == RetirementOwnershipDisposition.Status.ELIGIBLE_SPOUSAL_BENEFICIARY) {
                 var balance = balances.get(original);
                 if (balance == null || disposition.effectiveRmdRecipient().orElse(null) != survivor) throw invalidSource();
@@ -84,7 +100,7 @@ public final class SpousalIraRmdMembership {
                     var event = rollovers.get(original);
                     if (event == null) throw invalidSource();
                     if (event.effectiveDate().getYear() == year()) {
-                        if (balance.compareTo(event.eligibleTransferredBalance()) != 0) {
+                        if (postRbdDeathYear == null && balance.compareTo(event.eligibleTransferredBalance()) != 0) {
                             throw new SpousalIraRmdUnavailable(year(), SpousalIraRmdUnavailable.Reason.INCOMPATIBLE_ACCOUNT_HISTORY,
                                     "The eligible rollover amount differs from the original plan's prior closing balance.");
                         }
@@ -96,6 +112,7 @@ public final class SpousalIraRmdMembership {
                 members.put(original, balance);
             }
         }
+        var deathYearEmployer = new LinkedHashMap<Account, BigDecimal>();
         var positions = new HashSet<AccountReference>();
         var employerAccounts = new HashMap<AccountReference, Account>();
         var employerRmds = new LinkedHashMap<AccountReference, Beneficiary401kRmd>();
@@ -103,6 +120,9 @@ public final class SpousalIraRmdMembership {
         for (var position : opening.getAccountBalances()) {
             var ref = AccountReference.capture(position.getAccount());
             if (!positions.add(ref)) throw invalidSource();
+            if (ref.type() == AccountType.TRADITIONAL_401K && deceasedMembers.containsKey(ref)) {
+                deathYearEmployer.put(position.getAccount(), deceasedMembers.get(ref));
+            }
             var balance = employer.get(ref);
             if (balance != null) {
                 if (firstBeneficiaryYear == null || !ref.participantFacts().equals(ownership.accounts().get(ref).originalAccount().participantFacts())) {
@@ -114,9 +134,11 @@ public final class SpousalIraRmdMembership {
             }
         }
         if (!positions.containsAll(members.keySet()) || !positions.containsAll(inherited.keySet())
-                || employerRmds.size() != employer.size()) throw invalidSource();
+                || !positions.containsAll(deceasedMembers.keySet()) || employerRmds.size() != employer.size()) throw invalidSource();
         if ((firstBeneficiaryYear == null) != (inherited.isEmpty() && employer.isEmpty())) throw invalidSource();
         priorBalances = Map.copyOf(members);
+        deathYearBalances = Map.copyOf(deceasedMembers);
+        deathYearEmployerBalances = java.util.Collections.unmodifiableMap(deathYearEmployer);
         beneficiaryAccounts = Set.copyOf(inherited.keySet());
         beneficiaryObligation = inherited.isEmpty() ? null : beneficiaryObligation(firstBeneficiaryYear, inherited, divisor);
         employerPositions = Map.copyOf(employerAccounts);
@@ -140,7 +162,9 @@ public final class SpousalIraRmdMembership {
         return beneficiaryAccounts.contains(AccountReference.capture(account));
     }
     public boolean includes(Account account, AccountOwnership owner) {
-        return owner == survivor && priorBalances.containsKey(AccountReference.capture(account));
+        var reference = AccountReference.capture(account);
+        return owner == survivor ? priorBalances.containsKey(reference)
+                : owner == reference.owner() && deathYearBalances.containsKey(reference);
     }
 
     BigDecimal priorIraBalance(AccountOwnership owner) {
@@ -148,10 +172,31 @@ public final class SpousalIraRmdMembership {
         return priorBalances.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    public HouseholdRmdResult addDeathYearRequirement(HouseholdRmdResult living,
+            com.daviddunn.retirementplanner.domain.rules.GovernmentRules rules) {
+        if (deathYearBalances.isEmpty()) return living;
+        var decedent = decedent();
+        var birth = ownership.birthDates().get(decedent);
+        var balance = deathYearBalances.entrySet().stream()
+                .filter(entry -> entry.getKey().type() == AccountType.TRADITIONAL_IRA)
+                .map(Map.Entry::getValue).reduce(BigDecimal.ZERO, BigDecimal::add);
+        var amount = new OwnerRmdService().calculateIraRmd(balance, birth, year(), rules);
+        var employerService = new EmployerPlanRmdService();
+        var employers = deathYearEmployerBalances.entrySet().stream()
+                .map(entry -> employerService.calculateAccountRmd(entry.getKey(), entry.getValue(), birth, year(), rules))
+                .toList();
+        return living.withDeathYearRequirement(decedent, new OwnerRmdResult(amount, employers, List.of()));
+    }
+
+    private AccountOwnership decedent() {
+        return survivor == AccountOwnership.PRIMARY ? AccountOwnership.SPOUSE : AccountOwnership.PRIMARY;
+    }
+
     public IncomeSourceAttribution attributeActualDebit(IncomeSourceAttribution debit) {
         if (debit.owner().orElse(null) == survivor) return debit;
         var account = debit.account().orElseThrow(this::invalidSource);
         RetirementOwnershipDisposition disposition = ownership.accounts().get(account);
+        if (deathYearBalances.containsKey(account)) return debit.inYear(year()).forSuccessorRmd(disposition);
         if (beneficiaryAccounts.contains(account)) {
             return debit.inYear(year()).forSuccessorRmd(disposition, beneficiaryObligation);
         }
@@ -161,9 +206,39 @@ public final class SpousalIraRmdMembership {
         return debit.inYear(year()).forSuccessorRmd(disposition);
     }
 
+    public IncomeSourceAttribution attributeOrdinaryDebit(IncomeSourceAttribution debit, LocalDate firstPossibleDate) {
+        var account = debit.account().orElseThrow(this::invalidSource);
+        var disposition = ownership.accounts().get(account);
+        if (disposition == null) throw invalidSource();
+        if (disposition.effectiveRmdRecipient().orElse(null) != survivor
+                || (!priorBalances.containsKey(account) && !beneficiaryAccounts.contains(account)
+                    && !employerObligationsBySource.containsKey(account))) {
+            throw new SpousalIraRmdUnavailable(year(), SpousalIraRmdUnavailable.Reason.UNSUPPORTED_POLICY_OR_ACCOUNT,
+                    "The selected retirement position lacks effective successor treatment.");
+        }
+        if (disposition.status() == RetirementOwnershipDisposition.Status.ELIGIBLE_SUCCESSOR_OWNERSHIP) {
+            var threshold = ownership.birthDates().get(survivor).plusYears(59).plusMonths(6);
+            if (firstPossibleDate.isBefore(threshold)) {
+                var detail = threshold.getYear() == year()
+                        ? "The annual withdrawal date cannot establish that the survivor has reached age 59½."
+                        : "The owner IRA distribution could require the federal early-distribution additional tax.";
+                throw new SpousalIraRmdUnavailable(year(), SpousalIraRmdUnavailable.Reason.UNSUPPORTED_EARLY_DISTRIBUTION, detail);
+            }
+        }
+        return debit.inYear(year()).forSuccessorOrdinary(disposition);
+    }
+
     private BigDecimal beneficiaryDivisor() {
         try {
-            return SingleLifeRmdTable.divisor(year() - ownership.birthDates().get(survivor).getYear());
+            var spouseFactor = SingleLifeRmdTable.divisor(year() - ownership.birthDates().get(survivor).getYear());
+            if (postRbdDeathYear == null) return spouseFactor;
+            var decedentFactor = SingleLifeRmdTable.divisor(postRbdDeathYear - ownership.birthDates().get(decedent()).getYear())
+                    .subtract(BigDecimal.valueOf(year() - postRbdDeathYear));
+            var factor = spouseFactor.max(decedentFactor);
+            if (factor.compareTo(BigDecimal.ONE) <= 0) {
+                throw new IllegalArgumentException("The continuing beneficiary divisor has reached the depletion boundary.");
+            }
+            return factor;
         } catch (IllegalArgumentException unsupported) {
             throw new SpousalIraRmdUnavailable(year(), SpousalIraRmdUnavailable.Reason.UNSUPPORTED_POLICY_OR_ACCOUNT,
                     "A verified Single Life Table divisor for the beneficiary is unavailable.");

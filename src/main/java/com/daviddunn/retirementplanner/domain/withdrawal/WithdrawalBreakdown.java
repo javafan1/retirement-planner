@@ -97,6 +97,10 @@ public final class WithdrawalBreakdown {
         return amount;
     }
 
+    public WithdrawalBreakdown withIncomeSources(List<IncomeSourceAttribution> sources) {
+        return new WithdrawalBreakdown(cashWithdrawal, taxableWithdrawal, taxDeferredWithdrawal, rothWithdrawal, sources);
+    }
+
     public WithdrawalBreakdown plus(
             WithdrawalBreakdown other) {
 

@@ -59,10 +59,33 @@ class AssumptionsLayoutTest {
                         }
                         assertEquals(7, view.lookupAll(".assumptions-card").size());
                         assertEquals(Set.of("Planning Timeline", "Household & Survivor Planning", "Economic & Investment Assumptions",
+                                "Spousal Retirement Account Inheritance",
                                 "Social Security Claiming Ages & Benefits", "Future Social Security Benefit Reduction",
                                 "Income Tax Assumptions", "Estate & Heir Assumptions"),
                                 view.lookupAll(".assumptions-section-heading").stream().map(Label.class::cast).map(Label::getText)
                                         .collect(java.util.stream.Collectors.toSet()));
+                        var inheritance = (VBox) view.lookup("#spousal-inheritance-settings");
+                        var survivorCard = (VBox) inheritance.getParent();
+                        assertEquals("Household & Survivor Planning",
+                                ((Label) survivorCard.getChildren().getFirst()).getText());
+                        assertEquals(couple, inheritance.isVisible());
+                        assertEquals(couple, inheritance.isManaged());
+                        var owner = (RadioButton) view.lookup("#spousal-inheritance-owner");
+                        var beneficiary = (RadioButton) view.lookup("#spousal-inheritance-beneficiary");
+                        assertSame(inheritance, owner.getParent());
+                        assertSame(inheritance, beneficiary.getParent());
+                        assertEquals(Set.of(owner, beneficiary), nodes.stream()
+                                .filter(RadioButton.class::isInstance)
+                                .collect(java.util.stream.Collectors.toSet()));
+                        assertSame(owner.getToggleGroup(), beneficiary.getToggleGroup());
+                        assertEquals(Set.of(owner, beneficiary), Set.copyOf(owner.getToggleGroup().getToggles()));
+                        assertEquals(2, owner.getToggleGroup().getToggles().size());
+                        assertEquals(com.daviddunn.retirementplanner.domain.model.SpousalInheritanceAssumption.Treatment.SPOUSE_AS_OWNER,
+                                owner.getUserData());
+                        assertEquals(com.daviddunn.retirementplanner.domain.model.SpousalInheritanceAssumption.Treatment.SPOUSE_AS_BENEFICIARY,
+                                beneficiary.getUserData());
+                        assertTrue(owner.isFocusTraversable());
+                        assertTrue(beneficiary.isFocusTraversable());
                         assertColumns(view);
                         var scroll = (ScrollPane) view.lookup("#assumptions-scroll");
                         assertTrue(scroll.isFitToWidth());

@@ -554,6 +554,7 @@ public class AccountDialog extends Dialog<Account> {
                 || type == AccountType.TRADITIONAL_403B || type == AccountType.ROTH_401K;
         participantFactsEditor.setVisible(employer && !guidedCreation);
         participantFactsEditor.setManaged(employer && !guidedCreation);
+        participantFactsEditor.showPostRbdConfirmation(type == AccountType.TRADITIONAL_401K && !guidedCreation);
         boolean traditionalEmployer = com.daviddunn.retirementplanner.domain.roth.RothConversionEligibilityPolicy
                 .isEmployerPretaxSource(type);
         availabilityEditor.setVisible(traditionalEmployer);

@@ -21,6 +21,163 @@ import static org.junit.jupiter.api.Assertions.*;
 class ProjectionPdfExportTest {
     @BeforeAll static void startFx() throws Exception { ProjectionChartViewTest.startFx(); }
 
+    @Test void versionedPdfShowsFrozenWindowAfterEditingTheLiveRequest(@org.junit.jupiter.api.io.TempDir Path folder) throws Exception {
+        ProjectionChartViewTest.fx(() -> {
+            var controller = new ApplicationController();
+            var plan = SpousalPostRbd401kOwnerExecutionTest.fixture(true, true);
+            plan.setRothConversionRequest(new com.daviddunn.retirementplanner.domain.roth.RothConversionRequest(
+                    true, 2043, new BigDecimal("20000"), null,
+                    com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy.FIXED_AMOUNT,
+                    com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency.ONE_TIME, null,
+                    new com.daviddunn.retirementplanner.domain.roth.RothConversionRequest.Scheduling(1, 2043,
+                            com.daviddunn.retirementplanner.domain.roth.RothRmdSchedulingPolicy.CONTINUE_THROUGH_END_YEAR)));
+            controller.newPlan(plan);
+            var projection = controller.getCurrentProjection();
+            var frozen = controller.getAcceptedProjectionSnapshot();
+            plan.setRothConversionRequest(null);
+            var summary = new ResultsSummaryView(controller);
+            summary.load(plan, projection, List.of());
+            try {
+                var file = folder.resolve("versioned-roth.pdf");
+                new ProjectionPdfExporter().export(frozen.restoreExecutionPlan(), frozen.restoreProjection(),
+                        frozen.restoreNonInvestable(), summary.prepareProjectionPdfReport(), file);
+                try (var pdf = Loader.loadPDF(file.toFile())) {
+                    var text = new PDFTextStripper().getText(pdf).replaceAll("\\s+", " ");
+                    assertTrue(text.contains("Roth End Year"));
+                    assertTrue(text.contains("Continue Through End Year"));
+                }
+            } catch (java.io.IOException failure) {
+                throw new java.io.UncheckedIOException(failure);
+            }
+        });
+    }
+
+    @Test void legacyNullStopIsSafeInBothEditorsAndFrozenPdf(@org.junit.jupiter.api.io.TempDir Path folder) throws Exception {
+        ProjectionChartViewTest.fx(() -> {
+            var controller = new ApplicationController();
+            var plan = SpousalPostRbd401kOwnerExecutionTest.fixture(true, true);
+            plan.setRothConversionRequest(new com.daviddunn.retirementplanner.domain.roth.RothConversionRequest(
+                    false, 2042, BigDecimal.ZERO, null,
+                    com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy.FIXED_AMOUNT,
+                    com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency.ONE_TIME));
+            controller.newUserPlan(plan);
+            var projection = controller.getCurrentProjection();
+            var frozen = controller.getAcceptedProjectionSnapshot();
+            var summary = new ResultsSummaryView(controller);
+            summary.load(plan, projection, List.of());
+            var report = summary.prepareProjectionPdfReport();
+            var view = new com.daviddunn.retirementplanner.ui.views.RothConversionView();
+            view.load(plan);
+            assertNotNull(view.lookup("#pending-roth-scheduling"));
+            new javafx.scene.Scene(summary);
+            summary.applyCss();
+            assertNotNull(summary.lookup("#pending-roth-scheduling"));
+            assertNull(frozen.restoreInputs().getRothConversionRequest().getStopRule());
+            var file = folder.resolve("legacy-null-stop.pdf");
+            try {
+                new ProjectionPdfExporter().export(frozen.restoreExecutionPlan(), frozen.restoreProjection(),
+                        frozen.restoreNonInvestable(), report, file);
+                try (var pdf = Loader.loadPDF(file.toFile())) {
+                    var text = new PDFTextStripper().getText(pdf).replaceAll("\\s+", " ");
+                    assertTrue(text.contains("Legacy unspecified (no RMD stop)"));
+                }
+            } catch (java.io.IOException failure) {
+                throw new java.io.UncheckedIOException(failure);
+            }
+        });
+    }
+
+    @Test void employerPostRbdOwnerPdfFreezesRolloverSequence(@org.junit.jupiter.api.io.TempDir Path folder) throws Exception {
+        ProjectionChartViewTest.fx(() -> {
+            var controller = new ApplicationController();
+            var plan = com.daviddunn.retirementplanner.domain.projection.SpousalPostRbd401kOwnerExecutionTest
+                    .fixture(true, true);
+            controller.newPlan(plan);
+            var projection = controller.getCurrentProjection();
+            var frozen = controller.getAcceptedProjectionSnapshot();
+            var assumptions = plan.getPlanningAssumptions();
+            plan.setPlanningAssumptions(assumptions.withEconomicAssumptions(
+                    assumptions.getEconomicAssumptions().withSpousalInheritance(null)));
+            var summary = new ResultsSummaryView(controller);
+            summary.load(plan, projection, List.of());
+            var report = summary.prepareProjectionPdfReport();
+            assertEquals(frozen.inheritancePlanningDisclosure(), report.inheritancePlanningDisclosure());
+            var file = folder.resolve("employer-owner-post-rbd.pdf");
+            try {
+                new ProjectionPdfExporter().export(frozen.restoreExecutionPlan(), frozen.restoreProjection(),
+                        frozen.restoreNonInvestable(), report, file);
+                try (var pdf = Loader.loadPDF(file.toFile())) {
+                    var text = new PDFTextStripper().getText(pdf).replaceAll("\\s+", " ");
+                    assertTrue(text.contains("SPOUSE AS OWNER applied in Florida Basic"));
+                    assertTrue(text.contains("modeled January 1 post-RBD death"));
+                    assertTrue(text.contains("beneficiary minimum before the eligible remainder rolls directly"));
+                }
+            } catch (java.io.IOException failure) {
+                throw new java.io.UncheckedIOException(failure);
+            }
+        });
+    }
+
+    @Test void employerPostRbdPdfRetainsAcceptedDisclosure(@org.junit.jupiter.api.io.TempDir Path folder) throws Exception {
+        ProjectionChartViewTest.fx(() -> {
+            var controller = new ApplicationController();
+            var plan = com.daviddunn.retirementplanner.domain.projection.SpousalPostRbd401kExecutionTest
+                    .fixture(true, 2040, 1960, 1965, "808000", "246000");
+            controller.newPlan(plan);
+            var projection = controller.getCurrentProjection();
+            var frozen = controller.getAcceptedProjectionSnapshot();
+            var assumptions = plan.getPlanningAssumptions();
+            plan.setPlanningAssumptions(assumptions.withEconomicAssumptions(
+                    assumptions.getEconomicAssumptions().withSpousalInheritance(null)));
+            var summary = new ResultsSummaryView(controller);
+            summary.load(plan, projection, List.of());
+            var report = summary.prepareProjectionPdfReport();
+            assertEquals(frozen.inheritancePlanningDisclosure(), report.inheritancePlanningDisclosure());
+            var file = folder.resolve("employer-post-rbd.pdf");
+            try {
+                new ProjectionPdfExporter().export(frozen.restoreExecutionPlan(), frozen.restoreProjection(),
+                        frozen.restoreNonInvestable(), report, file);
+                try (var pdf = Loader.loadPDF(file.toFile())) {
+                    var text = new PDFTextStripper().getText(pdf).replaceAll("\\s+", " ");
+                    assertTrue(text.contains("SPOUSE AS BENEFICIARY applied to traditional 401(k)s"));
+                    assertTrue(text.contains("Death is modeled January 1"));
+                    assertTrue(text.contains("Actual plans may require faster payouts"));
+                }
+            } catch (java.io.IOException failure) {
+                throw new java.io.UncheckedIOException(failure);
+            }
+        });
+    }
+
+    @Test void deathYearPdfRetainsAcceptedDisclosure(@org.junit.jupiter.api.io.TempDir Path folder) throws Exception {
+        ProjectionChartViewTest.fx(() -> {
+            var controller = new ApplicationController();
+            var plan = SpousalIraDeathYearExecutionTest.opening(true, true, 2040, "808000", "246000");
+            controller.newPlan(plan);
+            var projection = controller.getCurrentProjection();
+            var frozen = controller.getAcceptedProjectionSnapshot();
+            var assumptions = plan.getPlanningAssumptions();
+            plan.setPlanningAssumptions(assumptions.withEconomicAssumptions(
+                    assumptions.getEconomicAssumptions().withSpousalInheritance(null)));
+            var summary = new ResultsSummaryView(controller);
+            summary.load(plan, projection, List.of());
+            var report = summary.prepareProjectionPdfReport();
+            assertEquals(frozen.inheritancePlanningDisclosure(), report.inheritancePlanningDisclosure());
+            var file = folder.resolve("death-year.pdf");
+            try {
+                new ProjectionPdfExporter().export(frozen.restoreExecutionPlan(), frozen.restoreProjection(),
+                        frozen.restoreNonInvestable(), report, file);
+                try (var pdf = Loader.loadPDF(file.toFile())) {
+                    var text = new PDFTextStripper().getText(pdf).replaceAll("\\s+", " ");
+                    assertTrue(text.contains("SPOUSE AS BENEFICIARY applied to traditional IRAs in Florida Basic"));
+                    assertTrue(text.contains("The modeled death date is January 1"));
+                }
+            } catch (java.io.IOException failure) {
+                throw new java.io.UncheckedIOException(failure);
+            }
+        });
+    }
+
     @Test void employerRolloverPdfRetainsFrozenScopeAfterLiveAssumptionEdits(@org.junit.jupiter.api.io.TempDir Path folder) throws Exception {
         ProjectionChartViewTest.fx(() -> {
             var controller = new ApplicationController();
@@ -82,11 +239,13 @@ class ProjectionPdfExportTest {
                         frozen.restoreNonInvestable(), report, document);
                 try (var pdf = Loader.loadPDF(document.toFile())) {
                     String text = new PDFTextStripper().getText(pdf).replaceAll("\\s+", " ");
-                    assertTrue(text.contains(beneficiary ? "SPOUSE AS BENEFICIARY applied in Florida Basic"
-                            : "SPOUSE AS OWNER applied to qualifying traditional IRA required distributions in Florida Basic"));
+                    assertTrue(text.contains(beneficiary ? "SPOUSE AS BENEFICIARY applied to qualifying"
+                            : "SPOUSE AS OWNER applied to qualifying"));
+                    assertTrue(text.contains("ordinary withdrawals for expenses and taxes in Florida Basic"));
                     assertFalse(text.contains(beneficiary ? "SPOUSE AS OWNER" : "SPOUSE AS BENEFICIARY"));
                     if (treatment.equals("401(k) beneficiary")) {
-                        assertTrue(text.contains("Qualifying traditional 401(k) distributions use recalculated Single Life expectancy"));
+                        assertTrue(text.contains("Beneficiary 401(k) RMDs use recalculated Single Life expectancy"));
+                        assertTrue(text.contains("assumes additional payouts are available"));
                         assertTrue(text.contains("employer-plan terms may restrict payout options"));
                     }
                 }

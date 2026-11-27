@@ -41,6 +41,10 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
     public static final int SPOUSAL_401K_ROLLOVER_SCHEMA = 5;
     public static final int SPOUSAL_BENEFICIARY_IRA_SCHEMA = 6;
     public static final int SPOUSAL_BENEFICIARY_401K_SCHEMA = 7;
+    public static final int SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA = 8;
+    public static final int SPOUSAL_DEATH_YEAR_IRA_SCHEMA = 9;
+    public static final int SPOUSAL_POST_RBD_401K_SCHEMA = 10;
+    public static final int SPOUSAL_POST_RBD_401K_OWNER_SCHEMA = 11;
 
     public RetainedProjectionSnapshot(int schemaVersion, List<AccountData> accounts, List<Annual> years,
             ProjectionMetrics metrics, WeightedSnapshots.Strategy strategy, Boolean advancedSocialSecurityPathUsed,
@@ -69,14 +73,33 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
     }
 
     public RetainedProjectionSnapshot {
-        boolean employerBeneficiary = schemaVersion == SPOUSAL_BENEFICIARY_401K_SCHEMA;
-        boolean beneficiary = schemaVersion == SPOUSAL_BENEFICIARY_IRA_SCHEMA || employerBeneficiary;
-        boolean applied = schemaVersion == SPOUSAL_IRA_RMD_SCHEMA || schemaVersion == SPOUSAL_401K_ROLLOVER_SCHEMA || beneficiary;
+        boolean deathYear = schemaVersion == SPOUSAL_DEATH_YEAR_IRA_SCHEMA;
+        boolean postRbd401k = schemaVersion == SPOUSAL_POST_RBD_401K_SCHEMA;
+        boolean postRbdOwner = schemaVersion == SPOUSAL_POST_RBD_401K_OWNER_SCHEMA;
+        boolean ordinary = schemaVersion == SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA || deathYear || postRbd401k || postRbdOwner;
+        if (postRbd401k && (spousal401kRollovers != null || beneficiary401kObligations == null
+                || beneficiary401kObligations.isEmpty() || beneficiaryIraObligations == null
+                || !beneficiaryIraObligations.isEmpty())) {
+            throw new IllegalArgumentException("Post-RBD employer history requires only per-plan beneficiary obligations.");
+        }
+        if (postRbdOwner && (spousal401kRollovers == null || beneficiary401kObligations == null
+                || beneficiaryIraObligations == null || !beneficiaryIraObligations.isEmpty())) {
+            throw new IllegalArgumentException("Post-RBD owner history requires the distributing plan obligations and rollover evidence.");
+        }
+        boolean employerBeneficiary = schemaVersion == SPOUSAL_BENEFICIARY_401K_SCHEMA
+                || ordinary && beneficiary401kObligations != null;
+        boolean beneficiary = schemaVersion == SPOUSAL_BENEFICIARY_IRA_SCHEMA || employerBeneficiary
+                || ordinary && beneficiaryIraObligations != null;
+        boolean rolloverPolicy = schemaVersion == SPOUSAL_401K_ROLLOVER_SCHEMA || ordinary && spousal401kRollovers != null;
+        boolean applied = schemaVersion == SPOUSAL_IRA_RMD_SCHEMA || rolloverPolicy || beneficiary || ordinary;
         if (schemaVersion != SCHEMA && schemaVersion != AVAILABILITY_SCHEMA && schemaVersion != ARKANSAS_SCHEMA
                 && !applied)
             throw new IllegalArgumentException("Unsupported retained-projection schema.");
+        if (deathYear && (spousal401kRollovers != null || beneficiary401kObligations != null)) {
+            throw new IllegalArgumentException("The death-year policy only accepts traditional IRA evidence.");
+        }
         accounts = List.copyOf(accounts); years = List.copyOf(years); warnings = List.copyOf(warnings);
-        if ((schemaVersion == SPOUSAL_401K_ROLLOVER_SCHEMA) != (spousal401kRollovers != null)) {
+        if (rolloverPolicy != (spousal401kRollovers != null) || rolloverPolicy && beneficiary && !postRbdOwner) {
             throw new IllegalArgumentException("Rollover evidence requires its applied projection policy.");
         }
         if (beneficiary != (beneficiaryIraObligations != null)) {
@@ -123,13 +146,28 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
         }
         for (var year : years) {
             for (var row : year.sources()) {
+                if (row.successorOrdinaryTreatment() != null && !ordinary) {
+                    throw new IllegalArgumentException("Ordinary successor distributions require their applied projection policy.");
+                }
                 if (row.successorRmdTreatment() != null && !applied) {
                     throw new IllegalArgumentException("Successor RMD rows require an applied projection policy.");
                 }
                 if (row.successorRmdTreatment() == RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_401K_DIRECT_ROLLOVER_V1
-                        && schemaVersion != SPOUSAL_401K_ROLLOVER_SCHEMA) {
+                        && !rolloverPolicy) {
                     throw new IllegalArgumentException("An employer rollover RMD requires its applied projection policy.");
                 }
+                if (row.successorRmdTreatment()
+                        == RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_DEATH_YEAR_IRA_V1) {
+                    if (!deathYear) throw new IllegalArgumentException("The death-year receipt requires its applied policy.");
+                    continue;
+                }
+                if (row.successorRmdTreatment()
+                        == RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_DEATH_YEAR_401K_V1) {
+                    if (!postRbd401k && !postRbdOwner) throw new IllegalArgumentException("The employer death-year receipt requires its applied policy.");
+                    continue;
+                }
+                if (postRbdOwner && row.successorRmdTreatment()
+                        == RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_401K_DIRECT_ROLLOVER_V1) continue;
                 boolean employerReceipt = row.successorRmdTreatment()
                         == RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_BENEFICIARY_401K_SINGLE_LIFE_V1;
                 if ((employerReceipt && !employerBeneficiary)
@@ -193,6 +231,22 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
         return capture(projection, null, null, null, List.of(), SPOUSAL_BENEFICIARY_401K_SCHEMA);
     }
     /** Controlled history capture requires annual results produced by the gated Arkansas engine. */
+    public static RetainedProjectionSnapshot captureSpousalSuccessorOrdinary(Projection projection) {
+        return capture(projection, null, null, null, List.of(), SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA);
+    }
+
+    public static RetainedProjectionSnapshot captureSpousalIraDeathYear(Projection projection) {
+        return capture(projection, null, null, null, List.of(), SPOUSAL_DEATH_YEAR_IRA_SCHEMA);
+    }
+
+    public static RetainedProjectionSnapshot captureSpousalPostRbd401kOwner(Projection projection) {
+        return capture(projection, null, null, null, List.of(), SPOUSAL_POST_RBD_401K_OWNER_SCHEMA);
+    }
+
+    public static RetainedProjectionSnapshot captureSpousalPostRbd401k(Projection projection) {
+        return capture(projection, null, null, null, List.of(), SPOUSAL_POST_RBD_401K_SCHEMA);
+    }
+
     public static RetainedProjectionSnapshot captureArkansas(Projection projection) {
         return capture(projection, null, null, null, List.of(), ARKANSAS_SCHEMA);
     }
@@ -228,7 +282,11 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
         var rollovers = projection.getYears().stream().flatMap(year -> year.spousal401kRollovers().stream())
                 .map(event -> new Rollover(registry.reference(event.source()), event.survivor(), event.effectiveDate(),
                         event.eligibleTransferredBalance())).toList();
-        if (version != SPOUSAL_401K_ROLLOVER_SCHEMA && !rollovers.isEmpty()) {
+        boolean ordinary = version == SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA || version == SPOUSAL_DEATH_YEAR_IRA_SCHEMA
+                || version == SPOUSAL_POST_RBD_401K_SCHEMA || version == SPOUSAL_POST_RBD_401K_OWNER_SCHEMA;
+        boolean rolloverPolicy = version == SPOUSAL_401K_ROLLOVER_SCHEMA || version == SPOUSAL_POST_RBD_401K_OWNER_SCHEMA
+                || ordinary && !rollovers.isEmpty();
+        if (!rolloverPolicy && !rollovers.isEmpty()) {
             throw new IllegalArgumentException("Employer rollover evidence requires its applied projection schema.");
         }
         var obligations = projection.getYears().stream().map(ProjectionYear::beneficiaryIraRmd).filter(Objects::nonNull).toList();
@@ -236,20 +294,22 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
                 .map(event -> new EmployerBeneficiaryObligation(registry.reference(event.source()), event.year(),
                         event.firstDistributionYear(), event.beneficiary(), event.priorBalance(), event.divisor(),
                         event.requiredAmount())).toList();
-        boolean employerBeneficiary = version == SPOUSAL_BENEFICIARY_401K_SCHEMA;
-        boolean beneficiary = version == SPOUSAL_BENEFICIARY_IRA_SCHEMA || employerBeneficiary;
+        boolean employerBeneficiary = version == SPOUSAL_BENEFICIARY_401K_SCHEMA || ordinary && !employerObligations.isEmpty();
+        boolean beneficiary = version == SPOUSAL_BENEFICIARY_IRA_SCHEMA || employerBeneficiary || ordinary && !obligations.isEmpty();
         if ((!beneficiary && !obligations.isEmpty()) || (!employerBeneficiary && !employerObligations.isEmpty())) {
             throw new IllegalArgumentException("Beneficiary obligation evidence requires its applied projection schema.");
         }
         return new RetainedProjectionSnapshot(version, registry.accounts,
                 projection.getYears().stream().map(y -> Annual.capture(y, registry)).toList(), metrics, strategy, advanced, warnings, arkansas,
-                version == SPOUSAL_401K_ROLLOVER_SCHEMA ? rollovers : null,
+                rolloverPolicy ? rollovers : null,
                 beneficiary ? obligations : null, employerBeneficiary ? employerObligations : null);
     }
     public Projection restoreProjection() {
         var identities = accounts.stream().map(AccountData::restore).toList();
         if (schemaVersion == SPOUSAL_IRA_RMD_SCHEMA || schemaVersion == SPOUSAL_401K_ROLLOVER_SCHEMA
-                || schemaVersion == SPOUSAL_BENEFICIARY_IRA_SCHEMA || schemaVersion == SPOUSAL_BENEFICIARY_401K_SCHEMA) {
+                || schemaVersion == SPOUSAL_BENEFICIARY_IRA_SCHEMA || schemaVersion == SPOUSAL_BENEFICIARY_401K_SCHEMA
+                || schemaVersion == SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA || schemaVersion == SPOUSAL_DEATH_YEAR_IRA_SCHEMA
+                || schemaVersion == SPOUSAL_POST_RBD_401K_SCHEMA || schemaVersion == SPOUSAL_POST_RBD_401K_OWNER_SCHEMA) {
             throw new IllegalArgumentException("Applied spousal IRA history requires its complete snapshot.");
         }
         return restoreProjection(identities, null, List.of());
@@ -262,10 +322,16 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
         var frozen = verified.restoreExecutionPlan();
         var identities = frozen.getAccountPortfolio().getAccounts();
         var engine = new ProjectionEngine();
-        if (beneficiary401kObligations != null) {
+        if (schemaVersion == SPOUSAL_POST_RBD_401K_SCHEMA) {
+            return restoreProjection(identities, engine.spousalPostRbd401kOwnership(frozen), List.of());
+        }
+        if (schemaVersion == SPOUSAL_DEATH_YEAR_IRA_SCHEMA) {
+            return restoreProjection(identities, engine.spousalIraDeathYearOwnership(frozen), List.of());
+        }
+        if (beneficiary401kObligations != null && schemaVersion != SPOUSAL_POST_RBD_401K_OWNER_SCHEMA) {
             return restoreProjection(identities, engine.spousalBeneficiary401kOwnership(frozen), List.of());
         }
-        if (beneficiaryIraObligations != null) {
+        if (beneficiaryIraObligations != null && schemaVersion != SPOUSAL_POST_RBD_401K_OWNER_SCHEMA) {
             return restoreProjection(identities, engine.spousalBeneficiaryIraOwnership(frozen), List.of());
         }
         if (spousal401kRollovers == null) return restoreProjection(identities, engine.spousalIraRmdOwnership(frozen), List.of());
@@ -275,12 +341,23 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
                     row.eligibleTransferredBalance());
             events.put(event.source(), event);
         }
+        if (schemaVersion == SPOUSAL_POST_RBD_401K_OWNER_SCHEMA) {
+            var ownership = engine.spousalPostRbd401kOwnerHistory(frozen, events);
+            return restoreProjection(identities, ownership.owner(), List.copyOf(events.values()), ownership.beforeRollover());
+        }
         return restoreProjection(identities, engine.spousal401kRolloverOwnership(frozen, events), List.copyOf(events.values()));
     }
 
     private Projection restoreProjection(List<Account> identities,
             java.util.function.IntFunction<com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership> ownership,
             List<Spousal401kRollover> rollovers) {
+        return restoreProjection(identities, ownership, rollovers, null);
+    }
+
+    private Projection restoreProjection(List<Account> identities,
+            java.util.function.IntFunction<com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership> ownership,
+            List<Spousal401kRollover> rollovers,
+            java.util.function.IntFunction<com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership> beforeRollover) {
         var registry = new CaptureRegistry(); identities.forEach(registry::add);
         var projection = new Projection();
         var byYear = rollovers.stream().collect(java.util.stream.Collectors.groupingBy(event -> event.effectiveDate().getYear()));
@@ -297,11 +374,12 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
         }
         for (int i = 0; i < years.size(); i++) {
             var year = years.get(i);
-            var annualOwnership = ownership != null && year.sources().stream().anyMatch(s -> s.successorRmdTreatment() != null)
+            var annualOwnership = ownership != null && year.sources().stream().anyMatch(s -> s.successorRmdTreatment() != null || s.successorOrdinaryTreatment() != null)
                     ? ownership.apply(year.year()) : null;
             var restored = year.restore(identities, arkansas == null ? null : arkansas.years().get(i),
                     arkansas == null ? null : arkansas.versions(), annualOwnership, byYear.getOrDefault(year.year(), List.of()),
-                    obligations.get(year.year()), employerByYear.getOrDefault(year.year(), Map.of()));
+                    obligations.get(year.year()), employerByYear.getOrDefault(year.year(), Map.of()),
+                    beforeRollover != null && employerByYear.containsKey(year.year()) ? beforeRollover.apply(year.year()) : null);
             // Reject constructor/version drift rather than silently substituting or rounding stored results.
             if (!year.equals(Annual.capture(restored, registry)))
                 throw new IllegalArgumentException("Retained projection cannot be reconstructed exactly.");
@@ -629,7 +707,17 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
             @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
             FinancialCalculationMode calculationMode,
             @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-            RetirementOwnershipDisposition.Treatment successorRmdTreatment) {
+            RetirementOwnershipDisposition.Treatment successorRmdTreatment,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            RetirementOwnershipDisposition.Treatment successorOrdinaryTreatment) {
+        public Income(IncomeSourceAttribution.Kind kind, IncomeSourceAttribution.Purpose purpose, AccountOwnership owner,
+                Reference account, Reference destination, String description, BigDecimal gross, BigDecimal taxable,
+                Integer taxYear, PensionFacts pension, com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt conditionalBenefit,
+                com.daviddunn.retirementplanner.domain.tax.NetInvestmentIncomeTaxCalculation niit, FinancialCalculationMode calculationMode,
+                RetirementOwnershipDisposition.Treatment successorRmdTreatment) {
+            this(kind, purpose, owner, account, destination, description, gross, taxable, taxYear, pension,
+                    conditionalBenefit, niit, calculationMode, successorRmdTreatment, null);
+        }
         public Income(IncomeSourceAttribution.Kind kind, IncomeSourceAttribution.Purpose purpose, AccountOwnership owner,
                 Reference account, Reference destination, String description, BigDecimal gross, BigDecimal taxable,
                 Integer taxYear, PensionFacts pension, com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt conditionalBenefit,
@@ -653,11 +741,23 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
             this(kind,purpose,owner,account,destination,description,gross,taxable,taxYear,pension,null);
         }
         public Income {
+            if (successorOrdinaryTreatment != null
+                    && (successorOrdinaryTreatment == RetirementOwnershipDisposition.Treatment.NONE
+                        || successorOrdinaryTreatment == RetirementOwnershipDisposition.Treatment.ORIGINAL_OWNER
+                        || successorRmdTreatment != null || kind != IncomeSourceAttribution.Kind.ORDINARY_RETIREMENT_WITHDRAWAL
+                        || purpose != IncomeSourceAttribution.Purpose.CASH_FLOW && purpose != IncomeSourceAttribution.Purpose.TAX_FUNDING
+                        || owner == null || owner == AccountOwnership.JOINT || account == null || destination != null
+                        || taxYear == null || gross == null || gross.signum() <= 0 || !gross.equals(taxable)
+                        || pension != null || conditionalBenefit != null || niit != null || calculationMode != null)) {
+                throw new IllegalArgumentException("Invalid retained ordinary successor distribution.");
+            }
             if (successorRmdTreatment != null
                     && (successorRmdTreatment != RetirementOwnershipDisposition.Treatment.MODELED_SPOUSE_AS_OWNER_NEXT_YEAR_V1
                         && successorRmdTreatment != RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_401K_DIRECT_ROLLOVER_V1
                         && successorRmdTreatment != RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_BENEFICIARY_IRA_SINGLE_LIFE_V1
                         && successorRmdTreatment != RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_BENEFICIARY_401K_SINGLE_LIFE_V1
+                        && successorRmdTreatment != RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_DEATH_YEAR_IRA_V1
+                        && successorRmdTreatment != RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_DEATH_YEAR_401K_V1
                         || kind != IncomeSourceAttribution.Kind.RMD || purpose != IncomeSourceAttribution.Purpose.CASH_FLOW
                         || owner == null || owner == AccountOwnership.JOINT || account == null || destination != null
                         || taxYear == null || gross == null || gross.signum() <= 0 || !gross.equals(taxable)
@@ -691,13 +791,14 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
                     registry.reference(i.destination().orElse(null)), i.description(), i.grossAmount(), i.modeledTaxableAmount().orElse(null),
                     i.taxYear().isPresent() ? i.taxYear().getAsInt() : null, PensionFacts.capture(i.pension().orElse(null)),
                     i.conditionalBenefit().orElse(null), i.niit().orElse(null), i.calculationMode().orElse(null),
-                    i.successorRmd().map(IncomeSourceAttribution.SuccessorRmd::treatment).orElse(null));
+                    i.successorRmd().map(IncomeSourceAttribution.SuccessorRmd::treatment).orElse(null),
+                    i.successorOrdinary().map(IncomeSourceAttribution.SuccessorOrdinary::treatment).orElse(null));
         }
         IncomeSourceAttribution restore(List<Account> identities) {
             return restore(identities, RetirementIncomeSourceOrigin.UNKNOWN);
         }
         IncomeSourceAttribution restore(List<Account> identities, RetirementIncomeSourceOrigin origin) {
-            if (successorRmdTreatment != null) {
+            if (successorRmdTreatment != null || successorOrdinaryTreatment != null) {
                 throw new IllegalArgumentException("Successor RMD restoration requires applied ownership and debit evidence.");
             }
             return new IncomeSourceAttribution(kind, purpose, Optional.ofNullable(owner),
@@ -740,7 +841,7 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
             if (!node.isObject()) throw com.fasterxml.jackson.databind.JsonMappingException.from(parser,"Retained income object required.");
             var seen = new HashSet<String>();
             node.fieldNames().forEachRemaining(seen::add);
-            var optional = Set.of("conditionalBenefit", "niit", "calculationMode", "successorRmdTreatment");
+            var optional = Set.of("conditionalBenefit", "niit", "calculationMode", "successorRmdTreatment", "successorOrdinaryTreatment");
             if (!seen.containsAll(required) || seen.stream().anyMatch(key -> !required.contains(key) && !optional.contains(key)))
                 throw com.fasterxml.jackson.databind.JsonMappingException.from(parser,"Missing or unknown retained income field.");
             var successor = RetirementOwnershipDisposition.Treatment.MODELED_SPOUSE_AS_OWNER_NEXT_YEAR_V1;
@@ -756,8 +857,19 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
             if (node.has("successorRmdTreatment") && employerBeneficiary.name().equals(node.get("successorRmdTreatment").textValue())) {
                 successor = employerBeneficiary;
             }
+            var deathYear = RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_DEATH_YEAR_IRA_V1;
+            if (node.has("successorRmdTreatment") && deathYear.name().equals(node.get("successorRmdTreatment").textValue())) {
+                successor = deathYear;
+            }
+            var employerDeathYear = RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_DEATH_YEAR_401K_V1;
+            if (node.has("successorRmdTreatment") && employerDeathYear.name().equals(node.get("successorRmdTreatment").textValue())) {
+                successor = employerDeathYear;
+            }
             if (node.has("successorRmdTreatment") && !successor.name().equals(node.get("successorRmdTreatment").textValue())) {
                 throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, "Unsupported retained successor RMD treatment.");
+            }
+            if (node.has("successorOrdinaryTreatment") && !node.get("successorOrdinaryTreatment").isTextual()) {
+                throw com.fasterxml.jackson.databind.JsonMappingException.from(parser, "Unsupported ordinary successor treatment.");
             }
             return new Income(value(context,node,"kind",IncomeSourceAttribution.Kind.class), value(context,node,"purpose",IncomeSourceAttribution.Purpose.class),
                     value(context,node,"owner",AccountOwnership.class),value(context,node,"account",Reference.class),value(context,node,"destination",Reference.class),
@@ -766,7 +878,8 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
                     value(context,node,"conditionalBenefit",com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitReceipt.class),
                     value(context,node,"niit",com.daviddunn.retirementplanner.domain.tax.NetInvestmentIncomeTaxCalculation.class),
                     value(context,node,"calculationMode",FinancialCalculationMode.class),
-                    node.has("successorRmdTreatment") ? successor : null);
+                    node.has("successorRmdTreatment") ? successor : null,
+                    value(context, node, "successorOrdinaryTreatment", RetirementOwnershipDisposition.Treatment.class));
         }
         private static <T> T value(com.fasterxml.jackson.databind.DeserializationContext context, com.fasterxml.jackson.databind.JsonNode node,
                 String name, Class<T> type) throws java.io.IOException {
@@ -855,7 +968,8 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
         ProjectionYear restore(List<Account> identities, ArkansasYear arkansas, Map<String, String> versions,
                 com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership ownership,
                 List<Spousal401kRollover> rollovers, BeneficiaryIraRmd beneficiaryObligation,
-                Map<IncomeSourceAttribution.AccountReference, Beneficiary401kRmd> employerObligations) {
+                Map<IncomeSourceAttribution.AccountReference, Beneficiary401kRmd> employerObligations,
+                com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership beforeRollover) {
             var snapshots = balances.stream().map(b -> new ProjectedAccountSnapshot(at(identities, b.account()), b.endingBalance())).toList();
             if (state == null && medicare == null && arkansas == null) {
                 return new ProjectionYear(index, year, beginning, growth, income, expenses, cashNeed, withdrawal, rmd, excessRmd, ending, snapshots, primaryAge);
@@ -872,17 +986,27 @@ public record RetainedProjectionSnapshot(int schemaVersion, List<AccountData> ac
             var restoredSources = new ArrayList<IncomeSourceAttribution>(sources.size());
             for (int i = 0; i < sources.size(); i++) {
                 var row = sources.get(i);
-                if (row.successorRmdTreatment() == null) {
+                if (row.successorOrdinaryTreatment() != null) {
+                    // Complete snapshot construction independently replayed and matched every annual debit.
+                    var account = at(identities, row.account().account());
+                    var reference = IncomeSourceAttribution.AccountReference.capture(account);
+                    var disposition = ownership.accounts().get(reference);
+                    restoredSources.add(IncomeSourceAttribution.withdrawal(account, row.gross(), row.kind(), row.purpose())
+                            .inYear(year).forSuccessorOrdinary(disposition));
+                } else if (row.successorRmdTreatment() == null) {
                     restoredSources.add(row.restore(identities, origins.getOrDefault(i, RetirementIncomeSourceOrigin.UNKNOWN)));
                 } else {
                     // Complete construction already independently reconciled the source debit and all annual amounts.
                     var account = at(identities, row.account().account());
                     var reference = IncomeSourceAttribution.AccountReference.capture(account);
-                    var disposition = ownership.accounts().get(reference);
+                    boolean employerMinimum = row.successorRmdTreatment()
+                            == RetirementOwnershipDisposition.Treatment.MODELED_SPOUSAL_BENEFICIARY_401K_SINGLE_LIFE_V1;
+                    var disposition = (beforeRollover != null && employerMinimum ? beforeRollover : ownership)
+                            .accounts().get(reference);
                     var verifiedDebit = IncomeSourceAttribution.withdrawal(account, row.gross(), IncomeSourceAttribution.Kind.RMD,
                             IncomeSourceAttribution.Purpose.CASH_FLOW).inYear(year);
                     restoredSources.add(row.restoreSuccessorRmd(identities, disposition, verifiedDebit, beneficiaryObligation,
-                            employerObligations.get(reference)));
+                            employerMinimum ? employerObligations.get(reference) : null));
                 }
             }
             ArkansasValidationTax arkansasTax = null;

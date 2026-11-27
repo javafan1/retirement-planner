@@ -1479,14 +1479,16 @@ public class ApplicationController {
             // Preserve the established normal-result account identities. The synchronous engine
             // receives the same live graph as before; detached metadata and the post-run guards
             // prevent publishing a result whose effective input state changed during execution.
-            boolean appliedRollover = ProjectionEngine.requestsSpousal401kRollover(executionPlan);
-            boolean appliedIra = !appliedRollover && ProjectionEngine.requestsSpousalIraRmd(executionPlan);
-            boolean appliedEmployerBeneficiary = ProjectionEngine.requestsSpousalBeneficiary401kRmd(executionPlan);
-            boolean appliedBeneficiary = !appliedEmployerBeneficiary && ProjectionEngine.requestsSpousalBeneficiaryIraRmd(executionPlan);
-            var outcome = appliedEmployerBeneficiary ? projectionEngine.projectSpousalBeneficiary401kRmd(executionPlan)
-                    : appliedBeneficiary ? projectionEngine.projectSpousalBeneficiaryIraRmd(executionPlan)
-                    : appliedRollover ? projectionEngine.projectSpousal401kRollover(executionPlan)
-                    : appliedIra ? projectionEngine.projectSpousalIraRmd(executionPlan)
+            boolean appliedSpousal = ProjectionEngine.requestsAppliedSpousalIraRmd(executionPlan);
+            boolean deathYearIra = ProjectionEngine.requestsSpousalIraDeathYear(executionPlan);
+            boolean postRbd401k = ProjectionEngine.requestsSpousalPostRbd401k(executionPlan);
+            boolean postRbdOwner = ProjectionEngine.requestsSpousalPostRbd401kOwner(executionPlan);
+            var outcome = com.daviddunn.retirementplanner.domain.roth.RothConversionRequest.usesVersionedExecution(executionPlan.getRothConversionRequest())
+                    ? projectionEngine.projectNormalWithRothScheduling(executionPlan)
+                    : postRbdOwner ? projectionEngine.projectSpousalPostRbd401kOwner(executionPlan)
+                    : postRbd401k ? projectionEngine.projectSpousalPostRbd401k(executionPlan)
+                    : deathYearIra ? projectionEngine.projectSpousalIraDeathYear(executionPlan)
+                    : appliedSpousal ? projectionEngine.projectSpousalSuccessorOrdinary(executionPlan)
                     : projectionEngine.projectWithOutcome(runPlan);
             CompleteProjectionSnapshot complete = null;
             ProjectionSummary completedSummary = null;
@@ -1497,10 +1499,10 @@ public class ApplicationController {
                 completedProjection = projection;
                 completedSummary = projectionSummaryService.summarize(executionPlan, projection);
                 var nonInvestable = nonInvestableAssetProjectionService.project(executionPlan.getNonInvestableAssets(), projection.getStartYear(), projection.getEndYear());
-                var retained = appliedEmployerBeneficiary ? RetainedProjectionSnapshot.captureSpousalBeneficiary401kRmd(projection)
-                        : appliedBeneficiary ? RetainedProjectionSnapshot.captureSpousalBeneficiaryIraRmd(projection)
-                        : appliedRollover ? RetainedProjectionSnapshot.captureSpousal401kRollover(projection)
-                        : appliedIra ? RetainedProjectionSnapshot.captureSpousalIraRmd(projection)
+                var retained = postRbdOwner ? RetainedProjectionSnapshot.captureSpousalPostRbd401kOwner(projection)
+                        : postRbd401k ? RetainedProjectionSnapshot.captureSpousalPostRbd401k(projection)
+                        : deathYearIra ? RetainedProjectionSnapshot.captureSpousalIraDeathYear(projection)
+                        : appliedSpousal ? RetainedProjectionSnapshot.captureSpousalSuccessorOrdinary(projection)
                         : RetainedProjectionSnapshot.capture(projection);
                 complete = new CompleteProjectionSnapshot(1, java.util.UUID.randomUUID(), ownerIdentity, ownerIdentity, java.time.Instant.now(),
                         inputDocument, CompleteProjectionSnapshot.digest(inputDocument),
@@ -1508,7 +1510,8 @@ public class ApplicationController {
                                 frozen.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance(), inputDocument, retained,
                                 com.daviddunn.retirementplanner.app.projection.ConditionalBenefitExecutionSemantics.completed(executionPlan,inputDocument,retained,
                                 com.daviddunn.retirementplanner.app.projection.PensionSelectionSemantics.PROVENANCE
-                                + "Accepted normal projection; retained schema " + retained.schemaVersion() + "; original build version not recorded")),
+                                + "Accepted normal projection; retained schema " + retained.schemaVersion() + "; original build version not recorded"
+                                + CompleteProjectionSnapshot.rothSchedulingStamp(frozen.getRothConversionRequest(), inputDocument, retained))),
                         retained, nonInvestable.stream().map(CompleteProjectionSnapshot.NonInvestableYear::capture).toList(),
                         CompleteProjectionSnapshot.Summary.capture(completedSummary), BreakEvenPlanSummary.from(executionPlan));
                 completedChart = complete.chart(); // Validate/detach before publishing any accepted state.
@@ -1855,6 +1858,7 @@ public class ApplicationController {
 
     /** User creation boundary only; load, history and generic isolated plans never consult preferences. */
     public RetirementPlan newUserPlan(RetirementPlan plan) {
+        plan.initializeNewPlanRothSchedulingDraft();
         if (plan.getFinancialCalculationMode() == null)
             plan.setFinancialCalculationMode(settingsService.snapshot().getDefaultFinancialCalculationMode());
         return newPlan(plan);

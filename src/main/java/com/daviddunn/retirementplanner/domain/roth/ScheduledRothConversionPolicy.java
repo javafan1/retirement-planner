@@ -4,6 +4,17 @@ import java.util.Objects;
 
 public final class ScheduledRothConversionPolicy {
 
+    public boolean shouldExecuteVersioned(RothConversionRequest request, int year,
+            boolean currentPositive, boolean priorPositive) {
+        var schedule = Objects.requireNonNull(request.getScheduling());
+        if (!request.isEnabled() || year < request.getStartYear() || year > schedule.conversionEndYear()) return false;
+        return switch (schedule.rmdSchedulingPolicy()) {
+            case CONTINUE_THROUGH_END_YEAR -> true;
+            case SKIP_POSITIVE_RMD_YEARS -> !currentPositive;
+            case PERMANENTLY_STOP_AT_FIRST_RMD -> !currentPositive && !priorPositive;
+        };
+    }
+
     public boolean shouldExecuteConvert(
             RothConversionRequest request,
             int calendarYear,
@@ -13,6 +24,7 @@ public final class ScheduledRothConversionPolicy {
                 request,
                 "Roth conversion request is required.");
 
+        RothConversionRequest.requireExecutable(request);
         if (!request.isEnabled()) {
             return false;
         }

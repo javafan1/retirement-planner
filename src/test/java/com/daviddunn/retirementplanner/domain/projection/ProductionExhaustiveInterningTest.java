@@ -3,6 +3,8 @@ package com.daviddunn.retirementplanner.domain.projection;
 import com.daviddunn.retirementplanner.app.socialsecurity.*;
 import com.daviddunn.retirementplanner.app.socialsecurity.results.*;
 import com.daviddunn.retirementplanner.domain.financial.*;
+import com.daviddunn.retirementplanner.domain.income.Pension;
+import com.daviddunn.retirementplanner.domain.income.PensionPlanClassification;
 import com.daviddunn.retirementplanner.domain.model.*;
 import com.daviddunn.retirementplanner.persistence.*;
 import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdAccountData;
@@ -41,6 +43,12 @@ class ProductionExhaustiveInterningTest {
     void optimizedPayloadPreservesActualStateAccountAndAttributionGraphs(StateTaxJurisdiction state) throws Exception {
         var plan = state == StateTaxJurisdiction.PA || state == StateTaxJurisdiction.IA
                 ? PennsylvaniaProductionProjectionTest.plan(true, state) : FloridaProductionProjectionTest.plan(true, state);
+        if (state == StateTaxJurisdiction.AL) {
+            // Supply a supported synthetic pension and keep the receipt in the interning graph.
+            plan.getHousehold().members().forEach(person -> person.getIncomeSources().stream()
+                    .filter(Pension.class::isInstance).map(Pension.class::cast)
+                    .forEach(pension -> pension.setPlanClassification(PensionPlanClassification.DEFINED_CONTRIBUTION)));
+        }
         if (state == StateTaxJurisdiction.FL) {
             var inherited = new InheritedAccountInformation(LocalDate.of(1930, 1, 1),
                     LocalDate.of(2018, 1, 1), BeneficiaryRelationship.CHILD);

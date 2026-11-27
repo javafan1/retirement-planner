@@ -48,6 +48,10 @@ final class SpousalIraRmdPolicy {
     private final boolean employerRollovers;
     private final boolean beneficiaryTreatment;
     private final boolean beneficiary401k;
+    final boolean ordinaryEnabled;
+    private final boolean deathYearPolicy;
+    private final boolean postRbd;
+    private final boolean postRbdRollover;
 
     static boolean requested(RetirementPlan plan) {
         return requested(plan, AccountType.TRADITIONAL_IRA, SpousalInheritanceAssumption.Treatment.SPOUSE_AS_OWNER);
@@ -94,9 +98,21 @@ final class SpousalIraRmdPolicy {
     }
 
     SpousalIraRmdPolicy(RetirementPlan plan, RmdRules rules, Treatment treatment) {
+        this(plan, rules, treatment, false);
+    }
+
+    SpousalIraRmdPolicy(RetirementPlan plan, RmdRules rules, Treatment treatment, boolean ordinaryEnabled) {
+        this(plan, rules, treatment, ordinaryEnabled, false);
+    }
+
+    SpousalIraRmdPolicy(RetirementPlan plan, RmdRules rules, Treatment treatment, boolean ordinaryEnabled,
+            boolean deathYearPolicy) {
+        this.deathYearPolicy = deathYearPolicy;
         this.rules = rules;
+        this.ordinaryEnabled = ordinaryEnabled;
         employerRollovers = treatment == Treatment.OWNER_ROLLOVER;
         beneficiary401k = treatment == Treatment.BENEFICIARY_401K;
+        postRbdRollover = deathYearPolicy && employerRollovers;
         beneficiaryTreatment = treatment == Treatment.BENEFICIARY_IRA || beneficiary401k;
         var assumptions = plan.getPlanningAssumptions();
         opening = assumptions.getProjectionStartDate();
@@ -134,7 +150,19 @@ final class SpousalIraRmdPolicy {
         var decedentBirth = births.get(deceased);
         survivorStartingAge = startingAge(births.get(survivor));
         decedentFirstDistributionYear = decedentBirth.getYear() + startingAge(decedentBirth);
-        if (death.getYear() >= decedentFirstDistributionYear) {
+        postRbd = !death.isBefore(LocalDate.of(decedentFirstDistributionYear + 1, 4, 1));
+        if (deathYearPolicy && (death.getYear() < decedentFirstDistributionYear
+                || (beneficiary401k || postRbdRollover) && !postRbd)) {
+            throw refusal(death.getYear(), UNSUPPORTED_POLICY_OR_ACCOUNT,
+                    "This death-year policy requires compatible account and required beginning date chronology.");
+        }
+        boolean projectsLivingOwnerMinimum = opening.getYear() <= decedentFirstDistributionYear
+                && death.getYear() > decedentFirstDistributionYear;
+        if (deathYearPolicy && (postRbd || projectsLivingOwnerMinimum) && survivorIsMoreThanTenYearsYounger()) {
+            throw refusal(death.getYear(), UNSUPPORTED_POLICY_OR_ACCOUNT,
+                    "The original retirement account would require the Joint and Last Survivor Table in a modeled distribution year.");
+        }
+        if (!deathYearPolicy && death.getYear() >= decedentFirstDistributionYear) {
             throw refusal(death.getYear(), UNRESOLVED_MANDATORY_DISTRIBUTION,
                     "Death was in or after the deceased spouse's earliest applicable owner distribution year.");
         }
@@ -151,12 +179,43 @@ final class SpousalIraRmdPolicy {
             if (account.getOwnership() != deceased) continue;
             boolean ira = account.getType() == AccountType.TRADITIONAL_IRA;
             boolean employer = (employerRollovers || beneficiary401k) && account.getType() == AccountType.TRADITIONAL_401K;
-            if (!ira && !employer) continue;
+            if (deathYearPolicy && !((beneficiary401k || postRbdRollover) ? employer : ira) && account.getType().requiresIndividualOwnership()
+                    && account.getCurrentBalance().signum() > 0) {
+                throw refusal(death.getYear(), UNSUPPORTED_POLICY_OR_ACCOUNT,
+                        "The death-year policy requires complete holdings of the supported account family and does not cover mixed deceased-owned retirement assets.");
+            }
+            if (!ira && !employer || deathYearPolicy && (beneficiary401k || postRbdRollover) && !employer) continue;
             var openingRmd = account.getOpeningRmdAccountData();
             if (openingRmd != null && (openingRmd.getDistributionYear() != opening.getYear()
-                    || openingRmd.getRmdAlreadyDistributedBeforeProjection().signum() != 0)) {
+                    || (!deathYearPolicy || opening.equals(death))
+                        && openingRmd.getRmdAlreadyDistributedBeforeProjection().signum() != 0)) {
                 throw refusal(death.getYear(), INCOMPATIBLE_ACCOUNT_HISTORY,
-                        "The decedent's opening RMD data conflict with the pre-RMD death model.");
+                        "The decedent's opening RMD data conflict with the applicable year or modeled payment chronology.");
+            }
+            if (deathYearPolicy) {
+                if (employer) {
+                    var facts = account.getRetirementParticipantFacts();
+                    verifyEmployerRequiredBeginningDate(account.getName(), facts);
+                    if (postRbdRollover && !Boolean.TRUE.equals(facts.confirmedPostRbdDirectRollover())) {
+                        throw refusal(death.getYear(), UNSUPPORTED_POLICY_OR_ACCOUNT,
+                                "Confirm the direct rollover terms for " + account.getName() + ".");
+                    }
+                }
+                if (ira && !account.getRetirementParticipantFacts().equals(RetirementParticipantFacts.UNKNOWN)) {
+                    throw refusal(death.getYear(), INCOMPATIBLE_ACCOUNT_HISTORY,
+                            "The original traditional IRA has conflicting participant facts.");
+                }
+                boolean opensAtDeath = opening.equals(death);
+                if (opensAtDeath && (openingRmd == null
+                        || openingRmd.getPriorDecember31Balance().compareTo(account.getCurrentBalance()) != 0)) {
+                    throw refusal(death.getYear(), INCOMPATIBLE_ACCOUNT_HISTORY,
+                            "Opening at death requires the preceding December 31 balance to agree with the original opening position.");
+                }
+                if (opening.getYear() > decedentFirstDistributionYear
+                        && (openingRmd == null || !Boolean.TRUE.equals(openingRmd.getPrecedingYearsSatisfied()))) {
+                    throw refusal(death.getYear(), UNRESOLVED_MANDATORY_DISTRIBUTION,
+                            "Confirm that all earlier calendar-year RMD obligations for the original retirement source are resolved.");
+                }
             }
             if (beneficiary401k && employer) {
                 // The pre-first-distribution-year gate precedes even the earliest age-based April 1 RBD.
@@ -167,9 +226,28 @@ final class SpousalIraRmdPolicy {
                             "Dated employer facts conflict with the participant's death.");
                 }
             }
-            if (ira || beneficiary401k && employer) clearedAccounts.add(AccountReference.capture(account));
+            if (ira || (beneficiary401k || postRbdRollover) && employer) clearedAccounts.add(AccountReference.capture(account));
         }
         cleared = Set.copyOf(clearedAccounts);
+    }
+
+    private void verifyEmployerRequiredBeginningDate(String planName, RetirementParticipantFacts facts) {
+        var applicableYearEnd = LocalDate.of(decedentFirstDistributionYear, 12, 31);
+        var supportedRbd = LocalDate.of(decedentFirstDistributionYear + 1, 4, 1);
+        if (!supportedRbd.equals(facts.confirmedPostRbdBeneficiaryRequiredBeginningDate())
+                || facts.separationStatusOn(applicableYearEnd) != RetirementParticipantFacts.SeparationStatus.SEPARATED
+                || facts.retirementConditionsStatusOn(applicableYearEnd)
+                        != RetirementParticipantFacts.RetirementConditionsStatus.MET
+                || facts.separationDate().isBefore(births.get(deceased))
+                || facts.retirementConditionsMetDate().isBefore(births.get(deceased))) {
+            throw refusal(death.getYear(), INCOMPATIBLE_ACCOUNT_HISTORY,
+                    "The 401(k) \"" + planName + "\" requires dated retirement by the applicable-age year and plan "
+                    + "confirmation of the legal April 1 required beginning date and compatible sole-spouse payout terms.");
+        }
+    }
+
+    private boolean survivorIsMoreThanTenYearsYounger() {
+        return births.get(survivor).isAfter(births.get(deceased).plusYears(10));
     }
 
     boolean inSurvivorPeriod(int year) { return year >= death.getYear(); }
@@ -178,8 +256,26 @@ final class SpousalIraRmdPolicy {
         return membership(year, portfolio, prior, Map.of());
     }
 
+    SpousalIraRmdMembership mandatoryBeforeRollover(int year, ProjectedPortfolio portfolio, RmdBalanceSnapshot prior) {
+        if (!postRbdRollover || year != death.getYear() + 1) return null;
+        return new SpousalIraRmdMembership(rolloverPaymentOwnership(year), survivor, prior, portfolio, Map.of(), year, death.getYear());
+    }
+
+    com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership rolloverPaymentOwnership(int year) {
+        if (!postRbdRollover || year != death.getYear() + 1) throw refusal(year, INVALID_OWNERSHIP_CHRONOLOGY,
+                "The original plan payment belongs to the January rollover year.");
+        var intermediateChoice = new SpousalInheritanceAssumption(SpousalInheritanceAssumption.Treatment.SPOUSE_AS_BENEFICIARY);
+        return RetirementOwnershipResolver.resolveForPlanning(Year.of(year), opening, deaths, births, rules,
+                accounts, intermediateChoice, cleared, Map.of(), true);
+    }
+
     Map<AccountReference, Spousal401kRollover> rolloversAtOpening(
             int year, ProjectedPortfolio portfolio, RmdBalanceSnapshot prior) {
+        return rolloversAtOpening(year, portfolio, prior, null);
+    }
+
+    Map<AccountReference, Spousal401kRollover> rolloversAtOpening(
+            int year, ProjectedPortfolio portfolio, RmdBalanceSnapshot prior, SpousalIraRmdMembership mandatory) {
         if (!employerRollovers || year != death.getYear() + 1) return Map.of();
         if (prior == null || !prior.getSnapshotDate().equals(death.withDayOfYear(death.lengthOfYear()))) {
             throw refusal(year, MISSING_OR_DUPLICATE_SOURCE, "The original 401(k) December 31 balance is required.");
@@ -190,6 +286,12 @@ final class SpousalIraRmdPolicy {
                 throw refusal(year, MISSING_OR_DUPLICATE_SOURCE, "The prior balance contains a duplicate account occurrence.");
             }
         }
+        var exclusions = new HashMap<AccountReference, java.math.BigDecimal>();
+        if (mandatory != null) {
+            for (var obligation : mandatory.beneficiaryEmployerObligations()) {
+                exclusions.put(obligation.source(), obligation.requiredAmount());
+            }
+        }
         var result = new LinkedHashMap<AccountReference, Spousal401kRollover>();
         for (var position : portfolio.getAccountBalances()) {
             var account = position.getAccount();
@@ -197,10 +299,14 @@ final class SpousalIraRmdPolicy {
             var source = AccountReference.capture(account);
             var closing = priorBySource.remove(source);
             if (closing == null) throw refusal(year, MISSING_OR_DUPLICATE_SOURCE, "An original 401(k) occurrence is missing or duplicated.");
-            if (closing.compareTo(position.getBalance()) != 0) {
+            var excluded = postRbdRollover ? exclusions.remove(source) : java.math.BigDecimal.ZERO;
+            if (excluded == null) throw refusal(year, UNRESOLVED_MANDATORY_DISTRIBUTION,
+                    "The original plan has no verified rollover-year minimum.");
+            var eligible = closing.subtract(excluded);
+            if (eligible.compareTo(position.getBalance()) != 0) {
                 throw refusal(year, INCOMPATIBLE_ACCOUNT_HISTORY, "The 401(k) opening balance differs from the preceding closing balance.");
             }
-            if (closing.signum() == 0) continue;
+            if (eligible.signum() == 0) continue;
             if (death.getYear() < 2025) {
                 throw refusal(year, INVALID_OWNERSHIP_CHRONOLOGY,
                         "The modeled death precedes the applicable final employer RMD rules.");
@@ -208,7 +314,7 @@ final class SpousalIraRmdPolicy {
             // The distribution and receipt are both January 1. The modeled sole spouse uses the default
             // life-expectancy method until then. A beneficiary RMD for the rollover year is ineligible,
             // including when its year-end deadline has not passed.
-            if (year >= decedentFirstDistributionYear) {
+            if (!postRbdRollover && year >= decedentFirstDistributionYear) {
                 throw refusal(year, UNRESOLVED_MANDATORY_DISTRIBUTION,
                         "A 401(k) beneficiary distribution is required in the rollover year and must be excluded first.");
             }
@@ -217,9 +323,9 @@ final class SpousalIraRmdPolicy {
                     || facts.retirementConditionsMetDate() != null && facts.retirementConditionsMetDate().isAfter(death)) {
                 throw refusal(year, INCOMPATIBLE_ACCOUNT_HISTORY, "Dated employer facts conflict with the participant's death.");
             }
-            result.put(source, new Spousal401kRollover(source, survivor, death.plusYears(1), closing));
+            result.put(source, new Spousal401kRollover(source, survivor, death.plusYears(1), eligible));
         }
-        if (priorBySource.keySet().stream().anyMatch(ref -> ref.owner() == deceased
+        if (!exclusions.isEmpty() || priorBySource.keySet().stream().anyMatch(ref -> ref.owner() == deceased
                 && ref.type() == AccountType.TRADITIONAL_401K)) {
             throw refusal(year, MISSING_OR_DUPLICATE_SOURCE, "A prior 401(k) balance does not identify an opening position.");
         }
@@ -243,7 +349,7 @@ final class SpousalIraRmdPolicy {
                         "An unresolved inherited or non-personal-IRA obligation requires separate treatment.");
             }
         }
-        if (year == death.getYear()) return null;
+        if (year == death.getYear() && !(deathYearPolicy && postRbd)) return null;
         var survivorBirth = births.get(survivor);
         int age = year - survivorBirth.getYear();
         if (age >= survivorStartingAge) {
@@ -255,7 +361,9 @@ final class SpousalIraRmdPolicy {
         }
         var ownership = ownership(year, rollovers);
         return new SpousalIraRmdMembership(ownership, survivor, prior, portfolio, rollovers,
-                beneficiaryTreatment ? Math.max(death.getYear() + 1, decedentFirstDistributionYear) : null);
+                beneficiaryTreatment && year > death.getYear()
+                        ? Math.max(death.getYear() + 1, decedentFirstDistributionYear) : null,
+                deathYearPolicy && postRbd ? death.getYear() : null);
     }
 
     com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership ownership(int year) {
@@ -264,6 +372,16 @@ final class SpousalIraRmdPolicy {
 
     com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership ownership(int year,
             Map<AccountReference, Spousal401kRollover> rollovers) {
+        if (deathYearPolicy) {
+            var result = RetirementOwnershipResolver.resolveForPlanning(Year.of(year), opening, deaths, births, rules,
+                    accounts, selection, cleared, postRbdRollover && year <= death.getYear() ? Map.of() : rollovers, true);
+            var requiredBindings = postRbdRollover && year > death.getYear() ? rollovers.keySet() : cleared;
+            if ((year > death.getYear() || postRbd && year == death.getYear())
+                    && requiredBindings.stream().anyMatch(ref -> result.accounts().get(ref).effectiveRmdRecipient().orElse(null) != survivor)) {
+                throw refusal(year, UNRESOLVED_MANDATORY_DISTRIBUTION, "Unable to bind the original retirement source to the surviving spouse.");
+            }
+            return result;
+        }
         var ownership = beneficiaryTreatment
                 ? RetirementOwnershipResolver.resolveForBeneficiaryPlanning(Year.of(year), opening, deaths, births, rules,
                         accounts, selection, cleared)
@@ -276,17 +394,19 @@ final class SpousalIraRmdPolicy {
         return ownership;
     }
 
-    void validateDiscretionarySources(int year, List<IncomeSourceAttribution> sources) {
-        if (!inSurvivorPeriod(year)) return;
-        for (var source : sources) {
-            var account = source.account().orElse(null);
-            if (account != null && account.owner() == deceased
-                    && account.type().requiresIndividualOwnership()
-                    && source.kind() != IncomeSourceAttribution.Kind.RMD && source.grossAmount().signum() > 0) {
-                throw refusal(year, UNSUPPORTED_POLICY_OR_ACCOUNT,
-                        "The applied policy supports required distributions only from a successor retirement account.");
-            }
+    IncomeSourceAttribution attributeDiscretionarySource(int year, IncomeSourceAttribution source,
+            SpousalIraRmdMembership membership) {
+        var account = source.account().orElse(null);
+        if (account == null || account.owner() != deceased || !account.type().requiresIndividualOwnership()
+                || source.kind() == IncomeSourceAttribution.Kind.RMD || source.grossAmount().signum() == 0) {
+            return source;
         }
+        if (!ordinaryEnabled || membership == null
+                || source.kind() != IncomeSourceAttribution.Kind.ORDINARY_RETIREMENT_WITHDRAWAL) {
+            throw refusal(year, UNSUPPORTED_POLICY_OR_ACCOUNT,
+                    "The selected retirement position lacks effective ordinary successor withdrawal authorization.");
+        }
+        return membership.attributeOrdinaryDebit(source, LocalDate.of(year, 1, 1));
     }
 
     private static SpousalIraRmdUnavailable refusal(int year, SpousalIraRmdUnavailable.Reason reason, String detail) {

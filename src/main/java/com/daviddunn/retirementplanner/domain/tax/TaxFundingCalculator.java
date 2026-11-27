@@ -346,6 +346,32 @@ public final class TaxFundingCalculator {
             List<IncomeSourceAttribution> supplementalSources,
             TaxHouseholdContext taxContext,
             StateTaxAssumptions stateTaxAssumptions) {
+        return calculate(household, projectionDate, portfolio, existingWithdrawals, withdrawalStrategy, filingStatus,
+                projectedGovernmentRules, rothConversion, taxableInterestIncome, socialSecurityColaRate, deathAssumptions,
+                openingTaxDeferredDistribution, socialSecurityResult, availableHouseholdCash, authoritativePensionIncome,
+                supplementalSources, taxContext, stateTaxAssumptions, null);
+    }
+
+    public TaxFundingResult calculate(
+            Household household,
+            LocalDate projectionDate,
+            ProjectedPortfolio portfolio,
+            WithdrawalBreakdown existingWithdrawals,
+            WithdrawalStrategy withdrawalStrategy,
+            FilingStatus filingStatus,
+            GovernmentRules projectedGovernmentRules,
+            BigDecimal rothConversion,
+            BigDecimal taxableInterestIncome,
+            BigDecimal socialSecurityColaRate,
+            DeathScenarioAssumptions deathAssumptions,
+            BigDecimal openingTaxDeferredDistribution,
+            HouseholdSocialSecurityResult socialSecurityResult,
+            BigDecimal availableHouseholdCash,
+            Optional<BigDecimal> authoritativePensionIncome,
+            List<IncomeSourceAttribution> supplementalSources,
+            TaxHouseholdContext taxContext,
+            StateTaxAssumptions stateTaxAssumptions,
+            java.util.function.UnaryOperator<IncomeSourceAttribution> attributeWithdrawal) {
         Objects.requireNonNull(taxContext, "Tax household context is required.");
         Objects.requireNonNull(stateTaxAssumptions);
         supplementalSources = List.copyOf(Objects.requireNonNull(supplementalSources));
@@ -503,6 +529,11 @@ public final class TaxFundingCalculator {
                                         requiredWithdrawal,
                                         withdrawalStrategy);
 
+                if (attributeWithdrawal != null) {
+                    finalTaxFundingBreakdown = finalTaxFundingBreakdown.withIncomeSources(
+                            finalTaxFundingBreakdown.getIncomeSources().stream().map(attributeWithdrawal).toList());
+                }
+
                 WithdrawalBreakdown finalTotalWithdrawals =
                         existingWithdrawals.plus(
                                 finalTaxFundingBreakdown);
@@ -550,7 +581,11 @@ public final class TaxFundingCalculator {
                     requiredWithdrawal;
         }
 
-        throw new IllegalStateException(
-                "Income tax funding calculation did not converge.");
+        if (attributeWithdrawal != null) {
+            throw new com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable(projectionDate.getYear(),
+                    com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.Reason.TAX_FUNDING_NONCONVERGENCE,
+                    "Income tax funding calculation did not converge.");
+        }
+        throw new IllegalStateException("Income tax funding calculation did not converge.");
     }
 }

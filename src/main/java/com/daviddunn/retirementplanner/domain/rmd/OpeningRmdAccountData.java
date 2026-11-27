@@ -16,13 +16,20 @@ public final class OpeningRmdAccountData {
     private final BigDecimal priorDecember31Balance;
     private final BigDecimal rmdAlreadyDistributedBeforeProjection;
 
+    private final Boolean precedingYearsSatisfied;
+
+    public OpeningRmdAccountData(int distributionYear, BigDecimal priorBalance, BigDecimal alreadyDistributed) {
+        this(distributionYear, priorBalance, alreadyDistributed, null);
+    }
+
     @JsonCreator
     public OpeningRmdAccountData(
             @JsonProperty("distributionYear") int distributionYear,
             @JsonProperty("priorDecember31Balance")
             BigDecimal priorDecember31Balance,
             @JsonProperty("rmdAlreadyDistributedBeforeProjection")
-            BigDecimal rmdAlreadyDistributedBeforeProjection) {
+            BigDecimal rmdAlreadyDistributedBeforeProjection,
+            @JsonProperty("precedingYearsSatisfied") Boolean precedingYearsSatisfied) {
 
         if (distributionYear <= 0) {
             throw new IllegalArgumentException(
@@ -30,12 +37,18 @@ public final class OpeningRmdAccountData {
         }
 
         this.distributionYear = distributionYear;
+        this.precedingYearsSatisfied = Boolean.TRUE.equals(precedingYearsSatisfied) ? Boolean.TRUE : null;
         this.priorDecember31Balance = requireNonNegative(
                 priorDecember31Balance,
                 "Prior December 31 balance");
         this.rmdAlreadyDistributedBeforeProjection = requireNonNegative(
                 rmdAlreadyDistributedBeforeProjection,
                 "RMD already distributed before projection");
+    }
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public Boolean getPrecedingYearsSatisfied() {
+        return precedingYearsSatisfied;
     }
 
     public int getDistributionYear() {

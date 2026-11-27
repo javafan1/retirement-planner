@@ -29,6 +29,9 @@ import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdCalculation;
 import com.daviddunn.retirementplanner.domain.rmd.OpeningRmdCalculator;
 import com.daviddunn.retirementplanner.domain.rules.GovernmentRules;
 import com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdMembership;
+import com.daviddunn.retirementplanner.domain.retirementownership.Spousal401kRollover;
+import com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable;
+import static com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution.Purpose.TAX_FUNDING;
 import com.daviddunn.retirementplanner.domain.tax.*;
 import com.daviddunn.retirementplanner.domain.tax.state.ArkansasRecipientDiagnostic;
 import com.daviddunn.retirementplanner.domain.tax.state.ProductionStateTaxResult;
@@ -319,6 +322,41 @@ public class ProjectionEngine {
                 plan.getPlanningAssumptions().getExpectedAnnualInvestmentReturn()));
     }
 
+    public static boolean supportsVersionedRothScheduling(RetirementPlan plan) {
+        if (plan == null || plan.getPlanningAssumptions().getStateTaxAssumptions().jurisdiction()
+                != com.daviddunn.retirementplanner.domain.model.StateTaxJurisdiction.FL
+                || com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.resolved(plan)
+                        != com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode.BASIC) return false;
+        var assumptions = plan.getPlanningAssumptions();
+        var deaths = EffectiveHouseholdDeathView.resolve(plan.getHousehold(), assumptions.getDeathScenarioAssumptions(),
+                Optional.empty());
+        int finalYear = assumptions.getProjectionStartDate().getYear() + assumptions.getProjectionLengthYears() - 1;
+        return deaths.firstDeathYear().filter(year -> year.getValue() <= finalYear).isEmpty()
+                || requestsAppliedSpousalIraRmd(plan);
+    }
+
+    /** Explicit normal workflow. Contextual and analyzer entry points retain their versioned-request refusal. */
+    public ProjectionExecutionResult projectNormalWithRothScheduling(RetirementPlan plan) {
+        if (!RothConversionRequest.usesVersionedExecution(plan.getRothConversionRequest())
+                || !supportsVersionedRothScheduling(plan) || arkansasValidation != null || arkansasProduction) {
+            throw new RothConversionRequest.SchedulingUnavailable();
+        }
+        com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(plan);
+        boolean ownerEmployer = requestsSpousalPostRbd401kOwner(plan);
+        boolean beneficiaryEmployer = requestsSpousalPostRbd401k(plan);
+        boolean deathYearIra = requestsSpousalIraDeathYear(plan);
+        SpousalIraRmdPolicy policy = null;
+        if (requestsAppliedSpousalIraRmd(plan)) {
+            var treatment = ownerEmployer ? SpousalIraRmdPolicy.Treatment.OWNER_ROLLOVER
+                    : beneficiaryEmployer ? SpousalIraRmdPolicy.Treatment.BENEFICIARY_401K
+                    : deathYearIra ? deathYearTreatment(plan) : successorOrdinaryTreatment(plan);
+            policy = new SpousalIraRmdPolicy(plan, governmentRules.getRmdRules(), treatment, true,
+                    ownerEmployer || beneficiaryEmployer || deathYearIra);
+        }
+        return runProjection(plan, ProjectionEvaluationContext.empty(), ProjectionEconomicPath.constant(
+                plan.getPlanningAssumptions().getExpectedAnnualInvestmentReturn()), true, policy, true);
+    }
+
     /** Only the top-level deterministic workflow dispatches to this financial policy. */
     public static boolean requestsSpousalIraRmd(RetirementPlan plan) {
         return SpousalIraRmdPolicy.requested(plan);
@@ -358,10 +396,116 @@ public class ProjectionEngine {
         return projectSpousalIraRmd(frozenPlan, SpousalIraRmdPolicy.Treatment.BENEFICIARY_401K);
     }
 
+    public static boolean requestsSpousalIraDeathYear(RetirementPlan plan) {
+        if (!requestsSpousalIraRmd(plan) && !requestsSpousalBeneficiaryIraRmd(plan)) return false;
+        var deaths = EffectiveHouseholdDeathView.resolve(plan.getHousehold(),
+                plan.getPlanningAssumptions().getDeathScenarioAssumptions(), Optional.empty());
+        return plan.getHousehold().peopleByOwner().entrySet().stream().anyMatch(entry -> {
+            var birth = entry.getValue().getBirthDate();
+            return birth != null && birth.getYear() >= 1960
+                    && deaths.deathDate(entry.getKey()).filter(date -> date.getYear() >= birth.getYear() + 75).isPresent();
+        });
+    }
+
+    public static boolean requestsSpousalPostRbd401k(RetirementPlan plan) {
+        return requestsSpousalBeneficiary401kRmd(plan) && modeledEmployerPostRbd(plan);
+    }
+
+    public static boolean requestsSpousalPostRbd401kOwner(RetirementPlan plan) {
+        return requestsSpousal401kRollover(plan) && modeledEmployerPostRbd(plan);
+    }
+
+    private static boolean modeledEmployerPostRbd(RetirementPlan plan) {
+        var deaths = EffectiveHouseholdDeathView.resolve(plan.getHousehold(),
+                plan.getPlanningAssumptions().getDeathScenarioAssumptions(), Optional.empty());
+        return plan.getHousehold().peopleByOwner().entrySet().stream().anyMatch(entry -> {
+            var birth = entry.getValue().getBirthDate();
+            return birth != null && birth.getYear() >= 1960
+                    && deaths.deathDate(entry.getKey())
+                            .filter(date -> date.isAfter(LocalDate.of(birth.getYear() + 76, 4, 1))).isPresent();
+        });
+    }
+
+    public ProjectionExecutionResult projectSpousalPostRbd401kOwner(RetirementPlan plan) {
+        return projectSpousalIraRmd(plan, SpousalIraRmdPolicy.Treatment.OWNER_ROLLOVER, true, true);
+    }
+
+    public record PostRbd401kOwnerHistory(
+            java.util.function.IntFunction<com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership> owner,
+            java.util.function.IntFunction<com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership> beforeRollover) { }
+
+    public PostRbd401kOwnerHistory spousalPostRbd401kOwnerHistory(RetirementPlan plan,
+            Map<IncomeSourceAttribution.AccountReference, Spousal401kRollover> rollovers) {
+        var policy = new SpousalIraRmdPolicy(plan, governmentRules.getRmdRules(),
+                SpousalIraRmdPolicy.Treatment.OWNER_ROLLOVER, true, true);
+        var verified = Map.copyOf(rollovers);
+        return new PostRbd401kOwnerHistory(year -> policy.ownership(year, verified), policy::rolloverPaymentOwnership);
+    }
+
+    public ProjectionExecutionResult projectSpousalPostRbd401k(RetirementPlan plan) {
+        return projectSpousalIraRmd(plan, SpousalIraRmdPolicy.Treatment.BENEFICIARY_401K, true, true);
+    }
+
+    public java.util.function.IntFunction<com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership>
+            spousalPostRbd401kOwnership(RetirementPlan frozenPlan) {
+        var policy = new SpousalIraRmdPolicy(frozenPlan, governmentRules.getRmdRules(),
+                SpousalIraRmdPolicy.Treatment.BENEFICIARY_401K, true, true);
+        return policy::ownership;
+    }
+
+    public static boolean requiresSpousalOpeningHistory(RetirementPlan plan,
+            com.daviddunn.retirementplanner.domain.financial.Account account) {
+        if (!(account.getType() == AccountType.TRADITIONAL_IRA && requestsSpousalIraDeathYear(plan)
+                || account.getType() == AccountType.TRADITIONAL_401K && (requestsSpousalPostRbd401k(plan) || requestsSpousalPostRbd401kOwner(plan)))) return false;
+        var assumptions = plan.getPlanningAssumptions();
+        var deaths = EffectiveHouseholdDeathView.resolve(plan.getHousehold(), assumptions.getDeathScenarioAssumptions(),
+                Optional.empty());
+        var person = plan.getHousehold().peopleByOwner().get(account.getOwnership());
+        return person != null && deaths.deathDate(account.getOwnership()).isPresent()
+                && assumptions.getProjectionStartDate().getYear() > person.getBirthDate().getYear() + 75;
+    }
+
+    public ProjectionExecutionResult projectSpousalIraDeathYear(RetirementPlan frozenPlan) {
+        return projectSpousalIraRmd(frozenPlan, deathYearTreatment(frozenPlan), true, true);
+    }
+
+    private static SpousalIraRmdPolicy.Treatment deathYearTreatment(RetirementPlan plan) {
+        return requestsSpousalBeneficiaryIraRmd(plan) ? SpousalIraRmdPolicy.Treatment.BENEFICIARY_IRA
+                : SpousalIraRmdPolicy.Treatment.OWNER_IRA;
+    }
+
+    public java.util.function.IntFunction<com.daviddunn.retirementplanner.domain.retirementownership.AnnualRetirementOwnership>
+            spousalIraDeathYearOwnership(RetirementPlan frozenPlan) {
+        var policy = new SpousalIraRmdPolicy(frozenPlan, governmentRules.getRmdRules(),
+                deathYearTreatment(frozenPlan), true, true);
+        return policy::ownership;
+    }
+
+    public ProjectionExecutionResult projectSpousalSuccessorOrdinary(RetirementPlan frozenPlan) {
+        return projectSpousalIraRmd(frozenPlan, successorOrdinaryTreatment(frozenPlan), true);
+    }
+
+    private static SpousalIraRmdPolicy.Treatment successorOrdinaryTreatment(RetirementPlan frozenPlan) {
+        return requestsSpousalBeneficiary401kRmd(frozenPlan) ? SpousalIraRmdPolicy.Treatment.BENEFICIARY_401K
+                : requestsSpousalBeneficiaryIraRmd(frozenPlan) ? SpousalIraRmdPolicy.Treatment.BENEFICIARY_IRA
+                : requestsSpousal401kRollover(frozenPlan) ? SpousalIraRmdPolicy.Treatment.OWNER_ROLLOVER
+                : SpousalIraRmdPolicy.Treatment.OWNER_IRA;
+    }
+
     private ProjectionExecutionResult projectSpousalIraRmd(RetirementPlan frozenPlan, SpousalIraRmdPolicy.Treatment treatment) {
+        return projectSpousalIraRmd(frozenPlan, treatment, false);
+    }
+
+    private ProjectionExecutionResult projectSpousalIraRmd(RetirementPlan frozenPlan,
+            SpousalIraRmdPolicy.Treatment treatment, boolean ordinaryEnabled) {
+        return projectSpousalIraRmd(frozenPlan, treatment, ordinaryEnabled, false);
+    }
+
+    private ProjectionExecutionResult projectSpousalIraRmd(RetirementPlan frozenPlan,
+            SpousalIraRmdPolicy.Treatment treatment, boolean ordinaryEnabled, boolean deathYearPolicy) {
         if (arkansasValidation != null) throw new IllegalStateException("Spousal IRA RMD treatment requires Florida Basic.");
         com.daviddunn.retirementplanner.domain.benefit.ConditionalBenefitAdmission.requireDeterministicSupported(frozenPlan);
-        var policy = new SpousalIraRmdPolicy(frozenPlan, governmentRules.getRmdRules(), treatment);
+        var policy = new SpousalIraRmdPolicy(frozenPlan, governmentRules.getRmdRules(), treatment, ordinaryEnabled, deathYearPolicy);
         return runProjection(frozenPlan, ProjectionEvaluationContext.empty(), ProjectionEconomicPath.constant(
                 frozenPlan.getPlanningAssumptions().getExpectedAnnualInvestmentReturn()), true, policy);
     }
@@ -407,6 +551,7 @@ public class ProjectionEngine {
             ProjectionEvaluationContext evaluationContext,
             ProjectionEconomicPath economicPath,
             boolean structured) {
+        RothConversionRequest.requireExecutable(plan.getRothConversionRequest());
         if (arkansasProduction && (!selectsArkansas(plan) || arkansasRunControl.get() == null)) {
             throw new IllegalStateException("Arkansas production requires Arkansas inputs and a controlled calculation scope.");
         }
@@ -443,7 +588,13 @@ public class ProjectionEngine {
     private ProjectionExecutionResult runProjection(
             RetirementPlan plan, ProjectionEvaluationContext evaluationContext,
             ProjectionEconomicPath economicPath, boolean structured, SpousalIraRmdPolicy spousalIra) {
+        return runProjection(plan, evaluationContext, economicPath, structured, spousalIra, false);
+    }
+
+    private ProjectionExecutionResult runProjection(RetirementPlan plan, ProjectionEvaluationContext evaluationContext,
+            ProjectionEconomicPath economicPath, boolean structured, SpousalIraRmdPolicy spousalIra, boolean versionedRoth) {
         java.util.Objects.requireNonNull(plan, "Retirement plan is required.");
+        if (!versionedRoth) RothConversionRequest.requireExecutable(plan.getRothConversionRequest());
         plan.validateHouseholdReferences();
         validateSinglePersonProjection(plan, evaluationContext);
         java.util.Objects.requireNonNull(economicPath, "Economic path is required.");
@@ -521,6 +672,7 @@ public class ProjectionEngine {
         var benefitSpouseBirth = plan.getHousehold().spouse().map(Person::getBirthDate);
         var benefitOpening = plan.getPlanningAssumptions().getProjectionStartDate();
         boolean householdRmdHasOccurred = false;
+        boolean versionedRmdHasOccurred = false;
         BigDecimal generalExpenseMultiplier = BigDecimal.ONE;
         var controlledRun = arkansasValidation == null ? null : arkansasRunControl.get();
         Map<IncomeSourceAttribution.AccountReference,
@@ -529,7 +681,7 @@ public class ProjectionEngine {
              yearOffset < projectionLength;
              yearOffset++) {
             if (controlledRun != null) controlledRun.cancellation().throwIfCancellationRequested();
-            checkSpousalIraCancellation(spousalIra);
+            checkProtectedProjectionCancellation(spousalIra, versionedRoth);
 
             int calendarYear =
                     startYear + yearOffset;
@@ -546,11 +698,24 @@ public class ProjectionEngine {
                             new com.daviddunn.retirementplanner.domain.benefit.BenefitEvaluationContext(benefitPrimaryBirth,benefitSpouseBirth,deathView,benefitOpening,calendarYear));
             try {
                 var annualReturn = economicPath.investmentReturnForYear(calendarYear);
+                var mandatory = spousalIra == null ? null
+                        : spousalIra.mandatoryBeforeRollover(calendarYear, projectedPortfolio, priorYearEndSnapshot);
+                OpeningEmployerPayment openingPayment = null;
+                if (mandatory != null) {
+                    var obligations = mandatory.beneficiaryEmployerObligations();
+                    var payment = withdrawalAllocator.allocateHouseholdRmds(projectedPortfolio,
+                            new HouseholdRmdResult(HouseholdRmdResult.zero().ownerResults(), null, obligations), mandatory);
+                    openingPayment = new OpeningEmployerPayment(payment, obligations);
+                }
+                var afterOpeningPayment = openingPayment == null ? projectedPortfolio : openingPayment.allocation().getPortfolio();
                 if (spousalIra != null && rollovers.isEmpty()) {
-                    rollovers = spousalIra.rolloversAtOpening(calendarYear, projectedPortfolio, priorYearEndSnapshot);
+                    rollovers = spousalIra.rolloversAtOpening(calendarYear, afterOpeningPayment, priorYearEndSnapshot, mandatory);
                 }
                 var membership = spousalIra == null ? null
-                        : spousalIra.membership(calendarYear, projectedPortfolio, priorYearEndSnapshot, rollovers);
+                        : spousalIra.membership(calendarYear, afterOpeningPayment,
+                                priorYearEndSnapshot == null && spousalIra.inSurvivorPeriod(calendarYear)
+                                        ? RmdBalanceSnapshot.fromOpeningRmdData(plan.getAccountPortfolio(), calendarYear)
+                                        : priorYearEndSnapshot, rollovers);
                 if (annuityExecution) com.daviddunn.retirementplanner.domain.benefit.NonqualifiedAnnuityAdmission.requireGrowthSupported(
                         annuityOpeningCash, projectedPortfolio.getRetainedNonQualifiedAssets(), annualReturn);
                 calculation = calculateProjectionYear(
@@ -565,11 +730,11 @@ public class ProjectionEngine {
                                     HouseholdSocialSecurityResult.zero()),
                             deathView,
                             lifetimeRun,
-                            householdRmdHasOccurred,
+                            versionedRoth ? versionedRmdHasOccurred : householdRmdHasOccurred,
                             annualReturn,
                             evaluationContext.inflationPath().isPresent() ? generalExpenseMultiplier : null,
                             evaluationContext.expensePath().orElse(null), conditionalBenefits, financialMode,
-                            spousalIra, membership, null);
+                            spousalIra, membership, openingPayment, null, 0);
             } catch (RuntimeException exception) {
                 if (arkansasValidation != null && exception instanceof com.daviddunn.retirementplanner.domain.tax.NiitUnsupportedInputException) {
                     throw arkansasNiitUnavailable(calendarYear, exception);
@@ -592,6 +757,7 @@ public class ProjectionEngine {
                     calculation.getProjectionYear();
 
             householdRmdHasOccurred |= projectionYear.getRequiredMinimumDistribution().signum() > 0;
+            versionedRmdHasOccurred |= calculation.positiveMandatoryRmd();
             ProjectedPortfolio endingPortfolio =
                     calculation.getEndingPortfolio();
 
@@ -617,7 +783,7 @@ public class ProjectionEngine {
 
             projectedPortfolio =
                     endingPortfolio;
-            checkSpousalIraCancellation(spousalIra);
+            checkProtectedProjectionCancellation(spousalIra, versionedRoth);
             if (controlledRun != null) {
                 controlledRun.cancellation().throwIfCancellationRequested();
                 controlledRun.completedYears().accept(projection.getYearsProjected());
@@ -627,9 +793,9 @@ public class ProjectionEngine {
         return new ProjectionExecutionResult.Completed(projection.getYears());
     }
 
-    private static void checkSpousalIraCancellation(SpousalIraRmdPolicy policy) {
-        if (policy != null && Thread.currentThread().isInterrupted()) {
-            throw new java.util.concurrent.CancellationException("Spousal IRA projection canceled.");
+    private static void checkProtectedProjectionCancellation(SpousalIraRmdPolicy policy, boolean versionedRoth) {
+        if ((policy != null || versionedRoth) && Thread.currentThread().isInterrupted()) {
+            throw new java.util.concurrent.CancellationException("Projection canceled.");
         }
     }
 
@@ -645,6 +811,28 @@ public class ProjectionEngine {
             return Optional.empty();
         }
         return Optional.of(person.getAge(date));
+    }
+
+    private static void reconcileTaxFundingDebits(int year, List<IncomeSourceAttribution> expected,
+            List<IncomeSourceAttribution> executed) {
+        if (expected.size() == executed.size()) {
+            int index = 0;
+            for (; index < expected.size(); index++) {
+                var receipt = expected.get(index);
+                var debit = executed.get(index);
+                if (!receipt.account().equals(debit.account()) || receipt.grossAmount().compareTo(debit.grossAmount()) != 0) {
+                    break;
+                }
+            }
+            if (index == expected.size()) return;
+        }
+        throw new SpousalIraRmdUnavailable(year, SpousalIraRmdUnavailable.Reason.INCONSISTENT_WITHDRAWAL_DEBIT,
+                "Tax funding receipts differ from executed source debits.");
+    }
+
+    private record OpeningEmployerPayment(ProjectedWithdrawalAllocation allocation,
+            List<com.daviddunn.retirementplanner.domain.rmd.Beneficiary401kRmd> obligations) {
+        BigDecimal amount() { return allocation.getWithdrawalBreakdown().getTotalWithdrawal(); }
     }
 
     private ProjectionYearCalculation calculateProjectionYear(
@@ -665,11 +853,15 @@ public class ProjectionEngine {
             com.daviddunn.retirementplanner.domain.model.FinancialCalculationMode financialMode,
             SpousalIraRmdPolicy spousalIra,
             SpousalIraRmdMembership membership,
-            MedicarePremiumCalculation authoritativeMedicarePremium) {
+            OpeningEmployerPayment openingPayment,
+            MedicarePremiumCalculation authoritativeMedicarePremium,
+            int medicareRecalculations) {
 
         BigDecimal beginningAssets =
                 projectedPortfolio.getTotalBalance();
-
+        var investableAtOpening = openingPayment == null ? projectedPortfolio : openingPayment.allocation().getPortfolio();
+        var openingMandatoryAmount = openingPayment == null ? BigDecimal.ZERO : openingPayment.amount();
+        var growthBasis = investableAtOpening.getTotalBalance();
 
         PlanningAssumptions assumptions =
                 plan.getPlanningAssumptions();
@@ -685,7 +877,7 @@ public class ProjectionEngine {
 
         BigDecimal investmentGrowth =
                 calculateInvestmentGrowth(
-                        beginningAssets,
+                        growthBasis,
                         annualInvestmentReturn,
                         yearOffset,
                         projectionStartDate);
@@ -697,7 +889,7 @@ public class ProjectionEngine {
                 calculateRetainedNonQualifiedAssetGrowth(
                         investmentGrowth,
                         beginningRetainedNonQualifiedAssets,
-                        beginningAssets);
+                        growthBasis);
 
         BigDecimal accountAssetGrowth =
                 investmentGrowth.subtract(
@@ -779,14 +971,22 @@ public class ProjectionEngine {
                         ? openingRmdCalculation.getRemainingRequirement()
                         : annualHouseholdRmdResult;
 
+        if (membership != null) {
+            var livingAnnual = annualHouseholdRmdResult;
+            annualHouseholdRmdResult = membership.addDeathYearRequirement(livingAnnual, projectedGovernmentRules);
+            projectedPeriodRmdResult = projectedPeriodRmdResult == livingAnnual ? annualHouseholdRmdResult
+                    : membership.addDeathYearRequirement(projectedPeriodRmdResult, projectedGovernmentRules);
+        }
+
         BigDecimal rmdDistributedBeforeProjection =
                 openingRmdCalculation != null
                         ? openingRmdCalculation.getDistributedBeforeProjection()
                         : BigDecimal.ZERO;
 
+        var projectedRmdCash = projectedPeriodRmdResult.getTotalRmd().add(openingMandatoryAmount);
         BigDecimal requiredMinimumDistribution =
                 annualHouseholdRmdResult
-                        .getTotalRmd()
+                        .getTotalRmd().add(openingMandatoryAmount)
                         .setScale(
                                 2,
                                 RoundingMode.HALF_UP);
@@ -796,8 +996,7 @@ public class ProjectionEngine {
                         .calculateWithdrawal(
                                 guaranteedIncome,
                                 cashFlowExpenses,
-                                projectedPeriodRmdResult
-                                        .getTotalRmd());
+                                projectedRmdCash);
 
         BigDecimal portfolioWithdrawal =
                 withdrawalResult
@@ -814,7 +1013,7 @@ public class ProjectionEngine {
 //                                AccountOwnership.PRIMARY);
 
         ProjectedPortfolio portfolioAfterGrowth =
-                projectedPortfolio.withGrowth(
+                investableAtOpening.withGrowth(
                         accountAssetGrowth,
                         retainedNonQualifiedAssetGrowth);
 
@@ -827,7 +1026,8 @@ public class ProjectionEngine {
                 rmdAllocation.getPortfolio();
 
         WithdrawalBreakdown rmdWithdrawalBreakdown =
-                rmdAllocation.getWithdrawalBreakdown();
+                openingPayment == null ? rmdAllocation.getWithdrawalBreakdown()
+                        : openingPayment.allocation().getWithdrawalBreakdown().plus(rmdAllocation.getWithdrawalBreakdown());
 
         /*
          * The RMD may satisfy some or all of the
@@ -848,8 +1048,12 @@ public class ProjectionEngine {
 
         WithdrawalBreakdown withdrawalBreakdown =
                 withdrawalAllocation.getWithdrawalBreakdown();
+        java.util.function.UnaryOperator<IncomeSourceAttribution> attributeWithdrawal = survivorIraPeriod
+                ? source -> spousalIra.attributeDiscretionarySource(calendarYear, source, membership)
+                : java.util.function.UnaryOperator.identity();
         if (survivorIraPeriod) {
-            spousalIra.validateDiscretionarySources(calendarYear, withdrawalBreakdown.getIncomeSources());
+            withdrawalBreakdown = withdrawalBreakdown.withIncomeSources(
+                    withdrawalBreakdown.getIncomeSources().stream().map(attributeWithdrawal).toList());
         }
 
         WithdrawalBreakdown totalWithdrawalBreakdown =
@@ -861,7 +1065,7 @@ public class ProjectionEngine {
 
         BigDecimal availableHouseholdCashForTaxes =
                 guaranteedIncome
-                        .add(projectedPeriodRmdResult.getTotalRmd())
+                        .add(projectedRmdCash)
                         .subtract(cashFlowExpenses)
                         .max(BigDecimal.ZERO);
 
@@ -869,9 +1073,7 @@ public class ProjectionEngine {
                 plan.getRothConversionRequest();
 
         boolean householdSubjectToRmd =
-                annualHouseholdRmdResult
-                        .getTotalRmd()
-                        .signum() > 0;
+                annualHouseholdRmdResult.getTotalRmd().add(openingMandatoryAmount).signum() > 0;
 
         TaxHouseholdContext taxContext = TaxHouseholdContext.capture(
                 household, projectionDate, assumptions.getDeathScenarioAssumptions(), pensionResult);
@@ -888,12 +1090,18 @@ public class ProjectionEngine {
         BigDecimal rothConversion = BigDecimal.ZERO;
         BigDecimal arkansasTarget = null;
 
-        if (rothConversionRequest != null &&
-                scheduledRothConversionPolicy
+        boolean versionedRoth = RothConversionRequest.usesVersionedExecution(rothConversionRequest);
+        var conversionOwners = versionedRoth ? eligibleOwners.stream()
+                .filter(owner -> deathView.isAlive(owner, calendarYear)).collect(java.util.stream.Collectors.toUnmodifiableSet())
+                : eligibleOwners;
+        if (rothConversionRequest != null && (versionedRoth
+                ? scheduledRothConversionPolicy.shouldExecuteVersioned(rothConversionRequest, calendarYear,
+                        householdSubjectToRmd, householdRmdHasOccurred)
+                : scheduledRothConversionPolicy
                         .shouldExecuteConvert(
                                 rothConversionRequest,
                                 calendarYear,
-                                householdSubjectToRmd || (lifetimeRun && householdRmdHasOccurred))) {
+                                householdSubjectToRmd || (lifetimeRun && householdRmdHasOccurred)))) {
 
             RothConversionStrategy strategy =
                     rothConversionRequest.getStrategy();
@@ -972,7 +1180,7 @@ public class ProjectionEngine {
                                         rmdDistributedBeforeProjection,
                                         socialSecurityResult,
                                         availableHouseholdCashForTaxes,
-                                        authoritativePensionIncome, preConversionSources, taxContext, eligibleOwners,
+                                        authoritativePensionIncome, preConversionSources, taxContext, conversionOwners,
                                         assumptions.getStateTaxAssumptions(), survivorIraPeriod);
                 }
             }
@@ -1026,12 +1234,12 @@ public class ProjectionEngine {
             rothConversion = rothConversion.min(
                     projectedPortfolioRothConverter
                             .getMaximumConvertibleAmount(
-                                    portfolioAfterAdditionalWithdrawal, eligibleOwners, calendarYear));
+                                    portfolioAfterAdditionalWithdrawal, conversionOwners, calendarYear));
 
             rothConversionResult =
                     projectedPortfolioRothConverter.convertHousehold(
                             portfolioAfterAdditionalWithdrawal,
-                            rothConversion, eligibleOwners, calendarYear);
+                            rothConversion, conversionOwners, calendarYear);
 
             rothConversion = rothConversionResult.getTotalConversion();
 
@@ -1064,10 +1272,8 @@ public class ProjectionEngine {
                             rmdDistributedBeforeProjection,
                             socialSecurityResult,
                             availableHouseholdCashForTaxes,
-                            authoritativePensionIncome, supplementalIncomeSources, taxContext, assumptions.getStateTaxAssumptions());
-            if (survivorIraPeriod) {
-                spousalIra.validateDiscretionarySources(calendarYear, taxFundingResult.getIncomeSources());
-            }
+                            authoritativePensionIncome, supplementalIncomeSources, taxContext, assumptions.getStateTaxAssumptions(),
+                            survivorIraPeriod ? attributeWithdrawal : null);
         }
 
         BigDecimal taxFundingWithdrawal = arkansas == null ? taxFundingResult.getAdditionalWithdrawal()
@@ -1085,8 +1291,14 @@ public class ProjectionEngine {
                         deathView);
 
 
+        boolean successorOrdinaryPaid = survivorIraPeriod && spousalIra.ordinaryEnabled
+                && (openingPayment != null || taxFundingResult.getIncomeSources().stream().anyMatch(source -> source.successorOrdinary().isPresent()
+                        || source.successorRmd().map(row -> switch (row.treatment()) {
+                            case MODELED_SPOUSAL_DEATH_YEAR_IRA_V1, MODELED_SPOUSAL_DEATH_YEAR_401K_V1 -> true;
+                            default -> false;
+                        }).orElse(false)));
         MedicarePremiumCalculation medicarePremiumCalculation =
-                authoritativeMedicarePremium == null
+                authoritativeMedicarePremium == null || successorOrdinaryPaid
                         ? medicarePremiumCalculator.calculate(
                                 federalTaxCalculation,
                                 projectionFilingStatus,
@@ -1094,11 +1306,14 @@ public class ProjectionEngine {
                                 coveredIndividuals)
                         : authoritativeMedicarePremium;
 
-        if (authoritativeMedicarePremium == null
-                && medicarePremiumCalculation
-                        .totalAnnualMedicarePremium()
-                        .signum() > 0) {
-            checkSpousalIraCancellation(spousalIra);
+        BigDecimal fundedPremium = authoritativeMedicarePremium == null ? BigDecimal.ZERO
+                : authoritativeMedicarePremium.totalAnnualMedicarePremium();
+        if (medicarePremiumCalculation.totalAnnualMedicarePremium().compareTo(fundedPremium) != 0) {
+            if (medicareRecalculations >= projectedGovernmentRules.getIrmaaRules().getBrackets().size()) {
+                throw new SpousalIraRmdUnavailable(calendarYear, SpousalIraRmdUnavailable.Reason.MEDICARE_FUNDING_NONCONVERGENCE,
+                        "The successor withdrawal and Medicare premium did not settle in the same IRMAA tier.");
+            }
+            checkProtectedProjectionCancellation(spousalIra, versionedRoth);
             return calculateProjectionYear(
                     plan,
                     yearOffset,
@@ -1117,7 +1332,9 @@ public class ProjectionEngine {
                     financialMode,
                     spousalIra,
                     membership,
-                    medicarePremiumCalculation);
+                    openingPayment,
+                    medicarePremiumCalculation,
+                    medicareRecalculations + 1);
         }
 
         HouseholdCashSettlement cashSettlement;
@@ -1130,7 +1347,7 @@ public class ProjectionEngine {
             cashSettlement =
                     HouseholdCashSettlement.calculate(
                             guaranteedIncome,
-                            projectedPeriodRmdResult.getTotalRmd(),
+                            projectedRmdCash,
                             spendingWithdrawal,
                             taxFundingWithdrawal,
                             annualExpenses,
@@ -1138,11 +1355,18 @@ public class ProjectionEngine {
                                     .totalAnnualMedicarePremium(),
                             taxFundingResult.getTotalIncomeTax());
 
-            ProjectedPortfolio portfolioAfterTaxWithdrawal =
-                    withdrawalAllocator.applyAdditionalWithdrawal(
-                            rothConversionResult.getPortfolio(),
-                            taxFundingWithdrawal,
-                            withdrawalStrategy);
+            ProjectedPortfolio portfolioAfterTaxWithdrawal;
+            if (survivorIraPeriod && spousalIra.ordinaryEnabled) {
+                var actual = withdrawalAllocator.allocateTaxFundingWithdrawal(
+                        rothConversionResult.getPortfolio(), taxFundingWithdrawal, withdrawalStrategy);
+                var expected = taxFundingResult.getIncomeSources().stream()
+                        .filter(source -> source.purpose() == TAX_FUNDING).toList();
+                reconcileTaxFundingDebits(calendarYear, expected, actual.getWithdrawalBreakdown().getIncomeSources());
+                portfolioAfterTaxWithdrawal = actual.getPortfolio();
+            } else {
+                portfolioAfterTaxWithdrawal = withdrawalAllocator.applyAdditionalWithdrawal(
+                        rothConversionResult.getPortfolio(), taxFundingWithdrawal, withdrawalStrategy);
+            }
 
             endingPortfolio =
                     portfolioAfterTaxWithdrawal
@@ -1220,7 +1444,7 @@ public class ProjectionEngine {
                         totalPortfolioWithdrawal,
                         requiredMinimumDistribution,
                         rmdDistributedBeforeProjection,
-                        projectedPeriodRmdResult.getTotalRmd(),
+                        projectedRmdCash,
                         withdrawalResult.getExcessRmd(),
                         beginningRetainedNonQualifiedAssets,
                         retainedNonQualifiedAssetGrowth,
@@ -1242,11 +1466,12 @@ public class ProjectionEngine {
                         primaryPersonAge, arkansas == null ? taxFundingResult.getIncomeSources() : arkansas.funding().incomeSources(),
                         arkansas == null ? null : arkansas.disclosure(),
                         membership == null ? List.of() : membership.openingRollovers(),
-                        projectedPeriodRmdResult.beneficiaryIraRmd(), projectedPeriodRmdResult.employerBeneficiaryRmds());
+                        projectedPeriodRmdResult.beneficiaryIraRmd(), openingPayment == null
+                                ? projectedPeriodRmdResult.employerBeneficiaryRmds() : openingPayment.obligations());
 
         return new ProjectionYearCalculation(
                 projectionYear,
-                endingPortfolio);
+                endingPortfolio, householdSubjectToRmd);
     }
 
     private static com.daviddunn.retirementplanner.domain.rules.FilingStatus getFilingStatus(PlanningAssumptions assumptions) {

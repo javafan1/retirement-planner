@@ -35,8 +35,10 @@ import java.util.function.Predicate;
 public class RothConversionView extends VBox {
 
     private final Label availabilityLabel = new Label();
+    private final com.daviddunn.retirementplanner.ui.controls.PendingRothSchedulingView pendingSchedule =
+            new com.daviddunn.retirementplanner.ui.controls.PendingRothSchedulingView();
     private final Label strategyLabel = new Label("Strategy:");
-    private final Label conversionYearLabel = new Label("Conversion Year:");
+    private final Label conversionYearLabel = new Label("Start Year:");
     private final Label stopRuleLabel = new Label("Stop Rule:");
     private final List<RequiredFieldSupport.Attachment> requiredFieldAttachments = new ArrayList<>();
 
@@ -345,6 +347,7 @@ public class RothConversionView extends VBox {
         InputHelp.install(targetTaxableIncomeField, RothInputHelp.TARGET);
         InputHelp.install(frequencyComboBox, RothInputHelp.FREQUENCY);
         InputHelp.install(stopRuleComboBox, RothInputHelp.STOP);
+        stopRuleComboBox.setPromptText("Legacy unspecified (no RMD stop)");
         InputHelp.linkGridLabels(grid);
         requiredFieldAttachments.add(RequiredFieldSupport.attach(strategyLabel, strategyComboBox,
                 enabledCheckBox.selectedProperty()));
@@ -387,6 +390,7 @@ public class RothConversionView extends VBox {
         requiredLegend.managedProperty().bind(enabledCheckBox.selectedProperty());
         getChildren().addAll(
                 availabilityLabel,
+                pendingSchedule,
                 grid,
                 requiredLegend,
                 buttonBar,
@@ -402,6 +406,7 @@ public class RothConversionView extends VBox {
         strategyComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
         frequencyComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
         stopRuleComboBox.valueProperty().addListener((observable, oldValue, newValue) -> updateDirty());
+        pendingSchedule.onChange(() -> { updateStrategyFields(); updateDirty(); });
 
 
         /*
@@ -422,13 +427,15 @@ public class RothConversionView extends VBox {
 
         var availability = com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.assess(currentPlan);
         availabilityLabel.setText(availability.guidance());
+        pendingSchedule.refreshAdmission(currentPlan);
+        boolean versioned = pendingSchedule.selected();
         boolean savedEnabled = currentPlan != null && currentPlan.getRothConversionRequest() != null
                 && currentPlan.getRothConversionRequest().isEnabled();
-        enabledCheckBox.setDisable(!availability.canEnable() && !savedEnabled);
+        enabledCheckBox.setDisable(!savedEnabled && !availability.canEnable());
         boolean disabled = !enabledCheckBox.isSelected() || !availability.canEnable();
         for (Control control : List.of(strategyComboBox, conversionYearField, conversionAmountField,
                 targetTaxableIncomeField, frequencyComboBox, stopRuleComboBox)) {
-            control.setDisable(disabled);
+            control.setDisable(disabled || control == stopRuleComboBox && versioned);
         }
 
         boolean fixedAmount =
@@ -477,6 +484,7 @@ public class RothConversionView extends VBox {
 
         currentPlan = Objects.requireNonNull(plan);
         loading = true;
+        pendingSchedule.load(plan);
 
         RothConversionRequest request =
                 plan.getRothConversionRequest();
@@ -487,7 +495,8 @@ public class RothConversionView extends VBox {
             enabledCheckBox.setSelected(
                     false);
 
-            conversionYearField.setText("");
+            var draft = plan.getNewPlanRothSchedulingDraft();
+            conversionYearField.setText(pendingSchedule.selected() && draft != null ? Integer.toString(draft.getStartYear()) : "");
 
             conversionAmountField.setText("");
 
@@ -502,8 +511,7 @@ public class RothConversionView extends VBox {
             frequencyComboBox
                     .getSelectionModel()
                     .select(
-                            RothConversionFrequency
-                                    .ONE_TIME);
+                            pendingSchedule.selected() ? RothConversionFrequency.ANNUAL : RothConversionFrequency.ONE_TIME);
 
             stopRuleComboBox
                     .getSelectionModel()
@@ -742,10 +750,13 @@ public class RothConversionView extends VBox {
                 ? nonNegative(targetTaxableIncomeField, "Target taxable income") : null;
         RothConversionFrequency frequency = read(frequencyComboBox, "Conversion frequency", () ->
                 Objects.requireNonNull(frequencyComboBox.getValue(), "A selection is required."));
-        RothConversionStopRule stop = read(stopRuleComboBox, "Stop rule", () ->
-                Objects.requireNonNull(stopRuleComboBox.getValue(), "A selection is required."));
-        var proposed = new RothConversionRequest(true, year, amount, stop, strategy, frequency, target);
-        return read(enabledCheckBox, "Conversion availability", () -> {
+        RothConversionStopRule stop = stopRuleComboBox.getValue();
+        if (!pendingSchedule.selected() && stop == null && (applied == null || applied.getStopRule() != null)) {
+            throw new InputException(stopRuleComboBox, "Stop rule requires a selection.");
+        }
+        return read(enabledCheckBox, "Conversion schedule", () -> {
+            var proposed = new RothConversionRequest(true, year, amount, stop, strategy, frequency, target,
+                    pendingSchedule.read());
             com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.validateTransition(currentPlan, proposed);
             return proposed;
         });
@@ -757,7 +768,7 @@ public class RothConversionView extends VBox {
         }
         return Arrays.<Object>asList(request.isEnabled(), request.getStartYear(), request.getAnnualAmount(),
                 request.getStrategy(), request.getCustomTargetTaxableIncome(), request.getFrequency(),
-                request.getStopRule()).stream()
+                request.getStopRule(), request.getScheduling()).stream()
                 .map(value -> value instanceof BigDecimal decimal ? decimal.stripTrailingZeros() : value)
                 .toList();
     }

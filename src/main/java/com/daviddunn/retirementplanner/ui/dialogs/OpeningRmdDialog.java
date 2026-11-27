@@ -16,6 +16,8 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
+import com.daviddunn.retirementplanner.domain.projection.ProjectionEngine;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -46,6 +48,7 @@ public final class OpeningRmdDialog extends Dialog<Boolean> {
             new LinkedHashMap<>();
     private final Map<Account, CalculatedLabels> calculatedLabels =
             new LinkedHashMap<>();
+    private final Map<Account, CheckBox> precedingYearConfirmations = new LinkedHashMap<>();
     private final Label statusLabel = new Label();
 
     public OpeningRmdDialog(
@@ -200,6 +203,14 @@ public final class OpeningRmdDialog extends Dialog<Boolean> {
         InputHelp.install(distributedField, "RMD dollars already distributed from this account in the opening year before the projection start. Reduces the remaining RMD; do not include planned future withdrawals. Enter 0 if none.");
         InputHelp.linkGridLabels(grid);
         pane.getChildren().addAll(accountHeading, grid);
+        if (ProjectionEngine.requiresSpousalOpeningHistory(plan, account)) {
+            var confirmation = new CheckBox("Earlier calendar-year RMD obligations for this account are resolved");
+            var facts = account.getOpeningRmdAccountData();
+            confirmation.setSelected(facts != null && facts.getDistributionYear() == distributionYear
+                    && Boolean.TRUE.equals(facts.getPrecedingYearsSatisfied()));
+            precedingYearConfirmations.put(account, confirmation);
+            pane.getChildren().add(confirmation);
+        }
         return pane;
     }
 
@@ -298,7 +309,9 @@ public final class OpeningRmdDialog extends Dialog<Boolean> {
                             parseMoney(priorBalanceFields.get(account).getText(),
                                     "Prior December 31 balance"),
                             parseMoney(distributedFields.get(account).getText(),
-                                    "RMD already distributed")));
+                                    "RMD already distributed"),
+                            precedingYearConfirmations.containsKey(account)
+                                    && precedingYearConfirmations.get(account).isSelected() ? Boolean.TRUE : null));
         }
 
         return inputs;

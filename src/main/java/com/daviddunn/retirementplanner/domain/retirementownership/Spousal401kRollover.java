@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Objects;
 
-/** Evidence of a same-day, fully pretax direct rollover with no mandatory amount due. */
+/** Evidence of a same-day, fully pretax direct rollover of the eligible balance after any required payment. */
 public record Spousal401kRollover(AccountReference source, AccountOwnership survivor, LocalDate effectiveDate,
                                  BigDecimal eligibleTransferredBalance) {
     public Spousal401kRollover {

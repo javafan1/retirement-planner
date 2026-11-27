@@ -6,10 +6,12 @@ final class ProjectionYearCalculation {
 
     private final ProjectionYear projectionYear;
     private final ProjectedPortfolio endingPortfolio;
+    private final boolean positiveMandatoryRmd;
 
     ProjectionYearCalculation(
             ProjectionYear projectionYear,
-            ProjectedPortfolio endingPortfolio) {
+            ProjectedPortfolio endingPortfolio, boolean positiveMandatoryRmd) {
+        this.positiveMandatoryRmd = positiveMandatoryRmd;
 
         this.projectionYear =
                 Objects.requireNonNull(
@@ -25,6 +27,8 @@ final class ProjectionYearCalculation {
     ProjectionYear getProjectionYear() {
         return projectionYear;
     }
+
+    boolean positiveMandatoryRmd() { return positiveMandatoryRmd; }
 
     ProjectedPortfolio getEndingPortfolio() {
         return endingPortfolio;

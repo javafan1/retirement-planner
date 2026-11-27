@@ -584,7 +584,15 @@ public class ProjectionPdfExporter {
         writeKeyValue("Estimated Heir Tax Rate", percent(tax.getEstimatedHeirTaxRateOnTaxDeferredAssets()), GRAY);
         writeKeyValue("Future Federal Marginal Adjustment", percent(tax.getFutureFederalMarginalRateAdjustment())
                 + (tax.getFutureFederalMarginalRateEffectiveYear() == null ? " / not scheduled" : " / effective " + tax.getFutureFederalMarginalRateEffectiveYear()), GRAY);
-        if (roth != null) writeKeyValue("Roth Stop Rule", roth.getStopRule().toString(), GRAY);
+        if (RothConversionRequest.usesVersionedExecution(roth)) {
+            writeKeyValue("Roth End Year", Integer.toString(roth.getScheduling().conversionEndYear()), GRAY);
+            writeKeyValue("When RMDs Begin", roth.getScheduling().rmdSchedulingPolicy().label(), GRAY);
+            if (roth.getCustomTargetTaxableIncome() != null)
+                writeKeyValue("Roth Taxable Income Target", money(roth.getCustomTargetTaxableIncome()), GRAY);
+        } else if (roth != null) {
+            writeKeyValue("Roth Stop Rule", roth.getStopRule() == null ? "Legacy unspecified (no RMD stop)"
+                    : roth.getStopRule().toString(), GRAY);
+        }
         for (var person : plan.getHousehold().members()) {
             writeKeyValue("Household Member", person.getFullName() + " / born " + person.getBirthDate(), GRAY);
             for (var income : person.getIncomeSources()) {

@@ -85,6 +85,15 @@ public final class HouseholdRmdResult {
         return total;
     }
 
+    HouseholdRmdResult withDeathYearRequirement(AccountOwnership decedent, OwnerRmdResult requirement) {
+        var results = new EnumMap<AccountOwnership, OwnerRmdResult>(ownerResults());
+        if (Objects.requireNonNull(results.get(decedent)).getTotalRmd().signum() != 0) {
+            throw new IllegalArgumentException("The decedent cannot have both a living-owner and death-year requirement.");
+        }
+        results.put(decedent, requirement);
+        return new HouseholdRmdResult(results, beneficiaryIraRmd, employerBeneficiaryRmds);
+    }
+
     public BeneficiaryIraRmd beneficiaryIraRmd() { return beneficiaryIraRmd; }
 
     public List<Beneficiary401kRmd> employerBeneficiaryRmds() { return employerBeneficiaryRmds; }

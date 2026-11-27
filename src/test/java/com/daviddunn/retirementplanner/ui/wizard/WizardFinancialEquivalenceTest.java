@@ -255,7 +255,9 @@ class WizardFinancialEquivalenceTest {
         var original = plan.getPlanningAssumptions();
         var tax = original.getTaxAssumptions();
         plan.setPlanningAssumptions(new PlanningAssumptions(new EconomicAssumptions(new BigDecimal("0.0625"),
-                new BigDecimal("0.0225"), new BigDecimal("0.04125"), new BigDecimal("0.01875")),
+                new BigDecimal("0.0225"), new BigDecimal("0.04125"), new BigDecimal("0.01875"))
+                .withSpousalInheritance(new SpousalInheritanceAssumption(
+                        SpousalInheritanceAssumption.Treatment.SPOUSE_AS_OWNER)),
                 new TaxAssumptions(tax.getFederalTaxBracketGrowthRate(), tax.getStandardDeductionGrowthRate(),
                         tax.getStateIncomeTaxRate(), tax.getLocalIncomeTaxRate(), scenario.couple() ? FilingStatus.MARRIED_FILING_JOINTLY : FilingStatus.SINGLE,
                         tax.getEstimatedHeirTaxRateOnTaxDeferredAssets()), original.getWithdrawalAssumptions(), original.getDeathScenarioAssumptions(),

@@ -22,6 +22,26 @@ class RothConversionPersistenceTest {
     Path directory;
 
     @Test
+    void pendingScheduleRoundTripsThroughPlanAndFrozenInputs() throws Exception {
+        var plan = RothConversionDemoFactory.createRetirementPlan();
+        var schedule = new RothConversionRequest.Scheduling(1, 2100,
+                com.daviddunn.retirementplanner.domain.roth.RothRmdSchedulingPolicy.SKIP_POSITIVE_RMD_YEARS);
+        var request = new RothConversionRequest(false, 2026, new BigDecimal("5000.00"), null,
+                RothConversionStrategy.FIXED_AMOUNT, RothConversionFrequency.ANNUAL, null, schedule);
+        plan.setRothConversionRequest(request);
+        var repository = new JsonRetirementPlanRepository();
+        var path = directory.resolve("dormant-roth.json");
+        repository.save(plan, path);
+        var reopened = repository.load(path);
+        var frozen = com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot.freeze(reopened);
+        var snapshot = com.daviddunn.retirementplanner.app.projection.CompleteProjectionSnapshot.restoreInputs(frozen);
+        assertTrue(com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.same(request,
+                reopened.getRothConversionRequest()));
+        assertTrue(com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.same(request,
+                snapshot.getRothConversionRequest()));
+    }
+
+    @Test
     void rothConversionSurvivesJsonRoundTrip()
             throws Exception {
 

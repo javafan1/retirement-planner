@@ -106,6 +106,8 @@ public class ResultsSummaryView extends BorderPane {
     private final CheckBox rothEnabledCheckBox =
             new CheckBox();
 
+    private final com.daviddunn.retirementplanner.ui.controls.PendingRothSchedulingView pendingRothSchedule =
+            new com.daviddunn.retirementplanner.ui.controls.PendingRothSchedulingView();
     private final TextField rothStartYearField =
             new TextField();
 
@@ -146,6 +148,7 @@ public class ResultsSummaryView extends BorderPane {
     private final TextField projectionLengthField = new TextField();
     private final Label calculationModeDisclosure = new Label();
     private final Label inheritancePlanningNotice = new Label();
+    private final Label appliedRothSchedule = new Label();
     private final Label planningHorizonValue = new Label();
     private final Label socialSecurityReductionDisclosure = new Label();
 
@@ -421,6 +424,7 @@ public class ResultsSummaryView extends BorderPane {
         InputHelp.install(rothTargetTaxableIncomeField, RothInputHelp.TARGET);
         InputHelp.install(rothFrequencyComboBox, RothInputHelp.FREQUENCY);
         InputHelp.install(rothStopRuleComboBox, RothInputHelp.STOP);
+        rothStopRuleComboBox.setPromptText("Legacy unspecified (no RMD stop)");
         InputHelp.install(deathScenarioComboBox, PlanningInputHelp.DEATH_SCENARIO);
         InputHelp.install(deathYearField, PlanningInputHelp.DEATH_YEAR);
         configurePlaceholderControls();
@@ -854,9 +858,11 @@ public class ResultsSummaryView extends BorderPane {
 
         var availability = com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.assess(currentPlan);
         rothAvailabilityLabel.setText(availability.guidance());
+        pendingRothSchedule.refreshAdmission(currentPlan);
+        boolean versioned = pendingRothSchedule.selected();
         boolean savedEnabled = currentPlan != null && currentPlan.getRothConversionRequest() != null
                 && currentPlan.getRothConversionRequest().isEnabled();
-        rothEnabledCheckBox.setDisable(!availability.canEnable() && !savedEnabled);
+        rothEnabledCheckBox.setDisable(!savedEnabled && !availability.canEnable());
 
         boolean enabled =
                 rothEnabledCheckBox.isSelected() && availability.canEnable();
@@ -883,7 +889,7 @@ public class ResultsSummaryView extends BorderPane {
                 !enabled);
 
         rothStopRuleComboBox.setDisable(
-                !enabled);
+                !enabled || versioned);
 
         rothAmountField.setDisable(
                 !enabled || !fixedAmount);
@@ -1471,6 +1477,9 @@ public class ResultsSummaryView extends BorderPane {
         assumptionContent.setMinWidth(0);
         calculationModeDisclosure.setWrapText(true);
         calculationModeDisclosure.setId("summary-financial-calculation-mode");
+        appliedRothSchedule.setWrapText(true);
+        appliedRothSchedule.setVisible(false);
+        appliedRothSchedule.setManaged(false);
         inheritancePlanningNotice.setWrapText(true);
         inheritancePlanningNotice.setId("summary-spousal-inheritance-planning");
 
@@ -1530,6 +1539,7 @@ public class ResultsSummaryView extends BorderPane {
                 heading,
                 calculationModeDisclosure,
                 inheritancePlanningNotice,
+                appliedRothSchedule,
                 scrollPane);
 
         VBox.setVgrow(
@@ -1783,6 +1793,16 @@ public class ResultsSummaryView extends BorderPane {
                 applyRothButton,
                 "assumption-card");
         panel.getChildren().add(1, rothAvailabilityLabel);
+        pendingRothSchedule.onChange(this::updateRothControls);
+        panel.getChildren().add(2, pendingRothSchedule);
+        var cancel = new Button("Cancel Roth Edits");
+        cancel.setOnAction(event -> {
+            if (currentPlan != null) {
+                rothLoadedFields = null;
+                loadRothConversion(currentPlan);
+            }
+        });
+        panel.getChildren().add(cancel);
         return panel;
     }
 
@@ -2570,6 +2590,12 @@ public class ResultsSummaryView extends BorderPane {
         inheritancePlanningNotice.setText(inheritanceDisclosure);
         inheritancePlanningNotice.setVisible(!inheritanceDisclosure.isEmpty());
         inheritancePlanningNotice.setManaged(!inheritanceDisclosure.isEmpty());
+        var accepted = controller.getAcceptedProjectionSnapshot();
+        String rothDisclosure = accepted != null && projection != null && projection == controller.peekCurrentProjection()
+                ? accepted.rothSchedulingDisclosure() : "";
+        appliedRothSchedule.setText(rothDisclosure);
+        appliedRothSchedule.setVisible(!rothDisclosure.isEmpty());
+        appliedRothSchedule.setManaged(!rothDisclosure.isEmpty());
         calculationModeDisclosure.setText(projection == null || projection.isEmpty() ? ""
                 : com.daviddunn.retirementplanner.domain.tax.FinancialCalculationPolicy.disclosure(projection.getYearAt(0).getIncomeSources()));
 
@@ -3265,7 +3291,7 @@ public class ResultsSummaryView extends BorderPane {
                         "Roth conversion frequency is required.");
             }
 
-            if (stopRule == null) {
+            if (!pendingRothSchedule.selected() && stopRule == null && (saved == null || saved.getStopRule() != null)) {
 
                 throw new IllegalArgumentException(
                         "Roth conversion stop rule is required.");
@@ -3279,7 +3305,7 @@ public class ResultsSummaryView extends BorderPane {
                             stopRule,
                             strategy,
                             frequency,
-                            customTargetTaxableIncome);
+                            customTargetTaxableIncome, pendingRothSchedule.read());
 
             com.daviddunn.retirementplanner.domain.roth.RothConversionConfiguration.validateTransition(currentPlan, request);
             submitRothConversion(request);
@@ -3646,10 +3672,11 @@ public class ResultsSummaryView extends BorderPane {
     private List<Object> rothUiFields() {
         return java.util.Arrays.asList(rothEnabledCheckBox.isSelected(), rothStrategyComboBox.getValue(),
                 rothStartYearField.getText(), rothAmountField.getText(), rothTargetTaxableIncomeField.getText(),
-                rothFrequencyComboBox.getValue(), rothStopRuleComboBox.getValue());
+                rothFrequencyComboBox.getValue(), rothStopRuleComboBox.getValue(), pendingRothSchedule.draftFields());
     }
 
     private void loadRothConversionFields(RetirementPlan plan) {
+        pendingRothSchedule.load(plan);
 
         RothConversionRequest request =
                 plan.getRothConversionRequest();
@@ -3663,14 +3690,15 @@ public class ResultsSummaryView extends BorderPane {
                     .select(
                             RothConversionStrategy.FIXED_AMOUNT);
 
-            rothStartYearField.clear();
+            var draft = plan.getNewPlanRothSchedulingDraft();
+            rothStartYearField.setText(pendingRothSchedule.selected() && draft != null ? Integer.toString(draft.getStartYear()) : "");
             rothAmountField.clear();
             rothTargetTaxableIncomeField.clear();
 
             rothFrequencyComboBox
                     .getSelectionModel()
                     .select(
-                            RothConversionFrequency.ONE_TIME);
+                            pendingRothSchedule.selected() ? RothConversionFrequency.ANNUAL : RothConversionFrequency.ONE_TIME);
 
             rothStopRuleComboBox
                     .getSelectionModel()

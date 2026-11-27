@@ -72,6 +72,7 @@ public final class ConditionalBenefitAdmission {
 
     /** Arkansas life principal is approved for deterministic projection only. */
     public static void requireAnalyzerSupported(RetirementPlan plan) {
+        com.daviddunn.retirementplanner.domain.roth.RothConversionRequest.requireExecutable(plan.getRothConversionRequest());
         if (usesArkansasRegularTaxOnly(plan)) {
             throw new UnsupportedExecutionException(
                     "Arkansas Regular Tax Only is available only for Basic deterministic projections.", null);

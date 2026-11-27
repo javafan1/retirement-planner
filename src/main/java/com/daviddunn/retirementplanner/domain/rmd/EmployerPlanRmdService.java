@@ -184,7 +184,7 @@ public final class EmployerPlanRmdService {
      * supplied rather than read inside this
      * method from Account.getCurrentBalance().
      */
-    private AccountRmd calculateAccountRmd(
+    AccountRmd calculateAccountRmd(
             Account account,
             BigDecimal balance,
             LocalDate dateOfBirth,

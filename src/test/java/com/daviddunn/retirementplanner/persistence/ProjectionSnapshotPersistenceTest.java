@@ -29,25 +29,338 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.daviddunn.retirementplanner.app.baseline.BaselineDetailsTest.set;
 
 class ProjectionSnapshotPersistenceTest {
+    @Test void versionedRothAndLegacyHistoryKeepSeparateIdentitiesAcrossSaveOpenAndSwap() throws Exception {
+        var controller = controller();
+        var plan = com.daviddunn.retirementplanner.domain.projection.SpousalPostRbd401kOwnerExecutionTest.fixture(true, true);
+        controller.newPlan(plan);
+        controller.getCurrentProjection();
+        var legacy = controller.getAcceptedProjectionSnapshot();
+        controller.saveCurrentAsBaseline("Legacy");
+        plan.setRothConversionRequest(new com.daviddunn.retirementplanner.domain.roth.RothConversionRequest(
+                true, 2043, new BigDecimal("20000"), null,
+                com.daviddunn.retirementplanner.domain.roth.RothConversionStrategy.FIXED_AMOUNT,
+                com.daviddunn.retirementplanner.domain.roth.RothConversionFrequency.ONE_TIME, null,
+                new com.daviddunn.retirementplanner.domain.roth.RothConversionRequest.Scheduling(1, 2043,
+                        com.daviddunn.retirementplanner.domain.roth.RothRmdSchedulingPolicy.CONTINUE_THROUGH_END_YEAR)));
+        controller.invalidateProjection();
+        controller.getCurrentProjection();
+        var versioned = controller.getAcceptedProjectionSnapshot();
+        var path = directory.resolve("versioned-roth.json");
+        controller.saveAs(path);
+        controller.save();
+        var reopened = controller();
+        reopened.open(path);
+        reopened.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        var restored = reopened.getAcceptedProjectionSnapshot();
+        assertEquals(versioned.id(), restored.id());
+        assertEquals(versioned.annual(), restored.annual());
+        assertTrue(restored.rothSchedulingDisclosure().contains("Continue Through End Year"));
+        assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(legacy.id(), reopened.getAcceptedProjectionSnapshot().id());
+        assertEquals("", reopened.getAcceptedProjectionSnapshot().rothSchedulingDisclosure());
+        reopened.save();
+        assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(versioned.id(), reopened.getAcceptedProjectionSnapshot().id());
+        assertEquals(0, new BigDecimal("20000").compareTo(reopened.getAcceptedProjectionSnapshot()
+                .restoreProjection().getYearAt(1).getRothConversion()));
+    }
+
+    @Test void employerPostRbdOwnerHistoryCertifiesExclusionAndTransfer() throws Exception {
+        var controller = controller();
+        var plan = com.daviddunn.retirementplanner.domain.projection.SpousalPostRbd401kOwnerExecutionTest
+                .fixture(true, true);
+        controller.newPlan(plan);
+        controller.getCurrentProjection();
+        var owner = controller.getAcceptedProjectionSnapshot();
+        controller.saveCurrentAsBaseline("Post-RBD employer");
+        plan.getAccountPortfolio().getAccounts().getFirst().setCurrentBalance(new BigDecimal("435100"));
+        plan.getAccountPortfolio().getAccounts().getFirst().setOpeningRmdAccountData(
+                new com.daviddunn.retirementplanner.domain.rmd.OpeningRmdAccountData(2042,
+                        new BigDecimal("435100"), BigDecimal.ZERO, true));
+        controller.invalidateProjection();
+        controller.getCurrentProjection();
+        var beneficiary = controller.getAcceptedProjectionSnapshot();
+        assertEquals(RetainedProjectionSnapshot.SPOUSAL_POST_RBD_401K_OWNER_SCHEMA, beneficiary.annual().schemaVersion());
+        assertTrue(beneficiary.provenance().contains(SpousalInheritancePlanningEvidence.POST_RBD_401K_OWNER_POLICY));
+        assertTrue(beneficiary.inheritancePlanningDisclosure().contains("January 1"));
+        assertEquals(new BigDecimal("12.3"), beneficiary.restoreProjection().getYearAt(1).beneficiary401kRmds().getFirst().divisor());
+        assertEquals(0, new BigDecimal("19000.00").compareTo(beneficiary.restoreProjection().getYearAt(0).getIncomeSources().stream()
+                .filter(row -> row.successorRmd().isPresent()).findFirst().orElseThrow().grossAmount()));
+
+        var invalidInputs = beneficiary.inputsDocument().replace("2041-04-01", "2040-04-01");
+        assertNotEquals(beneficiary.inputsDocument(), invalidInputs);
+        var selection = plan.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance();
+        var forgedProvenance = SpousalInheritancePlanningEvidence.completed(selection, invalidInputs, beneficiary.annual(),
+                ConditionalBenefitExecutionSemantics.completed(plan, invalidInputs, beneficiary.annual(), PensionSelectionSemantics.PROVENANCE));
+        assertThrows(com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.class,
+                () -> new CompleteProjectionSnapshot(beneficiary.version(), beneficiary.id(), beneficiary.owner(),
+                        beneficiary.sourcePlanId(), beneficiary.acceptedAt(), invalidInputs,
+                        CompleteProjectionSnapshot.digest(invalidInputs), forgedProvenance,
+                        beneficiary.annual(), beneficiary.nonInvestable(), beneficiary.summary(), beneficiary.people()));
+
+        var first = directory.resolve("owner-post-rbd-first.json");
+        var second = directory.resolve("owner-post-rbd-copy.json");
+        controller.saveAs(first);
+        controller.save();
+        controller.saveAs(second);
+        var reopened = controller();
+        reopened.open(second);
+        reopened.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(beneficiary.annual(), reopened.getAcceptedProjectionSnapshot().annual());
+        assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(owner.id(), reopened.getAcceptedProjectionSnapshot().id());
+        reopened.save();
+        assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(beneficiary.id(), reopened.getAcceptedProjectionSnapshot().id());
+
+        var mapper = new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .setNodeFactory(com.fasterxml.jackson.databind.node.JsonNodeFactory.withExactBigDecimals(true));
+        var selected = plan.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance();
+        for (String change : List.of("amount", "recipient", "source", "divisor", "principal", "missing evidence")) {
+            var tree = mapper.readTree(mapper.writeValueAsBytes(beneficiary.annual()));
+            var sources = (com.fasterxml.jackson.databind.node.ArrayNode) tree.path("years").get(0).path("sources");
+            for (int i = 0; i < sources.size(); i++) {
+                var row = (com.fasterxml.jackson.databind.node.ObjectNode) sources.get(i);
+                if (!row.path("successorRmdTreatment").asText().equals("MODELED_SPOUSAL_DEATH_YEAR_401K_V1")) continue;
+                switch (change) {
+                    case "amount" -> {
+                        row.put("gross", new BigDecimal("19001.00"));
+                        row.put("taxable", new BigDecimal("19001.00"));
+                    }
+                    case "recipient" -> row.put("owner", "PRIMARY");
+                    case "source" -> ((com.fasterxml.jackson.databind.node.ObjectNode) row.path("account")).put("account", 1);
+                    case "divisor" -> ((com.fasterxml.jackson.databind.node.ObjectNode) tree.path("beneficiary401kObligations").get(0))
+                            .put("divisor", new BigDecimal("12.4"));
+                    case "principal" -> ((com.fasterxml.jackson.databind.node.ObjectNode) tree.path("spousal401kRollovers").get(0))
+                            .put("eligibleTransferredBalance", new BigDecimal("401000"));
+                    case "missing evidence" -> sources.remove(i);
+                    default -> throw new AssertionError(change);
+                }
+                break;
+            }
+            var altered = mapper.treeToValue(tree, RetainedProjectionSnapshot.class);
+            var inputs = beneficiary.inputsDocument();
+            var provenance = SpousalInheritancePlanningEvidence.completed(selected, inputs, altered,
+                    ConditionalBenefitExecutionSemantics.completed(plan, inputs, altered, PensionSelectionSemantics.PROVENANCE));
+            assertThrows(com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.class,
+                    () -> new CompleteProjectionSnapshot(beneficiary.version(), beneficiary.id(), beneficiary.owner(),
+                            beneficiary.sourcePlanId(), beneficiary.acceptedAt(), inputs, beneficiary.inputDigest(), provenance,
+                            altered, beneficiary.nonInvestable(), beneficiary.summary(), beneficiary.people()), change);
+        }
+        var lastAccepted = controller.getAcceptedProjectionSnapshot();
+        controller.invalidateProjection();
+        try {
+            Thread.currentThread().interrupt();
+            assertThrows(CancellationException.class, controller::getCurrentProjection);
+        } finally {
+            Thread.interrupted();
+        }
+        assertSame(lastAccepted, controller.getAcceptedProjectionSnapshot());
+        plan.getAccountPortfolio().getAccounts().getFirst().setOpeningRmdAccountData(null);
+        assertThrows(com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.class, controller::getCurrentProjection);
+        assertSame(lastAccepted, controller.getAcceptedProjectionSnapshot());
+    }
+
+    @Test void employerPostRbdHistoryCertifiesPerPlanPaymentAndSwaps() throws Exception {
+        var controller = controller();
+        var plan = com.daviddunn.retirementplanner.domain.projection.SpousalPostRbd401kExecutionTest
+                .fixture(true, 2040, 1960, 1965, "808000", "246000");
+        controller.newPlan(plan);
+        controller.getCurrentProjection();
+        var owner = controller.getAcceptedProjectionSnapshot();
+        controller.saveCurrentAsBaseline("Post-RBD employer");
+        plan.getAccountPortfolio().getAccounts().getFirst().setCurrentBalance(new BigDecimal("787800"));
+        plan.getAccountPortfolio().getAccounts().getFirst().setOpeningRmdAccountData(
+                new com.daviddunn.retirementplanner.domain.rmd.OpeningRmdAccountData(2040,
+                        new BigDecimal("787800"), BigDecimal.ZERO, true));
+        controller.invalidateProjection();
+        controller.getCurrentProjection();
+        var beneficiary = controller.getAcceptedProjectionSnapshot();
+        assertEquals(RetainedProjectionSnapshot.SPOUSAL_POST_RBD_401K_SCHEMA, beneficiary.annual().schemaVersion());
+        assertTrue(beneficiary.provenance().contains(SpousalInheritancePlanningEvidence.POST_RBD_401K_POLICY));
+        assertTrue(beneficiary.inheritancePlanningDisclosure().contains("January 1"));
+        assertEquals(new BigDecimal("14.1"), beneficiary.restoreProjection().getYearAt(1).beneficiary401kRmds().getFirst().divisor());
+        assertEquals(0, new BigDecimal("39000.00").compareTo(beneficiary.restoreProjection().getYearAt(0).getIncomeSources().stream()
+                .filter(row -> row.successorRmd().isPresent()).findFirst().orElseThrow().grossAmount()));
+
+        var invalidInputs = beneficiary.inputsDocument().replace("2036-04-01", "2037-04-01");
+        assertNotEquals(beneficiary.inputsDocument(), invalidInputs);
+        var selection = plan.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance();
+        var forgedProvenance = SpousalInheritancePlanningEvidence.completed(selection, invalidInputs, beneficiary.annual(),
+                ConditionalBenefitExecutionSemantics.completed(plan, invalidInputs, beneficiary.annual(), PensionSelectionSemantics.PROVENANCE));
+        assertThrows(com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.class,
+                () -> new CompleteProjectionSnapshot(beneficiary.version(), beneficiary.id(), beneficiary.owner(),
+                        beneficiary.sourcePlanId(), beneficiary.acceptedAt(), invalidInputs,
+                        CompleteProjectionSnapshot.digest(invalidInputs), forgedProvenance,
+                        beneficiary.annual(), beneficiary.nonInvestable(), beneficiary.summary(), beneficiary.people()));
+
+        var first = directory.resolve("employer-post-rbd-first.json");
+        var second = directory.resolve("employer-post-rbd-copy.json");
+        controller.saveAs(first);
+        controller.save();
+        controller.saveAs(second);
+        var reopened = controller();
+        reopened.open(second);
+        reopened.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(beneficiary.annual(), reopened.getAcceptedProjectionSnapshot().annual());
+        assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(owner.id(), reopened.getAcceptedProjectionSnapshot().id());
+        reopened.save();
+        assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(beneficiary.id(), reopened.getAcceptedProjectionSnapshot().id());
+
+        var mapper = new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .setNodeFactory(com.fasterxml.jackson.databind.node.JsonNodeFactory.withExactBigDecimals(true));
+        var selected = plan.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance();
+        for (String change : List.of("amount", "recipient", "source", "divisor", "missing evidence")) {
+            var tree = mapper.readTree(mapper.writeValueAsBytes(beneficiary.annual()));
+            var sources = (com.fasterxml.jackson.databind.node.ArrayNode) tree.path("years").get(0).path("sources");
+            for (int i = 0; i < sources.size(); i++) {
+                var row = (com.fasterxml.jackson.databind.node.ObjectNode) sources.get(i);
+                if (!row.path("successorRmdTreatment").asText().equals("MODELED_SPOUSAL_DEATH_YEAR_401K_V1")) continue;
+                switch (change) {
+                    case "amount" -> {
+                        row.put("gross", new BigDecimal("40001.00"));
+                        row.put("taxable", new BigDecimal("40001.00"));
+                    }
+                    case "recipient" -> row.put("owner", "PRIMARY");
+                    case "source" -> ((com.fasterxml.jackson.databind.node.ObjectNode) row.path("account")).put("account", 1);
+                    case "divisor" -> ((com.fasterxml.jackson.databind.node.ObjectNode) tree.path("beneficiary401kObligations").get(0))
+                            .put("divisor", new BigDecimal("14.2"));
+                    case "missing evidence" -> sources.remove(i);
+                    default -> throw new AssertionError(change);
+                }
+                break;
+            }
+            var altered = mapper.treeToValue(tree, RetainedProjectionSnapshot.class);
+            var inputs = beneficiary.inputsDocument();
+            var provenance = SpousalInheritancePlanningEvidence.completed(selected, inputs, altered,
+                    ConditionalBenefitExecutionSemantics.completed(plan, inputs, altered, PensionSelectionSemantics.PROVENANCE));
+            assertThrows(com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.class,
+                    () -> new CompleteProjectionSnapshot(beneficiary.version(), beneficiary.id(), beneficiary.owner(),
+                            beneficiary.sourcePlanId(), beneficiary.acceptedAt(), inputs, beneficiary.inputDigest(), provenance,
+                            altered, beneficiary.nonInvestable(), beneficiary.summary(), beneficiary.people()), change);
+        }
+        var lastAccepted = controller.getAcceptedProjectionSnapshot();
+        controller.invalidateProjection();
+        try {
+            Thread.currentThread().interrupt();
+            assertThrows(CancellationException.class, controller::getCurrentProjection);
+        } finally {
+            Thread.interrupted();
+        }
+        assertSame(lastAccepted, controller.getAcceptedProjectionSnapshot());
+        plan.getAccountPortfolio().getAccounts().getFirst().setOpeningRmdAccountData(null);
+        assertThrows(com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.class, controller::getCurrentProjection);
+        assertSame(lastAccepted, controller.getAcceptedProjectionSnapshot());
+    }
+
+    @Test void iraDeathYearHistoryReplaysAndSwapsAcrossBothElections() throws Exception {
+        var controller = controller();
+        var plan = SpousalIraDeathYearExecutionTest.opening(true, false, 2040, "808000", "246000");
+        controller.newPlan(plan);
+        controller.getCurrentProjection();
+        var owner = controller.getAcceptedProjectionSnapshot();
+        controller.saveCurrentAsBaseline("Death-year owner");
+        SpousalBeneficiaryIraRmdExecutionTest.select(plan);
+        controller.invalidateProjection();
+        controller.getCurrentProjection();
+        var beneficiary = controller.getAcceptedProjectionSnapshot();
+        assertEquals(RetainedProjectionSnapshot.SPOUSAL_DEATH_YEAR_IRA_SCHEMA, beneficiary.annual().schemaVersion());
+        assertTrue(beneficiary.provenance().contains(SpousalInheritancePlanningEvidence.DEATH_YEAR_IRA_POLICY));
+        assertTrue(beneficiary.inheritancePlanningDisclosure().contains("January 1"));
+        assertEquals(new BigDecimal("14.1"), beneficiary.restoreProjection().getYearAt(1).beneficiaryIraRmd().divisor());
+
+        var first = directory.resolve("death-year-first.json");
+        var second = directory.resolve("death-year-copy.json");
+        controller.saveAs(first);
+        controller.save();
+        controller.saveAs(second);
+        var reopened = controller();
+        reopened.open(second);
+        reopened.getProjectionRestoration().toCompletableFuture().get(15, TimeUnit.SECONDS);
+        assertEquals(beneficiary.annual(), reopened.getAcceptedProjectionSnapshot().annual());
+        assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(owner.id(), reopened.getAcceptedProjectionSnapshot().id());
+        reopened.save();
+        assertTrue(reopened.commitProjectionSwap(reopened.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
+        assertEquals(beneficiary.id(), reopened.getAcceptedProjectionSnapshot().id());
+
+        var mapper = new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .setNodeFactory(com.fasterxml.jackson.databind.node.JsonNodeFactory.withExactBigDecimals(true));
+        var selected = plan.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance();
+        for (String change : List.of("amount", "recipient", "source", "divisor", "missing evidence")) {
+            var tree = mapper.readTree(mapper.writeValueAsBytes(beneficiary.annual()));
+            var sources = (com.fasterxml.jackson.databind.node.ArrayNode) tree.path("years").get(0).path("sources");
+            for (int i = 0; i < sources.size(); i++) {
+                var row = (com.fasterxml.jackson.databind.node.ObjectNode) sources.get(i);
+                if (!row.path("successorRmdTreatment").asText().equals("MODELED_SPOUSAL_DEATH_YEAR_IRA_V1")) continue;
+                switch (change) {
+                    case "amount" -> {
+                        row.put("gross", new BigDecimal("40001.00"));
+                        row.put("taxable", new BigDecimal("40001.00"));
+                    }
+                    case "recipient" -> row.put("owner", "PRIMARY");
+                    case "source" -> ((com.fasterxml.jackson.databind.node.ObjectNode) row.path("account")).put("account", 1);
+                    case "divisor" -> ((com.fasterxml.jackson.databind.node.ObjectNode) tree.path("beneficiaryIraObligations").get(0))
+                            .put("divisor", new BigDecimal("14.2"));
+                    case "missing evidence" -> sources.remove(i);
+                    default -> throw new AssertionError(change);
+                }
+                break;
+            }
+            var altered = mapper.treeToValue(tree, RetainedProjectionSnapshot.class);
+            var inputs = beneficiary.inputsDocument();
+            var provenance = SpousalInheritancePlanningEvidence.completed(selected, inputs, altered,
+                    ConditionalBenefitExecutionSemantics.completed(plan, inputs, altered, PensionSelectionSemantics.PROVENANCE));
+            assertThrows(com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.class,
+                    () -> new CompleteProjectionSnapshot(beneficiary.version(), beneficiary.id(), beneficiary.owner(),
+                            beneficiary.sourcePlanId(), beneficiary.acceptedAt(), inputs, beneficiary.inputDigest(), provenance,
+                            altered, beneficiary.nonInvestable(), beneficiary.summary(), beneficiary.people()), change);
+        }
+        var lastAccepted = controller.getAcceptedProjectionSnapshot();
+        controller.invalidateProjection();
+        try {
+            Thread.currentThread().interrupt();
+            assertThrows(CancellationException.class, controller::getCurrentProjection);
+        } finally {
+            Thread.interrupted();
+        }
+        assertSame(lastAccepted, controller.getAcceptedProjectionSnapshot());
+        plan.getAccountPortfolio().getAccounts().getFirst().setOpeningRmdAccountData(null);
+        assertThrows(com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.class, controller::getCurrentProjection);
+        assertSame(lastAccepted, controller.getAcceptedProjectionSnapshot());
+    }
+
     @Test void employerBeneficiaryHistoryCertifiesOriginalDebitAcrossSavedRoles() throws Exception {
         var controller = controller();
         var plan = SpousalBeneficiaryIraRmdExecutionTest.fixture("32800");
         controller.newPlan(plan);
         controller.getCurrentProjection();
         var ira = controller.getAcceptedProjectionSnapshot();
-        assertEquals(RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_IRA_SCHEMA, ira.annual().schemaVersion());
+        assertEquals(RetainedProjectionSnapshot.SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA, ira.annual().schemaVersion());
         assertNull(ira.annual().beneficiary401kObligations());
         controller.saveCurrentAsBaseline("Beneficiary IRA baseline");
 
         plan.getAccountPortfolio().addAccount(new com.daviddunn.retirementplanner.domain.financial.Traditional401K(
                 "Original employer plan", AccountOwnership.PRIMARY, new BigDecimal("246000")));
+        var spendingDate = java.time.LocalDate.of(2035, 1, 1);
+        plan.getHousehold().addExpense(new com.daviddunn.retirementplanner.domain.financial.Expense(
+                "Synthetic spending", new BigDecimal("280000"), com.daviddunn.retirementplanner.domain.financial.GrowthCategory.GENERAL,
+                spendingDate, spendingDate, com.daviddunn.retirementplanner.domain.financial.ExpenseType.ONE_TIME));
         controller.invalidateProjection();
         controller.getCurrentProjection();
         var employer = controller.getAcceptedProjectionSnapshot();
-        assertEquals(RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_401K_SCHEMA, employer.annual().schemaVersion());
+        assertEquals(RetainedProjectionSnapshot.SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA, employer.annual().schemaVersion());
         assertEquals(3, employer.annual().beneficiary401kObligations().size());
-        assertTrue(employer.provenance().contains(SpousalInheritancePlanningEvidence.EMPLOYER_BENEFICIARY_POLICY));
-        assertTrue(employer.inheritancePlanningDisclosure().contains("traditional IRA and 401(k)"));
+        assertTrue(employer.provenance().contains(SpousalInheritancePlanningEvidence.SUCCESSOR_ORDINARY_POLICY));
+        assertTrue(employer.inheritancePlanningDisclosure().contains("ordinary withdrawals"));
         assertNull(controller.prepareAnalyzerAssociation(AnalysisKind.COUPLE_EXHAUSTIVE));
 
         controller.saveAs(directory.resolve("employer-beneficiary.json"));
@@ -71,6 +384,17 @@ class ProjectionSnapshotPersistenceTest {
         assertEquals(AccountOwnership.PRIMARY, receipt.account().orElseThrow().owner());
         assertEquals(AccountOwnership.SPOUSE, receipt.owner().orElseThrow());
         assertEquals(receipt.grossAmount(), receipt.modeledTaxableAmount().orElseThrow());
+        var ordinary = year.getIncomeSources().stream()
+                .filter(row -> row.successorOrdinary().isPresent() && row.account().filter(obligation.source()::equals).isPresent())
+                .toList();
+        assertEquals(2, ordinary.size());
+        assertTrue(ordinary.stream().allMatch(row -> row.owner().orElseThrow() == AccountOwnership.SPOUSE));
+        assertEquals(0, new BigDecimal("246000").subtract(receipt.grossAmount())
+                .subtract(ordinary.stream().map(com.daviddunn.retirementplanner.domain.income.IncomeSourceAttribution::grossAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add))
+                .compareTo(year.getEndingAccountSnapshots().stream()
+                        .filter(position -> position.getAccount().getType() == AccountType.TRADITIONAL_401K)
+                        .findFirst().orElseThrow().getEndingBalance()));
 
         assertTrue(copy.commitProjectionSwap(copy.prepareProjectionSwap().toCompletableFuture().get(15, TimeUnit.SECONDS)));
         assertEquals(ira.id(), copy.getAcceptedProjectionSnapshot().id());
@@ -132,10 +456,10 @@ class ProjectionSnapshotPersistenceTest {
         controller.invalidateProjection();
         controller.getCurrentProjection();
         var beneficiary = controller.getAcceptedProjectionSnapshot();
-        assertEquals(RetainedProjectionSnapshot.SPOUSAL_BENEFICIARY_IRA_SCHEMA, beneficiary.annual().schemaVersion());
+        assertEquals(RetainedProjectionSnapshot.SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA, beneficiary.annual().schemaVersion());
         assertEquals(3, beneficiary.annual().beneficiaryIraObligations().size());
         assertNull(owner.annual().beneficiaryIraObligations());
-        assertTrue(beneficiary.provenance().contains(SpousalInheritancePlanningEvidence.BENEFICIARY_POLICY));
+        assertTrue(beneficiary.provenance().contains(SpousalInheritancePlanningEvidence.SUCCESSOR_ORDINARY_POLICY));
         assertTrue(beneficiary.inheritancePlanningDisclosure().contains("SPOUSE AS BENEFICIARY applied"));
         assertNull(controller.prepareAnalyzerAssociation(AnalysisKind.COUPLE_EXHAUSTIVE));
 
@@ -259,7 +583,7 @@ class ProjectionSnapshotPersistenceTest {
         controller.newPlan(plan);
         controller.getCurrentProjection();
         var iraOnly = controller.getAcceptedProjectionSnapshot();
-        assertEquals(RetainedProjectionSnapshot.SPOUSAL_IRA_RMD_SCHEMA, iraOnly.annual().schemaVersion());
+        assertEquals(RetainedProjectionSnapshot.SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA, iraOnly.annual().schemaVersion());
         assertNull(iraOnly.annual().spousal401kRollovers());
         controller.saveCurrentAsBaseline("Original IRA-only baseline");
 
@@ -272,8 +596,8 @@ class ProjectionSnapshotPersistenceTest {
         controller.invalidateProjection();
         controller.getCurrentProjection();
         var rollover = controller.getAcceptedProjectionSnapshot();
-        assertEquals(RetainedProjectionSnapshot.SPOUSAL_401K_ROLLOVER_SCHEMA, rollover.annual().schemaVersion());
-        assertTrue(rollover.provenance().contains(SpousalInheritancePlanningEvidence.ROLLOVER_POLICY));
+        assertEquals(RetainedProjectionSnapshot.SPOUSAL_SUCCESSOR_ORDINARY_SCHEMA, rollover.annual().schemaVersion());
+        assertTrue(rollover.provenance().contains(SpousalInheritancePlanningEvidence.SUCCESSOR_ORDINARY_POLICY));
         assertTrue(rollover.inheritancePlanningDisclosure().contains("traditional 401(k) direct rollover"));
         assertEquals(1, rollover.restoreProjection().getYearAt(2).spousal401kRollovers().size());
         assertNull(controller.prepareAnalyzerAssociation(AnalysisKind.COUPLE_EXHAUSTIVE));
@@ -375,7 +699,7 @@ class ProjectionSnapshotPersistenceTest {
         var applied = controller.getAcceptedProjectionSnapshot();
         assertTrue(applied.spousalIraRmdApplied());
         assertTrue(applied.inheritancePlanningDisclosure().contains("applied to qualifying"));
-        assertTrue(applied.provenance().contains(SpousalInheritancePlanningEvidence.APPLIED_POLICY));
+        assertTrue(applied.provenance().contains(SpousalInheritancePlanningEvidence.SUCCESSOR_ORDINARY_POLICY));
         assertTrue(controller.currentProjectionDeterministicallyApplicable());
         assertThrows(IllegalArgumentException.class, () -> applied.annual().restoreProjection());
         assertNull(controller.prepareAnalyzerAssociation(AnalysisKind.COUPLE_EXHAUSTIVE));
@@ -426,17 +750,25 @@ class ProjectionSnapshotPersistenceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {4, 5, 6, 7})
+    @ValueSource(ints = {4, 5, 6, 7, 8})
     void appliedSnapshotChecksFinancialGraphEvenWithRecomputedProvenance(int appliedSchema) throws Exception {
         var controller = controller();
-        controller.newPlan(switch (appliedSchema) {
+        var fixture = switch (appliedSchema) {
             case 5 -> Spousal401kRolloverExecutionTest.fixture(DeathScenario.PRIMARY_DIES, 2034);
             case 6 -> SpousalBeneficiaryIraRmdExecutionTest.fixture("246000");
-            case 7 -> SpousalBeneficiary401kRmdExecutionTest.fixture("246000");
+            case 7, 8 -> SpousalBeneficiary401kRmdExecutionTest.fixture("246000");
             default -> SpousalIraRmdExecutionTest.fixture(DeathScenario.PRIMARY_DIES, 2034, "246000", "123000", false);
-        });
+        };
+        if (appliedSchema == 8) {
+            var date = java.time.LocalDate.of(2035, 1, 1);
+            fixture.getHousehold().addExpense(new com.daviddunn.retirementplanner.domain.financial.Expense(
+                    "Synthetic spending", new BigDecimal("125000"), com.daviddunn.retirementplanner.domain.financial.GrowthCategory.GENERAL,
+                    date, date, com.daviddunn.retirementplanner.domain.financial.ExpenseType.ONE_TIME));
+        }
+        controller.newPlan(fixture);
         controller.getCurrentProjection();
-        var accepted = controller.getAcceptedProjectionSnapshot();
+        var live = controller.getAcceptedProjectionSnapshot();
+        var accepted = appliedSchema == 8 ? live : retainedPriorSpousalPolicy(live, appliedSchema);
         var input = accepted.inputsDocument();
         var plan = accepted.restoreExecutionPlan();
         var selected = plan.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance();
@@ -448,7 +780,8 @@ class ProjectionSnapshotPersistenceTest {
                 "closing balance", "obligation", "AGI")) {
             var node = mapper.readTree(mapper.writeValueAsBytes(accepted.annual()));
             var year = (com.fasterxml.jackson.databind.node.ObjectNode) node.path("years").get(appliedSchema >= 6 ? 2 : 4);
-            var receipt = year.path("sources").valueStream().filter(s -> s.has("successorRmdTreatment")).findFirst()
+            String marker = appliedSchema == 8 ? "successorOrdinaryTreatment" : "successorRmdTreatment";
+            var receipt = year.path("sources").valueStream().filter(s -> s.has(marker)).findFirst()
                     .map(com.fasterxml.jackson.databind.node.ObjectNode.class::cast).orElseThrow();
             switch (alteration) {
                 case "receipt amount" -> {
@@ -475,6 +808,39 @@ class ProjectionSnapshotPersistenceTest {
             assertEquals(com.daviddunn.retirementplanner.domain.rmd.SpousalIraRmdUnavailable.Reason.HISTORICAL_EVIDENCE_MISMATCH,
                     failure.reason());
         }
+    }
+
+    private CompleteProjectionSnapshot retainedPriorSpousalPolicy(CompleteProjectionSnapshot live, int schema) throws Exception {
+        var plan = live.restoreExecutionPlan();
+        var engine = new ProjectionEngine();
+        var outcome = switch (schema) {
+            case 4 -> engine.projectSpousalIraRmd(plan);
+            case 5 -> engine.projectSpousal401kRollover(plan);
+            case 6 -> engine.projectSpousalBeneficiaryIraRmd(plan);
+            case 7 -> engine.projectSpousalBeneficiary401kRmd(plan);
+            default -> throw new AssertionError(schema);
+        };
+        var projection = assertInstanceOf(ProjectionExecutionResult.Completed.class, outcome).projection();
+        var prior = switch (schema) {
+            case 4 -> RetainedProjectionSnapshot.captureSpousalIraRmd(projection);
+            case 5 -> RetainedProjectionSnapshot.captureSpousal401kRollover(projection);
+            case 6 -> RetainedProjectionSnapshot.captureSpousalBeneficiaryIraRmd(projection);
+            case 7 -> RetainedProjectionSnapshot.captureSpousalBeneficiary401kRmd(projection);
+            default -> throw new AssertionError(schema);
+        };
+        var inputs = live.inputsDocument();
+        var provenance = SpousalInheritancePlanningEvidence.completed(
+                plan.getPlanningAssumptions().getEconomicAssumptions().getSpousalInheritance(), inputs, prior,
+                ConditionalBenefitExecutionSemantics.completed(plan, inputs, prior, PensionSelectionSemantics.PROVENANCE));
+        var snapshot = new CompleteProjectionSnapshot(live.version(), live.id(), live.owner(), live.sourcePlanId(),
+                live.acceptedAt(), inputs, live.inputDigest(), provenance, prior, live.nonInvestable(), live.summary(), live.people());
+        var codec = new AnalysisSnapshotCodec();
+        var restored = codec.decodeDocument(codec.encodeProjectionDocument(snapshot).bytes(), CompleteProjectionSnapshot.class);
+        assertEquals(snapshot, restored);
+        assertFalse(restored.calculationSemanticsCurrent());
+        assertTrue(restored.restoreProjection().getYears().stream().flatMap(year -> year.getIncomeSources().stream())
+                .noneMatch(source -> source.successorOrdinary().isPresent()));
+        return restored;
     }
 
     @Test void pendingInheritanceChoiceKeepsLegacyLedgerAndRoundTripsThroughBothRoles() throws Exception {
